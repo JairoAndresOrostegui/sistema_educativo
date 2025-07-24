@@ -89,8 +89,25 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       );
     }
 
-    // Agrega más verificaciones si tienes funcionalidades futuras como:
-    // boletines, calificaciones, tareas, etc.
+    if (funcionalidades['horarios']?.contains('ver') ?? false) {
+      items.add(
+        const MenuItemData(
+          label: 'Horario escolar',
+          icon: Icons.timer,
+          route: '/mis_horarios',
+        ),
+      );
+    }
+
+    if ((funcionalidades['documentos']?.contains('ver') ?? false)) {
+      items.add(
+        const MenuItemData(
+          label: 'Documentos',
+          icon: Icons.file_download,
+          route: '/documentos_estudiante',
+        ),
+      );
+    }
 
     if (!mounted) return;
 

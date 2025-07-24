@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import '../../../utils/profile_image_picker.dart';
+import '../../../utils/imagen/profile_image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});

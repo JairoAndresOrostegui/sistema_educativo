@@ -1,9 +1,8 @@
-// ADMIN RUTAS CON ESTILOS APLICADOS
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter_typeahead/flutter_typeahead.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart'; // Asegúrate de que esta línea esté presente
 
 class AdminRutasScreen extends StatefulWidget {
   const AdminRutasScreen({super.key});
@@ -92,6 +91,12 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
                     ? gestores.firstWhereOrNull((u) => u.id == gestionador)
                     : null;
 
+            final gestionadorTextController = TextEditingController(
+              text: gestionadorSeleccionado != null
+                  ? '${gestionadorSeleccionado['nombres']} ${gestionadorSeleccionado['apellidos']}'
+                  : '',
+            );
+
             return AlertDialog(
               backgroundColor: Colors.white,
               contentPadding: const EdgeInsets.all(16),
@@ -139,12 +144,19 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      TypeAheadFormField<DocumentSnapshot>(
-                        textFieldConfiguration: const TextFieldConfiguration(
-                          decoration: InputDecoration(
-                            labelText: 'Buscar estudiante',
-                          ),
-                        ),
+                      // Primer TypeAheadField para Estudiantes
+                      TypeAheadField<DocumentSnapshot>(
+                        // Aquí se usa el builder para construir el TextField
+                        builder: (context, controller, focusNode) {
+                          return TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar estudiante',
+                              border: OutlineInputBorder(), // Añade el borde si lo tenías en TextFieldConfiguration
+                            ),
+                          );
+                        },
                         suggestionsCallback: (pattern) {
                           final texto = pattern.toLowerCase();
                           return estudiantes.where((e) {
@@ -164,7 +176,7 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
                             ),
                           );
                         },
-                        onSuggestionSelected: (DocumentSnapshot seleccionado) {
+                        onSelected: (DocumentSnapshot seleccionado) { // Cambiado de onSuggestionSelected a onSelected
                           setModalState(() {
                             estudiantesOrdenados.add({
                               'id': seleccionado.id,
@@ -220,18 +232,19 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      TypeAheadFormField<DocumentSnapshot>(
-                        textFieldConfiguration: TextFieldConfiguration(
-                          decoration: const InputDecoration(
-                            labelText: 'Buscar gestionador',
-                          ),
-                          controller: TextEditingController(
-                            text:
-                                gestionadorSeleccionado != null
-                                    ? '${gestionadorSeleccionado['nombres']} ${gestionadorSeleccionado['apellidos']}'
-                                    : '',
-                          ),
-                        ),
+                      // Segundo TypeAheadField para Gestionador
+                      TypeAheadField<DocumentSnapshot>(
+                        // Aquí se usa el builder para construir el TextField
+                        builder: (context, controller, focusNode) {
+                          return TextField(
+                            controller: gestionadorTextController, // Usa el controller específico
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar gestionador',
+                              border: OutlineInputBorder(), // Añade el borde si lo tenías
+                            ),
+                          );
+                        },
                         suggestionsCallback: (pattern) {
                           final texto = pattern.toLowerCase();
                           return gestores.where((u) {
@@ -248,8 +261,12 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
                             ),
                           );
                         },
-                        onSuggestionSelected: (DocumentSnapshot seleccionado) {
-                          setModalState(() => gestionador = seleccionado.id);
+                        onSelected: (DocumentSnapshot seleccionado) { // Cambiado de onSuggestionSelected a onSelected
+                          setModalState(() {
+                            gestionador = seleccionado.id;
+                            gestionadorTextController.text = // Actualiza el texto del controlador
+                                '${seleccionado['nombres']} ${seleccionado['apellidos']}';
+                          });
                         },
                       ),
                       const SizedBox(height: 20),
@@ -272,26 +289,26 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
                             'horaInicio':
                                 horaInicio != null
                                     ? Timestamp.fromDate(
-                                      DateTime(
-                                        2000,
-                                        1,
-                                        1,
-                                        horaInicio!.hour,
-                                        horaInicio!.minute,
-                                      ),
-                                    )
+                                        DateTime(
+                                          2000,
+                                          1,
+                                          1,
+                                          horaInicio!.hour,
+                                          horaInicio!.minute,
+                                        ),
+                                      )
                                     : null,
                             'horaFin':
                                 horaFin != null
                                     ? Timestamp.fromDate(
-                                      DateTime(
-                                        2000,
-                                        1,
-                                        1,
-                                        horaFin!.hour,
-                                        horaFin!.minute,
-                                      ),
-                                    )
+                                        DateTime(
+                                          2000,
+                                          1,
+                                          1,
+                                          horaFin!.hour,
+                                          horaFin!.minute,
+                                        ),
+                                      )
                                     : null,
                             'estudiantes':
                                 estudiantesOrdenados
@@ -447,70 +464,70 @@ class _AdminRutasScreenState extends State<AdminRutasScreen> {
           isLoading
               ? const Center(child: CircularProgressIndicator())
               : Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: TextField(
-                      controller: _busquedaController,
-                      decoration: const InputDecoration(
-                        labelText: 'Buscar ruta...',
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: TextField(
+                        controller: _busquedaController,
+                        decoration: const InputDecoration(
+                          labelText: 'Buscar ruta...',
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: rutas.length,
-                      itemBuilder: (context, index) {
-                        final ruta = rutas[index];
-                        final data = ruta.data() as Map<String, dynamic>;
-                        final nombreRuta = data['nombre']?.toLowerCase() ?? '';
-                        if (_textoBusqueda.isNotEmpty &&
-                            !nombreRuta.contains(_textoBusqueda)) {
-                          return const SizedBox.shrink();
-                        }
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          color: const Color(0xFFF5F5F5),
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: ListTile(
-                            leading: const Icon(Icons.route),
-                            title: Text(data['nombre'] ?? ''),
-                            subtitle: Text(
-                              'Desde: ${data['direccionInicio'] ?? 'sin dirección'}',
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: rutas.length,
+                        itemBuilder: (context, index) {
+                          final ruta = rutas[index];
+                          final data = ruta.data() as Map<String, dynamic>;
+                          final nombreRuta = data['nombre']?.toLowerCase() ?? '';
+                          if (_textoBusqueda.isNotEmpty &&
+                              !nombreRuta.contains(_textoBusqueda)) {
+                            return const SizedBox.shrink();
+                          }
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
                             ),
-                            trailing:
-                                isMobile
-                                    ? null
-                                    : Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit),
-                                          onPressed:
-                                              () => _mostrarFormulario(
-                                                ruta: ruta,
-                                              ),
+                            color: const Color(0xFFF5F5F5),
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ListTile(
+                              leading: const Icon(Icons.route),
+                              title: Text(data['nombre'] ?? ''),
+                              subtitle: Text(
+                                'Desde: ${data['direccionInicio'] ?? 'sin dirección'}',
+                              ),
+                              trailing:
+                                  isMobile
+                                      ? null
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit),
+                                              onPressed:
+                                                  () => _mostrarFormulario(
+                                                    ruta: ruta,
+                                                  ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete),
+                                              onPressed:
+                                                  () => _eliminarRuta(ruta.id),
+                                            ),
+                                          ],
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete),
-                                          onPressed:
-                                              () => _eliminarRuta(ruta.id),
-                                        ),
-                                      ],
-                                    ),
-                          ),
-                        );
-                      },
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
     );
   }
 }

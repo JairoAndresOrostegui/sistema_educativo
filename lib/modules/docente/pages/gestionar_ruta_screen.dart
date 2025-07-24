@@ -115,10 +115,20 @@ class _GestionarRutaScreenState extends State<GestionarRutaScreen> {
         }
       }
 
+      final user = FirebaseAuth.instance.currentUser!;
+      final userSnap =
+          await FirebaseFirestore.instance
+              .collection('usuarios')
+              .doc(user.uid)
+              .get();
+      final nombreDocente = '${userSnap['nombres']} ${userSnap['apellidos']}';
+
       await ref.set({
         'idRuta': ruta.id,
+        'nombreRuta': dataRuta['nombre'] ?? '',
         'fecha': Timestamp.now(),
-        'gestionador': FirebaseAuth.instance.currentUser!.uid,
+        'gestionador': user.uid,
+        'gestionadaPorNombre': nombreDocente,
         'estado': 'pendiente',
         'horaInicio': null,
         'horaFin': null,

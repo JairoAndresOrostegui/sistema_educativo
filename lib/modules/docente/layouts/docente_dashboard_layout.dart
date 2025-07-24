@@ -63,6 +63,26 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
+    if (funcionalidades['horarios']?.contains('ver') ?? false) {
+      items.add(
+        const MenuItemData(
+          label: 'Horario escolar',
+          icon: Icons.timer,
+          route: '/gestionar_horario',
+        ),
+      );
+    }
+
+    if ((funcionalidades['documentos']?.contains('ver') ?? false)) {
+      items.add(
+        const MenuItemData(
+          label: 'Documentos',
+          icon: Icons.file_copy,
+          route: '/documentos_docente',
+        ),
+      );
+    }
+
     if (!mounted) return;
 
     setState(() {

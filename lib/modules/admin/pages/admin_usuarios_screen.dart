@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import '../../../utils/grados_utils.dart';
 
 class AdminUsuariosScreen extends StatefulWidget {
   const AdminUsuariosScreen({super.key});
@@ -28,24 +29,13 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
     'Cédula',
     'Pasaporte',
   ];
-  final List<String> gradosColombia = [
-    'No aplica',
-    'Prejardín',
-    'Jardín',
-    'Transición',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    '10',
-    '11',
+  final List<String> funcionalidadesDisponibles = [
+    'usuarios',
+    'rutas',
+    'horarios',
+    'documentos',
+    'historial_rutas',
   ];
-  final List<String> funcionalidadesDisponibles = ['usuarios', 'rutas'];
   final List<String> permisos = ['ver', 'crear', 'editar', 'eliminar'];
 
   bool esSuperadminActual = false;
@@ -197,7 +187,11 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
                               bottom: 0,
                               right: 0,
                               child: IconButton(
-                                icon: const Icon(Icons.edit, size: 20),
+                                icon: const Icon(
+                                  Icons.edit,
+                                  size: 20,
+                                  color: Colors.green,
+                                ),
                                 onPressed: () async {
                                   final picker = ImagePicker();
                                   final picked = await picker.pickImage(
@@ -689,7 +683,10 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          icon: const Icon(Icons.edit),
+                                          icon: const Icon(
+                                            Icons.edit,
+                                            color: Colors.green,
+                                          ),
                                           onPressed:
                                               () => _mostrarFormulario(
                                                 usuario: user,
@@ -697,7 +694,10 @@ class _AdminUsuariosScreenState extends State<AdminUsuariosScreen> {
                                         ),
                                         if (puedeEliminar)
                                           IconButton(
-                                            icon: const Icon(Icons.delete),
+                                            icon: const Icon(
+                                              Icons.delete,
+                                              color: Colors.red,
+                                            ),
                                             onPressed:
                                                 () => _eliminarUsuario(
                                                   user.id,
