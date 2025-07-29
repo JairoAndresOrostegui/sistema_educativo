@@ -51,7 +51,10 @@ class _DashboardLayoutState extends State<DashboardLayout> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final isWeb = kIsWeb;
-                  int crossAxisCount = (constraints.maxWidth ~/ 140).clamp(2, isWeb ? 6 : 4);
+                  int crossAxisCount = (constraints.maxWidth ~/ 140).clamp(
+                    2,
+                    isWeb ? 6 : 4,
+                  );
 
                   return Center(
                     child: SingleChildScrollView(
@@ -59,52 +62,102 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                         spacing: isWeb ? 20 : 16,
                         runSpacing: isWeb ? 30 : 24,
                         alignment: WrapAlignment.center,
-                        children: widget.menuItems.map((item) {
-                          final isHovered = hoveredRoute == item.route;
+                        children:
+                            widget.menuItems.map((item) {
+                              final isHovered = hoveredRoute == item.route;
 
-                          return MouseRegion(
-                            onEnter: (_) => setState(() => hoveredRoute = item.route),
-                            onExit: (_) => setState(() => hoveredRoute = ''),
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: () => _navegar(item.route),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: constraints.maxWidth / crossAxisCount - 20,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: isHovered ? const Color.fromRGBO(240, 240, 240, 1) : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: isHovered
-                                      ? [
-                                          const BoxShadow(
-                                            color: Color.fromRGBO(0, 0, 0, 0.1),
-                                            blurRadius: 8,
-                                            offset: Offset(0, 4),
-                                          )
-                                        ]
-                                      : [],
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(item.icon, size: 48, color: const Color.fromARGB(255, 31, 155, 212)),
-                                    const SizedBox(height: 10),
-                                    Text(
-                                      item.label,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: isHovered ? FontWeight.bold : FontWeight.w500,
-                                        color: isHovered ? Colors.black : Colors.black87,
+                              return MouseRegion(
+                                onEnter:
+                                    (_) => setState(
+                                      () => hoveredRoute = item.route,
+                                    ),
+                                onExit:
+                                    (_) => setState(() => hoveredRoute = ''),
+                                cursor: SystemMouseCursors.click,
+                                child: Tooltip(
+                                  message: item.label,
+                                  child: Semantics(
+                                    label: item.label,
+                                    button: true,
+                                    enabled: true,
+                                    focusable: true,
+                                    child: GestureDetector(
+                                      onTap: () => _navegar(item.route),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 200,
+                                        ),
+                                        width:
+                                            constraints.maxWidth /
+                                                crossAxisCount -
+                                            20,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              isHovered
+                                                  ? const Color.fromRGBO(
+                                                    240,
+                                                    240,
+                                                    240,
+                                                    1,
+                                                  )
+                                                  : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          boxShadow:
+                                              isHovered
+                                                  ? [
+                                                    const BoxShadow(
+                                                      color: Color.fromRGBO(
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        0.1,
+                                                      ),
+                                                      blurRadius: 8,
+                                                      offset: Offset(0, 4),
+                                                    ),
+                                                  ]
+                                                  : [],
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              item.icon,
+                                              size: 48,
+                                              color: const Color.fromARGB(
+                                                255,
+                                                31,
+                                                155,
+                                                212,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Text(
+                                              item.label,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight:
+                                                    isHovered
+                                                        ? FontWeight.bold
+                                                        : FontWeight.w500,
+                                                color:
+                                                    isHovered
+                                                        ? Colors.black
+                                                        : Colors.black87,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                              );
+                            }).toList(),
                       ),
                     ),
                   );
@@ -117,37 +170,57 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                 onEnter: (_) => setState(() => hoveringCerrarSesion = true),
                 onExit: (_) => setState(() => hoveringCerrarSesion = false),
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: _cerrarSesion,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: hoveringCerrarSesion ? const Color.fromRGBO(240, 240, 240, 1) : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: hoveringCerrarSesion
-                          ? [
-                              const BoxShadow(
-                                color: Color.fromRGBO(0, 0, 0, 0.1),
-                                blurRadius: 8,
-                                offset: Offset(0, 4),
-                              )
-                            ]
-                          : [],
-                    ),
-                    child: const Column(
-                      children: [
-                        Icon(Icons.logout, size: 36, color: Colors.redAccent),
-                        SizedBox(height: 8),
-                        Text(
-                          'Cerrar sesión',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
+                child: Tooltip(
+                  message: 'Cerrar sesión',
+                  child: Semantics(
+                    label: 'Cerrar sesión',
+                    button: true,
+                    enabled: true,
+                    focusable: true,
+                    child: GestureDetector(
+                      onTap: _cerrarSesion,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
                         ),
-                      ],
+                        decoration: BoxDecoration(
+                          color:
+                              hoveringCerrarSesion
+                                  ? const Color.fromRGBO(240, 240, 240, 1)
+                                  : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow:
+                              hoveringCerrarSesion
+                                  ? [
+                                    const BoxShadow(
+                                      color: Color.fromRGBO(0, 0, 0, 0.1),
+                                      blurRadius: 8,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ]
+                                  : [],
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(
+                              Icons.logout,
+                              size: 36,
+                              color: Colors.redAccent,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Cerrar sesión',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -165,5 +238,9 @@ class MenuItemData {
   final IconData icon;
   final String route;
 
-  const MenuItemData({required this.label, required this.icon, required this.route});
+  const MenuItemData({
+    required this.label,
+    required this.icon,
+    required this.route,
+  });
 }

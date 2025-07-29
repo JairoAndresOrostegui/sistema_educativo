@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../admin/layouts/admin_dashboard_layout.dart';
+import '../../student/layouts/student_dashboard_layout.dart';
 import '../pages/access_denied_page.dart';
 import '../pages/login_page.dart';
 
-class AdminDashboardGuard extends StatelessWidget {
-  const AdminDashboardGuard({super.key});
+class StudentDashboardGuard extends StatelessWidget {
+  const StudentDashboardGuard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -30,11 +30,11 @@ class AdminDashboardGuard extends StatelessWidget {
           return const AccessDeniedPage();
         }
 
-        if (data['rol'] != 'admin' || data['estado'] != 'activo') {
+        if (data['rol'] != 'estudiante' || data['estado'] != 'activo') {
           return const AccessDeniedPage();
         }
 
-        return const AdminDashboardLayout();
+        return const EstudianteDashboardLayout();
       },
     );
   }

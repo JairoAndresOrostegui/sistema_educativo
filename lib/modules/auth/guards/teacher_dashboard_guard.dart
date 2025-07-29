@@ -1,17 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../admin/layouts/admin_dashboard_layout.dart';
+import '../../auth/pages/login_page.dart';
 import '../pages/access_denied_page.dart';
-import '../pages/login_page.dart';
+import '../../teacher/layouts/teacher_dashboard_layout.dart';
 
-class AdminDashboardGuard extends StatelessWidget {
-  const AdminDashboardGuard({super.key});
+class TeacherDashboardGuard extends StatelessWidget {
+  const TeacherDashboardGuard({super.key});
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) return const LoginPage();
 
     return FutureBuilder<DocumentSnapshot>(
@@ -30,11 +29,21 @@ class AdminDashboardGuard extends StatelessWidget {
           return const AccessDeniedPage();
         }
 
-        if (data['rol'] != 'admin' || data['estado'] != 'activo') {
+        final List<dynamic> funcionalidades =
+            data['funcionalidades'] is List
+                ? data['funcionalidades'] as List<dynamic>
+                : [];
+
+        final bool esAdminConPermisos =
+            data['rol'] == 'admin' &&
+            funcionalidades.contains('docente.acceso');
+
+        if (data['estado'] != 'activo' ||
+            (data['rol'] != 'docente' && !esAdminConPermisos)) {
           return const AccessDeniedPage();
         }
 
-        return const AdminDashboardLayout();
+        return const DocenteDashboardLayout();
       },
     );
   }

@@ -84,4 +84,3 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
     throw new Error("No se pudo eliminar el usuario.");
   }
 });
-

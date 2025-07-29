@@ -3,24 +3,24 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../auth/pages/dashboard_layout.dart';
 
-class AdminDashboardLayout extends StatefulWidget {
-  const AdminDashboardLayout({super.key});
+class DocenteDashboardLayout extends StatefulWidget {
+  const DocenteDashboardLayout({super.key});
 
   @override
-  State<AdminDashboardLayout> createState() => _AdminDashboardLayoutState();
+  State<DocenteDashboardLayout> createState() => _DocenteDashboardLayoutState();
 }
 
-class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
+class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _cargarPermisos();
+    _cargarMenu();
   }
 
-  Future<void> _cargarPermisos() async {
+  Future<void> _cargarMenu() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -30,14 +30,16 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
             .doc(user.uid)
             .get();
     final data = doc.data();
-
     if (data == null) return;
 
     final List<String> funcionalidades =
         (data['funcionalidades'] is List)
             ? List<String>.from(data['funcionalidades'])
             : [];
-    final bool esSuperadmin = data['esSuperadmin'] == true;
+
+    final String rol = data['rol'] ?? '';
+
+    if (rol != 'docente') return;
 
     final List<MenuItemData> items = [
       const MenuItemData(
@@ -47,7 +49,17 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       ),
     ];
 
-    if (esSuperadmin || funcionalidades.contains('usuarios.ver')) {
+    if (funcionalidades.contains('rutas.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Ruta escolar',
+          icon: Icons.directions_bus,
+          route: '/manage_routes',
+        ),
+      );
+    }
+
+    if (funcionalidades.contains('usuarios.ver')) {
       items.add(
         const MenuItemData(
           label: 'Gestión de usuarios',
@@ -57,42 +69,22 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin || funcionalidades.contains('rutas.ver')) {
+    if (funcionalidades.contains('horarios.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Gestión de rutas',
-          icon: Icons.route,
-          route: '/routes',
-        ),
-      );
-    }
-
-    if (esSuperadmin || funcionalidades.contains('horarios.ver')) {
-      items.add(
-        const MenuItemData(
-          label: 'Horarios',
+          label: 'Horario escolar',
           icon: Icons.timer,
-          route: '/school_schedule',
+          route: '/manage_schedule',
         ),
       );
     }
 
-    if (esSuperadmin || funcionalidades.contains('documentos.ver')) {
+    if (funcionalidades.contains('documentos.ver')) {
       items.add(
         const MenuItemData(
           label: 'Documentos',
           icon: Icons.file_copy,
-          route: '/admin_documents',
-        ),
-      );
-    }
-
-    if (esSuperadmin || funcionalidades.contains('historial_rutas.ver')) {
-      items.add(
-        const MenuItemData(
-          label: 'Historial rutas',
-          icon: Icons.file_copy,
-          route: '/admin_route_history',
+          route: '/teacher_documents',
         ),
       );
     }
@@ -108,7 +100,11 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+        ? const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(color: Colors.redAccent),
+          ),
+        )
         : DashboardLayout(menuItems: _menuItems);
   }
 }

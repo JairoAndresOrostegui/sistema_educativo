@@ -1,68 +1,129 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'modules/admin/pages/admin_historial_rutas_screen.dart';
-import 'modules/admin/pages/admin_horario_screen.dart';
-import 'modules/admin/pages/admin_rutas_screen.dart';
-import 'modules/auth/pages/login_page.dart';
-import 'modules/auth/guards/admin_dashboard_guard.dart';
-import 'modules/auth/guards/docente_dashboard_guard.dart';
-import 'modules/auth/guards/estudiante_dashboard_guard.dart';
-import 'modules/admin/pages/admin_usuarios_screen.dart';
-import 'modules/docente/pages/gestionar_horario_screen.dart';
-import 'modules/docente/pages/gestionar_ruta_screen.dart';
-import 'modules/docente/pages/subir_archivo_screen.dart';
-import 'modules/estudiante/pages/mis_horarios_screen.dart';
-import 'modules/estudiante/pages/mis_rutas_screen.dart';
-import 'modules/auth/pages/profile_page.dart';
-import 'modules/estudiante/pages/ver_archivos_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class App extends StatelessWidget {
-  const App({super.key});
+import 'modules/auth/providers/user_provider.dart';
+import 'modules/auth/pages/login_page.dart';
+import 'modules/auth/pages/access_denied_page.dart';
+import 'modules/profile/pages/profile_page.dart';
+import 'modules/auth/guards/admin_dashboard_guard.dart';
+import 'modules/auth/guards/teacher_dashboard_guard.dart';
+import 'modules/auth/guards/student_dashboard_guard.dart';
+
+import 'modules/admin/pages/admin_users_screen.dart';
+import 'modules/admin/pages/admin_routes_screen.dart';
+import 'modules/admin/pages/admin_schedule_screen.dart';
+import 'modules/admin/pages/admin_route_history_screen.dart';
+
+import 'modules/teacher/pages/manage_route_screen.dart';
+import 'modules/teacher/pages/manage_schedule_screen.dart';
+import 'modules/teacher/pages/upload_file_screen.dart';
+
+import 'modules/student/pages/my_routes_screen.dart';
+import 'modules/student/pages/my_schedule_screen.dart';
+import 'modules/student/pages/view_files_screen.dart';
+
+class AppRouter extends StatelessWidget {
+  const AppRouter({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sistema Educativo',
       debugShowCheckedModeBanner: false,
+      title: 'Sistema Educativo',
       theme: ThemeData(primarySwatch: Colors.indigo),
-      initialRoute: '/',
-      routes: {
-        //Ruta raiz
-        '/': (context) => const LoginPage(),
+      home: Consumer<UsuarioProvider>(
+        builder: (context, usuarioProvider, child) {
+          final estado = usuarioProvider.estado;
+          final usuario = usuarioProvider.usuario;
 
-        //Inicio de sesion
-        '/login': (context) => const LoginPage(),
+          if (estado == EstadoUsuario.cargando) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-        //Rutas de rol
-        '/admin_dashboard': (context) => const AdminDashboardGuard(),
-        '/docente_dashboard': (context) => const DocenteDashboardGuard(),
-        '/estudiante_dashboard': (context) => const EstudianteDashboardGuard(),
+          if (estado == EstadoUsuario.noAutenticado || usuario == null) {
+            return const LoginPage();
+          }
+          final String initialRouteName = _routeByRol(usuario.rol);
 
-        //Rutas generales
-        '/perfil': (context) => const ProfilePage(),
-
-        //Rutas del administrador
-        '/usuarios': (context) => const AdminUsuariosScreen(),
-        '/rutas': (context) => const AdminRutasScreen(),
-        '/horario_escolar': (context) => const AdminHorarioScreen(),
-        '/documentos_admin': (context) => const SubirArchivoScreen(),
-        '/admin_historial_rutas': (context) => const AdminHistorialRutasScreen(),
-
-        //Rutas del docente
-        '/rutas_docente': (context) => const GestionarRutaScreen(),
-        '/gestionar_horario': (context) => const GestionarHorarioScreen(),
-        '/documentos_docente': (context) => const SubirArchivoScreen(),
-
-        //Rutas del estudiante
-        '/mis_rutas': (context) => const MisRutasScreen(),
-        '/mis_horarios': (context) => const MisHorariosScreen(),
-        '/documentos_estudiante': (context) => const VerArchivosScreen(),
-
-        '/logout': (context) {
-          FirebaseAuth.instance.signOut();
-          return const LoginPage();
+          return Navigator(
+            initialRoute: initialRouteName,
+            onGenerateRoute: (settings) {
+              Widget page;
+              switch (settings.name) {
+                case '/profile':
+                  page = const ProfilePage();
+                  break;
+                case '/admin_dashboard':
+                  page = const AdminDashboardGuard();
+                  break;
+                case '/docente_dashboard':
+                  page = const TeacherDashboardGuard();
+                  break;
+                case '/estudiante_dashboard':
+                  page = const StudentDashboardGuard();
+                  break;
+                case '/users':
+                  page = const AdminUsersScreen();
+                  break;
+                case '/routes':
+                  page = const AdminRoutesScreen();
+                  break;
+                case '/school_schedule':
+                  page = const AdminScheduleScreen();
+                  break;
+                case '/admin_documents':
+                  page = const UploadFileScreen();
+                  break;
+                case '/admin_route_history':
+                  page = const AdminRouteHistoryScreen();
+                  break;
+                case '/manage_routes':
+                  page = const ManageRouteScreen();
+                  break;
+                case '/manage_schedule':
+                  page = const ManageScheduleScreen();
+                  break;
+                case '/teacher_documents':
+                  page = const UploadFileScreen();
+                  break;
+                case '/my_routes':
+                  page = const MyRoutesScreen();
+                  break;
+                case '/my_schedule':
+                  page = const MyScheduleScreen();
+                  break;
+                case '/student_documents':
+                  page = const ViewFilesScreen();
+                  break;
+                case '/logout':
+                  FirebaseAuth.instance.signOut();
+                  page = const LoginPage();
+                  break;
+                default:
+                  page = const AccessDeniedPage();
+                  break;
+              }
+              return MaterialPageRoute(builder: (context) => page, settings: settings);
+            },
+          );
         },
-      },
+      ),
     );
+  }
+
+  String _routeByRol(String? rol) {
+    switch (rol) {
+      case 'admin':
+        return '/admin_dashboard';
+      case 'docente':
+        return '/docente_dashboard';
+      case 'estudiante':
+        return '/estudiante_dashboard';
+      default:
+        return '/access_denied';
+    }
   }
 }
