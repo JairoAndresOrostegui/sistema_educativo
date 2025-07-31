@@ -1,49 +1,15 @@
-import 'package:excel/excel.dart';
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-// Solo para Web
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'stub/export_utils_stub.dart'
+    if (dart.library.html) 'web/admin_route_log_utils_web.dart'
+    if (dart.library.io) 'mobile/export_utils_mobile.dart';
 
 class AdminRouteLogUtils {
   /// Exportar historial a Excel (solo Web)
-  static void exportarExcel(List<Map<String, dynamic>> logs) {
-    if (!kIsWeb) return;
-
-    final excel = Excel.createExcel();
-    final sheet = excel['HistorialGestionRutas'];
-
-    sheet.appendRow([
-      TextCellValue('Ruta'),
-      TextCellValue('Acción'),
-      TextCellValue('Administrador'),
-      TextCellValue('Fecha'),
-    ]);
-
-    for (final log in logs) {
-      final fecha = log['fecha']?.toDate();
-      final fechaTexto =
-          fecha != null ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha) : '';
-
-      sheet.appendRow([
-        TextCellValue(log['nombreRuta'] ?? ''),
-        TextCellValue(log['accion'] ?? ''),
-        TextCellValue(log['nombreAdmin'] ?? ''),
-        TextCellValue(fechaTexto),
-      ]);
-    }
-
-    final bytes = excel.encode();
-    final blob = html.Blob([bytes]);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor =
-        html.AnchorElement(href: url)
-          ..setAttribute("download", "HistorialGestionRutas.xlsx")
-          ..click();
-    html.Url.revokeObjectUrl(url);
+  static void exportarExcel(List<Map<String, dynamic>> objeto) {
+    ExportUtilsPlatform.exportarExcel(objeto);
   }
 
   /// Exportar historial a PDF (todas las plataformas)

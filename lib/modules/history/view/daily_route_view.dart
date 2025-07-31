@@ -150,13 +150,13 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () => ExportUtils.exportarExcel(_rutas),
+                    onPressed: () => DailyRouteExportUtils.exportarExcel(_rutas),
                     icon: const Icon(Icons.table_view),
                     label: const Text('Exportar Excel'),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: () => ExportUtils.exportarPDF(_rutas),
+                    onPressed: () => DailyRouteExportUtils.exportarPDF(_rutas),
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Exportar PDF'),
                   ),
