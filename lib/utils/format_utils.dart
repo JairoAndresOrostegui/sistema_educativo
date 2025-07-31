@@ -33,4 +33,23 @@ class FormatUtils {
   static Timestamp? timestampDesdeDateTime(DateTime? date) {
     return date != null ? Timestamp.fromDate(date) : null;
   }
+
+  static String formatHourRange(Timestamp inicio, Timestamp fin) {
+    final i = DateFormat('HH:mm').format(inicio.toDate());
+    final f = DateFormat('HH:mm').format(fin.toDate());
+    return '$i - $f';
+  }
+
+  static String formatearHoraDesdeTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return 'No disponible';
+    return DateFormat('HH:mm').format(timestamp.toDate());
+  }
+
+  static String formatoFechaHora(DateTime fecha) {
+  return DateFormat('yyyy-MM-dd HH:mm').format(fecha);
+}
+
+static String formatoHora(DateTime fecha) {
+  return DateFormat('HH:mm').format(fecha);
+}
 }

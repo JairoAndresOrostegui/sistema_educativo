@@ -8,6 +8,9 @@ environment:
   sdk: ^3.7.2
 
 dependencies:
+  pdf: ^3.11.3
+  excel: ^4.0.6
+  printing: ^5.14.2
   open_filex: ^4.3.3
   path_provider: ^2.1.2
   universal_html: ^2.2.4

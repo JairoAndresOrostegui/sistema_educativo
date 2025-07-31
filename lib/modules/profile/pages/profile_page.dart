@@ -2,9 +2,9 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../models/user_model.dart';
-import '../../../services/profile_service.dart';
-import '../../../services/auth_service.dart';
+import '../../../models/user/user_model.dart';
+import '../../../services/profile/profile_service.dart';
+import '../../../services/auth/auth_service.dart';
 import '../../../utils/images/profile_image_picker.dart';
 import '../widgets/profile_field.dart';
 import '../../auth/widgets/profile_photo_widget.dart';
@@ -86,11 +86,11 @@ class _ProfilePageState extends State<ProfilePage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         centerTitle: true,
-        title: const Text("Perfil del Usuario"),
+        title: const Text("My profile"),
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         elevation: 1,
-        leading: const BackButton(color: Colors.black),
+        leading: const BackButton(color: Colors.redAccent),
       ),
       body: Center(
         child: Padding(

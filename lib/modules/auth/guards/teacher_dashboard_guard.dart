@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../auth/pages/login_page.dart';
 import '../pages/access_denied_page.dart';
-import '../../teacher/layouts/teacher_dashboard_layout.dart';
+import '../../layout/teacher_dashboard_layout.dart';
 
 class TeacherDashboardGuard extends StatelessWidget {
   const TeacherDashboardGuard({super.key});

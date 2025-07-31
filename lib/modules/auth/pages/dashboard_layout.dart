@@ -35,15 +35,22 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         child: Column(
           children: [
             const SizedBox(height: 32),
-            Image.asset('assets/logo.jpg', height: 100),
+            Image.asset(
+              'assets/logo.jpg',
+              height: 100,
+              semanticLabel: 'Logo del Liceo Bilingüe Rodolfo Llinás',
+            ),
             const SizedBox(height: 20),
-            const Text(
-              'Liceo Bilingüe Rodolfo Llinás',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                color: Colors.redAccent,
-                fontWeight: FontWeight.bold,
+            Semantics(
+              header: true,
+              child: Text(
+                'Liceo Bilingüe Rodolfo Llinás',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 20),

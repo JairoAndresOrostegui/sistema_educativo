@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../models/user_model.dart';
+import '../../../models/user/user_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 enum EstadoUsuario { cargando, autenticado, noAutenticado, error }

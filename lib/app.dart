@@ -5,23 +5,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'modules/auth/providers/user_provider.dart';
 import 'modules/auth/pages/login_page.dart';
 import 'modules/auth/pages/access_denied_page.dart';
+import 'modules/history/admin_history_screen.dart';
 import 'modules/profile/pages/profile_page.dart';
 import 'modules/auth/guards/admin_dashboard_guard.dart';
 import 'modules/auth/guards/teacher_dashboard_guard.dart';
 import 'modules/auth/guards/student_dashboard_guard.dart';
 
-import 'modules/admin/pages/admin_users_screen.dart';
-import 'modules/admin/pages/admin_routes_screen.dart';
-import 'modules/admin/pages/admin_schedule_screen.dart';
-import 'modules/admin/pages/admin_route_history_screen.dart';
+import 'modules/user/screen/admin_users_screen.dart';
+import 'modules/route/screen/admin_route_screen.dart';
+import 'modules/schedule/screen/admin_schedule_screen.dart';
 
-import 'modules/teacher/pages/manage_route_screen.dart';
-import 'modules/teacher/pages/manage_schedule_screen.dart';
-import 'modules/teacher/pages/upload_file_screen.dart';
+import 'modules/route/screen/teacher_route_screen.dart';
+import 'modules/file/upload_file_screen.dart';
 
-import 'modules/student/pages/my_routes_screen.dart';
-import 'modules/student/pages/my_schedule_screen.dart';
-import 'modules/student/pages/view_files_screen.dart';
+import 'modules/route/screen/student_route_screen.dart';
+import 'modules/schedule/screen/shared_schedule_screen.dart';
+import 'modules/file/view_file_screen.dart';
 
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
@@ -53,60 +52,69 @@ class AppRouter extends StatelessWidget {
             onGenerateRoute: (settings) {
               Widget page;
               switch (settings.name) {
+                // Generales
                 case '/profile':
                   page = const ProfilePage();
                   break;
-                case '/admin_dashboard':
-                  page = const AdminDashboardGuard();
-                  break;
-                case '/docente_dashboard':
-                  page = const TeacherDashboardGuard();
-                  break;
-                case '/estudiante_dashboard':
-                  page = const StudentDashboardGuard();
-                  break;
-                case '/users':
-                  page = const AdminUsersScreen();
-                  break;
-                case '/routes':
-                  page = const AdminRoutesScreen();
-                  break;
-                case '/school_schedule':
-                  page = const AdminScheduleScreen();
-                  break;
-                case '/admin_documents':
-                  page = const UploadFileScreen();
-                  break;
-                case '/admin_route_history':
-                  page = const AdminRouteHistoryScreen();
-                  break;
-                case '/manage_routes':
-                  page = const ManageRouteScreen();
-                  break;
-                case '/manage_schedule':
-                  page = const ManageScheduleScreen();
-                  break;
-                case '/teacher_documents':
-                  page = const UploadFileScreen();
-                  break;
-                case '/my_routes':
-                  page = const MyRoutesScreen();
-                  break;
                 case '/my_schedule':
-                  page = const MyScheduleScreen();
-                  break;
-                case '/student_documents':
-                  page = const ViewFilesScreen();
+                  page = const SharedScheduleScreen();
                   break;
                 case '/logout':
                   FirebaseAuth.instance.signOut();
                   page = const LoginPage();
                   break;
+
+                // Del administrador
+                case '/admin_dashboard':
+                  page = const AdminDashboardGuard();
+                  break;
+                case '/admin_user':
+                  page = const AdminUsersScreen();
+                  break;
+                case '/management_route':
+                  page = const AdminRoutesScreen();
+                  break;
+                case '/management_schedule':
+                  page = const ManageScheduleScreen();
+                  break;
+                case '/management_document':
+                  page = const UploadFileScreen();
+                  break;
+                case '/view_history':
+                  page = const AdminHistoryScreen();
+                  break;
+
+                // Del docente
+                case '/teacher_dashboard':
+                  page = const TeacherDashboardGuard();
+                  break;
+                case '/execute_route':
+                  page = const ManageRouteScreen();
+                  break;
+                case '/teacher_document':
+                  page = const UploadFileScreen();
+                  break;
+
+                // Del estudiante
+                case '/student_dashboard':
+                  page = const StudentDashboardGuard();
+                  break;
+                case '/my_route':
+                  page = const MyRoutesScreen();
+                  break;
+                case '/student_document':
+                  page = const ViewFilesScreen();
+                  break;
+
+                // Acceso denegado
                 default:
                   page = const AccessDeniedPage();
                   break;
               }
-              return MaterialPageRoute(builder: (context) => page, settings: settings);
+              return MaterialPageRoute(
+                builder: (context) => page,
+                settings: settings,
+              );
             },
           );
         },
@@ -119,9 +127,9 @@ class AppRouter extends StatelessWidget {
       case 'admin':
         return '/admin_dashboard';
       case 'docente':
-        return '/docente_dashboard';
+        return '/teacher_dashboard';
       case 'estudiante':
-        return '/estudiante_dashboard';
+        return '/student_dashboard';
       default:
         return '/access_denied';
     }

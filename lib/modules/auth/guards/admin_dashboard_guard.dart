@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../admin/layouts/admin_dashboard_layout.dart';
+import '../../layout/admin_dashboard_layout.dart';
 import '../pages/access_denied_page.dart';
 import '../pages/login_page.dart';
 

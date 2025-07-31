@@ -26,7 +26,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    FirebaseAuth.instance.signOut(); // 🔥 Esto borra cualquier sesión previa
+    FirebaseAuth.instance.signOut();
   }
 
   @override
@@ -302,7 +302,6 @@ class _LoginPageState extends State<LoginPage> {
           });
         }
 
-        // Redirección con provider cargado luego del login
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
