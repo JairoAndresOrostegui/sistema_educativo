@@ -1,41 +1,50 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../layout/student_dashboard_layout.dart';
-import '../pages/access_denied_page.dart';
-import '../pages/login_page.dart';
+import 'package:provider/provider.dart';
+
+import '../layouts/student_dashboard_layout.dart';
+import '../../../providers/user_provider_V2.dart';
+import '../screens/access_denied_page.dart';
+import '../screens/loginScreenV2.dart';
 
 class StudentDashboardGuard extends StatelessWidget {
   const StudentDashboardGuard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final userProvider = context.watch<UserProviderV2>();
+    final user = userProvider.user;
 
-    if (user == null) return const LoginPage();
+    if (user == null) return const LoginScreen();
 
-    return FutureBuilder<DocumentSnapshot>(
-      future:
-          FirebaseFirestore.instance.collection('usuarios').doc(user.uid).get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+    final role = user.role.trim().toLowerCase();
+    final status = (user.status).trim().toLowerCase();
+    final isActive = status == 'activo';
+    final isAllowed = role == 'estudiante' || role == 'familiar';
+
+    if (!isAllowed || !isActive) return const AccessDeniedPage();
+
+    // Familiar: setear activeStudentId si falta, sin bloquear el build
+    if (role == 'familiar' &&
+        (user.studentIds?.isNotEmpty ?? false) &&
+        (user.activeStudentId == null || user.activeStudentId!.isEmpty)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final up = context.read<UserProviderV2>();
+        final current = up.user;
+        if (current == null) return;
+        final stillFamiliar = current.role.trim().toLowerCase() == 'familiar';
+        final needsActive =
+            (current.activeStudentId == null ||
+                current.activeStudentId!.isEmpty);
+        final hasKids = current.studentIds?.isNotEmpty ?? false;
+
+        if (stillFamiliar && needsActive && hasKids) {
+          up.setUser(
+            current.copyWith(activeStudentId: current.studentIds!.first),
           );
         }
+      });
+    }
 
-        final data = snapshot.data!.data();
-
-        if (data == null || data is! Map<String, dynamic>) {
-          return const AccessDeniedPage();
-        }
-
-        if (data['rol'] != 'estudiante' || data['estado'] != 'activo') {
-          return const AccessDeniedPage();
-        }
-
-        return const EstudianteDashboardLayout();
-      },
-    );
+    return const EstudianteDashboardLayout();
   }
 }

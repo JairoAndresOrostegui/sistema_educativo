@@ -7,7 +7,7 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 setGlobalOptions({maxInstances: 10});
 
-exports.enviarNotificacionRuta = onCall(async (request) => {
+exports.enviarNotificacion = onCall(async (request) => {
   const {tokens, titulo, cuerpo} = request.data;
 
   if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
@@ -22,10 +22,7 @@ exports.enviarNotificacionRuta = onCall(async (request) => {
     tokens,
   };
 
-  const respuesta = await admin
-      .messaging()
-      .sendEachForMulticast(mensaje);
-
+  const respuesta = await admin.messaging().sendEachForMulticast(mensaje);
 
   return {
     exitosos: respuesta.successCount,
@@ -41,27 +38,7 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
   }
 
   try {
-    const usuario = await admin.auth().createUser({
-      email,
-      password,
-    });
-
-    const userData = {
-      nombres,
-      apellidos,
-      correo: email,
-      documento,
-      rol,
-      activo: true,
-      esSuperadmin: false,
-      creadoEn: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await admin.firestore()
-        .collection("usuarios")
-        .doc(usuario.uid)
-        .set(userData);
-
+    const usuario = await admin.auth().createUser({email, password});
     return {exito: true, uid: usuario.uid};
   } catch (error) {
     console.error("Error creando usuario desde admin:", error);

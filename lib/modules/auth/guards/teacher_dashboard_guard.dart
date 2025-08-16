@@ -1,50 +1,26 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../auth/pages/login_page.dart';
-import '../pages/access_denied_page.dart';
-import '../../layout/teacher_dashboard_layout.dart';
+import 'package:provider/provider.dart';
+
+import '../layouts/teacher_dashboard_layout.dart';
+import '../../../providers/user_provider_V2.dart';
+import '../screens/access_denied_page.dart';
+import '../screens/loginScreenV2.dart';
 
 class TeacherDashboardGuard extends StatelessWidget {
   const TeacherDashboardGuard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const LoginPage();
+    final user = context.watch<UserProviderV2>().user;
+    if (user == null) return const LoginScreen();
 
-    return FutureBuilder<DocumentSnapshot>(
-      future:
-          FirebaseFirestore.instance.collection('usuarios').doc(user.uid).get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+    final role = user.role.trim().toLowerCase();
+    final status = (user.status).trim().toLowerCase();
+    final isActive = status == 'activo';
 
-        final data = snapshot.data!.data();
+    final canAccess = user.isSuperadmin || role == 'docente';
+    if (!canAccess || !isActive) return const AccessDeniedPage();
 
-        if (data == null || data is! Map<String, dynamic>) {
-          return const AccessDeniedPage();
-        }
-
-        final List<dynamic> funcionalidades =
-            data['funcionalidades'] is List
-                ? data['funcionalidades'] as List<dynamic>
-                : [];
-
-        final bool esAdminConPermisos =
-            data['rol'] == 'admin' &&
-            funcionalidades.contains('docente.acceso');
-
-        if (data['estado'] != 'activo' ||
-            (data['rol'] != 'docente' && !esAdminConPermisos)) {
-          return const AccessDeniedPage();
-        }
-
-        return const DocenteDashboardLayout();
-      },
-    );
+    return const DocenteDashboardLayout();
   }
 }

@@ -1,41 +1,26 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../../layout/admin_dashboard_layout.dart';
-import '../pages/access_denied_page.dart';
-import '../pages/login_page.dart';
+import 'package:provider/provider.dart';
+
+import '../layouts/admin_dashboard_layout.dart';
+import '../../../providers/user_provider_V2.dart';
+import '../screens/access_denied_page.dart';
+import '../screens/loginScreenV2.dart';
 
 class AdminDashboardGuard extends StatelessWidget {
   const AdminDashboardGuard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = context.watch<UserProviderV2>().user;
+    if (user == null) return const LoginScreen();
 
-    if (user == null) return const LoginPage();
+    final role = user.role.trim().toLowerCase();
+    final status = (user.status).trim().toLowerCase();
+    final isActive = status == 'activo';
 
-    return FutureBuilder<DocumentSnapshot>(
-      future:
-          FirebaseFirestore.instance.collection('usuarios').doc(user.uid).get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+    final canAccess = user.isSuperadmin || role == 'administrador';
+    if (!canAccess || !isActive) return const AccessDeniedPage();
 
-        final data = snapshot.data!.data();
-
-        if (data == null || data is! Map<String, dynamic>) {
-          return const AccessDeniedPage();
-        }
-
-        if (data['rol'] != 'admin' || data['estado'] != 'activo') {
-          return const AccessDeniedPage();
-        }
-
-        return const AdminDashboardLayout();
-      },
-    );
+    return const AdminDashboardLayout();
   }
 }

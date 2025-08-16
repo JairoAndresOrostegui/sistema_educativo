@@ -2,69 +2,68 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../utils/format_utils.dart';
 
-class RutaModel {
+class RouteModel {
   final String id;
-  final String nombre;
-  final String direccionInicio;
-  final DateTime? fechaInicio;
-  final DateTime? fechaFin;
-  final TimeOfDay? horaInicio;
-  final TimeOfDay? horaFin;
-  final String? gestionador;
-  final List<String> estudiantes;
+  final String name;
+  final String startAddress;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final TimeOfDay? startTime;
+  final TimeOfDay? endTime;
+  final String? manager;
+  final List<String> students;
 
-  RutaModel({
+  const RouteModel({
     required this.id,
-    required this.nombre,
-    required this.direccionInicio,
-    this.fechaInicio,
-    this.fechaFin,
-    this.horaInicio,
-    this.horaFin,
-    this.gestionador,
-    required this.estudiantes,
+    required this.name,
+    required this.startAddress,
+    this.startDate,
+    this.endDate,
+    this.startTime,
+    this.endTime,
+    this.manager,
+    required this.students,
   });
 
-  factory RutaModel.fromFirestore(DocumentSnapshot doc) {
+  factory RouteModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    return RutaModel(
+    return RouteModel(
       id: doc.id,
-      nombre: data['nombre'] ?? '',
-      direccionInicio: data['direccionInicio'] ?? '',
-      fechaInicio: FormatUtils.dateTimeDesdeTimestamp(data['fechaInicio']),
-      fechaFin: FormatUtils.dateTimeDesdeTimestamp(data['fechaFin']),
-      horaInicio: FormatUtils.timeOfDayDesdeTimestamp(data['horaInicio']),
-      horaFin: FormatUtils.timeOfDayDesdeTimestamp(data['horaFin']),
-      gestionador: data['gestionador'],
-      estudiantes: List<String>.from(data['estudiantes'] ?? []),
+      name: data['nombre'] ?? '',
+      startAddress: data['direccionInicio'] ?? '',
+      startDate: FormatUtils.dateTimeDesdeTimestamp(data['fechaInicio']),
+      endDate: FormatUtils.dateTimeDesdeTimestamp(data['fechaFin']),
+      startTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaInicio']),
+      endTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaFin']),
+      manager: data['gestionador'],
+      students: List<String>.from(data['estudiantes'] ?? []),
     );
   }
 
-  RutaModel copyWithId(String nuevoId) {
-    return RutaModel(
-      id: nuevoId,
-      nombre: nombre,
-      direccionInicio: direccionInicio,
-      fechaInicio: fechaInicio,
-      fechaFin: fechaFin,
-      horaInicio: horaInicio,
-      horaFin: horaFin,
-      gestionador: gestionador,
-      estudiantes: estudiantes,
+  RouteModel copyWithId(String newId) {
+    return RouteModel(
+      id: newId,
+      name: name,
+      startAddress: startAddress,
+      startDate: startDate,
+      endDate: endDate,
+      startTime: startTime,
+      endTime: endTime,
+      manager: manager,
+      students: students,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'nombre': nombre,
-      'direccionInicio': direccionInicio,
-      'fechaInicio': FormatUtils.timestampDesdeDateTime(fechaInicio),
-      'fechaFin': FormatUtils.timestampDesdeDateTime(fechaFin),
-      'horaInicio': FormatUtils.timestampDesdeHora(horaInicio),
-      'horaFin': FormatUtils.timestampDesdeHora(horaFin),
-      'gestionador': gestionador,
-      'estudiantes': estudiantes,
+      'nombre': name,
+      'direccionInicio': startAddress,
+      'fechaInicio': FormatUtils.timestampDesdeDateTime(startDate),
+      'fechaFin': FormatUtils.timestampDesdeDateTime(endDate),
+      'horaInicio': FormatUtils.timestampDesdeHora(startTime),
+      'horaFin': FormatUtils.timestampDesdeHora(endTime),
+      'gestionador': manager,
+      'estudiantes': students,
     };
   }
 }

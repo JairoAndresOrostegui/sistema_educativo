@@ -1,45 +1,47 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class ArchivoModel {
+class FileModel {
   final String id;
-  final String nombre;
+  final String name;
   final String url;
-  final String grado;
-  final String subidoPor;
-  final String nombreSubidor;
-  final Timestamp fecha;
+  final String grade;
+  final String uploadedBy;
+  final String uploaderName;
+  final Timestamp createdAt;
 
-  ArchivoModel({
+  FileModel({
     required this.id,
-    required this.nombre,
+    required this.name,
     required this.url,
-    required this.grado,
-    required this.subidoPor,
-    required this.nombreSubidor,
-    required this.fecha,
+    required this.grade,
+    required this.uploadedBy,
+    required this.uploaderName,
+    required this.createdAt,
   });
 
-  factory ArchivoModel.fromFirestore(DocumentSnapshot doc) {
+  factory FileModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    return ArchivoModel(
+    return FileModel(
       id: doc.id,
-      nombre: data['nombre'] ?? '',
+      name: data['name'] ?? '',
       url: data['url'] ?? '',
-      grado: data['grado'] ?? '',
-      subidoPor: data['subidoPor'] ?? '',
-      nombreSubidor: data['nombreSubidor'] ?? '',
-      fecha: data['fecha'] ?? Timestamp.now(),
+      grade: data['grade'] ?? '',
+      uploadedBy: data['uploadedBy'] ?? '',
+      uploaderName: data['uploaderName'] ?? '',
+      createdAt: data['createdAt'] is Timestamp
+          ? data['createdAt'] as Timestamp
+          : Timestamp.now(),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'nombre': nombre,
+      'name': name,
       'url': url,
-      'grado': grado,
-      'subidoPor': subidoPor,
-      'nombreSubidor': nombreSubidor,
-      'fecha': fecha,
+      'grade': grade,
+      'uploadedBy': uploadedBy,
+      'uploaderName': uploaderName,
+      'createdAt': createdAt,
     };
   }
 }

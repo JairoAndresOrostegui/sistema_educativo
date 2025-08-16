@@ -1,24 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:sistema_educativo/config/firebase_options.dart'; 
-
-import 'package:sistema_educativo/app.dart';
-import 'package:sistema_educativo/modules/auth/providers/user_provider.dart';
+import 'app.dart';
+import 'config/firebase_options.dart';
+import 'config/theme_config.dart';
+import 'providers/user_provider_V2.dart';
+import 'utils/firebase_utils.dart';
+import 'utils/push_notifications.dart';
+import 'widgets/push_bootstrap.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // Fondo (Android)
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  try {
+    await ThemeProvider.cargarConfiguracion(
+      'desarrolloytecnologiasantander.com',
+    );
+  } catch (e) {
+    debugPrint('⚠️ Error al cargar configuración: $e');
+    ThemeProvider.config = ThemeConfig.fromMap({});
+  }
+
+  await fRequestPermission();
 
   runApp(
     ChangeNotifierProvider(
-      create: (context) => UsuarioProvider()..cargarUsuario(FirebaseAuth.instance.currentUser?.uid),
-      child: const AppRouter(),
+      create: (context) => UserProviderV2(),
+      child: const PushBootstrap(
+        webVapidKey: 'BCWDKdFxjGMarEkk6xvvs5jw0mnJEN22UFAKmd-DbT7Lwipt4rwHhKTnF0GaTphnkk0-CmCerzJIidz8kkfrV-s',
+        child: AppRouter(),
+      ),
     ),
   );
 }
