@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../services/file_history_service.dart';
 import '../export/utils/file_export_utils.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
 
 class GestionDocumentosView extends StatefulWidget {
   const GestionDocumentosView({super.key});
@@ -218,7 +218,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
     if (!kIsWeb) {
       return const Scaffold(
         body: SafeArea(
-          child: Center(child: Text('Disponible solo en la versión web.')),
+          child: Center(child: Text('Disponible solo en la version web.')),
         ),
       );
     }
@@ -226,7 +226,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
     final rangoTexto =
         _rango == null
             ? ''
-            : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
+            : '${df.format(_rango!.start)}  -  ${df.format(_rango!.end)}';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -245,11 +245,11 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.03),
+                      color: Colors.black.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -270,7 +270,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                   SizedBox(
                     width: 260,
                     child: DropdownButtonFormField<String?>(
-                      value: _gradeSelected,
+                      initialValue: _gradeSelected,
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
@@ -392,7 +392,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   side: BorderSide(
-                                    color: Colors.red.withOpacity(.12),
+                                    color: Colors.red.withValues(alpha: .12),
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),

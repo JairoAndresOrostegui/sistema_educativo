@@ -1,4 +1,4 @@
-package com.example.sistema_educativo
+package com.desarrolloytecnologiasantander.serodolfo
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -18,16 +18,18 @@ class ScheduleHistoryUtils {
     final font = await PdfGoogleFonts.openSansRegular();
     final fontBold = await PdfGoogleFonts.openSansBold();
 
-    DateTime? _asDateTime(dynamic raw) {
+    DateTime? asDateTime(dynamic raw) {
       if (raw is DateTime) return raw;
       if (raw is Timestamp) return raw.toDate();
       if (raw is num) {
         final v = raw.toDouble().abs();
-        if (v > 1e14)
-          return DateTime.fromMicrosecondsSinceEpoch(raw.toInt()); // µs
-        if (v > 1e11)
-          return DateTime.fromMillisecondsSinceEpoch(raw.toInt()); // ms
-        return DateTime.fromMillisecondsSinceEpoch((raw * 1000).toInt()); // s
+        if (v > 1e14) {
+          return DateTime.fromMicrosecondsSinceEpoch(raw.toInt());
+        }
+        if (v > 1e11) {
+          return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
+        }
+        return DateTime.fromMillisecondsSinceEpoch((raw * 1000).toInt());
       }
       if (raw is String && raw.isNotEmpty) {
         try {
@@ -53,15 +55,15 @@ class ScheduleHistoryUtils {
               pw.TableHelper.fromTextArray(
                 headers: [
                   'Grado',
-                  'Día',
+                  'Dia',
                   'Materia',
-                  'Acción',
+                  'Accion',
                   'Usuario',
                   'Fecha',
                 ],
                 data:
                     logs.map((log) {
-                      final fecha = _asDateTime(log['fecha']);
+                      final fecha = asDateTime(log['fecha']);
                       final fechaTexto =
                           fecha != null
                               ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)

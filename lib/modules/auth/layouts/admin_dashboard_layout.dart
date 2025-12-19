@@ -1,7 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 import 'dashboard_layout.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../enrollment/services/enrollment_service.dart';
 
 class AdminDashboardLayout extends StatefulWidget {
   const AdminDashboardLayout({super.key});
@@ -13,14 +16,17 @@ class AdminDashboardLayout extends StatefulWidget {
 class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _pendingStream;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingSub;
 
   @override
   void initState() {
     super.initState();
     _buildMenu();
+    _listenPending();
   }
 
-  void _buildMenu() {
+  Future<void> _buildMenu() async {
     final user = context.read<UserProviderV2>().user;
     if (user == null) return;
 
@@ -29,6 +35,14 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
 
     final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
     final esSuperadmin = user.isSuperadmin;
+
+    int pendingEnrollments = 0;
+    try {
+      pendingEnrollments = await EnrollmentService()
+          .countByEstados(['prematricula', 'pendiente_revision']);
+    } catch (_) {
+      pendingEnrollments = 0;
+    }
 
     final items = <MenuItemData>[
       const MenuItemData(
@@ -47,6 +61,15 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
         ),
       );
     }
+
+    items.add(
+      MenuItemData(
+        label: 'Matrículas',
+        icon: Icons.assignment_ind,
+        route: '/enrollment',
+        badgeCount: pendingEnrollments,
+      ),
+    );
 
     if (esSuperadmin || perms.contains('rutas.ver')) {
       items.add(
@@ -98,10 +121,43 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
+    if (!mounted) return;
     setState(() {
       _menuItems = items;
       isLoading = false;
     });
+  }
+
+  void _listenPending() {
+    _pendingStream = FirebaseFirestore.instance
+        .collection('enrollments')
+        .where('estado', whereIn: ['prematricula', 'pendiente_revision'])
+        .snapshots();
+    _pendingSub = _pendingStream!.listen((snapshot) {
+      final count = snapshot.size;
+      if (!mounted) return;
+      setState(() {
+        // reconstruir badge sin recalcular permisos
+        _menuItems = _menuItems
+            .map(
+              (m) => m.route == '/enrollment'
+                  ? MenuItemData(
+                      label: m.label,
+                      icon: m.icon,
+                      route: m.route,
+                      badgeCount: count,
+                    )
+                  : m,
+            )
+            .toList();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _pendingSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -117,3 +173,8 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
         : DashboardLayout(menuItems: _menuItems);
   }
 }
+
+
+
+
+

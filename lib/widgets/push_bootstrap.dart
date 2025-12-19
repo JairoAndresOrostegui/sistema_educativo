@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/user_provider_V2.dart';
+import '../providers/user_provider_v2.dart';
 import '../utils/push_notifications.dart';
 import '../utils/firebase_utils.dart';
 

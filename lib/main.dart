@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'app.dart';
 import 'config/firebase_options.dart';
 import 'config/theme_config.dart';
-import 'providers/user_provider_V2.dart';
+import 'providers/user_provider_v2.dart';
 import 'utils/firebase_utils.dart';
 import 'utils/push_notifications.dart';
 import 'widgets/push_bootstrap.dart';
@@ -23,7 +23,7 @@ void main() async {
       'desarrolloytecnologiasantander.com',
     );
   } catch (e) {
-    debugPrint('⚠️ Error al cargar configuración: $e');
+    debugPrint('Error al cargar configuracion de tema: $e');
     ThemeProvider.config = ThemeConfig.fromMap({});
   }
 
@@ -33,7 +33,8 @@ void main() async {
     ChangeNotifierProvider(
       create: (context) => UserProviderV2(),
       child: const PushBootstrap(
-        webVapidKey: 'BCWDKdFxjGMarEkk6xvvs5jw0mnJEN22UFAKmd-DbT7Lwipt4rwHhKTnF0GaTphnkk0-CmCerzJIidz8kkfrV-s',
+        webVapidKey:
+            'BCWDKdFxjGMarEkk6xvvs5jw0mnJEN22UFAKmd-DbT7Lwipt4rwHhKTnF0GaTphnkk0-CmCerzJIidz8kkfrV-s',
         child: AppRouter(),
       ),
     ),

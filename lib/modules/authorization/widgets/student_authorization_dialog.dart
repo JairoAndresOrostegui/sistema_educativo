@@ -160,7 +160,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
-                value: _studentId,
+                initialValue: _studentId,
                 decoration: const InputDecoration(
                   labelText: 'Estudiante',
                   border: OutlineInputBorder(),
@@ -182,7 +182,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                   Expanded(
                     child: SwitchListTile(
                       value: _allDay,
-                      activeColor: Colors.redAccent,
+                      activeThumbColor: Colors.redAccent,
                       onChanged: (v) => setState(() => _allDay = v),
                       title: const Text('Todo el día'),
                       contentPadding: EdgeInsets.zero,
@@ -191,7 +191,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                   Expanded(
                     child: SwitchListTile(
                       value: _multiDay,
-                      activeColor: Colors.redAccent,
+                      activeThumbColor: Colors.redAccent,
                       onChanged:
                           (v) => setState(() {
                             _multiDay = v;
@@ -281,8 +281,8 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                 ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
-                  color: Colors.red.withOpacity(.06),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: Colors.red.withValues(alpha: .06),
                 ),
                 child: const Text(
                   'Debes enviar la evidencia del motivo por los canales oficiales (WhatsApp y correo institucional).',
@@ -303,8 +303,9 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
             onPressed: () {
               if (_studentId == null ||
                   _dateFrom == null ||
-                  _reasonCtrl.text.trim().isEmpty)
+                  _reasonCtrl.text.trim().isEmpty) {
                 return;
+              }
               final startDt =
                   _allDay ? null : _toDateTime(_dateFrom!, _startTod);
               final endDt = _allDay ? null : _toDateTime(_dateFrom!, _endTod);

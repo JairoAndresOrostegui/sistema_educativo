@@ -1,4 +1,5 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -8,18 +9,18 @@ class ExportUtilsPlatform {
   static void exportarExcel(List<Map<String, dynamic>> logs) {
     final excel = Excel.createExcel();
 
-    final sheetName = 'HistorialHorarios';
+    const sheetName = 'HistorialHorarios';
     final def = excel.getDefaultSheet();
     if (def != null && def != sheetName) {
       excel.rename(def, sheetName);
     }
-    final Sheet sheet = excel[sheetName]!;
+    final Sheet sheet = excel[sheetName];
 
     sheet.appendRow([
       TextCellValue('Grado'),
-      TextCellValue('Día'),
+      TextCellValue('Dia'),
       TextCellValue('Materia'),
-      TextCellValue('Acción'),
+      TextCellValue('Accion'),
       TextCellValue('Usuario'),
       TextCellValue('Fecha'),
     ]);
@@ -64,10 +65,9 @@ class ExportUtilsPlatform {
       bytes,
     ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor =
-        html.AnchorElement(href: url)
-          ..download = 'HistorialHorarios.xlsx'
-          ..click();
+    html.AnchorElement(href: url)
+      ..download = 'HistorialHorarios.xlsx'
+      ..click();
     html.Url.revokeObjectUrl(url);
   }
 }

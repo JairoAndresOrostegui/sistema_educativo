@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
 import '../../../utils/format_utils.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/parameters_service.dart';
+import '../../../utils/navigation_utils.dart';
 
 extension _Cap on String {
   String cap() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
+}
+
+String _displayDay(String day) {
+  if (day.toLowerCase() == 'miercoles') return 'miércoles';
+  return day.cap();
 }
 
 class TeacherScheduleScreen extends StatefulWidget {
@@ -31,7 +37,7 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
   final List<String> _daysOfWeek = const [
     'lunes',
     'martes',
-    'miércoles',
+    'miercoles',
     'jueves',
     'viernes',
   ];
@@ -112,6 +118,7 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
+        leading: const BackToDashboardButton(),
       ),
       body: SafeArea(
         child: Padding(
@@ -186,7 +193,7 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Semantics(
-                        label: 'Día ${day.cap()}',
+              label: 'Día ${_displayDay(day)}',
                         button: true,
                         selected: sel,
                         child: ElevatedButton(
@@ -199,7 +206,7 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
                             elevation: 0,
                           ),
                           onPressed: () => setState(() => _selectedDay = day),
-                          child: Text(day.cap()),
+                      child: Text(_displayDay(day)),
                         ),
                       ),
                     );
@@ -242,15 +249,15 @@ class _FilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(.15)),
+          border: Border.all(color: Colors.red.withValues(alpha: .15)),
           gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [Colors.red.withOpacity(.06), Colors.white],
+            colors: [Colors.red.withValues(alpha: .06), Colors.white],
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -290,13 +297,13 @@ class _DayColumn extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(color: Colors.red.withOpacity(.08)),
+            decoration: BoxDecoration(color: Colors.red.withValues(alpha: .08)),
             child: Semantics(
               header: true,
-              label: 'Horario de ${day.cap()}',
+              label: 'Horario de ${_displayDay(day)}',
               child: Center(
                 child: Text(
-                  day.cap(),
+                  _displayDay(day),
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     color: Colors.redAccent,
@@ -316,7 +323,7 @@ class _DayColumn extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.all(12),
               itemCount: subjects.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) => _TeacherSubjectItem(subject: subjects[i]),
             ),
         ],
@@ -342,12 +349,12 @@ class _TeacherSubjectItem extends StatelessWidget {
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.redAccent.withOpacity(.15)),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: .15)),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [
-            Colors.redAccent.withOpacity(.06),
+            Colors.redAccent.withValues(alpha: .06),
             Theme.of(context).colorScheme.surface,
           ],
         ),
@@ -381,9 +388,9 @@ class _GradeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.redAccent.withOpacity(.12),
+        color: Colors.redAccent.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.redAccent.withOpacity(.25)),
+        border: Border.all(color: Colors.redAccent.withValues(alpha: .25)),
       ),
       child: Text(
         text,

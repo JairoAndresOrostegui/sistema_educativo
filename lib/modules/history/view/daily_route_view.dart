@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart'; // ⬅️ NUEVO
-import '../../../providers/user_provider_V2.dart'; // ⬅️ NUEVO
+import '../../../providers/user_provider_v2.dart'; // ⬅️ NUEVO
 
 import '../services/daily_route_history_service.dart';
 import '../export/utils/daily_route_export_utils.dart';
@@ -240,11 +240,11 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border.all(color: Colors.red.withOpacity(.15)),
+              border: Border.all(color: Colors.red.withValues(alpha: .15)),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(.03),
+                  color: Colors.black.withValues(alpha: .03),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -273,7 +273,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
               SizedBox(
                 width: 200,
                 child: DropdownButtonFormField<String>(
-                  value: _estadoSeleccionado,
+                  initialValue: _estadoSeleccionado,
                   items: const [
                     DropdownMenuItem(
                       value: 'pendiente',
@@ -429,12 +429,12 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.red.withOpacity(.15)),
+          border: Border.all(color: Colors.red.withValues(alpha: .15)),
           borderRadius: BorderRadius.circular(14),
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.03),
+              color: Colors.black.withValues(alpha: .03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

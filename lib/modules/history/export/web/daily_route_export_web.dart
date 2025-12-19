@@ -1,4 +1,5 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 import 'package:excel/excel.dart';
 
@@ -11,7 +12,7 @@ class ExportUtilsPlatform {
     if (def != null && def != sheetName) {
       excel.rename(def, sheetName);
     }
-    final Sheet sheet = excel[sheetName]!;
+    final Sheet sheet = excel[sheetName];
 
     sheet.appendRow([
       TextCellValue('Nombre Ruta'),
@@ -20,7 +21,7 @@ class ExportUtilsPlatform {
       TextCellValue('Hora Inicio'),
       TextCellValue('Hora Fin'),
       TextCellValue('Estado'),
-      TextCellValue('Duración (min)'),
+      TextCellValue('Duracion (min)'),
       TextCellValue('Total Estudiantes'),
       TextCellValue('Avisos Enviados'),
     ]);
@@ -52,7 +53,7 @@ class ExportUtilsPlatform {
       sheet.appendRow([
         TextCellValue(''),
         TextCellValue('Nombre Estudiante'),
-        TextCellValue('Dirección'),
+        TextCellValue('Direccion'),
         TextCellValue('Hora Recogida'),
         TextCellValue('Recogido'),
         TextCellValue('Anulado'),
@@ -69,9 +70,9 @@ class ExportUtilsPlatform {
           TextCellValue(est['nombre'] ?? ''),
           TextCellValue(est['direccion'] ?? ''),
           TextCellValue(est['horaRecogida']?.toDate().toString() ?? ''),
-          TextCellValue(est['recogido'] == true ? 'Sí' : 'No'),
-          TextCellValue(est['anulado'] == true ? 'Sí' : 'No'),
-          TextCellValue(est['activo'] == true ? 'Sí' : 'No'),
+          TextCellValue(est['recogido'] == true ? 'Si' : 'No'),
+          TextCellValue(est['anulado'] == true ? 'Si' : 'No'),
+          TextCellValue(est['activo'] == true ? 'Si' : 'No'),
           TextCellValue((est['avisosEnviados'] ?? 0).toString()),
         ]);
       }
@@ -90,10 +91,9 @@ class ExportUtilsPlatform {
       bytes,
     ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor =
-        html.AnchorElement(href: url)
-          ..download = 'HistorialRutas.xlsx'
-          ..click();
+    html.AnchorElement(href: url)
+      ..download = 'HistorialRutas.xlsx'
+      ..click();
     html.Url.revokeObjectUrl(url);
   }
 }

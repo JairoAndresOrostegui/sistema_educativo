@@ -1,4 +1,5 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -13,29 +14,35 @@ class ExportUtilsPlatform {
     if (def != null && def != sheetName) {
       excel.rename(def, sheetName);
     }
-    final Sheet sheet = excel[sheetName]!;
+    final Sheet sheet = excel[sheetName];
 
     sheet.appendRow([
       TextCellValue('Nombre'),
       TextCellValue('Rol'),
       TextCellValue('Evento'),
       TextCellValue('Campus'),
-      TextCellValue('Institución'),
+      TextCellValue('Institucion'),
       TextCellValue('Grado'),
       TextCellValue('Fecha'),
     ]);
 
-    DateTime? _asDateTime(dynamic raw) {
+    DateTime? asDateTime(dynamic raw) {
       if (raw is DateTime) return raw;
       if (raw is Timestamp) return raw.toDate();
       if (raw is num) {
         final v = raw.toDouble().abs();
-        if (v > 1e14) return DateTime.fromMicrosecondsSinceEpoch(raw.toInt());
-        if (v > 1e11) return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
+        if (v > 1e14) {
+          return DateTime.fromMicrosecondsSinceEpoch(raw.toInt());
+        }
+        if (v > 1e11) {
+          return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
+        }
         return DateTime.fromMillisecondsSinceEpoch((raw * 1000).toInt());
       }
       if (raw is String && raw.isNotEmpty) {
-        try { return DateTime.parse(raw); } catch (_) {}
+        try {
+          return DateTime.parse(raw);
+        } catch (_) {}
       }
       return null;
     }
@@ -43,7 +50,7 @@ class ExportUtilsPlatform {
     final df = DateFormat('yyyy-MM-dd HH:mm:ss');
 
     for (final log in logs) {
-      final fecha = _asDateTime(log['timestamp']);
+      final fecha = asDateTime(log['timestamp']);
       final fechaTexto = fecha != null ? df.format(fecha) : '';
 
       sheet.appendRow([
@@ -69,7 +76,7 @@ class ExportUtilsPlatform {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
+    html.AnchorElement(href: url)
       ..download = 'HistorialLogsUsuarios.xlsx'
       ..click();
     html.Url.revokeObjectUrl(url);

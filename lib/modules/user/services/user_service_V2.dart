@@ -1,13 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
-import '../../../models/user/userModelV2.dart';
+import '../../../models/user/user_model_v2.dart';
 
 class UserServiceV2 {
   final _db = FirebaseFirestore.instance;
 
-  /// Obtener todos los usuarios desde la colección 'users'
-  Future<List<UserModelV2>> obtenerTodos({
+  /// Obtener todos los usuarios desde la coleccion 'users'
+  Future<List<userModelv2>> obtenerTodos({
     required String institutionId,
     required String campusId,
   }) async {
@@ -19,12 +19,12 @@ class UserServiceV2 {
             .get();
 
     return snapshot.docs
-        .map((doc) => UserModelV2.fromFirestore(doc.data(), doc.id))
+        .map((doc) => userModelv2.fromFirestore(doc.data(), doc.id))
         .toList();
   }
 
   /// Obtener usuario por ID
-  Future<UserModelV2?> obtenerPorId({
+  Future<userModelv2?> obtenerPorId({
     required String uid,
     required String institutionId,
     required String campusId,
@@ -39,13 +39,13 @@ class UserServiceV2 {
             .get();
 
     if (doc.docs.isEmpty) return null;
-    return UserModelV2.fromFirestore(doc.docs.first.data(), doc.docs.first.id);
+    return userModelv2.fromFirestore(doc.docs.first.data(), doc.docs.first.id);
   }
 
   /// Guardar o actualizar un usuario en Firestore
-  Future<void> guardarUsuario(UserModelV2 usuario) async {
+  Future<void> guardarUsuario(userModelv2 usuario) async {
     if (usuario.id.trim().isEmpty) {
-      throw Exception('El ID del usuario no puede estar vacío');
+      throw Exception('El ID del usuario no puede estar vacio');
     }
     await _db
         .collection('users')
@@ -59,7 +59,7 @@ class UserServiceV2 {
     return docRef.id;
   }
 
-  /// Crear usuario en Firebase Auth + Firestore vía Cloud Function
+  /// Crear usuario en Firebase Auth via Cloud Function
   Future<String> crearUsuarioDesdeAdmin({
     required String email,
     required String password,
@@ -87,7 +87,7 @@ class UserServiceV2 {
     return result.data['uid'];
   }
 
-  /// Eliminar usuario de Firebase Auth vía Cloud Function
+  /// Eliminar usuario de Firebase Auth via Cloud Function
   Future<void> eliminarUsuarioAuth(String uid) async {
     final callable = FirebaseFunctions.instance.httpsCallable(
       'eliminarUsuarioAuth',
@@ -100,14 +100,14 @@ class UserServiceV2 {
   }
 
   /// Eliminar usuario completamente del sistema (Auth + Firestore)
-  Future<void> eliminar(UserModelV2 usuario) async {
+  Future<void> eliminar(userModelv2 usuario) async {
     await _db.collection('users').doc(usuario.id).delete();
     await eliminarUsuarioAuth(usuario.id);
   }
 
   /// Registrar historial de acciones del usuario (agrega institution/campus)
   Future<void> registrarHistorial({
-    required UserModelV2 usuario,
+    required userModelv2 usuario,
     required String accion,
     required String realizadoPor,
   }) async {

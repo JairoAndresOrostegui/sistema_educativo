@@ -3,15 +3,15 @@ import 'package:intl/intl.dart';
 
 import '../../../models/route/daily_route_model.dart';
 import '../../../models/route/student_route_model.dart';
-import '../../../models/user/userModelV2.dart';
+import '../../../models/user/user_model_v2.dart';
 
 class RutaDiariaService {
   final FirebaseFirestore _firestore;
-  final UserModelV2 _currentUser;
+  final userModelv2 _currentUser;
 
   RutaDiariaService({
     FirebaseFirestore? firestore,
-    required UserModelV2 currentUser,
+    required userModelv2 currentUser,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _currentUser = currentUser;
 

@@ -1,4 +1,5 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -13,11 +14,11 @@ class ExportUtilsPlatform {
     if (def != null && def != sheetName) {
       excel.rename(def, sheetName);
     }
-    final Sheet sheet = excel[sheetName]!;
+    final Sheet sheet = excel[sheetName];
 
     sheet.appendRow([
       TextCellValue('Ruta'),
-      TextCellValue('Acción'),
+      TextCellValue('Accion'),
       TextCellValue('Administrador'),
       TextCellValue('Fecha'),
     ]);
@@ -32,7 +33,6 @@ class ExportUtilsPlatform {
       } else if (raw is Timestamp) {
         fecha = raw.toDate();
       } else if (raw is num) {
-        // admite epoch ms/us comunes
         final ms = raw.abs() > 1e12 ? raw ~/ 1000 : raw;
         fecha = DateTime.fromMillisecondsSinceEpoch(ms.toInt());
       } else if (raw is String && raw.isNotEmpty) {
@@ -61,10 +61,9 @@ class ExportUtilsPlatform {
       bytes,
     ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor =
-        html.AnchorElement(href: url)
-          ..download = 'HistorialGestionRutas.xlsx'
-          ..click();
+    html.AnchorElement(href: url)
+      ..download = 'HistorialGestionRutas.xlsx'
+      ..click();
     html.Url.revokeObjectUrl(url);
   }
 }

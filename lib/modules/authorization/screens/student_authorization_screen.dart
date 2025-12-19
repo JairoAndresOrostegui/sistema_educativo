@@ -1,12 +1,16 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
-import '../../../models/user/userModelV2.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../models/user/user_model_v2.dart';
+import '../../../providers/user_provider_v2.dart';
 import '../services/authorization_service.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
 import '../widgets/student_authorization_dialog.dart';
 import '../widgets/teacher_authorization_dialog.dart';
 
@@ -22,7 +26,7 @@ class _AuthorizationStudentScreenState
     extends State<AuthorizationStudentScreen> {
   final _svc = AuthorizationService();
 
-  UserModelV2? _logged;
+  userModelv2? _logged;
   bool _isSuperadmin = false;
   List<String> _perms = [];
   late String _institutionId;
@@ -31,6 +35,7 @@ class _AuthorizationStudentScreenState
   final List<AuthorizationRequest> _items = [];
   final List<dynamic> _cursors = [null];
   bool _loading = false;
+  bool _busy = false;
   bool _hasNext = false;
   int _pageIndex = 0;
   final int _perPage = 20;
@@ -98,6 +103,7 @@ class _AuthorizationStudentScreenState
         _activeStudentId = exists ? currentActive : _children.first.id;
 
         if (!exists) {
+          if (!mounted) return;
           final prov = context.read<UserProviderV2>();
           final userNow = prov.user;
           if (userNow != null) {
@@ -198,7 +204,7 @@ class _AuthorizationStudentScreenState
   String _firstWords(String text, int n) {
     final parts = text.trim().split(RegExp(r'\s+'));
     if (parts.length <= n) return text.trim();
-    return parts.take(n).join(' ') + '...';
+    return '${parts.take(n).join(' ')}...';
   }
 
   // === helpers de estado (solo visual) ===
@@ -241,6 +247,7 @@ class _AuthorizationStudentScreenState
       return Scaffold(
         appBar: AppBar(
           title: const Text('Authorizations'),
+          leading: const BackToDashboardButton(),
           backgroundColor: Colors.white,
           foregroundColor: Colors.redAccent,
           centerTitle: true,
@@ -254,6 +261,7 @@ class _AuthorizationStudentScreenState
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Autorizaciones'),
+        leading: const BackToDashboardButton(),
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
@@ -261,18 +269,17 @@ class _AuthorizationStudentScreenState
           if (_canCreate)
             TextButton.icon(
               onPressed: () async {
+                final ctx = context;
                 if (_children.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'No se encontraron estudiantes vinculados.',
-                      ),
-                    ),
+                  await DialogUtils.showError(
+                    context: ctx,
+                    title: 'Sin estudiantes',
+                    message: 'No se encontraron estudiantes vinculados.',
                   );
                   return;
                 }
                 final res = await showDialog<CreateAuthorizationResult>(
-                  context: context,
+                  context: ctx,
                   builder:
                       (_) => AuthorizationCreateDialog(
                         children:
@@ -290,36 +297,55 @@ class _AuthorizationStudentScreenState
                 );
                 if (res == null) return;
 
-                final kid = _children.firstWhere((c) => c.id == res.studentId);
-                final req = AuthorizationRequest(
-                  id: '',
-                  institutionId: _institutionId,
-                  campusId: _campusId,
-                  studentId: kid.id,
-                  studentFullName: kid.fullName,
-                  grade: kid.grade,
-                  requesterId: '',
-                  requesterFullName: '',
-                  allDay: res.allDay,
-                  multiDay: res.multiDay,
-                  dateFrom: res.dateFrom,
-                  dateTo: res.dateTo,
-                  startTime: res.startTime,
-                  endTime: res.endTime,
-                  reason: res.reason,
-                  status: AuthorizationStatus.pending,
-                  adminNote: null,
-                  evidence: null,
-                  resubmissionOfRequestId: null,
-                  createdAt: null,
-                  updatedAt: null,
-                );
-                await _svc.createRequest(request: req, requester: session);
-                await _reload();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Solicitud enviada.')),
+                if (_busy) return;
+                if (!mounted) return;
+                setState(() => _busy = true);
+
+                try {
+                  final kid = _children.firstWhere(
+                    (c) => c.id == res.studentId,
                   );
+                  final req = AuthorizationRequest(
+                    id: '',
+                    institutionId: _institutionId,
+                    campusId: _campusId,
+                    studentId: kid.id,
+                    studentFullName: kid.fullName,
+                    grade: kid.grade,
+                    requesterId: '',
+                    requesterFullName: '',
+                    allDay: res.allDay,
+                    multiDay: res.multiDay,
+                    dateFrom: res.dateFrom,
+                    dateTo: res.dateTo,
+                    startTime: res.startTime,
+                    endTime: res.endTime,
+                    reason: res.reason,
+                    status: AuthorizationStatus.pending,
+                    adminNote: null,
+                    evidence: null,
+                    resubmissionOfRequestId: null,
+                    createdAt: null,
+                    updatedAt: null,
+                  );
+                  await _svc.createRequest(request: req, requester: session);
+                  if (!mounted) return;
+                  await _reload();
+                  if (!mounted) return;
+                  await DialogUtils.showSuccess(
+                    context: ctx,
+                    title: 'Exito',
+                    message: 'Solicitud enviada.',
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  await DialogUtils.showError(
+                    context: ctx,
+                    title: 'Error',
+                    message: e.toString(),
+                  );
+                } finally {
+                  if (mounted) setState(() => _busy = false);
                 }
               },
               icon: const Icon(Icons.add),
@@ -341,15 +367,20 @@ class _AuthorizationStudentScreenState
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.withOpacity(.15)),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: .15),
+                        ),
                         gradient: LinearGradient(
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
-                          colors: [Colors.red.withOpacity(.06), Colors.white],
+                          colors: [
+                            Colors.red.withValues(alpha: .06),
+                            Colors.white,
+                          ],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
+                            color: Colors.black.withValues(alpha: 0.03),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -386,11 +417,11 @@ class _AuthorizationStudentScreenState
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.03),
+                      color: Colors.black.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -422,10 +453,10 @@ class _AuthorizationStudentScreenState
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: statusColor.withOpacity(.12),
+                                color: statusColor.withValues(alpha: .12),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: statusColor.withOpacity(.25),
+                                  color: statusColor.withValues(alpha: .25),
                                 ),
                               ),
                               child: Text(
@@ -469,13 +500,13 @@ class _AuthorizationStudentScreenState
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.red.withOpacity(.12),
+                                    color: Colors.red.withValues(alpha: .12),
                                   ),
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                     colors: [
-                                      Colors.red.withOpacity(.06),
+                                      Colors.red.withValues(alpha: .06),
                                       Colors.white,
                                     ],
                                   ),

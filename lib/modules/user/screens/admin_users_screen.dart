@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sistema_educativo/models/user/userModelV2.dart';
-import 'package:sistema_educativo/providers/user_provider_V2.dart';
-import '../../../utils/snackbar_utils.dart';
+import 'package:sistema_educativo/models/user/user_model_v2.dart';
+import 'package:sistema_educativo/providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
 import '../services/user_service_v2.dart';
-import '../widgets/admin_photo_widget.dart';
-import '../widgets/admin_user_form_widget.dart';
+import '../widgets/admin/admin_photo_widget.dart';
+import '../widgets/admin/admin_user_form_widget.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -17,7 +18,7 @@ class AdminUsersScreen extends StatefulWidget {
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final TextEditingController _busquedaController = TextEditingController();
   String _textoBusqueda = '';
-  List<UserModelV2> usuarios = [];
+  List<userModelv2> usuarios = [];
   bool isLoading = true;
   String nombreCompleto = '';
   bool esSuperadminActual = false;
@@ -65,7 +66,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         campusId: campusId,
       );
     } catch (e) {
-      // ignore
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error al cargar usuarios',
+          message: e.toString(),
+        );
+      }
     }
 
     if (!mounted) return;
@@ -86,6 +93,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         centerTitle: true,
         surfaceTintColor: Colors.transparent,
         elevation: 1,
+        leading: const BackToDashboardButton(),
       ),
       floatingActionButton:
           (esSuperadminActual ||
@@ -107,12 +115,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: Colors.red.withOpacity(.15),
+                            color: Colors.red.withValues(alpha: .15),
                           ),
                           gradient: LinearGradient(
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
-                            colors: [Colors.red.withOpacity(.06), Colors.white],
+                            colors: [
+                              Colors.red.withValues(alpha: .06),
+                              Colors.white,
+                            ],
                           ),
                         ),
                         child: TextField(
@@ -181,13 +192,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                          color: Colors.red.withOpacity(.15),
+                                          color: Colors.red.withValues(
+                                            alpha: .15,
+                                          ),
                                         ),
                                         gradient: LinearGradient(
                                           begin: Alignment.centerLeft,
                                           end: Alignment.centerRight,
                                           colors: [
-                                            Colors.red.withOpacity(.06),
+                                            Colors.red.withValues(alpha: .06),
                                             Colors.white,
                                           ],
                                         ),
@@ -208,7 +221,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                           '${user.firstName} ${user.lastName}',
                                         ),
                                         subtitle: Text(
-                                          '${user.personalEmail} • ${user.status.toUpperCase()}',
+                                          '${user.personalEmail} - ${user.status.toUpperCase()}',
                                         ),
                                         trailing:
                                             isMobile
@@ -262,17 +275,19 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Future<void> _eliminarUsuario(UserModelV2 usuario) async {
+  Future<void> _eliminarUsuario(userModelv2 usuario) async {
     final logged = context.read<UserProviderV2>().user!;
     final isSelf = logged.id == usuario.id;
     final isAdminUser = usuario.role == 'Administrador';
 
     if (isSelf && isAdminUser) {
-      if (mounted)
-        mostrarSnack(
-          context,
-          'No puedes eliminar tu propio usuario de Administrador.',
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'Accion no permitida',
+          message: 'No puedes eliminar tu propio usuario de Administrador.',
         );
+      }
       return;
     }
 
@@ -280,10 +295,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: const Text('Confirmar eliminación'),
+            title: const Text('Confirmar eliminacion'),
             content: Text(
-              '¿Estás seguro de que deseas eliminar a ${usuario.firstName} ${usuario.lastName}?\n'
-              'Esta acción eliminará su cuenta del sistema y no se puede deshacer.',
+              'Estas seguro de que deseas eliminar a ${usuario.firstName} ${usuario.lastName}?\n'
+              'Esta accion eliminara su cuenta del sistema y no se puede deshacer.',
             ),
             actions: [
               TextButton(
@@ -310,14 +325,26 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       await _userService.eliminar(usuario);
       await _cargarUsuarios();
 
-      if (mounted) mostrarSnack(context, 'Usuario eliminado correctamente');
+      if (mounted) {
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Usuario eliminado',
+          message: 'Se elimino el usuario correctamente.',
+        );
+      }
     } catch (e) {
-      if (mounted) mostrarSnack(context, 'Error al eliminar usuario: $e');
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error al eliminar usuario',
+          message: e.toString(),
+        );
+      }
     }
   }
 
   void _mostrarFormulario({
-    UserModelV2? usuario,
+    userModelv2? usuario,
     bool soloLectura = false,
   }) async {
     final bool? resultado = await showDialog<bool>(
@@ -334,7 +361,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       if (!mounted) return;
       await _cargarUsuarios();
       if (mounted) {
-        mostrarSnack(context, 'Usuario guardado con éxito');
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Usuario guardado',
+          message: 'El usuario se guardo correctamente.',
+        );
       }
     }
   }

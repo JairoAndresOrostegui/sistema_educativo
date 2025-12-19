@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dashboard_layout.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
 
 class DocenteDashboardLayout extends StatefulWidget {
   const DocenteDashboardLayout({super.key});

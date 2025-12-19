@@ -218,11 +218,11 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.03),
+                      color: Colors.black.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -275,7 +275,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   SizedBox(
                     width: 180,
                     child: DropdownButtonFormField<String>(
-                      value: _dia,
+                      initialValue: _dia,
                       items: const [
                         DropdownMenuItem(
                           value: null,
@@ -322,7 +322,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   SizedBox(
                     width: 220,
                     child: DropdownButtonFormField<String>(
-                      value: _accion,
+                      initialValue: _accion,
                       items: const [
                         DropdownMenuItem(
                           value: null,
@@ -456,7 +456,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   side: BorderSide(
-                                    color: Colors.red.withOpacity(.12),
+                                    color: Colors.red.withValues(alpha: .12),
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),

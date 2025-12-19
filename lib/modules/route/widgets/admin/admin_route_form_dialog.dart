@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/admin_route_service.dart';
 import 'admin_route_form_body.dart';
 import '../../../../models/route/route_model.dart';
-import '../../../../providers/user_provider_V2.dart';
+import '../../../../providers/user_provider_v2.dart';
 
 Future<void> mostrarFormularioRuta({
   required BuildContext context,
@@ -67,6 +67,7 @@ Future<void> mostrarFormularioRuta({
 
   final orderedStudents = ValueNotifier<List<Map<String, dynamic>>>(mapped);
 
+  if (!context.mounted) return;
   await showDialog(
     context: context,
     builder: (ctx) {

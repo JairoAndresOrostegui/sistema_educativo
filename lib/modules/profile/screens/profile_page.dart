@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/user/userModelV2.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../models/user/user_model_v2.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
 import '../services/profile_service.dart';
 import '../utils/profile_image_picker.dart';
 import '../widgets/profile_field.dart';
-import '../../user/widgets/admin_photo_widget.dart';
+import '../../user/widgets/admin/admin_photo_widget.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -20,7 +22,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final _profileService = ProfileService();
-  UserModelV2? userModel;
+  userModelv2? userModel;
 
   @override
   void initState() {
@@ -36,16 +38,20 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _seleccionarImagenYSubir() async {
     try {
       final (archivoBytes, nombreOriginal) = await pickImage();
-      if (archivoBytes == null) return;
+      if (archivoBytes == null || nombreOriginal.isEmpty) return;
 
-      if (!(nombreOriginal.toLowerCase().endsWith('.jpg') ||
-          nombreOriginal.toLowerCase().endsWith('.jpeg') ||
-          nombreOriginal.toLowerCase().endsWith('.png'))) {
+      final lower = nombreOriginal.toLowerCase();
+      final extensionValida =
+          lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png');
+
+      if (!extensionValida) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Solo se permiten imágenes JPG o PNG."),
-            ),
+          await DialogUtils.showError(
+            context: context,
+            title: 'Formato no válido',
+            message: 'Solo se permiten imágenes JPG o PNG.',
           );
         }
         return;
@@ -67,15 +73,19 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Foto de perfil actualizada")),
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Foto actualizada',
+          message: 'Se actualizó la foto de perfil.',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error al subir imagen: $e")));
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error al subir imagen',
+          message: e.toString(),
+        );
       }
     }
   }
@@ -98,7 +108,7 @@ class _ProfilePageState extends State<ProfilePage> {
         foregroundColor: Colors.redAccent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: const BackButton(color: Colors.redAccent),
+        leading: const BackToDashboardButton(),
       ),
       body: Center(
         child: Padding(
@@ -121,7 +131,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         border: Border.all(color: Colors.redAccent, width: 3),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
+                            color: Colors.black.withValues(alpha: 0.06),
                             blurRadius: 12,
                             offset: const Offset(0, 6),
                           ),
@@ -187,7 +197,7 @@ class _ProfilePageState extends State<ProfilePage> {
 }
 
 class _ProfileHeaderCard extends StatelessWidget {
-  final UserModelV2 user;
+  final userModelv2 user;
   const _ProfileHeaderCard({required this.user});
 
   @override
@@ -197,9 +207,9 @@ class _ProfileHeaderCard extends StatelessWidget {
     final fullName = '${user.firstName} ${user.lastName}'.trim();
     final meta = [
       if ((user.role).isNotEmpty) user.role,
-      if ((user.grade ?? '').isNotEmpty) '• ${user.grade}',
-      if ((user.campus).isNotEmpty) '• ${user.campus}',
-    ].join('  ');
+      if ((user.grade ?? '').isNotEmpty) 'Grado ${user.grade}',
+      if ((user.campus).isNotEmpty) 'Sede ${user.campus}',
+    ].join(' | ');
 
     return Semantics(
       label: 'Información principal del perfil',
@@ -209,18 +219,15 @@ class _ProfileHeaderCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.withOpacity(.15)),
+          border: Border.all(color: Colors.red.withValues(alpha: .15)),
           gradient: const LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [
-              Color.fromRGBO(244, 67, 54, 0.06),
-              Colors.white,
-            ],
+            colors: [Color.fromRGBO(244, 67, 54, 0.06), Colors.white],
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -245,7 +252,7 @@ class _ProfileHeaderCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.redAccent.withOpacity(.9),
+                color: Colors.redAccent.withValues(alpha: .9),
               ),
             ),
             if ((user.institution).isNotEmpty) ...[
@@ -268,7 +275,7 @@ class _ProfileHeaderCard extends StatelessWidget {
 }
 
 class _ProfileDataCard extends StatelessWidget {
-  final UserModelV2 user;
+  final userModelv2 user;
   const _ProfileDataCard({required this.user});
 
   @override
@@ -281,7 +288,7 @@ class _ProfileDataCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.withOpacity(.15)),
+          border: Border.all(color: Colors.red.withValues(alpha: .15)),
           gradient: const LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
@@ -289,7 +296,7 @@ class _ProfileDataCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -313,7 +320,7 @@ class _ProfileDataCard extends StatelessWidget {
                 ),
               ),
             ),
-            Container(height: 1, color: Colors.red.withOpacity(.15)),
+            Container(height: 1, color: Colors.red.withValues(alpha: .15)),
             const SizedBox(height: 8),
             ProfileField(title: "Nombres", value: user.firstName),
             ProfileField(title: "Apellidos", value: user.lastName),

@@ -1,4 +1,5 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
@@ -7,13 +8,12 @@ class ExportUtilsPlatform {
   static void exportarExcel(List<Map<String, dynamic>> logs) {
     final excel = Excel.createExcel();
 
-    // Renombrar y usar la hoja por defecto
     const String sheetName = 'HistorialDocumentos';
     final def = excel.getDefaultSheet();
     if (def != null && def != sheetName) {
       excel.rename(def, sheetName);
     }
-    final Sheet sheet = excel[sheetName]!;
+    final Sheet sheet = excel[sheetName];
 
     sheet.appendRow([
       TextCellValue('Nombre del archivo'),
@@ -36,7 +36,6 @@ class ExportUtilsPlatform {
       ]);
     }
 
-    // Por seguridad elimina Sheet1 si existiera
     if (excel.sheets.containsKey('Sheet1') && sheetName != 'Sheet1') {
       excel.delete('Sheet1');
     }
@@ -48,10 +47,9 @@ class ExportUtilsPlatform {
       bytes,
     ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor =
-        html.AnchorElement(href: url)
-          ..download = 'HistorialDocumentos.xlsx'
-          ..click();
+    html.AnchorElement(href: url)
+      ..download = 'HistorialDocumentos.xlsx'
+      ..click();
     html.Url.revokeObjectUrl(url);
   }
 }

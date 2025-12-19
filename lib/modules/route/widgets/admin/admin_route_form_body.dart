@@ -63,7 +63,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.red.withOpacity(.25)),
+      borderSide: BorderSide(color: Colors.red.withValues(alpha: .25)),
     ),
     focusedBorder: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -74,15 +74,15 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
 
   BoxDecoration _box() => BoxDecoration(
     borderRadius: BorderRadius.circular(14),
-    border: Border.all(color: Colors.red.withOpacity(.15)),
+    border: Border.all(color: Colors.red.withValues(alpha: .15)),
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Colors.red.withOpacity(.06), Colors.white],
+      colors: [Colors.red.withValues(alpha: .06), Colors.white],
     ),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(0.06),
+        color: Colors.black.withValues(alpha: 0.06),
         blurRadius: 12,
         offset: const Offset(0, 6),
       ),

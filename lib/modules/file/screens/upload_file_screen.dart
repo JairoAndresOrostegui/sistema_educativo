@@ -1,16 +1,17 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/file_service.dart';
-import '../../../utils/snackbar_utils.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/notification_service.dart';
 import '../../../utils/parameters_service.dart';
-import '../../../utils/notification_service.dart'; // enviarNotificacion
+import '../../../utils/navigation_utils.dart';
+import '../services/file_service.dart';
 
 class UploadFileScreen extends StatefulWidget {
   const UploadFileScreen({super.key});
@@ -20,8 +21,8 @@ class UploadFileScreen extends StatefulWidget {
 }
 
 class _UploadFileScreenState extends State<UploadFileScreen> {
-  final _params = ParametersService();
-  final _scrollCtrl = ScrollController();
+  final ParametersService _params = ParametersService();
+  final ScrollController _scrollCtrl = ScrollController();
 
   String? _grade;
   PlatformFile? _pickedFile;
@@ -70,7 +71,11 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     );
 
     if (result == null || result.files.isEmpty) {
-      mostrarSnack(context, 'No file selected.');
+      await DialogUtils.showError(
+        context: context,
+        title: 'Seleccion de archivo',
+        message: 'No file selected.',
+      );
       return;
     }
 
@@ -78,12 +83,20 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     final ext = file.extension?.toLowerCase();
 
     if (!['pdf', 'doc', 'docx', 'xls', 'xlsx'].contains(ext)) {
-      mostrarSnack(context, 'Only PDF, Word or Excel files are allowed.');
+      await DialogUtils.showError(
+        context: context,
+        title: 'Formato no permitido',
+        message: 'Only PDF, Word or Excel files are allowed.',
+      );
       return;
     }
 
     if (file.bytes == null) {
-      mostrarSnack(context, 'Error reading file.');
+      await DialogUtils.showError(
+        context: context,
+        title: 'Error',
+        message: 'Error reading file.',
+      );
       return;
     }
 
@@ -113,7 +126,11 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     if (!_canCreate) return;
 
     if (_pickedFile == null || _grade == null) {
-      mostrarSnack(context, 'All fields are required.');
+      await DialogUtils.showError(
+        context: context,
+        title: 'Campos requeridos',
+        message: 'All fields are required.',
+      );
       return;
     }
 
@@ -125,7 +142,6 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       final uploaderName = '${user.firstName} ${user.lastName}';
       final institutionId = user.institution;
       final campusId = user.campus;
-
       final originalName = _pickedFile!.name;
       final storageName =
           '${DateTime.now().millisecondsSinceEpoch}_$originalName';
@@ -135,17 +151,19 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       await ref.putData(_pickedFile!.bytes!);
       final url = await ref.getDownloadURL();
 
-      final docRef = await FirebaseFirestore.instance.collection('files').add({
-        'grade': _grade,
-        'name': originalName,
-        'url': url,
-        'createdAt': FieldValue.serverTimestamp(),
-        'uploadedBy': uploaderId,
-        'uploaderName': uploaderName,
-        'storagePath': storagePath,
-        'institutionId': institutionId,
-        'campusId': campusId,
-      });
+      final docRef =
+          await FirebaseFirestore.instance.collection('files').add({
+            'grade': _grade,
+            'name': originalName,
+            'url': url,
+            'createdAt': FieldValue.serverTimestamp(),
+            'uploadedBy': uploaderId,
+            'uploaderName': uploaderName,
+            'storagePath': storagePath,
+            'institutionId': institutionId,
+            'campusId': campusId,
+          });
+
       await docRef.update({'id': docRef.id});
 
       final usersCol = FirebaseFirestore.instance.collection('users');
@@ -169,6 +187,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       final famTokens = <String>{};
       for (final chunk in _chunks(studentIds, 10)) {
         if (chunk.isEmpty) continue;
+
         final famSnap =
             await usersCol
                 .where('institution', isEqualTo: institutionId)
@@ -177,29 +196,40 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                 .where('status', isEqualTo: 'activo')
                 .where('studentIds', arrayContainsAny: chunk)
                 .get();
+
         for (final d in famSnap.docs) {
           famTokens.addAll(_extractTokens(d.data()));
         }
       }
 
       final tokens = {...stuTokens, ...famTokens}.toList();
+
       if (tokens.isNotEmpty) {
         await enviarNotificacion(
           tokens: tokens,
-          titulo: '📎 New file available',
-          cuerpo: 'Check the file "$originalName" recently uploaded.',
+          titulo: 'Nuevo archivo disponible',
+          cuerpo: 'Revisa el archivo "$originalName" recien subido.',
           grado: _grade,
         );
       }
 
-      mostrarSnack(context, '✅ File uploaded successfully.');
+      await DialogUtils.showSuccess(
+        context: context,
+        title: 'Exito',
+        message: 'File uploaded successfully.',
+      );
+
       setState(() {
         _pickedFile = null;
       });
 
       _loadUploadedFiles();
     } catch (e) {
-      mostrarSnack(context, '❌ Error uploading file: $e');
+      await DialogUtils.showError(
+        context: context,
+        title: 'Error al subir',
+        message: '$e',
+      );
     }
 
     setState(() => _loading = false);
@@ -211,6 +241,8 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       currentUser: user,
       selectedGrade: _grade,
     );
+
+    if (!mounted) return;
     setState(() => _uploadedFiles = files);
   }
 
@@ -241,34 +273,50 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
 
       final docId = file['id'] as String?;
       final url = file['url'] as String?;
+
       if (docId == null || url == null) {
-        mostrarSnack(context, 'Invalid file reference.');
+        await DialogUtils.showError(
+          context: context,
+          title: 'Referencia invalida',
+          message: 'Invalid file reference.',
+        );
         return;
       }
 
       await FileService().deleteFile(docId, url);
 
       if (!mounted) return;
-      mostrarSnack(context, '✅ File deleted.');
+
+      await DialogUtils.showSuccess(
+        context: context,
+        title: 'Archivo',
+        message: 'File deleted.',
+      );
 
       await _loadUploadedFiles();
     } catch (e) {
-      if (mounted) mostrarSnack(context, '❌ Error deleting: $e');
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error al eliminar',
+          message: '$e',
+        );
+      }
     }
   }
 
   BoxDecoration _boxDecoration(BuildContext context) {
     return BoxDecoration(
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.red.withOpacity(.15)),
+      border: Border.all(color: Colors.red.withValues(alpha: .15)),
       gradient: LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: [Colors.red.withOpacity(.06), Colors.white],
+        colors: [Colors.red.withValues(alpha: .06), Colors.white],
       ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.03),
+          color: Colors.black.withValues(alpha: 0.03),
           blurRadius: 6,
           offset: const Offset(0, 2),
         ),
@@ -296,6 +344,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
+        leading: const BackToDashboardButton(),
         title: const Text('Upload file (Word, Excel, PDF)'),
       ),
       body: SafeArea(
@@ -311,24 +360,22 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Caja de carga / filtros
                     Container(
                       decoration: _boxDecoration(context),
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Grade selector
                           Text(
                             'Share with grade',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              color: Colors.redAccent.withOpacity(.95),
+                              color: Colors.redAccent.withValues(alpha: .95),
                             ),
                           ),
                           const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
-                            value: _grade,
+                            initialValue: _grade,
                             items:
                                 _grades
                                     .map(
@@ -350,7 +397,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: Colors.red.withOpacity(.25),
+                                  color: Colors.red.withValues(alpha: .25),
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
@@ -364,8 +411,6 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-
-                          // Botón seleccionar archivo + nombre
                           if (_canCreate)
                             Row(
                               children: [
@@ -395,10 +440,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                                 ),
                               ],
                             ),
-
                           const SizedBox(height: 16),
-
-                          // Botón subir
                           if (_canCreate)
                             Align(
                               alignment: Alignment.centerLeft,
@@ -421,10 +463,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 18),
-
-                    // Caja listado
                     Container(
                       decoration: _boxDecoration(context),
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -445,7 +484,6 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-
                           if (_uploadedFiles.isEmpty)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 12),
@@ -458,7 +496,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: _uploadedFiles.length,
                               separatorBuilder:
-                                  (_, __) => const SizedBox(height: 8),
+                                  (context, _) => const SizedBox(height: 8),
                               itemBuilder: (_, i) {
                                 final file = _uploadedFiles[i];
                                 final name = file['name']?.toString() ?? '';
@@ -475,13 +513,13 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: Colors.red.withOpacity(.15),
+                                      color: Colors.red.withValues(alpha: .15),
                                     ),
                                     gradient: LinearGradient(
                                       begin: Alignment.centerLeft,
                                       end: Alignment.centerRight,
                                       colors: [
-                                        Colors.red.withOpacity(.06),
+                                        Colors.red.withValues(alpha: .06),
                                         Colors.white,
                                       ],
                                     ),
@@ -498,7 +536,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                                       ),
                                     ),
                                     subtitle: Text(
-                                      'Grade: $grade • ${date.toLocal()}',
+                                      'Grade: $grade · ${date.toLocal()}',
                                     ),
                                     trailing:
                                         _canDelete

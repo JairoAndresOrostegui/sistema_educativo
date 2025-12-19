@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/schedule/subject_model.dart';
-import '../../../models/user/userModelV2.dart';
+import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
 import '../../../utils/parameters_service.dart';
 
@@ -35,7 +35,7 @@ class ScheduleService {
 
   Future<void> createSubject({
     required SubjectModel subject,
-    required UserModelV2 creator,
+    required userModelv2 creator,
   }) async {
     try {
       final docRef = await _firestore
@@ -60,7 +60,7 @@ class ScheduleService {
           grade: newSubjectWithId.grade!,
           title: 'Horario actualizado (${newSubjectWithId.grade})',
           body:
-              'Se creó "${newSubjectWithId.subject}" el ${newSubjectWithId.day}.',
+              'Se creo "${newSubjectWithId.subject}" el ${newSubjectWithId.day}.',
         );
       }
     } catch (e) {
@@ -71,7 +71,7 @@ class ScheduleService {
   Future<void> editSubject({
     required SubjectModel oldSubject,
     required SubjectModel newSubject,
-    required UserModelV2 editor,
+    required userModelv2 editor,
   }) async {
     try {
       if (newSubject.id == null) {
@@ -99,7 +99,7 @@ class ScheduleService {
           grade: newSubject.grade!,
           title: 'Horario actualizado (${newSubject.grade})',
           body:
-              'Se editó "${oldSubject.subject}" → "${newSubject.subject}" el ${newSubject.day}.',
+              'Se edito "${oldSubject.subject}" -> "${newSubject.subject}" el ${newSubject.day}.',
         );
       }
     } catch (e) {
@@ -109,7 +109,7 @@ class ScheduleService {
 
   Future<void> deleteSubject({
     required SubjectModel subject,
-    required UserModelV2 remover,
+    required userModelv2 remover,
   }) async {
     try {
       if (subject.id == null) {
@@ -133,7 +133,7 @@ class ScheduleService {
           campusId: subject.campusId!,
           grade: subject.grade!,
           title: 'Horario actualizado (${subject.grade})',
-          body: 'Se eliminó "${subject.subject}" del ${subject.day}.',
+          body: 'Se elimino "${subject.subject}" del ${subject.day}.',
         );
       }
     } catch (e) {
@@ -141,7 +141,7 @@ class ScheduleService {
     }
   }
 
-  Future<List<UserModelV2>> getTeachers({
+  Future<List<userModelv2>> getTeachers({
     required String institutionId,
     required String campusId,
   }) async {
@@ -158,7 +158,7 @@ class ScheduleService {
 
   Future<void> _logScheduleAction({
     required String action,
-    required UserModelV2 creator,
+    required userModelv2 creator,
     required SubjectModel subject,
     required String message,
   }) async {
@@ -176,7 +176,9 @@ class ScheduleService {
         'message': message,
       };
       await _firestore.collection('schedule_history').add(logData);
-    } catch (e) {}
+    } catch (e) {
+      // Silenciar errores de logging para no afectar la operacion principal
+    }
   }
 
   Future<Map<String, List<SubjectModel>>> getSchedulesForGrade({
@@ -185,7 +187,7 @@ class ScheduleService {
     required String grade,
   }) async {
     final Map<String, List<SubjectModel>> allSchedules = {};
-    final days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes'];
+    final days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
 
     for (var day in days) {
       allSchedules[day] = await getDaySchedule(
@@ -198,7 +200,7 @@ class ScheduleService {
     return allSchedules;
   }
 
-  Future<List<UserModelV2>> getUsersByIds({
+  Future<List<userModelv2>> getUsersByIds({
     required List<String> userIds,
     required String institutionId,
     required String campusId,
@@ -214,7 +216,7 @@ class ScheduleService {
             .where('campus', isEqualTo: campusId)
             .get();
     return snapshot.docs
-        .map((doc) => UserModelV2.fromFirestore(doc.data(), doc.id))
+        .map((doc) => userModelv2.fromFirestore(doc.data(), doc.id))
         .toList();
   }
 
@@ -237,7 +239,7 @@ class ScheduleService {
     final Map<String, List<SubjectModel>> byDay = {
       'lunes': [],
       'martes': [],
-      'miércoles': [],
+      'miercoles': [],
       'jueves': [],
       'viernes': [],
     };
@@ -284,7 +286,7 @@ class ScheduleService {
     required String body,
   }) async {
     try {
-      // 1) Estudiantes del grado (misma institución/campus)
+      // 1) Estudiantes del grado (misma institucion/campus)
       final studentsSnap =
           await _firestore
               .collection('users')
@@ -303,7 +305,7 @@ class ScheduleService {
         studentTokens.addAll(_extractTokens(d.data()));
       }
 
-      // 2) Familiares que tengan esos estudiantes (array-contains-any máx 10)
+      // 2) Familiares que tengan esos estudiantes (array-contains-any max 10)
       final familyTokens = <String>{};
       for (final chunk in _chunks(studentIds, 10)) {
         if (chunk.isEmpty) continue;
@@ -331,7 +333,7 @@ class ScheduleService {
         grado: grade,
       );
     } catch (_) {
-      // silenciar errores de notificación para no romper el CRUD
+      // silenciar errores de notificacion para no romper el CRUD
     }
   }
 }

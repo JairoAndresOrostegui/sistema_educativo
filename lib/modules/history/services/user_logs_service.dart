@@ -11,7 +11,7 @@ class UserLogsPage {
 class UserLogsService {
   final _db = FirebaseFirestore.instance;
 
-  static const _COL = 'user_logs';
+  static const userLogsCollection = 'user_logs';
 
   /// Página de resultados normalizada
   Future<UserLogsPage> getLogs({
@@ -26,7 +26,10 @@ class UserLogsService {
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
     Query<Map<String, dynamic>> q =
-        _db.collection(_COL).orderBy('timestamp', descending: true).limit(limit);
+        _db
+            .collection(userLogsCollection)
+            .orderBy('timestamp', descending: true)
+            .limit(limit);
 
     if (role != null && role.trim().isNotEmpty) {
       q = q.where('role', isEqualTo: role.trim());
@@ -109,7 +112,7 @@ class UserLogsService {
     String? institution,
     DateTimeRange? rango,
   }) async {
-    Query<Map<String, dynamic>> q = _db.collection(_COL);
+    Query<Map<String, dynamic>> q = _db.collection(userLogsCollection);
 
     if (role != null && role.trim().isNotEmpty) {
       q = q.where('role', isEqualTo: role.trim());

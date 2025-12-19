@@ -50,19 +50,6 @@ class _AdminAuthorizationActionDialogState
 
   bool get _needsEvidence => _sel == AuthorizationStatus.finished;
 
-  String _statusLabel(AuthorizationStatus s) {
-    switch (s) {
-      case AuthorizationStatus.pending:
-        return 'Pendiente';
-      case AuthorizationStatus.approved:
-        return 'Aprobada';
-      case AuthorizationStatus.rejected:
-        return 'Rechazada';
-      case AuthorizationStatus.finished:
-        return 'Finalizada';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -81,7 +68,7 @@ class _AdminAuthorizationActionDialogState
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<AuthorizationStatus>(
-              value: _sel,
+              initialValue: _sel,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Nuevo estado',

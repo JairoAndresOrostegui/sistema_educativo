@@ -1,19 +1,19 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'dart:collection';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../../../providers/user_provider_V2.dart';
-import '../../../models/user/userModelV2.dart';
 import '../../../models/file/file_model.dart';
+import '../../../models/user/user_model_v2.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_log_service.dart';
 import '../../schedule/services/schedule_service.dart';
 import '../services/file_service.dart';
 import '../utils/file_utils.dart';
-import '../../../utils/user_log_service.dart';
 
 class ViewFilesScreen extends StatefulWidget {
   const ViewFilesScreen({super.key});
@@ -23,15 +23,15 @@ class ViewFilesScreen extends StatefulWidget {
 }
 
 class _ViewFilesScreenState extends State<ViewFilesScreen> {
-  final _fileService = FileService();
-  final _scheduleService = ScheduleService();
-  final _listCtrl = ScrollController();
+  final FileService _fileService = FileService();
+  final ScheduleService _scheduleService = ScheduleService();
+  final ScrollController _listCtrl = ScrollController();
 
   bool _loading = false;
   List<FileModel> _files = [];
 
   // Familiar
-  List<UserModelV2> _children = [];
+  List<userModelv2> _children = [];
   String? _activeStudentId;
   String? _activeGrade;
 
@@ -126,7 +126,7 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  String _fileKey(FileModel f) => (f.id?.isNotEmpty ?? false) ? f.id! : f.url;
+  String _fileKey(FileModel f) => f.id.isNotEmpty ? f.id : f.url;
 
   Future<void> _onDownloadTap(FileModel file) async {
     final key = _fileKey(file);
@@ -159,23 +159,22 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('❌ Error al descargar: $e')));
+      await DialogUtils.showError(
+        context: context,
+        title: 'Error al descargar',
+        message: '$e',
+      );
     } finally {
       if (mounted) setState(() => _downloading = null);
     }
   }
 
   List<MapEntry<String, List<FileModel>>> _groupsByMonthDesc() {
-    final map = LinkedHashMap<String, List<FileModel>>();
+    final map = <String, List<FileModel>>{};
     final labels = <String, String>{};
 
     for (final f in _files) {
-      final dt =
-          (f.createdAt is Timestamp)
-              ? (f.createdAt as Timestamp).toDate()
-              : f.createdAt.toDate();
+      final dt = f.createdAt.toDate();
       final key = DateFormat('yyyy-MM').format(dt);
       final label = _capitalize(DateFormat('MMMM yyyy', 'es').format(dt));
       labels[key] = label;
@@ -193,10 +192,10 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
     return BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.redAccent.withOpacity(.15)),
+      border: Border.all(color: Colors.redAccent.withValues(alpha: .15)),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.03),
+          color: Colors.black.withValues(alpha: 0.03),
           blurRadius: 8,
           offset: const Offset(0, 2),
         ),
@@ -207,11 +206,11 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
   BoxDecoration _itemDecoration() {
     return BoxDecoration(
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.redAccent.withOpacity(.15)),
+      border: Border.all(color: Colors.redAccent.withValues(alpha: .15)),
       gradient: LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: [Colors.redAccent.withOpacity(.06), Colors.white],
+        colors: [Colors.redAccent.withValues(alpha: .06), Colors.white],
       ),
     );
   }
@@ -228,6 +227,7 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
+        leading: const BackToDashboardButton(),
         title: const Text('Download file'),
       ),
       body:
@@ -246,7 +246,7 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
                               decoration: _boxDecoration(),
                               padding: const EdgeInsets.all(12),
                               child: DropdownButtonFormField<String>(
-                                value: _activeStudentId,
+                                initialValue: _activeStudentId,
                                 decoration: InputDecoration(
                                   labelText: 'Estudiante',
                                   isDense: true,
@@ -256,7 +256,9 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide(
-                                      color: Colors.redAccent.withOpacity(.25),
+                                      color: Colors.redAccent.withValues(
+                                        alpha: .25,
+                                      ),
                                     ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
@@ -285,8 +287,6 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
                             ),
                           if (user?.role == 'Familiar' && _children.isNotEmpty)
                             const SizedBox(height: 12),
-
-                          // Lista de grupos mensuales con estilos
                           Expanded(
                             child:
                                 _files.isEmpty
@@ -344,19 +344,14 @@ class _ViewFilesScreenState extends State<ViewFilesScreen> {
                                                       const NeverScrollableScrollPhysics(),
                                                   itemCount: items.length,
                                                   separatorBuilder:
-                                                      (_, __) => const SizedBox(
-                                                        height: 8,
-                                                      ),
+                                                      (context, _) =>
+                                                          const SizedBox(
+                                                            height: 8,
+                                                          ),
                                                   itemBuilder: (_, i) {
                                                     final f = items[i];
                                                     final date =
-                                                        (f.createdAt
-                                                                is Timestamp)
-                                                            ? (f.createdAt
-                                                                    as Timestamp)
-                                                                .toDate()
-                                                            : f.createdAt
-                                                                .toDate();
+                                                        f.createdAt.toDate();
                                                     final dateStr = DateFormat(
                                                       'yyyy-MM-dd HH:mm',
                                                     ).format(date);

@@ -7,34 +7,15 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:732639994966:android:573ec8322ad2c590e847f7",
+        "mobilesdk_app_id": "1:732639994966:android:7074e9ab68844152e847f7",
         "android_client_info": {
-          "package_name": "com.example.sistema_educativo"
+          "package_name": "com.desarrolloytecnologiasantander.serodolfollinas"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAumcmbsvpdqMka8oLH-teuIhzsNRxYwE0"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:732639994966:android:aa798459bddc493de847f7",
-        "android_client_info": {
-          "package_name": "com.liceobilinguerodolfollinas.sistemaeducativo"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAumcmbsvpdqMka8oLH-teuIhzsNRxYwE0"
+          "current_key": "AIzaSyBEpoXpp68zQHoSEvR00ToIggiiaHOLufI"
         }
       ],
       "services": {

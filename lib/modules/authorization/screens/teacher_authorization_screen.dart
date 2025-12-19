@@ -4,22 +4,26 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
-import '../../../models/user/userModelV2.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../models/user/user_model_v2.dart';
+import '../../../providers/user_provider_v2.dart';
 import '../services/authorization_service.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
 import '../widgets/teacher_authorization_dialog.dart';
 
 class AuthorizationTeacherScreen extends StatefulWidget {
   const AuthorizationTeacherScreen({super.key});
 
   @override
-  State<AuthorizationTeacherScreen> createState() => _AuthorizationTeacherScreenState();
+  State<AuthorizationTeacherScreen> createState() =>
+      _AuthorizationTeacherScreenState();
 }
 
-class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen> {
+class _AuthorizationTeacherScreenState
+    extends State<AuthorizationTeacherScreen> {
   final _svc = AuthorizationService();
 
-  UserModelV2? _logged;
+  userModelv2? _logged;
   bool _isSuperadmin = false;
   List<String> _perms = [];
   late String _institutionId;
@@ -31,6 +35,7 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
   bool _hasNext = false;
   int _pageIndex = 0;
   final int _perPage = 20;
+  bool _noGradeNotified = false;
 
   String? _activeGrade;
 
@@ -65,6 +70,14 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
       setState(() {
         _activeGrade = null;
       });
+      if (!_noGradeNotified && mounted) {
+        _noGradeNotified = true;
+        await DialogUtils.showError(
+          context: context,
+          title: 'Sin grado asignado',
+          message: 'El docente no tiene grado asignado.',
+        );
+      }
       return;
     } else {
       _activeGrade = g;
@@ -101,25 +114,36 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
       setState(() => _loading = false);
       return;
     }
-    final page = await _svc.listForGrade(
-      institutionId: _institutionId,
-      campusId: _campusId,
-      grade: _activeGrade!,
-      limit: _perPage,
-      startAfter: _cursor,
-    );
-    setState(() {
-      _items.addAll(page.items);
-      _hasNext = page.hasNext;
-      if (page.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(page.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = page.lastDoc;
+    try {
+      final page = await _svc.listForGrade(
+        institutionId: _institutionId,
+        campusId: _campusId,
+        grade: _activeGrade!,
+        limit: _perPage,
+        startAfter: _cursor,
+      );
+      setState(() {
+        _items.addAll(page.items);
+        _hasNext = page.hasNext;
+        if (page.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(page.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = page.lastDoc;
+          }
         }
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error',
+          message: e.toString(),
+        );
       }
-      _loading = false;
-    });
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _nextPage() async {
@@ -140,7 +164,8 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
     await _loadPage();
   }
 
-  String _fmtD(DateTime? d) => d == null ? '-' : DateFormat('yyyy-MM-dd').format(d);
+  String _fmtD(DateTime? d) =>
+      d == null ? '-' : DateFormat('yyyy-MM-dd').format(d);
   String _fmtT(DateTime? d) => d == null ? '-' : DateFormat('HH:mm').format(d);
 
   String _statusLabel(AuthorizationStatus s) {
@@ -172,7 +197,7 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
   String _firstWords(String text, int n) {
     final parts = text.trim().split(RegExp(r'\s+'));
     if (parts.length <= n) return text.trim();
-    return parts.take(n).join(' ') + '...';
+    return '${parts.take(n).join(' ')}...';
   }
 
   @override
@@ -188,6 +213,7 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
       return Scaffold(
         appBar: AppBar(
           title: const Text('Autorizaciones'),
+          leading: const BackToDashboardButton(),
           backgroundColor: Colors.white,
           foregroundColor: Colors.redAccent,
           centerTitle: true,
@@ -201,6 +227,7 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Autorizaciones (Docente)'),
+        leading: const BackToDashboardButton(),
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
@@ -212,14 +239,17 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.03),
+                      color: Colors.black.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -240,83 +270,108 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _activeGrade == null || _activeGrade!.isEmpty
-                        ? const Center(child: Text('No hay grado asignado al docente.'))
+                child:
+                    _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _activeGrade == null || _activeGrade!.isEmpty
+                        ? const Center(
+                          child: Text('No hay grado asignado al docente.'),
+                        )
                         : _items.isEmpty
-                            ? const Center(child: Text('No hay solicitudes'))
-                            : ListView.builder(
-                                itemCount: _items.length,
-                                itemBuilder: (_, i) {
-                                  final r = _items[i];
-                                  final sc = _statusColor(r.status);
-                                  final chip = Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: sc.withOpacity(.12),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: sc.withOpacity(.25)),
-                                    ),
-                                    child: Text(
-                                      _statusLabel(r.status),
-                                      style: TextStyle(
-                                        color: sc,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  );
-                                  final dateLine = r.multiDay
-                                      ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
-                                      : _fmtD(r.dateFrom);
-                                  final timeLine = r.allDay
-                                      ? 'Todo el día'
-                                      : r.endTime != null
-                                          ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
-                                          : _fmtT(r.startTime);
-                                  final sub = [
-                                    'Fecha: $dateLine',
-                                    'Hora: $timeLine',
-                                    if ((r.reason ?? '').toString().trim().isNotEmpty)
-                                      'Motivo: ${_firstWords(r.reason!, 40)}',
-                                  ].join('\n');
-
-                                  return Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.red.withOpacity(.12)),
-                                      gradient: LinearGradient(
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                        colors: [Colors.red.withOpacity(.06), Colors.white],
-                                      ),
-                                    ),
-                                    child: ListTile(
-                                      leading: const Icon(Icons.assignment_turned_in, color: Colors.redAccent),
-                                      title: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              '${r.studentFullName} — ${r.grade}',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          chip,
-                                        ],
-                                      ),
-                                      subtitle: Text(sub),
-                                      onTap: () => showDialog(
-                                        context: context,
-                                        builder: (_) => AuthorizationDetailsDialog(request: r),
-                                      ),
-                                    ),
-                                  );
-                                },
+                        ? const Center(child: Text('No hay solicitudes'))
+                        : ListView.builder(
+                          itemCount: _items.length,
+                          itemBuilder: (_, i) {
+                            final r = _items[i];
+                            final sc = _statusColor(r.status);
+                            final chip = Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
                               ),
+                              decoration: BoxDecoration(
+                                color: sc.withValues(alpha: .12),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: sc.withValues(alpha: .25),
+                                ),
+                              ),
+                              child: Text(
+                                _statusLabel(r.status),
+                                style: TextStyle(
+                                  color: sc,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            );
+                            final dateLine =
+                                r.multiDay
+                                    ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
+                                    : _fmtD(r.dateFrom);
+                            final timeLine =
+                                r.allDay
+                                    ? 'Todo el día'
+                                    : r.endTime != null
+                                    ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
+                                    : _fmtT(r.startTime);
+                            final sub = [
+                              'Fecha: $dateLine',
+                              'Hora: $timeLine',
+                              if ((r.reason ?? '').toString().trim().isNotEmpty)
+                                'Motivo: ${_firstWords(r.reason!, 40)}',
+                            ].join('\n');
+
+                            return Container(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.red.withValues(alpha: .12),
+                                ),
+                                gradient: LinearGradient(
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                  colors: [
+                                    Colors.red.withValues(alpha: .06),
+                                    Colors.white,
+                                  ],
+                                ),
+                              ),
+                              child: ListTile(
+                                leading: const Icon(
+                                  Icons.assignment_turned_in,
+                                  color: Colors.redAccent,
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${r.studentFullName} — ${r.grade}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    chip,
+                                  ],
+                                ),
+                                subtitle: Text(sub),
+                                onTap:
+                                    () => showDialog(
+                                      context: context,
+                                      builder:
+                                          (_) => AuthorizationDetailsDialog(
+                                            request: r,
+                                          ),
+                                    ),
+                              ),
+                            );
+                          },
+                        ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -327,7 +382,8 @@ class _AuthorizationTeacherScreenState extends State<AuthorizationTeacherScreen>
                     children: [
                       IconButton(
                         icon: const Icon(Icons.chevron_left),
-                        onPressed: _pageIndex == 0 || _loading ? null : _prevPage,
+                        onPressed:
+                            _pageIndex == 0 || _loading ? null : _prevPage,
                       ),
                       IconButton(
                         icon: const Icon(Icons.chevron_right),

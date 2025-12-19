@@ -16,8 +16,8 @@ class AdminScheduleHistoryService {
   final _db = FirebaseFirestore.instance;
 
   // Colecciones (nuevo / legado)
-  static const _COL_EN = 'schedule_history'; // vigente (EN)
-  static const _COL_ES = 'historial_horarios'; // legado (ES)
+  static const scheduleHistoryCollection = 'schedule_history'; // vigente (EN)
+  static const historialHorariosCollection = 'historial_horarios'; // legado (ES)
 
   /// Página de historial de horarios con filtros y paginación por cursor.
   /// Normaliza SIEMPRE a claves en español:
@@ -69,7 +69,7 @@ class AdminScheduleHistoryService {
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
     Query<Map<String, dynamic>> q = _db
-        .collection(_COL_EN)
+        .collection(scheduleHistoryCollection)
         .orderBy('timestamp', descending: true)
         .limit(limite);
 
@@ -107,12 +107,14 @@ class AdminScheduleHistoryService {
 
       // Filtros "contains" en memoria
       if (gradeContains != null && gradeContains.trim().isNotEmpty) {
-        if (!grado.toLowerCase().contains(gradeContains.toLowerCase()))
+        if (!grado.toLowerCase().contains(gradeContains.toLowerCase())) {
           continue;
+        }
       }
       if (subjectContains != null && subjectContains.trim().isNotEmpty) {
-        if (!materia.toLowerCase().contains(subjectContains.toLowerCase()))
+        if (!materia.toLowerCase().contains(subjectContains.toLowerCase())) {
           continue;
+        }
       }
 
       items.add({
@@ -147,7 +149,7 @@ class AdminScheduleHistoryService {
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
     Query<Map<String, dynamic>> q = _db
-        .collection(_COL_ES)
+        .collection(historialHorariosCollection)
         .orderBy('fecha', descending: true)
         .limit(limite);
 
@@ -180,12 +182,14 @@ class AdminScheduleHistoryService {
       final materia = (data['materia'] ?? '').toString();
 
       if (gradeContains != null && gradeContains.trim().isNotEmpty) {
-        if (!grado.toLowerCase().contains(gradeContains.toLowerCase()))
+        if (!grado.toLowerCase().contains(gradeContains.toLowerCase())) {
           continue;
+        }
       }
       if (subjectContains != null && subjectContains.trim().isNotEmpty) {
-        if (!materia.toLowerCase().contains(subjectContains.toLowerCase()))
+        if (!materia.toLowerCase().contains(subjectContains.toLowerCase())) {
           continue;
+        }
       }
 
       items.add({
@@ -222,7 +226,7 @@ class AdminScheduleHistoryService {
   }) async {
     int total =
         await _countIn(
-          col: _COL_EN,
+      col: scheduleHistoryCollection,
           dateField: 'timestamp',
           actionField: 'action',
           dayField: 'subjectData.day',
@@ -235,7 +239,7 @@ class AdminScheduleHistoryService {
     if (total == 0) {
       total =
           await _countIn(
-            col: _COL_ES,
+            col: historialHorariosCollection,
             dateField: 'fecha',
             actionField: 'accion',
             dayField: 'dia',

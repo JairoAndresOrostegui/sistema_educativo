@@ -185,8 +185,9 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
   List<Map<String, dynamic>> _filtradoLocal(List<Map<String, dynamic>> base) {
     return base.where((r) {
       if (_gradeEquals.trim().isNotEmpty) {
-        if ((r['grade'] ?? '').toString().trim() != _gradeEquals.trim())
+        if ((r['grade'] ?? '').toString().trim() != _gradeEquals.trim()) {
           return false;
+        }
       }
       return true;
     }).toList();
@@ -226,11 +227,11 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.03),
+                      color: Colors.black.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -251,7 +252,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   SizedBox(
                     width: 220,
                     child: DropdownButtonFormField<String>(
-                      value: _role,
+                      initialValue: _role,
                       items: const [
                         DropdownMenuItem(
                           value: null,
@@ -431,7 +432,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   side: BorderSide(
-                                    color: Colors.red.withOpacity(.12),
+                                    color: Colors.red.withValues(alpha: .12),
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),

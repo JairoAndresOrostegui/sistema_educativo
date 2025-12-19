@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
-import '../../../models/user/userModelV2.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../models/user/user_model_v2.dart';
+import '../../../providers/user_provider_v2.dart';
 import '../../../utils/format_utils.dart';
 import '../services/schedule_service.dart';
+import '../../../utils/navigation_utils.dart';
 
 extension _Cap on String {
   String cap() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
+}
+
+String _displayDay(String day) {
+  if (day.toLowerCase() == 'miercoles') return 'miércoles';
+  return day.cap();
 }
 
 class StudentScheduleScreen extends StatefulWidget {
@@ -26,14 +32,14 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   String? _selectedDay;
 
   // Para rol Familiar
-  List<UserModelV2> _children = [];
+  List<userModelv2> _children = [];
   String? _activeStudentId;
 
   // Días usados en BD y en ScheduleService.getSchedulesForGrade
   final List<String> _days = const [
     'lunes',
     'martes',
-    'miércoles',
+    'miercoles',
     'jueves',
     'viernes',
   ];
@@ -88,16 +94,13 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
       // Rol Estudiante
       if (user.role == 'Estudiante') {
-        if (user.institution == null ||
-            user.campus == null ||
-            user.grade == null ||
-            user.grade!.isEmpty) {
+        if (user.grade == null || user.grade!.isEmpty) {
           if (mounted) setState(() => _loading = false);
           return;
         }
         await _fetchSchedules(
-          institutionId: user.institution!,
-          campusId: user.campus!,
+          institutionId: user.institution,
+          campusId: user.campus,
           grade: user.grade!,
         );
         if (mounted) setState(() => _loading = false);
@@ -191,7 +194,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       case DateTime.tuesday:
         return 'martes';
       case DateTime.wednesday:
-        return 'miércoles';
+        return 'miercoles';
       case DateTime.thursday:
         return 'jueves';
       case DateTime.friday:
@@ -223,6 +226,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         foregroundColor: Colors.red,
         title: const Text('Mi horario'),
         centerTitle: true,
+        leading: const BackToDashboardButton(),
       ),
       body: SafeArea(
         child:
@@ -249,19 +253,19 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: Colors.red.withOpacity(.15),
+                                    color: Colors.red.withValues(alpha: .15),
                                   ),
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                     colors: [
-                                      Colors.red.withOpacity(.06),
+                                      Colors.red.withValues(alpha: .06),
                                       Colors.white,
                                     ],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.03),
+                                      color: Colors.black.withValues(alpha: 0.03),
                                       blurRadius: 6,
                                       offset: const Offset(0, 2),
                                     ),
@@ -318,7 +322,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Semantics(
-                      label: 'Día ${d.cap()}',
+                      label: 'Día ${_displayDay(d)}',
                       button: true,
                       selected: sel,
                       child: ElevatedButton(
@@ -331,7 +335,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                           elevation: 0,
                         ),
                         onPressed: () => setState(() => _selectedDay = d),
-                        child: Text(d.cap()),
+                        child: Text(_displayDay(d)),
                       ),
                     ),
                   );
@@ -396,12 +400,12 @@ class _DayList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (subjects.isEmpty) {
-      return Center(child: Text('No hay clases el ${day.cap()}.'));
+      return Center(child: Text('No hay clases el ${_displayDay(day)}.'));
     }
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 12),
       itemCount: subjects.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (context, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) => _SubjectCard(subject: subjects[i]),
     );
   }
@@ -424,13 +428,13 @@ class _DayColumn extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(color: Colors.red.withOpacity(.08)),
+            decoration: BoxDecoration(color: Colors.red.withValues(alpha: .08)),
             child: Semantics(
               header: true,
-              label: 'Horario de ${day.cap()}',
+              label: 'Horario de ${_displayDay(day)}',
               child: Center(
                 child: Text(
-                  day.cap(),
+                  _displayDay(day),
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     color: Colors.redAccent,
@@ -450,7 +454,7 @@ class _DayColumn extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.all(12),
               itemCount: subjects.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, _) => const SizedBox(height: 8),
               itemBuilder: (_, i) => _SubjectCard(subject: subjects[i]),
             ),
         ],
@@ -476,12 +480,12 @@ class _SubjectCard extends StatelessWidget {
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withOpacity(.15)),
+        border: Border.all(color: Colors.red.withValues(alpha: .15)),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [
-            Colors.red.withOpacity(.08),
+            Colors.red.withValues(alpha: .08),
             Theme.of(context).colorScheme.surface,
           ],
         ),
@@ -518,9 +522,9 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(.12),
+        color: Colors.red.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.red.withOpacity(.25)),
+        border: Border.all(color: Colors.red.withValues(alpha: .25)),
       ),
       child: Text(
         text,

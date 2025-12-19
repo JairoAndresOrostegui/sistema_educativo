@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../models/user/userModelV2.dart';
+import '../models/user/user_model_v2.dart';
 
 class Parameter {
   final String etiqueta;
@@ -81,6 +81,29 @@ class ParametersService {
     return parameters;
   }
 
+  Future<List<Parameter>> getEps() async {
+    final snapshot =
+        await _firestore
+            .collection('parameters')
+            .where('clave', isEqualTo: 'eps')
+            .where('activo', isEqualTo: true)
+            .get();
+
+    final parameters =
+        snapshot.docs.map((doc) {
+          final data = doc.data();
+          return Parameter(
+            etiqueta: data['etiqueta'],
+            valor: data['valor'],
+            orden: data['orden'],
+          );
+        }).toList();
+
+    parameters.sort((a, b) => a.orden.compareTo(b.orden));
+
+    return parameters;
+  }
+
   Future<List<Parameter>> getPermissions() async {
     final snapshot =
         await _firestore
@@ -103,7 +126,50 @@ class ParametersService {
     return parameters;
   }
 
-  Future<List<UserModelV2>> getUsersByFilters({
+  Future<bool> getEnrollmentParentEnabled() async {
+    try {
+      final snapshot =
+          await _firestore
+              .collection('parameters')
+              .where('clave', isEqualTo: 'enrollment_parent_enabled')
+              .where('activo', isEqualTo: true)
+              .limit(1)
+              .get();
+      if (snapshot.docs.isEmpty) return false;
+      final valor = snapshot.docs.first.data()['valor'];
+      if (valor is bool) return valor;
+      if (valor is String) {
+        final v = valor.toLowerCase();
+        return v == 'true' || v == '1' || v == 'si';
+      }
+      if (valor is num) return valor != 0;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int?> getEnrollmentYear() async {
+    try {
+      final snapshot =
+          await _firestore
+              .collection('parameters')
+              .where('clave', isEqualTo: 'enrollment_year')
+              .where('activo', isEqualTo: true)
+              .limit(1)
+              .get();
+      if (snapshot.docs.isEmpty) return null;
+      final valor = snapshot.docs.first.data()['valor'];
+      if (valor is int) return valor;
+      if (valor is num) return valor.toInt();
+      if (valor is String) return int.tryParse(valor);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<userModelv2>> getUsersByFilters({
     required String institution,
     required String campus,
     required String role,
@@ -124,7 +190,7 @@ class ParametersService {
       final QuerySnapshot<Map<String, dynamic>> result = await query.get();
 
       return result.docs.map((doc) {
-        return UserModelV2.fromFirestore(doc.data(), doc.id);
+        return userModelv2.fromFirestore(doc.data(), doc.id);
       }).toList();
     } catch (e) {
       return [];

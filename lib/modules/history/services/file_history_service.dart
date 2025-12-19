@@ -15,8 +15,8 @@ class DocumentPage {
 class DocumentHistoryService {
   final _db = FirebaseFirestore.instance;
 
-  static const _COL_EN = 'files';
-  static const _COL_ES = 'archivos';
+  static const filesCollection = 'files';
+  static const archivosCollection = 'archivos';
 
   /// Página de documentos con filtros (institución/campus + grade + rango) y paginación por cursor.
   Future<DocumentPage> obtenerHistorialDocumentos({
@@ -29,7 +29,7 @@ class DocumentHistoryService {
   }) async {
     // Primero intentamos en 'files' (esquema nuevo).
     var page = await _queryFiles(
-      col: _COL_EN,
+      col: filesCollection,
       institutionId: institutionId,
       campusId: campusId,
       grade: grade,
@@ -42,7 +42,7 @@ class DocumentHistoryService {
     // Si no hay datos, probamos 'archivos' (esquema viejo) con los mismos filtros.
     if (page.items.isEmpty) {
       final fallback = await _queryFiles(
-        col: _COL_ES,
+        col: archivosCollection,
         institutionId: institutionId,
         campusId: campusId,
         grade: grade,
@@ -147,7 +147,7 @@ class DocumentHistoryService {
     // EN
     final enSnap =
         await _db
-            .collection(_COL_EN)
+            .collection(filesCollection)
             .where('institutionId', isEqualTo: institutionId)
             .where('campusId', isEqualTo: campusId)
             .limit(500)
@@ -161,7 +161,7 @@ class DocumentHistoryService {
     if (set.isEmpty) {
       final esSnap =
           await _db
-              .collection(_COL_ES)
+              .collection(archivosCollection)
               .where('institutionId', isEqualTo: institutionId)
               .where('campusId', isEqualTo: campusId)
               .limit(500)
@@ -185,7 +185,7 @@ class DocumentHistoryService {
   }) async {
     // Intento EN
     final enCount = await _countIn(
-      col: _COL_EN,
+      col: filesCollection,
       createdField: 'createdAt',
       gradeField: 'grade',
       institutionId: institutionId,
@@ -197,7 +197,7 @@ class DocumentHistoryService {
 
     // Fallback ES
     final esCount = await _countIn(
-      col: _COL_ES,
+      col: archivosCollection,
       createdField: 'fechaSubida',
       gradeField: 'grado',
       institutionId: institutionId,

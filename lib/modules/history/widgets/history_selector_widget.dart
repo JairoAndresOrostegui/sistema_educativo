@@ -16,7 +16,7 @@ class HistorySelectorWidget extends StatelessWidget {
     return Semantics(
       label: 'Selector de historial',
       child: DropdownButtonFormField<HistoryType>(
-        value: selected,
+        initialValue: selected,
         items:
             HistoryType.values
                 .map(
@@ -28,7 +28,9 @@ class HistorySelectorWidget extends StatelessWidget {
           labelText: 'Selecciona un historial',
           border: const OutlineInputBorder(),
           focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.redAccent.withOpacity(.8)),
+            borderSide: BorderSide(
+              color: Colors.redAccent.withValues(alpha: .8),
+            ),
           ),
         ),
         onChanged: onChanged,

@@ -41,7 +41,9 @@ class LocationService {
 
     try {
       final first = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
       );
       await _writeIfNeeded(
         rutaDiaDocId,

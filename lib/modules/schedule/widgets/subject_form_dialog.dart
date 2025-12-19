@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/schedule/subject_model.dart';
-import '../../../models/user/userModelV2.dart';
+import '../../../models/user/user_model_v2.dart';
 
-// Extensión para capitalizar el texto de los días
+// Extension para capitalizar el texto de los dias
 extension StringExtension on String {
   String capitalize() {
     if (isEmpty) return this;
@@ -15,21 +15,21 @@ extension StringExtension on String {
 class SubjectFormDialog extends StatefulWidget {
   final SubjectModel? subjectToEdit;
 
-  /// Ahora onSave devuelve Future<void> para poder esperar y bloquear el botón
+  /// Ahora onSave devuelve `Future<void>` para poder esperar y bloquear el boton
   final Future<void> Function(SubjectModel subject) onSave;
-  final List<UserModelV2> teachers;
+  final List<userModelv2> teachers;
   final List<String> daysOfWeek;
 
   const SubjectFormDialog({
-    Key? key,
+    super.key,
     this.subjectToEdit,
     required this.onSave,
     required this.teachers,
     required this.daysOfWeek,
-  }) : super(key: key);
+  });
 
   @override
-  _SubjectFormDialogState createState() => _SubjectFormDialogState();
+  State<SubjectFormDialog> createState() => _SubjectFormDialogState();
 }
 
 class _SubjectFormDialogState extends State<SubjectFormDialog> {
@@ -154,8 +154,8 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
   @override
   Widget build(BuildContext context) {
     // Bloquear cierre por back mientras se guarda
-    return WillPopScope(
-      onWillPop: () async => !_submitting,
+    return PopScope(
+      canPop: !_submitting,
       child: AlertDialog(
         title: Text(
           widget.subjectToEdit == null ? 'Crear materia' : 'Editar materia',
@@ -184,7 +184,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: _selectedTeacherId,
+                      initialValue: _selectedTeacherId,
                       decoration: const InputDecoration(labelText: 'Profesor'),
                       items:
                           widget.teachers.map((teacher) {
@@ -223,7 +223,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                       ),
                     ] else ...[
                       DropdownButtonFormField<String>(
-                        value: _selectedDay,
+                        initialValue: _selectedDay,
                         decoration: const InputDecoration(
                           labelText: 'Día de la semana',
                         ),

@@ -5,4 +5,9 @@ class Validators {
     );
     return emailRegex.hasMatch(email.trim());
   }
+
+  static bool isInstitutionalEmail(String email, String domain) {
+    final value = email.trim().toLowerCase();
+    return value.endsWith('@${domain.toLowerCase()}');
+  }
 }

@@ -1,13 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../config/theme_config.dart';
-import '../../../providers/user_provider_V2.dart';
-import '../screens/loginScreenV2.dart';
-import '../services/authServiceV2.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../services/auth_service_v2.dart';
 
 class DashboardLayout extends StatefulWidget {
   final List<MenuItemData> menuItems;
@@ -18,7 +19,7 @@ class DashboardLayout extends StatefulWidget {
 }
 
 class _DashboardLayoutState extends State<DashboardLayout> {
-  // URL de la política
+  // URL de la politica
   static const String _privacyUrl =
       'https://desarrolloytecnologiasantander.com/privacidad.html';
 
@@ -27,18 +28,18 @@ class _DashboardLayoutState extends State<DashboardLayout> {
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo abrir la política de privacidad.'),
-          ),
+        await DialogUtils.showError(
+          context: context,
+          title: 'No se pudo abrir',
+          message: 'No se pudo abrir la politica de privacidad.',
         );
       }
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo abrir la política de privacidad.'),
-        ),
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo abrir',
+        message: 'No se pudo abrir la politica de privacidad.',
       );
     }
   }
@@ -48,28 +49,22 @@ class _DashboardLayoutState extends State<DashboardLayout> {
   bool hoveringPrivacy = false;
 
   void _navegar(String ruta) {
-    Navigator.pushNamed(context, ruta);
+    context.go(ruta);
   }
 
   Future<void> _cerrarSesion() async {
-    try {
-      final userProvider = context.read<UserProviderV2>();
-      final user = userProvider.user;
+    final userProvider = context.read<UserProviderV2>();
+    final user = userProvider.user;
 
-      if (user != null) {
-        await AuthService().logout(user);
-        userProvider.clearUser();
-      } else {
-        await FirebaseAuth.instance.signOut();
-      }
-    } finally {
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
+    if (user != null) {
+      await AuthService().logout(user);
+      userProvider.clearUser();
+    } else {
+      await FirebaseAuth.instance.signOut();
     }
+
+    if (!mounted) return;
+    context.go('/login');
   }
 
   String _greetingBogota() {
@@ -99,15 +94,15 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(.15)),
+          border: Border.all(color: Colors.red.withValues(alpha: .15)),
           gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [Colors.red.withOpacity(.06), Colors.white],
+            colors: [Colors.red.withValues(alpha: .06), Colors.white],
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -213,21 +208,23 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                                 crossAxisCount -
                                             18,
                                         padding: const EdgeInsets.all(14),
-                                        transform:
-                                            Matrix4.identity()
-                                              ..scale(isHovered ? 1.03 : 1.0),
+                                        transform: Matrix4.diagonal3Values(
+                                          isHovered ? 1.03 : 1.0,
+                                          isHovered ? 1.03 : 1.0,
+                                          1,
+                                        ),
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(
                                             14,
                                           ),
                                           border: Border.all(
-                                            color: Colors.red.withOpacity(.15),
+                                            color: Colors.red.withValues(alpha: .15),
                                           ),
                                           gradient: LinearGradient(
                                             begin: Alignment.centerLeft,
                                             end: Alignment.centerRight,
                                             colors: [
-                                              Colors.red.withOpacity(.06),
+                                              Colors.red.withValues(alpha: .06),
                                               Colors.white,
                                             ],
                                           ),
@@ -235,8 +232,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                               isHovered
                                                   ? [
                                                     BoxShadow(
-                                                      color: Colors.black
-                                                          .withOpacity(0.06),
+                                                      color: Colors.black.withValues(alpha: 0.06),
                                                       blurRadius: 12,
                                                       offset: const Offset(
                                                         0,
@@ -246,8 +242,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                                   ]
                                                   : [
                                                     BoxShadow(
-                                                      color: Colors.black
-                                                          .withOpacity(0.03),
+                                                      color: Colors.black.withValues(alpha: 0.03),
                                                       blurRadius: 6,
                                                       offset: const Offset(
                                                         0,
@@ -259,10 +254,35 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Icon(
-                                              item.icon,
-                                              size: tileIconSize,
-                                              color: Colors.redAccent,
+                                            Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Icon(
+                                                  item.icon,
+                                                  size: tileIconSize,
+                                                  color: Colors.redAccent,
+                                                ),
+                                                if (item.badgeCount > 0)
+                                                  Positioned(
+                                                    right: -6,
+                                                    top: -6,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.all(4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.redAccent,
+                                                        borderRadius: BorderRadius.circular(12),
+                                                      ),
+                                                      child: Text(
+                                                        '${item.badgeCount}',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
                                             const SizedBox(height: 12),
                                             SizedBox(
@@ -313,14 +333,14 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ---- Botón Política de privacidad ----
+                      // ---- Botón Politica de privacidad ----
                       MouseRegion(
                         onEnter: (_) => setState(() => hoveringPrivacy = true),
                         onExit: (_) => setState(() => hoveringPrivacy = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
                           label:
-                              'Política de privacidad (se abrirá en el navegador)',
+                              'Politica de privacidad (se abrirá en el navegador)',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -333,13 +353,15 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                 horizontal: 14,
                                 vertical: 14,
                               ),
-                              transform:
-                                  Matrix4.identity()
-                                    ..scale(hoveringPrivacy ? 1.02 : 1.0),
+                              transform: Matrix4.diagonal3Values(
+                                hoveringPrivacy ? 1.02 : 1.0,
+                                hoveringPrivacy ? 1.02 : 1.0,
+                                1,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: Colors.red.withOpacity(.15),
+                                  color: Colors.red.withValues(alpha: .15),
                                 ),
                                 gradient: const LinearGradient(
                                   begin: Alignment.centerLeft,
@@ -349,22 +371,18 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                     Colors.white,
                                   ],
                                 ),
-                                boxShadow:
-                                    hoveringPrivacy
-                                        ? [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.06,
-                                            ),
+                              boxShadow:
+                                  hoveringPrivacy
+                                      ? [
+                                        BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.06),
                                             blurRadius: 12,
                                             offset: const Offset(0, 6),
                                           ),
                                         ]
                                         : [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.03,
-                                            ),
+                                            color: Colors.black.withValues(alpha: 0.03),
                                             blurRadius: 6,
                                             offset: const Offset(0, 2),
                                           ),
@@ -380,7 +398,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Política de privacidad',
+                                    'Politica de privacidad',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,
@@ -396,7 +414,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
                       const SizedBox(height: 12),
 
-                      // ---- Botón Cerrar sesión ----
+                      // ---- Botón Cerrar sesion ----
                       MouseRegion(
                         onEnter:
                             (_) => setState(() => hoveringCerrarSesion = true),
@@ -404,7 +422,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                             (_) => setState(() => hoveringCerrarSesion = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
-                          label: 'Cerrar sesión',
+                          label: 'Cerrar sesion',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -415,10 +433,10 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                 builder:
                                     (ctx) => AlertDialog(
                                       title: const Text(
-                                        '¿Deseas cerrar sesión?',
+                                        'Deseas cerrar sesion?',
                                       ),
                                       content: const Text(
-                                        'Se cerrará tu sesión actual.',
+                                        'Se cerrará tu sesion actual.',
                                       ),
                                       actions: [
                                         TextButton(
@@ -429,7 +447,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                         TextButton(
                                           onPressed:
                                               () => Navigator.pop(ctx, true),
-                                          child: const Text('Cerrar sesión'),
+                                          child: const Text('Cerrar sesion'),
                                         ),
                                       ],
                                     ),
@@ -444,38 +462,36 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                 horizontal: 14,
                                 vertical: 14,
                               ),
-                              transform:
-                                  Matrix4.identity()
-                                    ..scale(hoveringCerrarSesion ? 1.02 : 1.0),
+                              transform: Matrix4.diagonal3Values(
+                                hoveringCerrarSesion ? 1.02 : 1.0,
+                                hoveringCerrarSesion ? 1.02 : 1.0,
+                                1,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: Colors.red.withOpacity(.15),
+                                  color: Colors.red.withValues(alpha: .15),
                                 ),
                                 gradient: LinearGradient(
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
                                   colors: [
-                                    Colors.red.withOpacity(.06),
+                                    Colors.red.withValues(alpha: .06),
                                     Colors.white,
                                   ],
                                 ),
-                                boxShadow:
-                                    hoveringCerrarSesion
-                                        ? [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.06,
-                                            ),
+                              boxShadow:
+                                  hoveringCerrarSesion
+                                      ? [
+                                        BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.06),
                                             blurRadius: 12,
                                             offset: const Offset(0, 6),
                                           ),
                                         ]
                                         : [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.03,
-                                            ),
+                                            color: Colors.black.withValues(alpha: 0.03),
                                             blurRadius: 6,
                                             offset: const Offset(0, 2),
                                           ),
@@ -491,7 +507,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Cerrar sesión',
+                                    'Cerrar sesion',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,
@@ -520,10 +536,12 @@ class MenuItemData {
   final String label;
   final IconData icon;
   final String route;
+  final int badgeCount;
 
   const MenuItemData({
     required this.label,
     required this.icon,
     required this.route,
+    this.badgeCount = 0,
   });
 }

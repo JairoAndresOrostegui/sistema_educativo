@@ -8,6 +8,7 @@ import '../view/management_file_view.dart';
 import '../view/management_route_view.dart';
 import '../view/management_schedule_view.dart';
 import '../view/management_user_view.dart';
+import '../../../utils/navigation_utils.dart';
 
 class AdminHistoryScreen extends StatefulWidget {
   const AdminHistoryScreen({super.key});
@@ -29,6 +30,7 @@ class _AdminHistoryScreenState extends State<AdminHistoryScreen> {
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
+        leading: const BackToDashboardButton(),
       ),
       body: SafeArea(
         child: Center(child: Text('Disponible solo en la versión web.')),
@@ -42,6 +44,7 @@ class _AdminHistoryScreenState extends State<AdminHistoryScreen> {
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
+        leading: const BackToDashboardButton(),
       ),
       body: SafeArea(
         child: Padding(

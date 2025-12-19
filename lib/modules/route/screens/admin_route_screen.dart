@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 import '../services/admin_route_service.dart';
 import '../widgets/admin/admin_route_form_dialog.dart';
 import '../../../models/route/route_model.dart';
-import '../../../providers/user_provider_V2.dart';
-import '../../../utils/snackbar_utils.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
 
 class AdminRoutesScreen extends StatefulWidget {
   const AdminRoutesScreen({super.key});
@@ -91,10 +92,18 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
         if (!mounted) return;
         await _loadRoutes();
         if (!mounted) return;
-        mostrarSnack(context, 'Ruta eliminada correctamente');
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Ruta eliminada',
+          message: 'Ruta eliminada correctamente',
+        );
       } catch (_) {
         if (!mounted) return;
-        mostrarSnack(context, 'Error al eliminar la ruta');
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error',
+          message: 'Error al eliminar la ruta',
+        );
       }
     }
   }
@@ -112,6 +121,7 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
+        leading: const BackToDashboardButton(),
         actions: [
           if (canCreate)
             IconButton(
@@ -130,8 +140,8 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                 context: context,
                 onGuardar: _loadRoutes,
               ),
-              child: const Icon(Icons.add),
               tooltip: 'Crear nueva ruta',
+              child: const Icon(Icons.add),
             )
           : null,
       body: SafeArea(
@@ -146,7 +156,8 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                       controller: _routesScrollController,
                       padding: const EdgeInsets.all(16),
                       itemCount: routes.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      separatorBuilder: (context, _) =>
+                          const SizedBox(height: 12),
                       itemBuilder: (context, index) {
                         final route = routes[index];
 
@@ -164,23 +175,23 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: Colors.red.withOpacity(.15),
-                              ),
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [
-                                  Colors.red.withOpacity(.06),
-                                  Colors.white,
-                                ],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.03),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                                    color: Colors.red.withValues(alpha: .15),
+                                  ),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    colors: [
+                                      Colors.red.withValues(alpha: .06),
+                                      Colors.white,
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.03),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                             ),
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,

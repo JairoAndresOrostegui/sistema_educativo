@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/admin_route_service.dart';
 import '../../../../models/route/route_model.dart';
-import '../../../../providers/user_provider_V2.dart';
+import '../../../../providers/user_provider_v2.dart';
 import '../admin/admin_route_form_body.dart';
 
 Future<void> mostrarFormularioRuta({
@@ -64,6 +64,7 @@ Future<void> mostrarFormularioRuta({
 
   final orderedStudents = ValueNotifier<List<Map<String, dynamic>>>(mapped);
 
+  if (!context.mounted) return;
   await showDialog(
     context: context,
     builder: (ctx) {

@@ -16,8 +16,8 @@ class AdminRouteHistoryService {
   final _db = FirebaseFirestore.instance;
 
   // Colecciones (nuevo/es)
-  static const _COL_EN = 'routes_admin_history'; // vigente
-  static const _COL_ES = 'historial_rutas_admin'; // legado
+  static const routesAdminHistoryCollection = 'routes_admin_history'; // vigente
+  static const historialRutasAdminCollection = 'historial_rutas_admin'; // legado
 
   /// Página con filtros + paginación por cursor.
   /// - Normaliza a claves en español: nombreRuta, accion, nombreAdmin, fecha, detalles
@@ -30,7 +30,7 @@ class AdminRouteHistoryService {
   }) async {
     // 1) Intentar en EN
     var page = await _query(
-      col: _COL_EN,
+      col: routesAdminHistoryCollection,
       dateField: 'date',
       routeNameField: 'routeName',
       actionField: 'action',
@@ -47,7 +47,7 @@ class AdminRouteHistoryService {
     // 2) Fallback a ES si vacío
     if (page.items.isEmpty) {
       page = await _query(
-        col: _COL_ES,
+        col: historialRutasAdminCollection,
         dateField: 'fecha',
         routeNameField: 'nombreRuta',
         actionField: 'accion',
@@ -162,7 +162,7 @@ class AdminRouteHistoryService {
   }) async {
     // Intento EN
     final en = await _countIn(
-      col: _COL_EN,
+      col: routesAdminHistoryCollection,
       dateField: 'date',
       actionField: 'action',
       action: action,
@@ -174,7 +174,7 @@ class AdminRouteHistoryService {
     // Si EN devolvió 0, prueba ES
     if (total == 0) {
       final es = await _countIn(
-        col: _COL_ES,
+        col: historialRutasAdminCollection,
         dateField: 'fecha',
         actionField: 'accion',
         action: action,

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../services/authServiceV2.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../services/auth_service_v2.dart';
+import '../../../providers/user_provider_v2.dart';
 import 'loginScreenV2.dart';
 
 class AccessDeniedPage extends StatelessWidget {

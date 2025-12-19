@@ -33,7 +33,7 @@ Future<void> enviarNotificacion({
     final funciones = FirebaseFunctions.instance;
     final callable = funciones.httpsCallable('enviarNotificacion');
 
-    final resultado = await callable
+    await callable
         .call({
           'grado': grado,
           'tokens': cleanTokens,
@@ -46,12 +46,11 @@ Future<void> enviarNotificacion({
         );
 
     if (kDebugMode) {
-      //print('[NOTIFY RES] ${resultado.data}');
+      //print('[NOTIFY RES]');
     }
-  } catch (e, st) {
+  } catch (e) {
     if (kDebugMode) {
       //print('[NOTIFY ERR] $e');
-      //print(st);
     }
     rethrow;
   }

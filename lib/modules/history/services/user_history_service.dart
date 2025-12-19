@@ -12,8 +12,8 @@ class AdminUserHistoryService {
   final _db = FirebaseFirestore.instance;
 
   // Colecciones (nuevo / legado)
-  static const _COL_EN = 'user_history';         // vigente
-  static const _COL_ES = 'historial_usuarios';   // legado
+  static const userHistoryCollection = 'user_history'; // vigente
+  static const historialUsuariosCollection = 'historial_usuarios'; // legado
 
   /// Devuelve página normalizada a claves en español:
   /// accion, nombres, apellidos, rol, realizadoPor, fecha, campus, institution, usuarioId
@@ -27,7 +27,7 @@ class AdminUserHistoryService {
   }) async {
     // 1) Intento en 'user_history'
     var page = await _query(
-      col: _COL_EN,
+      col: userHistoryCollection,
       dateField: 'fecha', // en tus datos nuevos 'fecha' existe; intentamos primero
       fallbacksDate: const ['date', 'timestamp'],
       roleField: 'rol',
@@ -48,7 +48,7 @@ class AdminUserHistoryService {
     // 2) Fallback legado si vacío
     if (page.items.isEmpty) {
       page = await _query(
-        col: _COL_ES,
+        col: historialUsuariosCollection,
         dateField: 'fecha',
         fallbacksDate: const [],
         roleField: 'rol',
@@ -240,7 +240,7 @@ class AdminUserHistoryService {
     String? nameContains, // NOTA: este "contains" no se aplica aquí (sería costoso)
   }) async {
     int total = await _countIn(
-          col: _COL_EN,
+      col: userHistoryCollection,
           dateField: 'fecha',
           actionField: 'accion',
           roleField: 'rol',
@@ -252,7 +252,7 @@ class AdminUserHistoryService {
 
     if (total == 0) {
       total = await _countIn(
-            col: _COL_ES,
+            col: historialUsuariosCollection,
             dateField: 'fecha',
             actionField: 'accion',
             roleField: 'rol',

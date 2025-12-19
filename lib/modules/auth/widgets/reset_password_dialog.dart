@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/authServiceV2.dart';
+
+import '../../../utils/validators.dart';
+import '../services/auth_service_v2.dart';
 
 class ResetPasswordDialog extends StatefulWidget {
   const ResetPasswordDialog({super.key});
@@ -22,28 +24,34 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Recuperar contraseña'),
+      title: const Text('Recuperar contrasena'),
       content: Form(
         key: _formKey,
         child: Semantics(
-          label: 'Campo de correo electrónico para recuperar contraseña',
+          label: 'Campo de correo electronico para recuperar contrasena',
           hint: 'Ingrese su correo institucional',
           textField: true,
           enabled: true,
           focusable: true,
           child: TextFormField(
             controller: _emailController,
-            decoration: const InputDecoration(labelText: 'Correo electrónico'),
+            decoration: const InputDecoration(labelText: 'Correo electronico'),
             keyboardType: TextInputType.emailAddress,
-            validator:
-                (value) =>
-                    value == null || value.isEmpty ? 'Campo obligatorio' : null,
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Campo obligatorio';
+              }
+              if (!Validators.isValidEmail(value)) {
+                return 'Correo invalido';
+              }
+              return null;
+            },
           ),
         ),
       ),
       actions: [
         Semantics(
-          label: 'Botón para cancelar recuperación de contraseña',
+          label: 'Boton para cancelar recuperacion de contrasena',
           button: true,
           child: TextButton(
             onPressed: () => Navigator.pop(context),
@@ -51,18 +59,17 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
           ),
         ),
         Semantics(
-          label: 'Botón para enviar correo de recuperación de contraseña',
+          label: 'Boton para enviar correo de recuperacion de contrasena',
           button: true,
           child: ElevatedButton(
             onPressed: _loading ? null : _enviarCorreo,
-            child:
-                _loading
-                    ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Text('Enviar'),
+            child: _loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Enviar'),
           ),
         ),
       ],
@@ -78,34 +85,35 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
 
     try {
       await AuthService().sendPasswordResetEmail(email);
-      mensaje = 'Se ha enviado un enlace para restablecer la contraseña.';
+      mensaje = 'Se ha enviado un enlace para restablecer la contrasena.';
     } catch (e) {
       mensaje = e.toString().replaceAll('Exception: ', '');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
 
     if (!mounted) return;
-    final ctx = Navigator.of(context, rootNavigator: true).context;
-    Navigator.pop(context); // cerrar diálogo actual
+    final navigator = Navigator.of(context, rootNavigator: true);
+    Navigator.pop(context);
 
-    Future.delayed(Duration.zero, () {
+    Future.microtask(() {
+      if (!mounted) return;
       showDialog(
-        context: ctx,
-        builder:
-            (_) => AlertDialog(
-              title: const Text('Recuperación de contraseña'),
-              content: Text(mensaje),
-              actions: [
-                Semantics(
-                  label:
-                      'Botón para cerrar el mensaje de recuperación de contraseña',
-                  button: true,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Aceptar'),
-                  ),
-                ),
-              ],
+        context: navigator.context,
+        builder: (_) => AlertDialog(
+          title: const Text('Recuperacion de contrasena'),
+          content: Text(mensaje),
+          actions: [
+            Semantics(
+              label: 'Boton para cerrar el mensaje de recuperacion de contrasena',
+              button: true,
+              child: TextButton(
+                onPressed: () => Navigator.pop(navigator.context),
+                child: const Text('Aceptar'),
+              ),
             ),
+          ],
+        ),
       );
     });
   }

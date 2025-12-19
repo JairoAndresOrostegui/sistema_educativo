@@ -11,9 +11,9 @@ class RutaPage {
 class RutaHistoryService {
   final _db = FirebaseFirestore.instance;
 
-  static const _COL = 'daily_routes';
-  static const _SUB_EN = 'students';
-  static const _SUB_ES = 'estudiantes';
+  static const dailyRoutesCollection = 'daily_routes';
+  static const studentsCollectionEn = 'students';
+  static const studentsCollectionEs = 'estudiantes';
 
   Future<RutaPage> obtenerHistorialRutas({
     // ⬇️ filtros OBLIGATORIOS de organización
@@ -27,7 +27,7 @@ class RutaHistoryService {
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
     Query<Map<String, dynamic>> q = _db
-        .collection(_COL)
+        .collection(dailyRoutesCollection)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId);
 
@@ -61,13 +61,14 @@ class RutaHistoryService {
       data['id'] = doc.id;
 
       // Carga de subcolección (EN primero, si no, ES)
-      final studentsCol = doc.reference.collection(_SUB_EN);
+      final studentsCol = doc.reference.collection(studentsCollectionEn);
       final stSnap = await studentsCol.get();
       if (stSnap.docs.isNotEmpty) {
         data['estudiantes'] =
             stSnap.docs.map((e) => _toEsStudent(e.data())).toList();
       } else {
-        final stSnapEs = await doc.reference.collection(_SUB_ES).get();
+        final stSnapEs =
+            await doc.reference.collection(studentsCollectionEs).get();
         data['estudiantes'] = stSnapEs.docs.map((e) => e.data()).toList();
       }
 
@@ -104,7 +105,7 @@ class RutaHistoryService {
     String? nombreRuta,
   }) async {
     Query<Map<String, dynamic>> q = _db
-        .collection(_COL)
+        .collection(dailyRoutesCollection)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
         .where('estado', isEqualTo: 'finalizada');

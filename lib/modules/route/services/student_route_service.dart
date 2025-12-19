@@ -6,8 +6,8 @@ class MyRouteService {
   MyRouteService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  static const _COL_DAILY = 'daily_routes';
-  static const _SUB_STUDENTS = 'students';
+  static const String _colDaily = 'daily_routes';
+  static const String _subStudents = 'students';
 
   Future<RutaDiaria?> getMyDailyRoute({
     required String studentId,
@@ -20,7 +20,7 @@ class MyRouteService {
 
     final byTenant =
         await _firestore
-            .collection(_COL_DAILY)
+            .collection(_colDaily)
             .where('institution', isEqualTo: institutionId)
             .where('campus', isEqualTo: campusId)
             .get();
@@ -36,9 +36,9 @@ class MyRouteService {
     for (final doc in todaysDocs) {
       final exists =
           await _firestore
-              .collection(_COL_DAILY)
+              .collection(_colDaily)
               .doc(doc.id)
-              .collection(_SUB_STUDENTS)
+              .collection(_subStudents)
               .doc(studentId)
               .get();
 
@@ -52,7 +52,7 @@ class MyRouteService {
   Stream<DocumentSnapshot<Map<String, dynamic>>> streamDailyRoute(
     String routeId,
   ) {
-    return _firestore.collection(_COL_DAILY).doc(routeId).snapshots();
+    return _firestore.collection(_colDaily).doc(routeId).snapshots();
   }
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> streamStudentDailyRoute(
@@ -60,9 +60,9 @@ class MyRouteService {
     String studentId,
   ) {
     return _firestore
-        .collection(_COL_DAILY)
+        .collection(_colDaily)
         .doc(routeId)
-        .collection(_SUB_STUDENTS)
+        .collection(_subStudents)
         .doc(studentId)
         .snapshots();
   }
@@ -73,9 +73,9 @@ class MyRouteService {
   ) async {
     final doc =
         await _firestore
-            .collection(_COL_DAILY)
+            .collection(_colDaily)
             .doc(routeId)
-            .collection(_SUB_STUDENTS)
+            .collection(_subStudents)
             .doc(studentId)
             .get();
     return doc.exists ? doc : null;

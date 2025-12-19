@@ -2,7 +2,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../../enrollment/services/enrollment_service.dart';
+import '../../../utils/parameters_service.dart';
 import 'dashboard_layout.dart';
 
 class EstudianteDashboardLayout extends StatefulWidget {
@@ -67,6 +69,19 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       ),
     ];
 
+    if (perms.contains('matriculas.ver')) {
+      final showEnrollment = await _shouldShowEnrollmentMenu(user.id);
+      if (showEnrollment) {
+        items.add(
+          const MenuItemData(
+            label: 'Matr¡cula',
+            icon: Icons.assignment_ind,
+            route: '/enrollment',
+          ),
+        );
+      }
+    }
+
     if (perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
@@ -112,6 +127,24 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       _menuItems = items;
       isLoading = false;
     });
+  }
+
+  Future<bool> _shouldShowEnrollmentMenu(String userId) async {
+    try {
+      final params = ParametersService();
+      final enabled = await params.getEnrollmentParentEnabled();
+      if (!enabled) return false;
+
+      final anio = await params.getEnrollmentYear() ?? DateTime.now().year;
+      final hasMatricula = await EnrollmentService().hasEnrollmentForUser(
+        userId: userId,
+        estados: ['matriculada'],
+        anioMatricula: anio,
+      );
+      return !hasMatricula;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override

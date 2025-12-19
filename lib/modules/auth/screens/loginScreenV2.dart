@@ -1,15 +1,17 @@
+// ignore_for_file: file_names
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app.dart';
 import '../../../config/theme_config.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../providers/user_provider_v2.dart';
 import '../../../utils/color_utils.dart';
 import '../../../utils/user_log_service.dart';
 import '../../../utils/validators.dart';
-import '../services/authServiceV2.dart';
-import '../widgets/publicLogoWidget.dart';
-import '../widgets/publicTitleWidget.dart';
+import '../../../utils/dialog_utils.dart';
+import '../services/auth_service_v2.dart';
+import '../widgets/public_logo_widget.dart';
+import '../widgets/public_title_widget.dart';
 import '../widgets/reset_password_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -34,23 +36,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _mostrarDialogo(String titulo, String mensaje) {
-    showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: Text(titulo),
-            content: Text(mensaje),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Aceptar'),
-              ),
-            ],
-          ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -64,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final containerRadius = BorderRadius.circular(16);
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.red.withOpacity(.25)),
+      borderSide: BorderSide(color: Colors.red.withValues(alpha: .25)),
     );
     final focusedBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -74,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor:
           parseColor(ThemeProvider.config?.colorFondo) ??
-          theme.colorScheme.background,
+          theme.colorScheme.surface,
       body: Stack(
         children: [
           SafeArea(
@@ -90,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: IntrinsicHeight(
                   child: Column(
                     children: [
-                      // encabezado público
+                      // encabezado publico
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -101,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      // tarjeta con degradé y borde
+                      // tarjeta con degrade y borde
                       Expanded(
                         child: Align(
                           alignment: const Alignment(0, -0.60),
@@ -112,11 +97,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               decoration: BoxDecoration(
                                 borderRadius: containerRadius,
                                 border: Border.all(
-                                  color: Colors.red.withOpacity(.15),
+                                  color: Colors.red.withValues(alpha: .15),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
+                                    color: Colors.black.withValues(alpha: 0.06),
                                     blurRadius: 12,
                                     offset: const Offset(0, 6),
                                   ),
@@ -125,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    Colors.red.withOpacity(.06),
+                                    Colors.red.withValues(alpha: .06),
                                     Colors.white,
                                   ],
                                 ),
@@ -142,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         // Email
                                         Semantics(
                                           label:
-                                              'Campo para correo electrónico',
+                                              'Campo para correo electronico',
                                           hint:
                                               'Ingrese su correo institucional',
                                           textField: true,
@@ -151,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           child: TextFormField(
                                             controller: _emailController,
                                             decoration: InputDecoration(
-                                              labelText: 'Correo electrónico',
+                                              labelText: 'Correo electronico',
                                               labelStyle: TextStyle(
                                                 color: labelColor,
                                                 fontFamily: fontGeneral,
@@ -178,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               if (!Validators.isValidEmail(
                                                 value,
                                               )) {
-                                                return 'Ingrese un correo válido';
+                                                return 'Ingrese un correo valido';
                                               }
                                               return null;
                                             },
@@ -187,8 +172,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         const SizedBox(height: 16),
                                         // Password
                                         Semantics(
-                                          label: 'Campo para contraseña',
-                                          hint: 'Ingrese su contraseña',
+                                          label: 'Campo para contrasena',
+                                          hint: 'Ingrese su contrasena',
                                           textField: true,
                                           enabled: true,
                                           focusable: true,
@@ -196,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             controller: _passwordController,
                                             obscureText: _obscure,
                                             decoration: InputDecoration(
-                                              labelText: 'Contraseña',
+                                              labelText: 'Contrasena',
                                               labelStyle: TextStyle(
                                                 color: labelColor,
                                                 fontFamily: fontGeneral,
@@ -211,8 +196,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                               suffixIcon: Semantics(
                                                 label:
                                                     _obscure
-                                                        ? 'Mostrar contraseña'
-                                                        : 'Ocultar contraseña',
+                                                        ? 'Mostrar contrasena'
+                                                        : 'Ocultar contrasena',
                                                 button: true,
                                                 child: IconButton(
                                                   icon: Icon(
@@ -235,20 +220,24 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                             textInputAction:
                                                 TextInputAction.done,
-                                            validator:
-                                                (value) =>
-                                                    value == null ||
-                                                            value.isEmpty
-                                                        ? 'Ingrese su contraseña'
-                                                        : null,
+                                            validator: (value) {
+                                              if (value == null ||
+                                                  value.isEmpty) {
+                                                return 'Ingrese su contrasena';
+                                              }
+                                              if (value.length < 8) {
+                                                return 'Minimo 8 caracteres';
+                                              }
+                                              return null;
+                                            },
                                             onFieldSubmitted:
                                                 (_) => _iniciarSesion(),
                                           ),
                                         ),
                                         const SizedBox(height: 24),
-                                        // Botón login
+                                        // Boton login
                                         Semantics(
-                                          label: 'Botón para iniciar sesión',
+                                          label: 'Boton para iniciar sesion',
                                           button: true,
                                           child: SizedBox(
                                             width: double.infinity,
@@ -283,7 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                         ),
                                                       )
                                                       : Text(
-                                                        'Iniciar sesión',
+                                                        'Iniciar sesion',
                                                         style: TextStyle(
                                                           fontFamily:
                                                               fontGeneral,
@@ -298,7 +287,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         // Reset password
                                         Semantics(
                                           label:
-                                              'Botón para recuperar contraseña',
+                                              'Boton para recuperar contrasena',
                                           button: true,
                                           child: TextButton(
                                             onPressed: () {
@@ -313,7 +302,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               foregroundColor: Colors.redAccent,
                                             ),
                                             child: Text(
-                                              '¿Olvidaste tu contraseña?',
+                                              '¿Olvidaste tu contrasena?',
                                               style: TextStyle(
                                                 fontFamily: fontGeneral,
                                               ),
@@ -339,7 +328,13 @@ class _LoginScreenState extends State<LoginScreen> {
           if (_loading)
             Positioned.fill(
               child: AbsorbPointer(
-                child: Container(color: Colors.redAccent.withOpacity(0.08)),
+                child: Container(color: Colors.redAccent.withValues(alpha: 0.08)),
+              ),
+            ),
+          if (_loading)
+            const Positioned.fill(
+              child: Center(
+                child: CircularProgressIndicator(strokeWidth: 2.8),
               ),
             ),
         ],
@@ -360,6 +355,8 @@ class _LoginScreenState extends State<LoginScreen> {
         password,
       );
 
+      if (!mounted) return;
+
       if (user != null) {
         final userProvider = Provider.of<UserProviderV2>(
           context,
@@ -373,25 +370,25 @@ class _LoginScreenState extends State<LoginScreen> {
           // no rompe UX si falla el log
         }
 
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AppRouter()),
-        );
+        // pantalla correspondiente segun rol cuando el provider cambia.
         return;
       }
 
       setState(() => _loading = false);
-      _mostrarDialogo('Error al iniciar sesión', 'Respuesta inválida.');
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: context,
+        title: 'Error al iniciar sesion',
+        message: 'Respuesta invalida.',
+      );
     } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        _mostrarDialogo(
-          'Error al iniciar sesión',
-          e.toString().replaceAll('Exception: ', ''),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loading = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'Error al iniciar sesion',
+        message: e.toString().replaceAll('Exception: ', ''),
+      );
     }
   }
 }

@@ -15,12 +15,17 @@ class ProfileService {
     final user = _auth.currentUser;
     if (user == null) return null;
 
-    final nombreArchivo = 'foto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final esPng = nombreOriginal.toLowerCase().endsWith('.png');
+    final extension = esPng ? 'png' : 'jpg';
+    final nombreArchivo =
+        'foto_${DateTime.now().millisecondsSinceEpoch}.$extension';
 
     final ref = _storage.ref().child('fotos_perfil/${user.uid}/$nombreArchivo');
     final uploadTask = await ref.putData(
       bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
+      SettableMetadata(
+        contentType: esPng ? 'image/png' : 'image/jpeg',
+      ),
     );
 
     final url = await uploadTask.ref.getDownloadURL();
@@ -35,13 +40,17 @@ class ProfileService {
   Future<String> subirFotoPerfil({
     required Uint8List bytes,
     required String uid,
+    String? fileName,
   }) async {
-    final nombreArchivo = 'foto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final esPng = (fileName ?? '').toLowerCase().endsWith('.png');
+    final extension = esPng ? 'png' : 'jpg';
+    final nombreArchivo =
+        'foto_${DateTime.now().millisecondsSinceEpoch}.$extension';
 
     final ref = _storage.ref().child('fotos_perfil/$uid/$nombreArchivo');
     final uploadTask = await ref.putData(
       bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
+      SettableMetadata(contentType: esPng ? 'image/png' : 'image/jpeg'),
     );
 
     final url = await uploadTask.ref.getDownloadURL();

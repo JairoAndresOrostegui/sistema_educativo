@@ -31,7 +31,7 @@ class EstudianteRutaDiaria {
   factory EstudianteRutaDiaria.fromFirestore(DocumentSnapshot doc) {
     final data = (doc.data() as Map<String, dynamic>? ?? {});
 
-    String _str(List<String> ks, [String def = '']) {
+    String readStr(List<String> ks, [String def = '']) {
       for (final k in ks) {
         final v = data[k];
         if (v is String && v.trim().isNotEmpty) return v;
@@ -39,7 +39,7 @@ class EstudianteRutaDiaria {
       return def;
     }
 
-    bool _bool(List<String> ks, [bool def = false]) {
+    bool readBool(List<String> ks, [bool def = false]) {
       for (final k in ks) {
         final v = data[k];
         if (v is bool) return v;
@@ -47,7 +47,7 @@ class EstudianteRutaDiaria {
       return def;
     }
 
-    int _int(List<String> ks, [int def = 0]) {
+    int readInt(List<String> ks, [int def = 0]) {
       for (final k in ks) {
         final v = data[k];
         if (v is int) return v;
@@ -55,7 +55,7 @@ class EstudianteRutaDiaria {
       return def;
     }
 
-    Timestamp? _ts(List<String> ks) {
+    Timestamp? readTs(List<String> ks) {
       for (final k in ks) {
         final v = data[k];
         if (v is Timestamp) return v;
@@ -65,15 +65,15 @@ class EstudianteRutaDiaria {
 
     return EstudianteRutaDiaria(
       id: doc.id,
-      nombre: _str(['name', 'nombre']),
-      direccion: _str(['address', 'direccion']),
-      activo: _bool(['active', 'activo']),
-      recogido: _bool(['picked', 'recogido']),
-      horaRecogida: _ts(['pickupTime', 'horaRecogida']),
-      avisoEnviado: _bool(['arrivalNotified', 'avisoEnviado']),
-      anulado: _bool(['canceled', 'anulado']),
-      orden: _int(['order', 'orden'], 0),
-      avisosEnviados: _int(['arrivalNotices', 'avisosEnviados'], 0),
+      nombre: readStr(['name', 'nombre']),
+      direccion: readStr(['address', 'direccion']),
+      activo: readBool(['active', 'activo']),
+      recogido: readBool(['picked', 'recogido']),
+      horaRecogida: readTs(['pickupTime', 'horaRecogida']),
+      avisoEnviado: readBool(['arrivalNotified', 'avisoEnviado']),
+      anulado: readBool(['canceled', 'anulado']),
+      orden: readInt(['order', 'orden'], 0),
+      avisosEnviados: readInt(['arrivalNotices', 'avisosEnviados'], 0),
     );
   }
 

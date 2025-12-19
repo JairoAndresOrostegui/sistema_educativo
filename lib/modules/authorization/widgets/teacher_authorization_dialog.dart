@@ -7,7 +7,8 @@ class AuthorizationDetailsDialog extends StatelessWidget {
   final AuthorizationRequest request;
   const AuthorizationDetailsDialog({super.key, required this.request});
 
-  String _fmtD(DateTime? d) => d == null ? '-' : DateFormat('yyyy-MM-dd').format(d);
+  String _fmtD(DateTime? d) =>
+      d == null ? '-' : DateFormat('yyyy-MM-dd').format(d);
   String _fmtT(DateTime? d) => d == null ? '-' : DateFormat('HH:mm').format(d);
 
   String _statusLabel(AuthorizationStatus s) {
@@ -40,10 +41,13 @@ class AuthorizationDetailsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final sc = _statusColor(request.status);
     final dateLine =
-        request.multiDay ? '${_fmtD(request.dateFrom)} → ${_fmtD(request.dateTo)}' : _fmtD(request.dateFrom);
-    final timeLine = request.allDay
-        ? 'Todo el día'
-        : request.endTime != null
+        request.multiDay
+            ? '${_fmtD(request.dateFrom)} → ${_fmtD(request.dateTo)}'
+            : _fmtD(request.dateFrom);
+    final timeLine =
+        request.allDay
+            ? 'Todo el día'
+            : request.endTime != null
             ? '${_fmtT(request.startTime)} - ${_fmtT(request.endTime)}'
             : _fmtT(request.startTime);
 
@@ -51,7 +55,10 @@ class AuthorizationDetailsDialog extends StatelessWidget {
       title: Center(
         child: Text(
           'Detalle de autorización',
-          style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       content: SizedBox(
@@ -62,9 +69,9 @@ class AuthorizationDetailsDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: sc.withOpacity(.12),
+                color: sc.withValues(alpha: .12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: sc.withOpacity(.25)),
+                border: Border.all(color: sc.withValues(alpha: .25)),
               ),
               child: Text(
                 _statusLabel(request.status),
@@ -74,46 +81,76 @@ class AuthorizationDetailsDialog extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                const Expanded(child: Text('Estudiante', style: TextStyle(fontWeight: FontWeight.w600))),
+                const Expanded(
+                  child: Text(
+                    'Estudiante',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
                 Expanded(child: Text(request.studentFullName)),
               ],
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Expanded(child: Text('Grado', style: TextStyle(fontWeight: FontWeight.w600))),
+                const Expanded(
+                  child: Text(
+                    'Grado',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
                 Expanded(child: Text(request.grade)),
               ],
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Expanded(child: Text('Fecha', style: TextStyle(fontWeight: FontWeight.w600))),
+                const Expanded(
+                  child: Text(
+                    'Fecha',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
                 Expanded(child: Text(dateLine)),
               ],
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Expanded(child: Text('Hora', style: TextStyle(fontWeight: FontWeight.w600))),
+                const Expanded(
+                  child: Text(
+                    'Hora',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
                 Expanded(child: Text(timeLine)),
               ],
             ),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Motivo', style: const TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                'Motivo',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text((request.reason ?? '').toString().trim().isEmpty ? '-' : request.reason!.trim()),
+              child: Text(
+                (request.reason ?? '').toString().trim().isEmpty
+                    ? '-'
+                    : request.reason!.trim(),
+              ),
             ),
             if ((request.adminNote ?? '').toString().trim().isNotEmpty) ...[
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Nota del administrador', style: const TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Nota del administrador',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
               const SizedBox(height: 4),
               Align(
@@ -125,7 +162,10 @@ class AuthorizationDetailsDialog extends StatelessWidget {
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Evidencia', style: const TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Evidencia',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
               const SizedBox(height: 4),
               Align(

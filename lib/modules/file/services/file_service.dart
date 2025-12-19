@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../../models/file/file_model.dart';
-import '../../../models/user/userModelV2.dart';
+import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
 
 class FileService {
@@ -23,11 +23,9 @@ class FileService {
         'files/$grade/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
     final ref = _storage.ref().child(path);
 
-    // Subir a Storage
     await ref.putFile(file);
     final url = await ref.getDownloadURL();
 
-    // Guardar en Firestore (incluye institution/campus)
     final data = {
       'name': name,
       'url': url,
@@ -46,7 +44,7 @@ class FileService {
       institutionId: institutionId,
       campusId: campusId,
       grade: grade,
-      title: '📎 New file available',
+      title: 'Nuevo archivo disponible',
       body: name,
     );
   }
@@ -56,7 +54,6 @@ class FileService {
     required String campusId,
     required String grade,
   }) async {
-    // SIN orderBy para evitar índice compuesto
     final snap =
         await _db
             .collection('files')
@@ -67,16 +64,9 @@ class FileService {
 
     final list = snap.docs.map((d) => FileModel.fromFirestore(d)).toList();
 
-    // Ordenamos en memoria por createdAt DESC (tolerante a null)
     list.sort((a, b) {
-      final ta =
-          (a.createdAt is Timestamp)
-              ? (a.createdAt as Timestamp).millisecondsSinceEpoch
-              : 0;
-      final tb =
-          (b.createdAt is Timestamp)
-              ? (b.createdAt as Timestamp).millisecondsSinceEpoch
-              : 0;
+      final ta = a.createdAt.millisecondsSinceEpoch;
+      final tb = b.createdAt.millisecondsSinceEpoch;
       return tb.compareTo(ta);
     });
 
@@ -160,12 +150,12 @@ class FileService {
         grado: grade,
       );
     } catch (_) {
-      // silencioso
+      // Best-effort notification
     }
   }
 
   Future<List<Map<String, dynamic>>> getUploadedFiles({
-    required UserModelV2 currentUser,
+    required userModelv2 currentUser,
     String? selectedGrade,
   }) async {
     Query query = _db
@@ -173,19 +163,16 @@ class FileService {
         .where('institutionId', isEqualTo: currentUser.institution)
         .where('campusId', isEqualTo: currentUser.campus);
 
-    final role = (currentUser.role ?? '').toLowerCase();
+    final role = currentUser.role.toLowerCase();
     final isAdmin = role == 'admin' || role == 'administrador';
 
     if (isAdmin) {
-      // Para admin, exigimos grado para filtrar
       if (selectedGrade == null) return [];
       query = query.where('grade', isEqualTo: selectedGrade);
     } else {
-      // Docentes ven SOLO lo suyo
       query = query.where('uploadedBy', isEqualTo: currentUser.id);
     }
 
-    // SIN orderBy en Firestore (evita índice)
     final snap = await query.get();
 
     final items =
@@ -195,7 +182,6 @@ class FileService {
           return data;
         }).toList();
 
-    // Ordenamos en memoria por createdAt DESC (tolerante a null)
     items.sort((a, b) {
       final ta =
           (a['createdAt'] is Timestamp)

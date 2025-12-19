@@ -1,10 +1,10 @@
-import 'dart:io' show Platform; // se ignora en web
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../models/user/userModelV2.dart';
+import '../models/user/user_model_v2.dart';
 
 class UserLogService {
   final _db = FirebaseFirestore.instance;
@@ -15,14 +15,20 @@ class UserLogService {
     final common = <String, dynamic>{
       'appVersion': pkg.version,
       'buildNumber': pkg.buildNumber,
-      'platform': kIsWeb
-          ? 'web'
-          : Platform.isAndroid ? 'android'
-          : Platform.isIOS ? 'ios'
-          : Platform.isMacOS ? 'macos'
-          : Platform.isWindows ? 'windows'
-          : Platform.isLinux ? 'linux'
-          : 'unknown',
+      'platform':
+          kIsWeb
+              ? 'web'
+              : Platform.isAndroid
+              ? 'android'
+              : Platform.isIOS
+              ? 'ios'
+              : Platform.isMacOS
+              ? 'macos'
+              : Platform.isWindows
+              ? 'windows'
+              : Platform.isLinux
+              ? 'linux'
+              : 'unknown',
     };
 
     try {
@@ -41,7 +47,8 @@ class UserLogService {
           ...common,
           'deviceManufacturer': info.manufacturer,
           'deviceModel': info.model,
-          'osVersion': 'Android ${info.version.release} (SDK ${info.version.sdkInt})',
+          'osVersion':
+              'Android ${info.version.release} (SDK ${info.version.sdkInt})',
           'isPhysicalDevice': info.isPhysicalDevice,
         };
       } else if (Platform.isIOS) {
@@ -53,7 +60,6 @@ class UserLogService {
           'isPhysicalDevice': info.isPhysicalDevice,
         };
       } else {
-        // macOS / Windows / Linux
         final info = await _deviceInfo.deviceInfo;
         return {
           ...common,
@@ -67,7 +73,7 @@ class UserLogService {
   }
 
   Future<void> logEvent({
-    required UserModelV2 user,
+    required userModelv2 user,
     required String event,
     Map<String, dynamic>? extra,
   }) async {
@@ -79,7 +85,7 @@ class UserLogService {
       'institution': user.institution,
       'campus': user.campus,
       'grade': user.grade,
-      'event': event, // ej: "login", "logout", "open:files"
+      'event': event,
       'timestamp': FieldValue.serverTimestamp(),
       'env': env,
       if (extra != null) 'extra': extra,
@@ -88,31 +94,31 @@ class UserLogService {
   }
 
   Future<Set<String>> getDownloadedFileKeys({
-  required String userId,
-  String? grade,
-  int limit = 100,
-}) async {
-  Query q = _db
-      .collection('user_logs')
-      .where('userId', isEqualTo: userId)
-      .where('event', isEqualTo: 'file_download');
+    required String userId,
+    String? grade,
+    int limit = 100,
+  }) async {
+    Query q = _db
+        .collection('user_logs')
+        .where('userId', isEqualTo: userId)
+        .where('event', isEqualTo: 'file_download');
 
-  if (grade != null && grade.isNotEmpty) {
-    q = q.where('extra.grade', isEqualTo: grade);
+    if (grade != null && grade.isNotEmpty) {
+      q = q.where('extra.grade', isEqualTo: grade);
+    }
+
+    final snap =
+        await q.orderBy('timestamp', descending: true).limit(limit).get();
+
+    final out = <String>{};
+    for (final d in snap.docs) {
+      final data = d.data() as Map<String, dynamic>;
+      final extra = (data['extra'] ?? {}) as Map<String, dynamic>;
+      final fileId = (extra['fileId'] as String?)?.trim() ?? '';
+      final url = (extra['url'] as String?)?.trim() ?? '';
+      final key = fileId.isNotEmpty ? fileId : url;
+      if (key.isNotEmpty) out.add(key);
+    }
+    return out;
   }
-
-  final snap = await q.orderBy('timestamp', descending: true).limit(limit).get();
-
-  final out = <String>{};
-  for (final d in snap.docs) {
-    final data = d.data() as Map<String, dynamic>;
-    final extra = (data['extra'] ?? {}) as Map<String, dynamic>;
-    final fileId = (extra['fileId'] as String?)?.trim() ?? '';
-    final url = (extra['url'] as String?)?.trim() ?? '';
-    final key = fileId.isNotEmpty ? fileId : url; // debe coincidir con _fileKey(...)
-    if (key.isNotEmpty) out.add(key);
-  }
-  return out;
-}
-
 }

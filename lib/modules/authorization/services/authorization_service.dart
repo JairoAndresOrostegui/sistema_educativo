@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
-import '../../../models/user/userModelV2.dart';
+import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
 
 class AuthorizationPage {
@@ -87,7 +87,7 @@ class AuthorizationService {
 
   Future<String> createRequest({
     required AuthorizationRequest request,
-    required UserModelV2 requester,
+    required userModelv2 requester,
   }) async {
     final data =
         request.toMap()..addAll({
@@ -104,7 +104,7 @@ class AuthorizationService {
 
   Future<void> _notifyOnCreate({
     required AuthorizationRequest request,
-    required UserModelV2 requester,
+    required userModelv2 requester,
   }) async {
     try {
       final adminsSnap =
@@ -222,7 +222,7 @@ class AuthorizationService {
     required AuthorizationStatus newStatus,
     String? adminNote,
     String? evidence,
-    required UserModelV2 admin,
+    required userModelv2 admin,
   }) async {
     final ref = _db.collection(_col).doc(id);
     final snap = await ref.get();
@@ -262,11 +262,11 @@ class AuthorizationService {
 
   Future<void> _notifyOnStatusChange({
     required AuthorizationRequest req,
-    required UserModelV2 admin,
+    required userModelv2 admin,
     String? note,
     String? evidence,
   }) async {
-    String _label(AuthorizationStatus s) {
+    String label(AuthorizationStatus s) {
       switch (s) {
         case AuthorizationStatus.pending:
           return 'Pendiente';
@@ -279,21 +279,21 @@ class AuthorizationService {
       }
     }
 
-    String _firstWords(String text, int n) {
+    String firstWords(String text, int n) {
       final parts = text.trim().split(RegExp(r'\s+'));
       if (parts.length <= n) return text.trim();
-      return parts.take(n).join(' ') + '...';
+      return '${parts.take(n).join(' ')}...';
     }
 
     final title = 'Autorización actualizada';
     final lines = <String>[
       '${req.studentFullName} • ${req.grade}',
-      'Estado: ${_label(req.status)}',
+      'Estado: ${label(req.status)}',
     ];
     if ((note ?? '').trim().isNotEmpty) lines.add('Nota: ${note!.trim()}');
     if (req.status == AuthorizationStatus.finished &&
         (evidence ?? '').trim().isNotEmpty) {
-      lines.add('Evidencia: ${_firstWords(evidence!.trim(), 40)}');
+      lines.add('Evidencia: ${firstWords(evidence!.trim(), 40)}');
     }
     final body = lines.join(' • ');
 

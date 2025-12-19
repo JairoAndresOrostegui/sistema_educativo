@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import '../models/user/userModelV2.dart';
+import '../models/user/user_model_v2.dart';
 
 class UserProviderV2 extends ChangeNotifier {
-  UserModelV2? _user;
+  userModelv2? _user;
 
-  UserModelV2? get user => _user;
+  userModelv2? get user => _user;
   bool get isLoggedIn => _user != null;
 
-  void setUser(UserModelV2 user) {
+  void setUser(userModelv2 user) {
     _user = user;
     notifyListeners();
   }
@@ -26,8 +26,9 @@ class UserProviderV2 extends ChangeNotifier {
 
   void setActiveStudentId(String studentId) {
     if (_user == null) return;
-    if (_user!.activeStudentId == studentId)
+    if (_user!.activeStudentId == studentId) {
       return; // evita rebuilds innecesarios
+    }
     _user = _user!.copyWith(activeStudentId: studentId);
     notifyListeners();
   }

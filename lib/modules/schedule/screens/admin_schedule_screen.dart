@@ -2,127 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
-import '../../../models/user/userModelV2.dart';
-import '../../../providers/user_provider_V2.dart';
+import '../../../models/user/user_model_v2.dart';
+import '../../../providers/user_provider_v2.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/parameters_service.dart';
 import '../widgets/subject_form_dialog.dart';
-
-class GradeDropdown extends StatelessWidget {
-  final String? selectedGrade;
-  final Function(String?) onChanged;
-  final List<String> availableGrades;
-
-  const GradeDropdown({
-    Key? key,
-    required this.selectedGrade,
-    required this.onChanged,
-    required this.availableGrades,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.red.withOpacity(.15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Colors.red.withOpacity(.06), Colors.white],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedGrade,
-          hint: const Text('Selecciona un grado'),
-          isExpanded: true,
-          items:
-              availableGrades
-                  .map(
-                    (String grade) => DropdownMenuItem<String>(
-                      value: grade,
-                      child: Text(grade),
-                    ),
-                  )
-                  .toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class SubjectItem extends StatelessWidget {
-  final SubjectModel subject;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final bool showEdit;
-  final bool showDelete;
-
-  const SubjectItem({
-    Key? key,
-    required this.subject,
-    required this.onEdit,
-    required this.onDelete,
-    this.showEdit = true,
-    this.showDelete = true,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withOpacity(.15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Colors.red.withOpacity(.06), Colors.white],
-        ),
-      ),
-      child: ListTile(
-        title: Text(
-          subject.subject,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(
-          '${TimeOfDay.fromDateTime(subject.startTime.toDate()).format(context)} '
-          'to ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)} • ${subject.teacherName}',
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showEdit)
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                onPressed: onEdit,
-              ),
-            if (showDelete)
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.redAccent),
-                onPressed: onDelete,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/navigation_utils.dart';
+import '../widgets/admin/admin_grade_dropdown.dart';
+import '../widgets/admin/admin_day_column.dart';
 
 class ScheduleAdminScreen extends StatefulWidget {
-  const ScheduleAdminScreen({Key? key}) : super(key: key);
+  const ScheduleAdminScreen({super.key});
 
   @override
   State<ScheduleAdminScreen> createState() => _ScheduleAdminScreenState();
@@ -135,7 +26,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   String? _selectedGrade;
   String _selectedDay = 'lunes';
   bool _isLoading = false;
-  List<UserModelV2> _teachers = [];
+  List<userModelv2> _teachers = [];
   Map<String, List<SubjectModel>> _allSchedules = {};
   List<String> _availableGrades = [];
   final ScrollController _webScrollController = ScrollController();
@@ -147,7 +38,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   final List<String> _daysOfWeek = const [
     'lunes',
     'martes',
-    'miércoles',
+    'miercoles',
     'jueves',
     'viernes',
   ];
@@ -156,7 +47,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     final u = context.read<UserProviderV2>().user;
     if (u == null) return false;
     if (u.isSuperadmin == true) return true;
-    final funcs = u.permissions ?? <String>[];
+    final funcs = u.permissions;
     return funcs.contains(clave);
   }
 
@@ -237,20 +128,21 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     setState(() => _isLoading = false);
   }
 
-  void _showCreateDialog(String day) {
+  Future<void> _showCreateDialog(String day) async {
     if (_selectedGrade == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor, selecciona un grado primero.'),
-          duration: Duration(seconds: 2),
-        ),
+      await DialogUtils.showError(
+        context: context,
+        title: 'Selecciona grado',
+        message: 'Por favor, selecciona un grado primero.',
       );
       return;
     }
 
     if (!_permite('horarios.crear')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No tienes permiso para crear.')),
+      await DialogUtils.showError(
+        context: context,
+        title: 'Sin permiso',
+        message: 'No tienes permiso para crear.',
       );
       return;
     }
@@ -259,6 +151,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       context: context,
       barrierDismissible: false, // bloquea cierre accidental
       builder: (context) {
+        final dialogContext = context;
         return SubjectFormDialog(
           teachers: _teachers,
           daysOfWeek: [day],
@@ -279,19 +172,18 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   creator: currentUser,
                 );
                 await _loadSchedulesForGrade(_selectedGrade);
-                if (context.mounted)
-                  Navigator.of(context).pop(); // cierra diálogo
+                if (!mounted || !dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop(); // cierra dialogo
               }
             } catch (e) {
-              // muestra error y relanza para que el diálogo quite su spinner
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Error al guardar la materia. Inténtalo de nuevo. ($e)',
-                  ),
-                  duration: const Duration(seconds: 3),
-                ),
-              );
+              if (mounted && dialogContext.mounted) {
+                // muestra error y relanza para que el dialogo quite su spinner
+                await DialogUtils.showError(
+                  context: dialogContext,
+                  title: 'Error al guardar',
+                  message: 'No se pudo guardar la materia. ($e)',
+                );
+              }
               rethrow;
             } finally {
               _setBlocking(false);
@@ -304,8 +196,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
 
   void _showEditDialog(SubjectModel subject) {
     if (!_permite('horarios.editar')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No tienes permiso para editar.')),
+      DialogUtils.showError(
+        context: context,
+        title: 'Sin permiso',
+        message: 'No tienes permiso para editar.',
       );
       return;
     }
@@ -314,6 +208,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
+        final dialogContext = context;
         return SubjectFormDialog(
           subjectToEdit: subject,
           teachers: _teachers,
@@ -338,12 +233,18 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   editor: currentUser,
                 );
                 await _loadSchedulesForGrade(_selectedGrade);
-                if (context.mounted) Navigator.of(context).pop();
+                if (mounted && dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
               }
             } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error al editar la materia. ($e)')),
-              );
+              if (mounted && dialogContext.mounted) {
+                await DialogUtils.showError(
+                  context: dialogContext,
+                  title: 'Error',
+                  message: 'Error al editar la materia. ($e)',
+                );
+              }
               rethrow;
             } finally {
               _setBlocking(false);
@@ -356,8 +257,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
 
   void _showDeleteConfirmationDialog(SubjectModel subject) {
     if (!_permite('horarios.eliminar')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No tienes permiso para eliminar.')),
+      DialogUtils.showError(
+        context: context,
+        title: 'Sin permiso',
+        message: 'No tienes permiso para eliminar.',
       );
       return;
     }
@@ -366,9 +269,9 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       context: context,
       builder:
           (dialogCtx) => AlertDialog(
-            title: const Text('Confirmar Eliminación'),
+            title: const Text('Confirmar eliminacion'),
             content: Text(
-              '¿Estás seguro de que deseas eliminar la materia "${subject.subject}"?',
+              'Estas seguro de que deseas eliminar la materia "${subject.subject}"?',
             ),
             actions: [
               TextButton(
@@ -388,22 +291,24 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                       );
                       await _loadSchedulesForGrade(_selectedGrade);
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Materia eliminada.')),
+                      await DialogUtils.showSuccess(
+                        context: context,
+                        title: 'Exito',
+                        message: 'Materia eliminada.',
                       );
                     }
                   } catch (e) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error al eliminar la materia. ($e)'),
-                      ),
+                    await DialogUtils.showError(
+                      context: context,
+                      title: 'Error',
+                      message: 'Error al eliminar la materia. ($e)',
                     );
                   } finally {
                     _setBlocking(false);
                   }
                 },
-                child: const Text('Sí'),
+                child: const Text('Si'),
               ),
             ],
           ),
@@ -414,7 +319,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   Widget build(BuildContext context) {
     final currentUser = context.read<UserProviderV2>().user;
     if (currentUser == null) {
-      return const Center(child: Text('Error: No se encontró el usuario.'));
+      return const Center(child: Text('Error: No se encontro el usuario.'));
     }
 
     final bool isDesktop = MediaQuery.of(context).size.width > 600;
@@ -425,7 +330,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GradeDropdown(
+            AdminGradeDropdown(
               selectedGrade: _selectedGrade,
               onChanged: (String? newGrade) => _loadSchedulesForGrade(newGrade),
               availableGrades: _availableGrades,
@@ -455,6 +360,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
+        leading: const BackToDashboardButton(),
       ),
       body: Stack(
         children: [
@@ -468,7 +374,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                 _blocking
                     ? Container(
                       key: const ValueKey('overlay'),
-                      color: Colors.black.withOpacity(0.35),
+                      color: Colors.black.withValues(alpha: 0.35),
                       child: Center(
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -480,7 +386,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
@@ -575,95 +481,18 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   }
 
   Widget _buildDayColumn(String day) {
-    final subjects = _allSchedules[day] ?? [];
-    subjects.sort((a, b) => a.startTime.compareTo(b.startTime));
+    final subjects = List<SubjectModel>.from(_allSchedules[day] ?? [])
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          margin: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: Colors.red.withOpacity(.08),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(
-            child: Text(
-              StringExtension(day).capitalize(),
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.redAccent,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          margin: const EdgeInsets.all(8.0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.red.withOpacity(.15)),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Colors.red.withOpacity(.06), Colors.white],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child:
-                subjects.isEmpty
-                    ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text('No hay materias para este día.'),
-                      ),
-                    )
-                    : ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: subjects.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder:
-                          (_, i) => SubjectItem(
-                            subject: subjects[i],
-                            onEdit: () => _showEditDialog(subjects[i]),
-                            onDelete:
-                                () =>
-                                    _showDeleteConfirmationDialog(subjects[i]),
-                            showEdit: _permite('horarios.editar'),
-                            showDelete: _permite('horarios.eliminar'),
-                          ),
-                    ),
-          ),
-        ),
-        if (_selectedGrade != null && _permite('horarios.crear'))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              onPressed: () => _showCreateDialog(day),
-              child: const Text('Agregar materia'),
-            ),
-          ),
-      ],
+    return AdminDayColumn(
+      day: day,
+      subjects: subjects,
+      canCreate: _selectedGrade != null && _permite('horarios.crear'),
+      canEdit: _permite('horarios.editar'),
+      canDelete: _permite('horarios.eliminar'),
+      onAddSubject: () => _showCreateDialog(day),
+      onEditSubject: _showEditDialog,
+      onDeleteSubject: _showDeleteConfirmationDialog,
     );
   }
 }

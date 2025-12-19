@@ -90,9 +90,12 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
       ..removeWhere((e) => e.isEmpty);
     _acciones = {for (final m in _items) (m['accion'] ?? '').toString()}
       ..removeWhere((e) => e.isEmpty);
-    if (_rolSel != null && !_roles.contains(_rolSel)) _rolSel = null;
-    if (_accionSel != null && !_acciones.contains(_accionSel))
+    if (_rolSel != null && !_roles.contains(_rolSel)) {
+      _rolSel = null;
+    }
+    if (_accionSel != null && !_acciones.contains(_accionSel)) {
       _accionSel = null;
+    }
   }
 
   String _norm(String s) {
@@ -119,11 +122,6 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
     return sb.toString().toLowerCase();
   }
 
-  String _rangeLabel(DateTimeRange? r) {
-    if (r == null) return 'Rango de fechas';
-    final f = DateFormat('yyyy-MM-dd');
-    return '${f.format(r.start)} → ${f.format(r.end)}';
-  }
 
   Future<void> _pickRange() async {
     final now = DateTime.now();
@@ -202,11 +200,11 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.red.withOpacity(.15)),
+                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.03),
+                      color: Colors.black.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -246,7 +244,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                   SizedBox(
                     width: 220,
                     child: DropdownButtonFormField<String?>(
-                      value: _rolSel,
+                      initialValue: _rolSel,
                       items: <DropdownMenuItem<String?>>[
                         const DropdownMenuItem<String?>(
                           value: null,
@@ -270,7 +268,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                   SizedBox(
                     width: 220,
                     child: DropdownButtonFormField<String?>(
-                      value: _accionSel,
+                      initialValue: _accionSel,
                       items: <DropdownMenuItem<String?>>[
                         const DropdownMenuItem<String?>(
                           value: null,
@@ -401,7 +399,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   side: BorderSide(
-                                    color: Colors.red.withOpacity(.12),
+                                    color: Colors.red.withValues(alpha: .12),
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
