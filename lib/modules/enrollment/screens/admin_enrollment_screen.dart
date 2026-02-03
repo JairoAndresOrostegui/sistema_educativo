@@ -7,10 +7,10 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../export/enrollment_pdf_utils.dart';
 import '../models/enrollment_model.dart';
 import '../screens/enrollment_form_screen.dart';
 import '../services/enrollment_service.dart';
-import '../export/enrollment_pdf_utils.dart';
 
 class AdminEnrollmentScreen extends StatefulWidget {
   const AdminEnrollmentScreen({super.key});
@@ -30,9 +30,10 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
 
   final _tabs = const [
     _EstadoTab('Pendientes', 'pendiente_revision'),
-    _EstadoTab('Pre-matrícula', 'prematricula'),
-    _EstadoTab('Matriculadas', 'matriculada'),
-    _EstadoTab('Rechazadas', 'rechazada'),
+    _EstadoTab('Pre-matriculado', 'prematriculado'),
+    _EstadoTab('Matriculados', 'matriculado'),
+    _EstadoTab('Rechazados', 'rechazado'),
+    _EstadoTab('Desmatriculados', 'desmatriculado'),
   ];
 
   @override
@@ -51,12 +52,12 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
   void _listenPending() {
     _pendingSub = FirebaseFirestore.instance
         .collection('enrollments')
-        .where('estado', whereIn: ['prematricula', 'pendiente_revision'])
+        .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
         .snapshots()
         .listen((snapshot) {
-          if (!mounted) return;
-          setState(() => _pendingCount = snapshot.size);
-        });
+      if (!mounted) return;
+      setState(() => _pendingCount = snapshot.size);
+    });
   }
 
   Future<void> _fetch() async {
@@ -72,7 +73,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       await DialogUtils.showError(
         context: context,
         title: 'Error',
-        message: 'No se pudo cargar el listado de matrículas.',
+        message: 'No se pudo cargar el listado de matriculas.',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -80,24 +81,29 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
   }
 
   Future<void> _aprobar(Enrollment e) async {
+    if (!mounted) return;
+    if (!mounted) return;
+    // ignore: use_build_context_synchronously
+    // ignore: use_build_context_synchronously
+    // ignore: use_build_context_synchronously
     final up = context.read<UserProviderV2>();
     try {
       await EnrollmentService().updateEnrollment(
         id: e.id,
         data: e.data,
-        estado: 'matriculada',
+        estado: 'matriculado',
         revisadoPor: up.user?.id,
         vinculaUsuarioId: e.vinculaUsuarioId,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
         context: context,
-        title: 'Aprobada',
-        message: 'La matricula fue marcada como matriculada.',
+        title: 'Aprobado',
+        message: 'La matricula fue marcada como matriculado.',
       );
       await EnrollmentPdfUtils.export(
         e.data,
-        estado: 'matriculada',
+        estado: 'matriculado',
         anio: e.anioMatricula,
       );
       _fetch();
@@ -148,7 +154,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       await EnrollmentService().updateEnrollment(
         id: e.id,
         data: e.data,
-        estado: 'rechazada',
+        estado: 'rechazado',
         revisadoPor: up.user?.id,
         rechazoMotivo: motivo,
         vinculaUsuarioId: e.vinculaUsuarioId,
@@ -156,8 +162,8 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       if (!mounted) return;
       await DialogUtils.showSuccess(
         context: context,
-        title: 'Rechazada',
-        message: 'Se marco como rechazada.',
+        title: 'Rechazado',
+        message: 'Se marco como rechazado.',
       );
       _fetch();
     } catch (_) {
@@ -166,6 +172,47 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         context: context,
         title: 'Error',
         message: 'No se pudo rechazar esta matricula.',
+      );
+    }
+  }
+
+  Future<void> _desmatricular(Enrollment e) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Desmatricular'),
+        content: const Text('¿Deseas marcar este registro como desmatriculado?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Desmatricular')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    // ignore: use_build_context_synchronously
+    final up = context.read<UserProviderV2>();
+    try {
+      await EnrollmentService().updateEnrollment(
+        id: e.id,
+        data: e.data,
+        estado: 'desmatriculado',
+        revisadoPor: up.user?.id,
+        vinculaUsuarioId: e.vinculaUsuarioId,
+      );
+      if (!mounted) return;
+      await DialogUtils.showSuccess(
+        context: context,
+        title: 'Desmatriculado',
+        message: 'Se marcó como desmatriculado.',
+      );
+      _fetch();
+    } catch (_) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: context,
+        title: 'Error',
+        message: 'No se pudo desmatricular este registro.',
       );
     }
   }
@@ -185,6 +232,23 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     ).then((_) => _fetch());
   }
 
+  String _estadoDisplay(String estado) {
+    switch (estado) {
+      case 'matriculado':
+        return 'Matriculado';
+      case 'rechazado':
+        return 'Rechazado';
+      case 'desmatriculado':
+        return 'Desmatriculado';
+      case 'pendiente_revision':
+        return 'Pendiente';
+      case 'prematriculado':
+        return 'Pre-matriculado';
+      default:
+        return estado;
+    }
+  }
+
   @override
   void dispose() {
     _pendingSub?.cancel();
@@ -196,7 +260,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     return Scaffold(
       appBar: AppBar(
         leading: const BackToDashboardButton(),
-        title: const Text('Gestión de matrículas'),
+        title: const Text('Gestion de matriculas'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -240,18 +304,23 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
               onRefresh: _fetch,
               child: _items.isEmpty
                   ? const ListTile(
-                      title: Text('Sin matrículas en este estado.'),
+                      title: Text('Sin matriculas en este estado.'),
                     )
                   : ListView.builder(
                       itemCount: _items.length,
                       itemBuilder: (_, index) {
                         final e = _items[index];
+                        final nombre = (e.data['nombresApellidosAlumno'] ??
+                                '${e.data['nombresAlumno'] ?? ''} ${e.data['apellidosAlumno'] ?? ''}')
+                            .toString()
+                            .trim();
+                        final estadoLabel = _estadoDisplay(e.estado);
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           child: ListTile(
-                            title: Text(e.data['nombresApellidosAlumno']?.toString() ?? 'Sin nombre'),
+                            title: Text(nombre.isEmpty ? 'Sin nombre' : nombre),
                             subtitle: Text(
-                              'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'} • Estado: ${e.estado}',
+                              'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'}  Estado: $estadoLabel',
                             ),
                             trailing: Wrap(
                               spacing: 8,
@@ -261,17 +330,23 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                                   icon: const Icon(Icons.edit),
                                   tooltip: 'Editar',
                                 ),
-                                if (e.estado != 'matriculada')
+                                if (e.estado != 'matriculado')
                                   IconButton(
                                     onPressed: () => _aprobar(e),
                                     icon: const Icon(Icons.check_circle, color: Colors.green),
                                     tooltip: 'Aprobar',
                                   ),
-                                if (e.estado != 'rechazada')
+                                if (e.estado != 'rechazado')
                                   IconButton(
                                     onPressed: () => _rechazar(e),
                                     icon: const Icon(Icons.cancel, color: Colors.redAccent),
                                     tooltip: 'Rechazar',
+                                  ),
+                                if (e.estado == 'matriculado')
+                                  IconButton(
+                                    onPressed: () => _desmatricular(e),
+                                    icon: const Icon(Icons.undo, color: Colors.orange),
+                                    tooltip: 'Desmatricular',
                                   ),
                               ],
                             ),

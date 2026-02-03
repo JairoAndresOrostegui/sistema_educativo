@@ -9,6 +9,7 @@ class EnrollmentSectionsList extends StatelessWidget {
   final Map<String, TextEditingController> controllers;
   final bool Function(EnrollmentField field) isReadOnly;
   final List<String> Function(EnrollmentField field) optionsFor;
+  final String Function(EnrollmentField field, String value) labelForValue;
   final Future<void> Function(EnrollmentField field, bool withTime) onPickDate;
   final void Function(String fieldName, String? value) onChanged;
   final List<EnrollmentSection> sections;
@@ -19,6 +20,7 @@ class EnrollmentSectionsList extends StatelessWidget {
     required this.controllers,
     required this.isReadOnly,
     required this.optionsFor,
+    required this.labelForValue,
     required this.onPickDate,
     required this.onChanged,
     required this.sections,
@@ -63,6 +65,7 @@ class EnrollmentSectionsList extends StatelessWidget {
                 controllers: controllers,
                 isReadOnly: isReadOnly,
                 optionsFor: optionsFor,
+                labelForValue: labelForValue,
                 onPickDate: onPickDate,
                 onChanged: onChanged,
               ),
@@ -101,6 +104,7 @@ class EnrollmentSectionsList extends StatelessWidget {
                 controllers: controllers,
                 isReadOnly: isReadOnly,
                 optionsFor: optionsFor,
+                labelForValue: labelForValue,
                 onPickDate: onPickDate,
                 onChanged: onChanged,
               ),

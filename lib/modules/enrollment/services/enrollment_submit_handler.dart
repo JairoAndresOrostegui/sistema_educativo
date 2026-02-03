@@ -21,7 +21,7 @@ class EnrollmentSubmitHandler {
       return;
     }
 
-    final estado = result.estado ?? controller.currentEstado ?? 'prematricula';
+    final estado = result.estado ?? controller.currentEstado ?? 'prematriculado';
     await DialogUtils.showSuccess(
       context: context,
       title: 'Guardado',
@@ -30,7 +30,7 @@ class EnrollmentSubmitHandler {
           : 'La solicitud de matrícula se guardó correctamente en estado "$estado".',
     );
 
-    if (estado == 'matriculada') {
+    if (estado == 'matriculado') {
       await EnrollmentPdfUtils.export(
         result.payload,
         estado: estado,

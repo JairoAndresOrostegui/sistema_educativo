@@ -29,7 +29,7 @@ class EnrollmentService {
       'anioMatricula': anioMatricula,
       'data': data,
       'fechaDiligenciamiento': FieldValue.serverTimestamp(),
-      if (estado == 'matriculada')
+      if (estado == 'matriculado')
         'fechaMatricula': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -56,7 +56,7 @@ class EnrollmentService {
       'vinculaUsuarioId': vinculaUsuarioId,
       'revisadoPor': revisadoPor,
       'rechazoMotivo': rechazoMotivo,
-      if (estado == 'matriculada') 'fechaMatricula': FieldValue.serverTimestamp(),
+      if (estado == 'matriculado') 'fechaMatricula': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -77,6 +77,31 @@ class EnrollmentService {
     final snap = await _col.where('data.numeroIdentidad', isEqualTo: document).limit(1).get();
     if (snap.docs.isEmpty) return null;
     return Enrollment.fromDoc(snap.docs.first);
+  }
+
+  Future<bool> existsByDocumentAndYear({
+    required String document,
+    required int anioMatricula,
+  }) async {
+    final snap = await _col
+        .where('data.numeroIdentidad', isEqualTo: document)
+        .where('anioMatricula', isEqualTo: anioMatricula)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
+  Future<List<Enrollment>> listFinalizedByDocumentBeforeYear({
+    required String document,
+    required int anioMatricula,
+  }) async {
+    final snap = await _col
+        .where('data.numeroIdentidad', isEqualTo: document)
+        .where('anioMatricula', isLessThan: anioMatricula)
+        .where('estado', whereIn: ['matriculado', 'finalizado'])
+        .orderBy('anioMatricula')
+        .get();
+    return snap.docs.map(Enrollment.fromDoc).toList();
   }
 
   Future<List<Enrollment>> listByEstado(String estado, {int limit = 50}) async {

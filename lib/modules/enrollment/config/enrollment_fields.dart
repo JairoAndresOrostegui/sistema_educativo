@@ -18,8 +18,15 @@ const List<EnrollmentField> enrollmentFieldConfig = [
     defaultValue: 'now',
   ),
   EnrollmentField(
-    name: 'nombresApellidosAlumno',
-    label: 'Nombres y apellidos del estudiante',
+    name: 'nombresAlumno',
+    label: 'Nombres del estudiante',
+    type: 'string',
+    required: true,
+    editableBy: ['padre'],
+  ),
+  EnrollmentField(
+    name: 'apellidosAlumno',
+    label: 'Apellidos del estudiante',
     type: 'string',
     required: true,
     editableBy: ['padre'],

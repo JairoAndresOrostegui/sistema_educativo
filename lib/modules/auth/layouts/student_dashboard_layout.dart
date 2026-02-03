@@ -74,7 +74,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       if (showEnrollment) {
         items.add(
           const MenuItemData(
-            label: 'Matr¡cula',
+            label: 'Matr\u00edcula',
             icon: Icons.assignment_ind,
             route: '/enrollment',
           ),
@@ -138,7 +138,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       final anio = await params.getEnrollmentYear() ?? DateTime.now().year;
       final hasMatricula = await EnrollmentService().hasEnrollmentForUser(
         userId: userId,
-        estados: ['matriculada'],
+        estados: ['matriculado'],
         anioMatricula: anio,
       );
       return !hasMatricula;

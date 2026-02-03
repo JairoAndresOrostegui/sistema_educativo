@@ -18,6 +18,7 @@ import 'widgets/enrollment_child_selector.dart';
 import 'widgets/enrollment_document_search_card.dart';
 import 'widgets/enrollment_form_actions.dart';
 import 'widgets/enrollment_fields_section.dart';
+import 'widgets/enrollment_grade_history_section.dart';
 
 enum EnrollmentEntryMode { admin, padreAutenticado, publico }
 
@@ -73,7 +74,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       anioInicial: widget.anioMatricula,
       initialEstado: widget.initialEstado,
       existingData: widget.existingData,
-      readOnly: widget.initialEstado == 'matriculada' &&
+      readOnly: widget.initialEstado == 'matriculado' &&
           _resolveMode() != EnrollmentEntryMode.admin,
     );
     _controller.loadAnioFromParameters();
@@ -90,6 +91,130 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
 
   List<String> _optionsFor(EnrollmentField field) {
     return _controller.optionsFor(field);
+  }
+
+  String _labelForValue(EnrollmentField field, String value) {
+    return _controller.labelForValue(field, value);
+  }
+
+  List<String> _availableExternalGrades() {
+    final aspirado = _controllers['gradoAspirado']?.text ?? '';
+    return _controller.availableExternalGrades(aspirado);
+  }
+
+  Future<void> _showAddGradeDialog() async {
+    final availableGrades = _availableExternalGrades();
+    if (availableGrades.isEmpty) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Sin grados disponibles',
+        message: 'Selecciona el grado a matricular para habilitar la lista.',
+      );
+      return;
+    }
+
+    final formKey = GlobalKey<FormState>();
+    final currentYear = _controller.anioMatricula ?? DateTime.now().year;
+    final yearController = TextEditingController(text: '${currentYear - 1}');
+    final institutionController = TextEditingController();
+    String? selectedGrade = availableGrades.first;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              title: const Text('Agregar grado cursado'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: yearController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Año',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        final parsed = int.tryParse(value ?? '');
+                        if (parsed == null) return 'Año inválido';
+                        if (parsed >= currentYear) {
+                          return 'Debe ser menor al año activo';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: institutionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Institución',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Requerido';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Grado',
+                        border: OutlineInputBorder(),
+                      ),
+                      value: selectedGrade,
+                      items: availableGrades
+                          .map(
+                            (g) => DropdownMenuItem<String>(
+                              value: g,
+                              child: Text(g),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) => setState(() => selectedGrade = val),
+                      validator: (value) =>
+                          (value == null || value.isEmpty) ? 'Requerido' : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+                    if (selectedGrade == null) return;
+                    Navigator.pop(
+                      dialogContext,
+                      {
+                        'anio': int.parse(yearController.text.trim()),
+                        'institucion': institutionController.text.trim(),
+                        'grado': selectedGrade,
+                        'interno': false,
+                      },
+                    );
+                  },
+                  child: const Text('Agregar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      _controller.addExternalGradeHistory(result);
+      setState(() {});
+    }
   }
 
   EnrollmentEntryMode _resolveMode() {
@@ -178,8 +303,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     setState(() {});
   }
 
-  void _onChildSelected(ChildOption? selected) {
-    _controller.onChildSelected(selected);
+  Future<void> _onChildSelected(ChildOption? selected) async {
+    await _controller.onChildSelected(selected);
     setState(() {});
   }
 
@@ -204,13 +329,21 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
           isReadOnly: (f) => !_controller.canEditField(
             field: f,
             role: _roleForFilters(),
-            estado: _currentEstado ?? 'prematricula',
+            estado: _currentEstado ?? 'prematriculado',
             isAdmin: isAdmin,
             lockForDoc: lockForDoc,
           ),
           optionsFor: _optionsFor,
+          labelForValue: _labelForValue,
           onPickDate: (field, withTime) =>
               _pickDate(context, field, withTime: withTime),
+          gradeHistoryBuilder: (field) => EnrollmentGradeHistorySection(
+            label: field.label,
+            entries: _controller.gradeHistory,
+            readOnly: _readOnlyForm || lockForDoc,
+            onAdd: _showAddGradeDialog,
+            onRemove: _controller.removeExternalGradeHistory,
+          ),
           onChanged: (fieldName, v) {
             _values[fieldName] = v;
             if (fieldName == 'fechaNacimiento') {
@@ -239,6 +372,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   Future<void> _onSubmit({bool matricularAhora = false}) async {
     final mode = _resolveMode();
     final isAdmin = mode == EnrollmentEntryMode.admin;
+    if (!isAdmin && _controller.blockedByExistingEnrollment) return;
     if (_readOnlyForm && !isAdmin) return;
     if (_documentoSeleccionado == null || _documentoSeleccionado!.isEmpty) {
       await DialogUtils.showError(
@@ -275,8 +409,9 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     final role = _roleForFilters();
     final mode = _resolveMode();
     final isAdmin = mode == EnrollmentEntryMode.admin;
+    final isBlocked = !isAdmin && _controller.blockedByExistingEnrollment;
     final requireDocStep = _documentoSeleccionado == null || _documentoSeleccionado!.isEmpty;
-    final lockForDoc = requireDocStep && !_readOnlyForm;
+    final lockForDoc = (requireDocStep && !_readOnlyForm) || isBlocked;
     final visible = _visibleFields().toList();
 
     return ChangeNotifierProvider.value(
@@ -326,6 +461,26 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
+                            if (isBlocked)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.redAccent.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.redAccent.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Este estudiante ya tiene una matrícula registrada para el año activo.',
+                                  style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            if (isBlocked) const SizedBox(height: 12),
                             if (_childOptions.isNotEmpty)
                               EnrollmentChildSelector(
                                 options: _childOptions,
@@ -359,7 +514,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                                   return Row(
                                     children: [
                                       ElevatedButton(
-                                        onPressed: requireDocStep
+                                        onPressed: requireDocStep || isBlocked
                                             ? null
                                             : () {
                                                 if (isLast) {
@@ -392,7 +547,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                             const SizedBox(height: 12),
                             EnrollmentFormActions(
                               isAdmin: isAdmin,
-                              disabled: requireDocStep,
+                              disabled: requireDocStep || isBlocked,
+                              currentEstado: _currentEstado,
                               onGuardarRevision: () => _onSubmit(),
                               onMatricular: () => _onSubmit(matricularAhora: true),
                             ),

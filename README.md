@@ -65,11 +65,11 @@ Aplicación Flutter para gestión escolar multirol (Administrador, Docente, Estu
 
 ### Enrollment / Matrícula (`lib/modules/enrollment`)
 - Configuración: `config/enrollment_fields.dart` define campos (roles con permiso de edición, defaults, fórmulas como edad) y `config/enrollment_sections.dart` agrupa los pasos/secciones visibles en el formulario.
-- Modelos: `EnrollmentField`, `Enrollment` (estados `prematricula`/`pendiente_revision`/`rechazada`/`matriculada`; fuente admin/padre/QR; token opcional para links públicos; metadata de revisión) y `SubmitResult` para encapsular resultado de guardado.
+- Modelos: `EnrollmentField`, `Enrollment` (estados `prematriculado`/`pendiente_revision`/`rechazado`/`matriculado`; fuente admin/padre/QR; token opcional para links públicos; metadata de revisión) y `SubmitResult` para encapsular resultado de guardado.
 - Servicios/controlador: `enrollment_service.dart` (CRUD en `enrollments`, búsqueda por id/token/documento, conteo por estado); `controllers/enrollment_form_controller.dart` concentra estado/valores/prefill/opciones/submit; `services/enrollment_submit_handler.dart` maneja diálogos y PDF tras guardar.
 - Formulario (`enrollment_form_screen.dart`): usa Provider + Stepper por secciones, paso inicial de documento con prellenado desde `users` o matrículas previas, cálculo de edad, control de edición por rol, selección de hijos vinculados (rol Familiar), bloqueo en lectura si ya está matriculado; chip de pendientes para admin.
 - Panel admin (`admin_enrollment_screen.dart`): tabs por estado, aprobar/rechazar/editar, crear nueva; al aprobar genera PDF con datos principales.
-- Rutas: `/enrollment_public` (QR/padre sin login) y `/enrollment` (admin abre panel; roles Familiar/Estudiante con permiso `matriculas.ver` abren el formulario). En el menú admin se muestra badge con pendientes `prematricula/pendiente_revision` en vivo.
+- Rutas: `/enrollment_public` (QR/padre sin login) y `/enrollment` (admin abre panel; roles Familiar/Estudiante con permiso `matriculas.ver` abren el formulario). En el menú admin se muestra badge con pendientes `prematriculado/pendiente_revision` en vivo.
 
 ### Utils / Core
 - `parameters_service.dart`: lee `parameters` (roles/grados/permisos/tipos de documento activos) y `getUsersByFilters`.

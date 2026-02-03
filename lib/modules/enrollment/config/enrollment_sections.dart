@@ -7,7 +7,8 @@ const List<EnrollmentSection> enrollmentSections = [
     fieldNames: [
       'anioInscripcion',
       'fechaInscripcion',
-      'nombresApellidosAlumno',
+      'nombresAlumno',
+      'apellidosAlumno',
       'lugarNacimiento',
       'fechaNacimiento',
       'edad',

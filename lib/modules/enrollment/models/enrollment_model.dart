@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Enrollment {
   final String id;
-  final String estado; // prematricula | pendiente_revision | rechazada | matriculada
+  final String estado; // prematriculado | pendiente_revision | rechazado | matriculado
   final String createdByRole; // admin | padre | publico
   final String? createdByUserId;
   final String? token; // para links públicos opcionales
@@ -37,7 +37,7 @@ class Enrollment {
     final data = doc.data() as Map<String, dynamic>;
     return Enrollment(
       id: doc.id,
-      estado: (data['estado'] ?? 'prematricula').toString(),
+      estado: (data['estado'] ?? 'prematriculado').toString(),
       createdByRole: (data['createdByRole'] ?? '').toString(),
       createdByUserId: data['createdByUserId'] as String?,
       token: data['token'] as String?,

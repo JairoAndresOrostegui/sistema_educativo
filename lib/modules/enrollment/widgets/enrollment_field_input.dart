@@ -10,6 +10,7 @@ class EnrollmentFieldInput extends StatelessWidget {
   final bool readOnly;
   final bool required;
   final List<String> options;
+  final String Function(String value) labelForValue;
   final Future<void> Function(bool withTime) onPickDate;
   final void Function(String) onChanged;
 
@@ -20,6 +21,7 @@ class EnrollmentFieldInput extends StatelessWidget {
     required this.readOnly,
     required this.required,
     required this.options,
+    required this.labelForValue,
     required this.onPickDate,
     required this.onChanged,
   });
@@ -56,7 +58,7 @@ class EnrollmentFieldInput extends StatelessWidget {
                   .map(
                     (o) => DropdownMenuItem<String>(
                       value: o,
-                      child: Text(o),
+                      child: Text(labelForValue(o)),
                     ),
                   )
                   .toList(),

@@ -36,12 +36,18 @@ class EnrollmentFormController extends ChangeNotifier {
   bool loadingOptions = false;
   bool loadingPrefill = false;
   int pendingCount = 0;
+  bool blockedByExistingEnrollment = false;
+  List<Parameter> gradeParameters = [];
+  final Map<String, int> gradeOrderByValue = {};
+  List<Map<String, dynamic>> internalGradeHistory = [];
+  List<Map<String, dynamic>> externalGradeHistory = [];
 
   List<String> tiposDocumento = ['RC', 'TI', 'CC', 'Pasaporte'];
   List<String> grados = [];
   List<String> sedes = [];
   List<String> eps = [];
   List<String> tiposSangre = ['A', 'B', 'AB', 'O'];
+  Map<String, String> epsLabels = {};
 
   String? documentoSeleccionado;
   int? anioMatricula;
@@ -67,6 +73,7 @@ class EnrollmentFormController extends ChangeNotifier {
     anioMatricula = anioInicial ?? now.year;
     currentEstado = initialEstado;
     readOnlyForm = readOnly;
+    _updateGradeHistoryValue();
 
     for (final f in enrollmentFieldConfig) {
       switch (f.defaultValue) {
@@ -95,6 +102,10 @@ class EnrollmentFormController extends ChangeNotifier {
     if (anio != null) {
       anioMatricula = anio;
       setValue('anioInscripcion', anio.toString());
+      if (documentoSeleccionado != null && documentoSeleccionado!.isNotEmpty) {
+        await checkExistingEnrollmentForDocument(documentoSeleccionado!);
+        await loadInternalGradeHistory(documentoSeleccionado!);
+      }
       notifyListeners();
     }
   }
@@ -104,7 +115,11 @@ class EnrollmentFormController extends ChangeNotifier {
     notifyListeners();
     try {
       final grades = await _params.getGrades();
+      gradeParameters = grades;
       grados = grades.map((g) => g.valor).toList();
+      gradeOrderByValue
+        ..clear()
+        ..addEntries(grades.map((g) => MapEntry(g.valor, g.orden)));
 
       final docTypes = await _params.getDocumentTypes();
       if (docTypes.isNotEmpty) {
@@ -132,6 +147,9 @@ class EnrollmentFormController extends ChangeNotifier {
       final epsParams = await _params.getEps();
       if (epsParams.isNotEmpty) {
         eps = epsParams.map((e) => e.valor.trim()).toList();
+        epsLabels = {
+          for (final e in epsParams) e.valor.trim(): (e.etiqueta).toString(),
+        };
       }
     } catch (_) {
       grados = [];
@@ -145,6 +163,11 @@ class EnrollmentFormController extends ChangeNotifier {
     if (eps.isEmpty) {
       eps = ['Sura', 'Sanitas', 'Coomeva'];
     }
+    if (epsLabels.isEmpty) {
+      epsLabels = {
+        for (final e in eps) e: e,
+      };
+    }
     tiposSangre = ['A', 'B', 'AB', 'O'];
     loadingOptions = false;
     notifyListeners();
@@ -153,7 +176,7 @@ class EnrollmentFormController extends ChangeNotifier {
   Future<void> loadPendingCount({required bool isAdmin}) async {
     if (!isAdmin) return;
     try {
-      pendingCount = await _enrollmentService.countByEstados(['prematricula', 'pendiente_revision']);
+      pendingCount = await _enrollmentService.countByEstados(['prematriculado', 'pendiente_revision']);
       notifyListeners();
     } catch (_) {}
   }
@@ -204,6 +227,13 @@ class EnrollmentFormController extends ChangeNotifier {
     }
   }
 
+  String labelForValue(EnrollmentField field, String value) {
+    if (field.name == 'epsEstudiante' && epsLabels.isNotEmpty) {
+      return epsLabels[value] ?? value;
+    }
+    return value;
+  }
+
   void setValue(String field, String? value) {
     if (!controllers.containsKey(field) || value == null) return;
     controllers[field]?.text = value;
@@ -211,10 +241,18 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   void applyPrefill(Map<String, dynamic> data) {
-    setValue(
-      'nombresApellidosAlumno',
-      '${(data['firstName'] ?? '')} ${(data['lastName'] ?? '')}'.trim(),
-    );
+    // Prefill directo de los campos guardados en la matrícula.
+    for (final f in enrollmentFieldConfig) {
+      if (data.containsKey(f.name) && data[f.name] != null) {
+        setValue(f.name, data[f.name].toString());
+      }
+    }
+
+    final nombres = (data['firstName'] ?? data['nombresAlumno'] ?? '').toString().trim();
+    final apellidos = (data['lastName'] ?? data['apellidosAlumno'] ?? '').toString().trim();
+    setValue('nombresAlumno', nombres);
+    setValue('apellidosAlumno', apellidos);
+    setValue('nombresApellidosAlumno', '$nombres $apellidos'.trim());
     setValue(
       'numeroIdentidad',
       data['document']?.toString() ?? data['numeroIdentidad']?.toString(),
@@ -222,6 +260,12 @@ class EnrollmentFormController extends ChangeNotifier {
     setValue(
       'tipoIdentidad',
       data['documentType']?.toString() ?? data['tipoIdentidad']?.toString(),
+    );
+    setValue('tipoSangre', data['tipoSangre']?.toString());
+    setValue('rh', data['rh']?.toString());
+    setValue(
+      'lugarNacimiento',
+      data['lugarNacimiento']?.toString() ?? data['birthCity']?.toString(),
     );
     setValue(
       'direccionAlumno',
@@ -246,6 +290,16 @@ class EnrollmentFormController extends ChangeNotifier {
           data['sedeAspirada']?.toString(),
     );
 
+    final history = data['nivelesCursadosInstitucion'];
+    if (history is List) {
+      externalGradeHistory = history
+          .where((e) => e is Map)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((e) => e['interno'] != true)
+          .toList();
+      _updateGradeHistoryValue();
+    }
+
     if (data['anioInscripcion'] != null) {
       final anio = int.tryParse(data['anioInscripcion'].toString());
       if (anio != null) {
@@ -264,6 +318,17 @@ class EnrollmentFormController extends ChangeNotifier {
     }
   }
 
+  List<Map<String, dynamic>> get gradeHistory {
+    final combined = [
+      ...internalGradeHistory,
+      ...externalGradeHistory,
+    ];
+    combined.sort(
+      (a, b) => (a['anio'] as int? ?? 0).compareTo(b['anio'] as int? ?? 0),
+    );
+    return combined;
+  }
+
   void recomputeAge() {
     final birthStr = controllers['fechaNacimiento']?.text ?? '';
     if (birthStr.isEmpty) return;
@@ -277,6 +342,20 @@ class EnrollmentFormController extends ChangeNotifier {
       controllers['edad']?.text = age.toString();
       values['edad'] = age.toString();
     } catch (_) {}
+  }
+
+  Future<void> checkExistingEnrollmentForDocument(String document) async {
+    if (document.trim().isEmpty) return;
+    final anio = anioMatricula ?? DateTime.now().year;
+    try {
+      blockedByExistingEnrollment = await _enrollmentService.existsByDocumentAndYear(
+        document: document.trim(),
+        anioMatricula: anio,
+      );
+    } catch (_) {
+      blockedByExistingEnrollment = false;
+    }
+    notifyListeners();
   }
 
   Future<void> prefillByDocument({bool readOnly = false}) async {
@@ -312,6 +391,8 @@ class EnrollmentFormController extends ChangeNotifier {
       } else {
         documentoSeleccionado = doc;
       }
+      await checkExistingEnrollmentForDocument(doc);
+      await loadInternalGradeHistory(doc);
     } catch (_) {
       // ignore errors
     } finally {
@@ -320,7 +401,7 @@ class EnrollmentFormController extends ChangeNotifier {
     }
   }
 
-  void onChildSelected(ChildOption? selected) {
+  Future<void> onChildSelected(ChildOption? selected) async {
     selectedChildId = selected?.id;
     if (selected == null) {
       notifyListeners();
@@ -332,7 +413,84 @@ class EnrollmentFormController extends ChangeNotifier {
     }
     applyPrefill(selected.data);
     recomputeAge();
+    if (selected.document != null && selected.document!.isNotEmpty) {
+      await checkExistingEnrollmentForDocument(selected.document!);
+      await loadInternalGradeHistory(selected.document!);
+    }
     notifyListeners();
+  }
+
+  Future<void> loadInternalGradeHistory(String document) async {
+    if (document.trim().isEmpty) return;
+    final anio = anioMatricula ?? DateTime.now().year;
+    try {
+      final items = await _enrollmentService.listFinalizedByDocumentBeforeYear(
+        document: document.trim(),
+        anioMatricula: anio,
+      );
+      internalGradeHistory = items
+          .where((e) => e.anioMatricula != null)
+          .map((e) {
+            return {
+              'anio': e.anioMatricula,
+              'institucion':
+                  (e.data['institucion'] ?? e.data['institution'] ?? '').toString(),
+              'grado':
+                  (e.data['gradoAspirado'] ?? e.data['grado'] ?? '').toString(),
+              'interno': true,
+            };
+          })
+          .toList()
+        ..sort(
+          (a, b) =>
+              (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
+        );
+    } catch (_) {
+      internalGradeHistory = [];
+    }
+    _updateGradeHistoryValue();
+    notifyListeners();
+  }
+
+  void _updateGradeHistoryValue() {
+    values['nivelesCursadosInstitucion'] = gradeHistory;
+  }
+
+  void addExternalGradeHistory(Map<String, dynamic> entry) {
+    externalGradeHistory = [...externalGradeHistory, entry]
+      ..sort(
+        (a, b) =>
+            (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
+      );
+    _updateGradeHistoryValue();
+    notifyListeners();
+  }
+
+  void removeExternalGradeHistory(Map<String, dynamic> entry) {
+    externalGradeHistory = externalGradeHistory
+        .where(
+          (e) => !(e['anio'] == entry['anio'] &&
+              e['institucion'] == entry['institucion'] &&
+              e['grado'] == entry['grado'] &&
+              e['interno'] == entry['interno']),
+        )
+        .toList();
+    _updateGradeHistoryValue();
+    notifyListeners();
+  }
+
+  List<String> availableExternalGrades(String? gradoAspirado) {
+    if (gradoAspirado == null || gradoAspirado.isEmpty) return [];
+    final aspiradoOrder = gradeOrderByValue[gradoAspirado];
+    if (aspiradoOrder == null) return [];
+    final internos = internalGradeHistory
+        .map((e) => e['grado']?.toString())
+        .whereType<String>()
+        .toSet();
+    return grados
+        .where((g) => (gradeOrderByValue[g] ?? 9999) < aspiradoOrder)
+        .where((g) => !internos.contains(g))
+        .toList();
   }
 
   void disposeControllers() {
@@ -346,14 +504,17 @@ class EnrollmentFormController extends ChangeNotifier {
     return formKey.currentState?.validate() ?? false;
   }
 
-  Map<String, String> collectPayload() {
-    final payload = <String, String>{};
+  Map<String, dynamic> collectPayload() {
+    final payload = <String, dynamic>{};
     for (final entry in controllers.entries) {
       payload[entry.key] = entry.value.text;
     }
-    payload.addAll(
-      values.map((key, value) => MapEntry(key, value?.toString() ?? '')),
-    );
+    // Nombre completo derivado para compatibilidad con vistas existentes/PDF.
+    final nombres = controllers['nombresAlumno']?.text.trim() ?? '';
+    final apellidos = controllers['apellidosAlumno']?.text.trim() ?? '';
+    final nombreCompleto = '$nombres $apellidos'.trim();
+    payload['nombresApellidosAlumno'] = nombreCompleto;
+    payload.addAll(values);
     if (documentoSeleccionado != null) {
       payload['numeroIdentidad'] = documentoSeleccionado!;
     }
@@ -379,7 +540,7 @@ class EnrollmentFormController extends ChangeNotifier {
     required bool isAdmin,
     required bool lockForDoc,
   }) {
-    if (readOnlyForm || lockForDoc) return false;
+    if (readOnlyForm || lockForDoc || blockedByExistingEnrollment) return false;
     return _rules.isEditable(
       field: field,
       role: role,
@@ -415,10 +576,17 @@ class EnrollmentFormController extends ChangeNotifier {
             : 'padre';
     final createdByUserId = isPublicLink ? null : user?.id;
     final isEditing = enrollmentId != null;
-    final adminEstado = matricularAhora ? 'matriculada' : 'pendiente_revision';
-    final estado = isAdmin
-        ? adminEstado
-        : (isEditing ? (currentEstadoExt ?? 'prematricula') : 'prematricula');
+    final adminEstado = matricularAhora ? 'matriculado' : 'pendiente_revision';
+    String estado;
+    if (isAdmin) {
+      if (isEditing && currentEstadoExt == 'matriculado' && !matricularAhora) {
+        estado = 'matriculado'; // no bajar a pendiente si ya estaba matriculado
+      } else {
+        estado = adminEstado;
+      }
+    } else {
+      estado = isEditing ? (currentEstadoExt ?? 'prematriculado') : 'prematriculado';
+    }
     final fuente = isPublicLink
         ? 'qr_publico'
         : isAdmin
@@ -426,6 +594,10 @@ class EnrollmentFormController extends ChangeNotifier {
             : 'app_padre';
     final anio = anioMatricula ?? DateTime.now().year;
     anioMatricula = anio;
+    if ((payload['institucion'] == null || payload['institucion'].toString().isEmpty) &&
+        (user?.institution ?? '').isNotEmpty) {
+      payload['institucion'] = user?.institution;
+    }
 
     try {
       if (isEditing) {

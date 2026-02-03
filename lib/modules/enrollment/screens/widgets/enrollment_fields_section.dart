@@ -8,8 +8,10 @@ class EnrollmentFieldsSection extends StatelessWidget {
   final Map<String, TextEditingController> controllers;
   final bool Function(EnrollmentField field) isReadOnly;
   final List<String> Function(EnrollmentField field) optionsFor;
+  final String Function(EnrollmentField field, String value) labelForValue;
   final Future<void> Function(EnrollmentField field, bool withTime) onPickDate;
   final void Function(String fieldName, String? value) onChanged;
+  final Widget Function(EnrollmentField field)? gradeHistoryBuilder;
 
   const EnrollmentFieldsSection({
     super.key,
@@ -17,8 +19,10 @@ class EnrollmentFieldsSection extends StatelessWidget {
     required this.controllers,
     required this.isReadOnly,
     required this.optionsFor,
+    required this.labelForValue,
     required this.onPickDate,
     required this.onChanged,
+    this.gradeHistoryBuilder,
   });
 
   @override
@@ -27,8 +31,14 @@ class EnrollmentFieldsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
-        ...fields.map(
-          (f) => Padding(
+        ...fields.map((f) {
+          if (f.name == 'nivelesCursadosInstitucion' && gradeHistoryBuilder != null) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: gradeHistoryBuilder!(f),
+            );
+          }
+          return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: EnrollmentFieldInput(
               field: f,
@@ -36,11 +46,12 @@ class EnrollmentFieldsSection extends StatelessWidget {
               readOnly: isReadOnly(f),
               required: f.required,
               options: optionsFor(f),
+              labelForValue: (value) => labelForValue(f, value),
               onPickDate: (withTime) => onPickDate(f, withTime),
               onChanged: (v) => onChanged(f.name, v),
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }

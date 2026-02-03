@@ -536,7 +536,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                                       ),
                                     ),
                                     subtitle: Text(
-                                      'Grade: $grade · ${date.toLocal()}',
+                                      'Grade: $grade - ${date.toLocal()}',
                                     ),
                                     trailing:
                                         _canDelete

@@ -62,7 +62,13 @@ class EnrollmentPdfUtils {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                row('Estudiante', data['nombresApellidosAlumno']?.toString()),
+                row(
+                  'Estudiante',
+                  (data['nombresApellidosAlumno'] ??
+                          '${data['nombresAlumno'] ?? ''} ${data['apellidosAlumno'] ?? ''}')
+                      .toString()
+                      .trim(),
+                ),
                 row('Documento', data['numeroIdentidad']?.toString()),
                 row('Tipo documento', data['tipoIdentidad']?.toString()),
                 row('Fecha nacimiento', data['fechaNacimiento']?.toString()),

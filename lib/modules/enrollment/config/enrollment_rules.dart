@@ -9,7 +9,7 @@ const List<EnrollmentRule> enrollmentRules = [
   EnrollmentRule(
     fieldName: '*',
     roles: ['padre'],
-    estados: ['matriculada'],
+    estados: ['matriculado'],
     editable: false,
   ),
   // Campos internos solo visibles para admin.

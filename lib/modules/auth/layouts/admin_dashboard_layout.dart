@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:async';
-import 'dashboard_layout.dart';
+
 import '../../../providers/user_provider_v2.dart';
 import '../../enrollment/services/enrollment_service.dart';
+import 'dashboard_layout.dart';
 
 class AdminDashboardLayout extends StatefulWidget {
   const AdminDashboardLayout({super.key});
@@ -39,7 +41,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     int pendingEnrollments = 0;
     try {
       pendingEnrollments = await EnrollmentService()
-          .countByEstados(['prematricula', 'pendiente_revision']);
+          .countByEstados(['prematriculado', 'pendiente_revision']);
     } catch (_) {
       pendingEnrollments = 0;
     }
@@ -55,7 +57,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     if (esSuperadmin || perms.contains('usuarios.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Gestión de usuarios',
+          label: 'Gesti\u00f3n de usuarios',
           icon: Icons.group,
           route: '/admin_user',
         ),
@@ -63,8 +65,16 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     }
 
     items.add(
+      const MenuItemData(
+        label: 'Par\u00e1metros',
+        icon: Icons.tune,
+        route: '/admin_parameters',
+      ),
+    );
+
+    items.add(
       MenuItemData(
-        label: 'Matrículas',
+        label: 'Matr\u00edculas',
         icon: Icons.assignment_ind,
         route: '/enrollment',
         badgeCount: pendingEnrollments,
@@ -74,7 +84,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     if (esSuperadmin || perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Gestión de rutas',
+          label: 'Gesti\u00f3n de rutas',
           icon: Icons.route,
           route: '/management_route',
         ),
@@ -131,13 +141,12 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   void _listenPending() {
     _pendingStream = FirebaseFirestore.instance
         .collection('enrollments')
-        .where('estado', whereIn: ['prematricula', 'pendiente_revision'])
+        .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
         .snapshots();
     _pendingSub = _pendingStream!.listen((snapshot) {
       final count = snapshot.size;
       if (!mounted) return;
       setState(() {
-        // reconstruir badge sin recalcular permisos
         _menuItems = _menuItems
             .map(
               (m) => m.route == '/enrollment'
@@ -164,17 +173,12 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   Widget build(BuildContext context) {
     return isLoading
         ? const Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: CircularProgressIndicator(color: Colors.redAccent),
+            body: SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.redAccent),
+              ),
             ),
-          ),
-        )
+          )
         : DashboardLayout(menuItems: _menuItems);
   }
 }
-
-
-
-
-

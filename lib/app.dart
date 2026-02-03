@@ -19,6 +19,7 @@ import 'modules/profile/screens/profile_page.dart';
 import 'modules/route/screens/admin_route_screen.dart';
 import 'modules/route/screens/student_route_screen.dart';
 import 'modules/route/screens/teacher_route_screen.dart';
+import 'modules/parameters/screens/admin_parameters_screen.dart';
 import 'modules/schedule/screens/admin_schedule_screen.dart';
 import 'modules/schedule/screens/student_schedule_screen.dart';
 import 'modules/schedule/screens/teacher_schedule_screen.dart';
@@ -76,6 +77,7 @@ class _AppRouterState extends State<AppRouter> {
             '/view_history',
             '/admin_authorization',
             '/enrollment',
+            '/admin_parameters',
           }.contains(path);
         case 'Docente':
           return {
@@ -175,6 +177,10 @@ class _AppRouterState extends State<AppRouter> {
         GoRoute(
           path: '/admin_authorization',
           builder: (context, state) => const AuthorizationAdminScreen(),
+        ),
+        GoRoute(
+          path: '/admin_parameters',
+          builder: (context, state) => const AdminParametersScreen(),
         ),
         // Docente
         GoRoute(
