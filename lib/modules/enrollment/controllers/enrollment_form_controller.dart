@@ -23,14 +23,15 @@ class EnrollmentFormController extends ChangeNotifier {
     EnrollmentService? enrollmentService,
     FirebaseFirestore? firestore,
     EnrollmentRulesService? rules,
-  })  : _params = params ?? ParametersService(),
-        _enrollmentService = enrollmentService ?? EnrollmentService(),
-        _firestore = firestore ?? FirebaseFirestore.instance,
-        _rules = rules ?? EnrollmentRulesService(rules: enrollmentRules);
+  }) : _params = params ?? ParametersService(),
+       _enrollmentService = enrollmentService ?? EnrollmentService(),
+       _firestore = firestore ?? FirebaseFirestore.instance,
+       _rules = rules ?? EnrollmentRulesService(rules: enrollmentRules);
 
   final formKey = GlobalKey<FormState>();
   final Map<String, TextEditingController> controllers = {};
-  final TextEditingController documentLookupController = TextEditingController();
+  final TextEditingController documentLookupController =
+      TextEditingController();
   final Map<String, dynamic> values = {};
 
   bool loadingOptions = false;
@@ -56,6 +57,8 @@ class EnrollmentFormController extends ChangeNotifier {
   List<ChildOption> childOptions = [];
   String? selectedChildId;
   int currentStep = 0;
+  bool isStepCollapsed = true;
+  String? lastValidationError;
 
   void setRules(List<EnrollmentRule> rules) {
     _rules = EnrollmentRulesService(rules: rules);
@@ -68,7 +71,12 @@ class EnrollmentFormController extends ChangeNotifier {
     }
   }
 
-  void initDefaults({int? anioInicial, String? initialEstado, Map<String, dynamic>? existingData, bool readOnly = false}) {
+  void initDefaults({
+    int? anioInicial,
+    String? initialEstado,
+    Map<String, dynamic>? existingData,
+    bool readOnly = false,
+  }) {
     final now = DateTime.now();
     anioMatricula = anioInicial ?? now.year;
     currentEstado = initialEstado;
@@ -82,7 +90,8 @@ class EnrollmentFormController extends ChangeNotifier {
           controllers[f.name]?.text = now.year.toString();
           break;
         case 'now':
-          final formatted = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+          final formatted =
+              '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
           values[f.name] = formatted;
           controllers[f.name]?.text = formatted;
           break;
@@ -93,7 +102,9 @@ class EnrollmentFormController extends ChangeNotifier {
 
     if (existingData != null) {
       applyPrefill(existingData);
-      documentoSeleccionado = existingData['numeroIdentidad']?.toString() ?? existingData['document']?.toString();
+      documentoSeleccionado =
+          existingData['numeroIdentidad']?.toString() ??
+          existingData['document']?.toString();
     }
   }
 
@@ -127,11 +138,12 @@ class EnrollmentFormController extends ChangeNotifier {
       }
 
       // sedes: tomar campus distintos desde users; fallback a lista fija
-      final campusesSnap = await _firestore
-          .collection('users')
-          .where('campus', isNotEqualTo: null)
-          .limit(400)
-          .get();
+      final campusesSnap =
+          await _firestore
+              .collection('users')
+              .where('campus', isNotEqualTo: null)
+              .limit(400)
+              .get();
       final campusesSet = <String>{};
       for (final d in campusesSnap.docs) {
         final c = d.data()['campus'];
@@ -164,9 +176,7 @@ class EnrollmentFormController extends ChangeNotifier {
       eps = ['Sura', 'Sanitas', 'Coomeva'];
     }
     if (epsLabels.isEmpty) {
-      epsLabels = {
-        for (final e in eps) e: e,
-      };
+      epsLabels = {for (final e in eps) e: e};
     }
     tiposSangre = ['A', 'B', 'AB', 'O'];
     loadingOptions = false;
@@ -176,7 +186,10 @@ class EnrollmentFormController extends ChangeNotifier {
   Future<void> loadPendingCount({required bool isAdmin}) async {
     if (!isAdmin) return;
     try {
-      pendingCount = await _enrollmentService.countByEstados(['prematriculado', 'pendiente_revision']);
+      pendingCount = await _enrollmentService.countByEstados([
+        'prematriculado',
+        'pendiente_revision',
+      ]);
       notifyListeners();
     } catch (_) {}
   }
@@ -190,27 +203,46 @@ class EnrollmentFormController extends ChangeNotifier {
     if (ids.isEmpty) return;
 
     try {
-      final snap = await _firestore
-          .collection('users')
-          .where(FieldPath.documentId, whereIn: ids.length > 10 ? ids.sublist(0, 10) : ids)
-          .get();
-      final options = snap.docs
-          .map(
-            (d) => ChildOption(
-              id: d.id,
-              nombre: '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}'.trim(),
-              document: d['document']?.toString(),
-              data: d.data(),
-            ),
-          )
-          .toList();
+      final snap =
+          await _firestore
+              .collection('users')
+              .where(
+                FieldPath.documentId,
+                whereIn: ids.length > 10 ? ids.sublist(0, 10) : ids,
+              )
+              .get();
+      final options =
+          snap.docs
+              .map(
+                (d) => ChildOption(
+                  id: d.id,
+                  nombre:
+                      '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}'.trim(),
+                  document: d['document']?.toString(),
+                  data: d.data(),
+                ),
+              )
+              .toList();
       childOptions = options;
       notifyListeners();
     } catch (_) {}
   }
 
   List<String> optionsFor(EnrollmentField field) {
-    if (field.options != null) return field.options!;
+    if (field.options != null) {
+      var opts = field.options!;
+      // For facturaElectronica, hide 'acudiente' option if tieneAcudienteDiferente is not enabled
+      if (field.name == 'facturaElectronica') {
+        final tieneAcudiente =
+            (controllers['tieneAcudienteDiferente']?.text ?? '')
+                .toLowerCase() ==
+            'true';
+        if (!tieneAcudiente) {
+          opts = opts.where((o) => o != 'acudiente').toList();
+        }
+      }
+      return opts;
+    }
     switch (field.optionsSource) {
       case 'tiposDocumento':
         return tiposDocumento;
@@ -231,6 +263,40 @@ class EnrollmentFormController extends ChangeNotifier {
     if (field.name == 'epsEstudiante' && epsLabels.isNotEmpty) {
       return epsLabels[value] ?? value;
     }
+    if (field.name == 'servicioTransporteTipo') {
+      switch (value) {
+        case 'medio_tiempo':
+          return 'Medio tiempo';
+        case 'tiempo_completo':
+          return 'Tiempo completo';
+        default:
+          return value;
+      }
+    }
+    if (field.name == 'acudientePrincipal') {
+      switch (value) {
+        case 'padre':
+          return 'Padre';
+        case 'madre':
+          return 'Madre';
+        default:
+          return value;
+      }
+    }
+    if (field.name == 'facturaElectronica') {
+      switch (value) {
+        case 'padre':
+          return 'Padre';
+        case 'madre':
+          return 'Madre';
+        case 'acudiente':
+          return 'Acudiente';
+        case 'ninguno':
+          return 'Ninguno';
+        default:
+          return value;
+      }
+    }
     return value;
   }
 
@@ -248,8 +314,10 @@ class EnrollmentFormController extends ChangeNotifier {
       }
     }
 
-    final nombres = (data['firstName'] ?? data['nombresAlumno'] ?? '').toString().trim();
-    final apellidos = (data['lastName'] ?? data['apellidosAlumno'] ?? '').toString().trim();
+    final nombres =
+        (data['firstName'] ?? data['nombresAlumno'] ?? '').toString().trim();
+    final apellidos =
+        (data['lastName'] ?? data['apellidosAlumno'] ?? '').toString().trim();
     setValue('nombresAlumno', nombres);
     setValue('apellidosAlumno', apellidos);
     setValue('nombresApellidosAlumno', '$nombres $apellidos'.trim());
@@ -271,7 +339,10 @@ class EnrollmentFormController extends ChangeNotifier {
       'direccionAlumno',
       data['address']?.toString() ?? data['direccionAlumno']?.toString(),
     );
-    setValue('gradoAspirado', data['grade']?.toString() ?? data['gradoAspirado']?.toString());
+    setValue(
+      'gradoAspirado',
+      data['grade']?.toString() ?? data['gradoAspirado']?.toString(),
+    );
     setValue(
       'telefonoAlumno',
       data['phones'] is List && (data['phones'] as List).isNotEmpty
@@ -292,11 +363,12 @@ class EnrollmentFormController extends ChangeNotifier {
 
     final history = data['nivelesCursadosInstitucion'];
     if (history is List) {
-      externalGradeHistory = history
-          .where((e) => e is Map)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .where((e) => e['interno'] != true)
-          .toList();
+      externalGradeHistory =
+          history
+              .where((e) => e is Map)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .where((e) => e['interno'] != true)
+              .toList();
       _updateGradeHistoryValue();
     }
 
@@ -311,7 +383,11 @@ class EnrollmentFormController extends ChangeNotifier {
     if (data['birthDate'] is Timestamp) {
       setValue(
         'fechaNacimiento',
-        (data['birthDate'] as Timestamp).toDate().toIso8601String().split('T').first,
+        (data['birthDate'] as Timestamp)
+            .toDate()
+            .toIso8601String()
+            .split('T')
+            .first,
       );
     } else if (data['fechaNacimiento'] != null) {
       setValue('fechaNacimiento', data['fechaNacimiento'].toString());
@@ -319,10 +395,7 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> get gradeHistory {
-    final combined = [
-      ...internalGradeHistory,
-      ...externalGradeHistory,
-    ];
+    final combined = [...internalGradeHistory, ...externalGradeHistory];
     combined.sort(
       (a, b) => (a['anio'] as int? ?? 0).compareTo(b['anio'] as int? ?? 0),
     );
@@ -348,10 +421,11 @@ class EnrollmentFormController extends ChangeNotifier {
     if (document.trim().isEmpty) return;
     final anio = anioMatricula ?? DateTime.now().year;
     try {
-      blockedByExistingEnrollment = await _enrollmentService.existsByDocumentAndYear(
-        document: document.trim(),
-        anioMatricula: anio,
-      );
+      blockedByExistingEnrollment = await _enrollmentService
+          .existsByDocumentAndYear(
+            document: document.trim(),
+            anioMatricula: anio,
+          );
     } catch (_) {
       blockedByExistingEnrollment = false;
     }
@@ -366,11 +440,12 @@ class EnrollmentFormController extends ChangeNotifier {
     notifyListeners();
     Map<String, dynamic>? found;
     try {
-      final usersSnap = await _firestore
-          .collection('users')
-          .where('document', isEqualTo: doc)
-          .limit(1)
-          .get();
+      final usersSnap =
+          await _firestore
+              .collection('users')
+              .where('document', isEqualTo: doc)
+              .limit(1)
+              .get();
       if (usersSnap.docs.isNotEmpty) {
         found = usersSnap.docs.first.data();
         documentoSeleccionado = doc;
@@ -428,23 +503,23 @@ class EnrollmentFormController extends ChangeNotifier {
         document: document.trim(),
         anioMatricula: anio,
       );
-      internalGradeHistory = items
-          .where((e) => e.anioMatricula != null)
-          .map((e) {
-            return {
-              'anio': e.anioMatricula,
-              'institucion':
-                  (e.data['institucion'] ?? e.data['institution'] ?? '').toString(),
-              'grado':
-                  (e.data['gradoAspirado'] ?? e.data['grado'] ?? '').toString(),
-              'interno': true,
-            };
-          })
-          .toList()
-        ..sort(
-          (a, b) =>
-              (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
-        );
+      internalGradeHistory =
+          items.where((e) => e.anioMatricula != null).map((e) {
+              return {
+                'anio': e.anioMatricula,
+                'institucion':
+                    (e.data['institucion'] ?? e.data['institution'] ?? '')
+                        .toString(),
+                'grado':
+                    (e.data['gradoAspirado'] ?? e.data['grado'] ?? '')
+                        .toString(),
+                'interno': true,
+              };
+            }).toList()
+            ..sort(
+              (a, b) =>
+                  (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
+            );
     } catch (_) {
       internalGradeHistory = [];
     }
@@ -457,24 +532,46 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   void addExternalGradeHistory(Map<String, dynamic> entry) {
-    externalGradeHistory = [...externalGradeHistory, entry]
-      ..sort(
-        (a, b) =>
-            (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
-      );
+    externalGradeHistory = [...externalGradeHistory, entry]..sort(
+      (a, b) => (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
+    );
     _updateGradeHistoryValue();
     notifyListeners();
   }
 
   void removeExternalGradeHistory(Map<String, dynamic> entry) {
-    externalGradeHistory = externalGradeHistory
-        .where(
-          (e) => !(e['anio'] == entry['anio'] &&
-              e['institucion'] == entry['institucion'] &&
-              e['grado'] == entry['grado'] &&
-              e['interno'] == entry['interno']),
-        )
-        .toList();
+    externalGradeHistory =
+        externalGradeHistory
+            .where(
+              (e) =>
+                  !(e['anio'] == entry['anio'] &&
+                      e['institucion'] == entry['institucion'] &&
+                      e['grado'] == entry['grado'] &&
+                      e['interno'] == entry['interno']),
+            )
+            .toList();
+    _updateGradeHistoryValue();
+    notifyListeners();
+  }
+
+  void updateExternalGradeHistory(
+    Map<String, dynamic> oldEntry,
+    Map<String, dynamic> newEntry,
+  ) {
+    // Remove the old matching entry and add the new one
+    externalGradeHistory =
+        externalGradeHistory
+            .where(
+              (e) =>
+                  !(e['anio'] == oldEntry['anio'] &&
+                      e['institucion'] == oldEntry['institucion'] &&
+                      e['grado'] == oldEntry['grado'] &&
+                      e['interno'] == oldEntry['interno']),
+            )
+            .toList();
+    externalGradeHistory = [...externalGradeHistory, newEntry]..sort(
+      (a, b) => (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
+    );
     _updateGradeHistoryValue();
     notifyListeners();
   }
@@ -483,10 +580,11 @@ class EnrollmentFormController extends ChangeNotifier {
     if (gradoAspirado == null || gradoAspirado.isEmpty) return [];
     final aspiradoOrder = gradeOrderByValue[gradoAspirado];
     if (aspiradoOrder == null) return [];
-    final internos = internalGradeHistory
-        .map((e) => e['grado']?.toString())
-        .whereType<String>()
-        .toSet();
+    final internos =
+        internalGradeHistory
+            .map((e) => e['grado']?.toString())
+            .whereType<String>()
+            .toSet();
     return grados
         .where((g) => (gradeOrderByValue[g] ?? 9999) < aspiradoOrder)
         .where((g) => !internos.contains(g))
@@ -501,7 +599,28 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   bool validateForm() {
-    return formKey.currentState?.validate() ?? false;
+    if (!(formKey.currentState?.validate() ?? false)) return false;
+
+    // Validar que si tieneAcudienteDiferente está marcado,
+    // el documento del acudiente sea diferente al de los padres
+    final tieneAcudiente =
+        (controllers['tieneAcudienteDiferente']?.text ?? '').toLowerCase() ==
+        'true';
+    if (tieneAcudiente) {
+      final cedulaAcudiente =
+          (controllers['cedulaAcudiente']?.text ?? '').trim();
+      final cedulaPadre = (controllers['cedulaPadre']?.text ?? '').trim();
+      final cedulaMadre = (controllers['cedulaMadre']?.text ?? '').trim();
+
+      if (cedulaAcudiente.isNotEmpty &&
+          (cedulaAcudiente == cedulaPadre || cedulaAcudiente == cedulaMadre)) {
+        lastValidationError =
+            'El número de documento del acudiente tiene que ser distinto al del padre o madre ';
+        return false;
+      }
+    }
+
+    return true;
   }
 
   Map<String, dynamic> collectPayload() {
@@ -569,9 +688,10 @@ class EnrollmentFormController extends ChangeNotifier {
     final payload = collectPayload();
     final user = userProvider.user;
 
-    final createdByRole = isPublicLink
-        ? 'publico'
-        : isAdmin
+    final createdByRole =
+        isPublicLink
+            ? 'publico'
+            : isAdmin
             ? 'admin'
             : 'padre';
     final createdByUserId = isPublicLink ? null : user?.id;
@@ -585,16 +705,19 @@ class EnrollmentFormController extends ChangeNotifier {
         estado = adminEstado;
       }
     } else {
-      estado = isEditing ? (currentEstadoExt ?? 'prematriculado') : 'prematriculado';
+      estado =
+          isEditing ? (currentEstadoExt ?? 'prematriculado') : 'prematriculado';
     }
-    final fuente = isPublicLink
-        ? 'qr_publico'
-        : isAdmin
+    final fuente =
+        isPublicLink
+            ? 'qr_publico'
+            : isAdmin
             ? 'admin'
             : 'app_padre';
     final anio = anioMatricula ?? DateTime.now().year;
     anioMatricula = anio;
-    if ((payload['institucion'] == null || payload['institucion'].toString().isEmpty) &&
+    if ((payload['institucion'] == null ||
+            payload['institucion'].toString().isEmpty) &&
         (user?.institution ?? '').isNotEmpty) {
       payload['institucion'] = user?.institution;
     }
@@ -637,6 +760,12 @@ class EnrollmentFormController extends ChangeNotifier {
 
   void setCurrentStep(int step) {
     currentStep = step;
+    isStepCollapsed = false;
+    notifyListeners();
+  }
+
+  void toggleStepCollapse() {
+    isStepCollapsed = !isStepCollapsed;
     notifyListeners();
   }
 

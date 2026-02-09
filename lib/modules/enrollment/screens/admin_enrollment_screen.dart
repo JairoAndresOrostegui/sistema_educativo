@@ -33,7 +33,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     _EstadoTab('Pre-matriculado', 'prematriculado'),
     _EstadoTab('Matriculados', 'matriculado'),
     _EstadoTab('Rechazados', 'rechazado'),
-    _EstadoTab('Desmatriculados', 'desmatriculado'),
+    _EstadoTab('Retirados', 'desmatriculado'),
   ];
 
   @override
@@ -55,9 +55,9 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() => _pendingCount = snapshot.size);
-    });
+          if (!mounted) return;
+          setState(() => _pendingCount = snapshot.size);
+        });
   }
 
   Future<void> _fetch() async {
@@ -179,14 +179,23 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
   Future<void> _desmatricular(Enrollment e) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Desmatricular'),
-        content: const Text('¿Deseas marcar este registro como desmatriculado?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Desmatricular')),
-        ],
-      ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Desmatricular'),
+            content: const Text(
+              '¿Deseas marcar este registro como desmatriculado?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Desmatricular'),
+              ),
+            ],
+          ),
     );
     if (confirm != true) return;
 
@@ -221,13 +230,14 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => EnrollmentFormScreen(
-          enrollmentId: e.id,
-          initialEstado: e.estado,
-          existingData: e.data,
-          modeOverride: EnrollmentEntryMode.admin,
-          anioMatricula: e.anioMatricula,
-        ),
+        builder:
+            (_) => EnrollmentFormScreen(
+              enrollmentId: e.id,
+              initialEstado: e.estado,
+              existingData: e.data,
+              modeOverride: EnrollmentEntryMode.admin,
+              anioMatricula: e.anioMatricula,
+            ),
       ),
     ).then((_) => _fetch());
   }
@@ -272,7 +282,10 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                   right: -6,
                   top: -6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.redAccent,
                       borderRadius: BorderRadius.circular(12),
@@ -298,71 +311,89 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
           indicatorColor: Colors.redAccent,
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _fetch,
-              child: _items.isEmpty
-                  ? const ListTile(
-                      title: Text('Sin matriculas en este estado.'),
-                    )
-                  : ListView.builder(
-                      itemCount: _items.length,
-                      itemBuilder: (_, index) {
-                        final e = _items[index];
-                        final nombre = (e.data['nombresApellidosAlumno'] ??
-                                '${e.data['nombresAlumno'] ?? ''} ${e.data['apellidosAlumno'] ?? ''}')
-                            .toString()
-                            .trim();
-                        final estadoLabel = _estadoDisplay(e.estado);
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          child: ListTile(
-                            title: Text(nombre.isEmpty ? 'Sin nombre' : nombre),
-                            subtitle: Text(
-                              'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'}  Estado: $estadoLabel',
-                            ),
-                            trailing: Wrap(
-                              spacing: 8,
-                              children: [
-                                IconButton(
-                                  onPressed: () => _editar(e),
-                                  icon: const Icon(Icons.edit),
-                                  tooltip: 'Editar',
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                onRefresh: _fetch,
+                child:
+                    _items.isEmpty
+                        ? const ListTile(
+                          title: Text('Sin matriculas en este estado.'),
+                        )
+                        : ListView.builder(
+                          itemCount: _items.length,
+                          itemBuilder: (_, index) {
+                            final e = _items[index];
+                            final nombre =
+                                (e.data['nombresApellidosAlumno'] ??
+                                        '${e.data['nombresAlumno'] ?? ''} ${e.data['apellidosAlumno'] ?? ''}')
+                                    .toString()
+                                    .trim();
+                            final estadoLabel = _estadoDisplay(e.estado);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              child: ListTile(
+                                title: Text(
+                                  nombre.isEmpty ? 'Sin nombre' : nombre,
                                 ),
-                                if (e.estado != 'matriculado')
-                                  IconButton(
-                                    onPressed: () => _aprobar(e),
-                                    icon: const Icon(Icons.check_circle, color: Colors.green),
-                                    tooltip: 'Aprobar',
-                                  ),
-                                if (e.estado != 'rechazado')
-                                  IconButton(
-                                    onPressed: () => _rechazar(e),
-                                    icon: const Icon(Icons.cancel, color: Colors.redAccent),
-                                    tooltip: 'Rechazar',
-                                  ),
-                                if (e.estado == 'matriculado')
-                                  IconButton(
-                                    onPressed: () => _desmatricular(e),
-                                    icon: const Icon(Icons.undo, color: Colors.orange),
-                                    tooltip: 'Desmatricular',
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
+                                subtitle: Text(
+                                  'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'}  Estado: $estadoLabel',
+                                ),
+                                trailing: Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () => _editar(e),
+                                      icon: const Icon(Icons.edit),
+                                      tooltip: 'Editar',
+                                    ),
+                                    if (e.estado != 'matriculado')
+                                      IconButton(
+                                        onPressed: () => _aprobar(e),
+                                        icon: const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        ),
+                                        tooltip: 'Aprobar',
+                                      ),
+                                    if (e.estado != 'rechazado')
+                                      IconButton(
+                                        onPressed: () => _rechazar(e),
+                                        icon: const Icon(
+                                          Icons.cancel,
+                                          color: Colors.redAccent,
+                                        ),
+                                        tooltip: 'Rechazar',
+                                      ),
+                                    if (e.estado == 'matriculado')
+                                      IconButton(
+                                        onPressed: () => _desmatricular(e),
+                                        icon: const Icon(
+                                          Icons.undo,
+                                          color: Colors.orange,
+                                        ),
+                                        tooltip: 'Desmatricular',
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+              ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const EnrollmentFormScreen(
-                modeOverride: EnrollmentEntryMode.admin,
-              ),
+              builder:
+                  (_) => const EnrollmentFormScreen(
+                    modeOverride: EnrollmentEntryMode.admin,
+                  ),
             ),
           ).then((_) => _fetch());
         },

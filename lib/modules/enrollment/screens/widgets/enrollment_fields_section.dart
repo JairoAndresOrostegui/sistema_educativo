@@ -32,7 +32,60 @@ class EnrollmentFieldsSection extends StatelessWidget {
       children: [
         const SizedBox(height: 8),
         ...fields.map((f) {
-          if (f.name == 'nivelesCursadosInstitucion' && gradeHistoryBuilder != null) {
+          // Show acudientePrincipal only if tieneAcudienteDiferente is FALSE
+          if (f.name == 'acudientePrincipal') {
+            final tieneAcudiente =
+                (controllers['tieneAcudienteDiferente']?.text ?? '')
+                    .toLowerCase() ==
+                'true';
+            if (tieneAcudiente) {
+              return const SizedBox.shrink();
+            }
+          }
+          // Hide other acudiente fields unless tieneAcudienteDiferente is enabled
+          if ([
+            'nombreAcudiente',
+            'cedulaAcudiente',
+            'emailAcudiente',
+            'celularAcudiente',
+            'lugarTrabajoAcudiente',
+            'ocupacionAcudiente',
+            'cargoAcudiente',
+          ].contains(f.name)) {
+            final tieneAcudiente =
+                (controllers['tieneAcudienteDiferente']?.text ?? '')
+                    .toLowerCase() ==
+                'true';
+            if (!tieneAcudiente) {
+              return const SizedBox.shrink();
+            }
+          }
+          // Hide the transporte tipo field unless the transporte switch is enabled
+          if (f.name == 'servicioTransporteTipo') {
+            final transporteVal =
+                (controllers['servicioTransporte']?.text ?? 'false')
+                    .toLowerCase();
+            if (transporteVal != 'true') {
+              return const SizedBox.shrink();
+            }
+          }
+          // Hide reference fields unless fueReferido is enabled
+          if ([
+            'observacionesPadres',
+            'nombrePadresReferentes',
+            'telefonoReferentes',
+            'celularReferentes',
+            'nombreReferido',
+          ].contains(f.name)) {
+            final fueReferido =
+                (controllers['fueReferido']?.text ?? '').toLowerCase() ==
+                'true';
+            if (!fueReferido) {
+              return const SizedBox.shrink();
+            }
+          }
+          if (f.name == 'nivelesCursadosInstitucion' &&
+              gradeHistoryBuilder != null) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: gradeHistoryBuilder!(f),

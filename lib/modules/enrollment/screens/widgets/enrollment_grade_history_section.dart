@@ -6,6 +6,7 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
   final bool readOnly;
   final VoidCallback onAdd;
   final void Function(Map<String, dynamic> entry) onRemove;
+  final void Function(Map<String, dynamic> entry)? onEdit;
 
   const EnrollmentGradeHistorySection({
     super.key,
@@ -14,6 +15,7 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
     required this.readOnly,
     required this.onAdd,
     required this.onRemove,
+    this.onEdit,
   });
 
   @override
@@ -37,7 +39,7 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
               0: FlexColumnWidth(0.9),
               1: FlexColumnWidth(2.2),
               2: FlexColumnWidth(1.4),
-              3: FixedColumnWidth(44),
+              3: FixedColumnWidth(88),
             },
             border: TableBorder.all(color: Colors.grey.shade300),
             children: [
@@ -78,10 +80,21 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.all(4),
                       child: (!readOnly && !interno)
-                          ? IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.redAccent),
-                              onPressed: () => onRemove(entry),
-                              tooltip: 'Eliminar',
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (onEdit != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.edit),
+                                    onPressed: () => onEdit!(entry),
+                                    tooltip: 'Editar',
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  onPressed: () => onRemove(entry),
+                                  tooltip: 'Eliminar',
+                                ),
+                              ],
                             )
                           : const SizedBox.shrink(),
                     ),

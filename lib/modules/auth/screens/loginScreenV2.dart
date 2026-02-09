@@ -258,28 +258,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                                   _loading
                                                       ? null
                                                       : _iniciarSesion,
-                                              child:
-                                                  _loading
-                                                      ? const SizedBox(
-                                                        height: 22,
-                                                        width: 22,
-                                                        child: CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          valueColor:
-                                                              AlwaysStoppedAnimation<
-                                                                Color
-                                                              >(Colors.white),
-                                                        ),
-                                                      )
-                                                      : Text(
-                                                        'Iniciar sesion',
-                                                        style: TextStyle(
-                                                          fontFamily:
-                                                              fontGeneral,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                        ),
-                                                      ),
+                                              child: Text(
+                                                'Iniciar sesion',
+                                                style: TextStyle(
+                                                  fontFamily: fontGeneral,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -328,14 +313,14 @@ class _LoginScreenState extends State<LoginScreen> {
           if (_loading)
             Positioned.fill(
               child: AbsorbPointer(
-                child: Container(color: Colors.redAccent.withValues(alpha: 0.08)),
+                child: Container(
+                  color: Colors.redAccent.withValues(alpha: 0.08),
+                ),
               ),
             ),
           if (_loading)
             const Positioned.fill(
-              child: Center(
-                child: CircularProgressIndicator(strokeWidth: 2.8),
-              ),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2.8)),
             ),
         ],
       ),

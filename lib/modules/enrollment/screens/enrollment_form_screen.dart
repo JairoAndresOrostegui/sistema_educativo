@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
-import '../../../utils/navigation_utils.dart';
 import '../config/enrollment_fields.dart';
 import '../config/enrollment_sections.dart';
 import '../controllers/enrollment_form_controller.dart';
@@ -14,6 +13,7 @@ import '../models/child_option.dart';
 import '../models/enrollment_field.dart';
 import '../models/submit_result.dart';
 import '../services/enrollment_submit_handler.dart';
+import 'widgets/back_to_enrollment_button.dart';
 import 'widgets/enrollment_child_selector.dart';
 import 'widgets/enrollment_document_search_card.dart';
 import 'widgets/enrollment_form_actions.dart';
@@ -50,7 +50,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   // moved to config\n
   late EnrollmentFormController _controller;
 
-  Map<String, TextEditingController> get _controllers => _controller.controllers;
+  Map<String, TextEditingController> get _controllers =>
+      _controller.controllers;
   TextEditingController get _documentLookupController =>
       _controller.documentLookupController;
   Map<String, dynamic> get _values => _controller.values;
@@ -63,6 +64,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   List<ChildOption> get _childOptions => _controller.childOptions;
   String? get _selectedChildId => _controller.selectedChildId;
   int get _currentStep => _controller.currentStep;
+  bool get _isStepCollapsed => _controller.isStepCollapsed;
   GlobalKey<FormState> get _formKey => _controller.formKey;
 
   @override
@@ -74,12 +76,15 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       anioInicial: widget.anioMatricula,
       initialEstado: widget.initialEstado,
       existingData: widget.existingData,
-      readOnly: widget.initialEstado == 'matriculado' &&
+      readOnly:
+          widget.initialEstado == 'matriculado' &&
           _resolveMode() != EnrollmentEntryMode.admin,
     );
     _controller.loadAnioFromParameters();
     _controller.loadOptions();
-    _controller.loadPendingCount(isAdmin: _resolveMode() == EnrollmentEntryMode.admin);
+    _controller.loadPendingCount(
+      isAdmin: _resolveMode() == EnrollmentEntryMode.admin,
+    );
     _controller.loadChildrenIfNeeded(context.read<UserProviderV2>());
   }
 
@@ -167,18 +172,22 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                         labelText: 'Grado',
                         border: OutlineInputBorder(),
                       ),
-                      value: selectedGrade,
-                      items: availableGrades
-                          .map(
-                            (g) => DropdownMenuItem<String>(
-                              value: g,
-                              child: Text(g),
-                            ),
-                          )
-                          .toList(),
+                      initialValue: selectedGrade,
+                      items:
+                          availableGrades
+                              .map(
+                                (g) => DropdownMenuItem<String>(
+                                  value: g,
+                                  child: Text(g),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (val) => setState(() => selectedGrade = val),
-                      validator: (value) =>
-                          (value == null || value.isEmpty) ? 'Requerido' : null,
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Requerido'
+                                  : null,
                     ),
                   ],
                 ),
@@ -192,15 +201,12 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                   onPressed: () {
                     if (!(formKey.currentState?.validate() ?? false)) return;
                     if (selectedGrade == null) return;
-                    Navigator.pop(
-                      dialogContext,
-                      {
-                        'anio': int.parse(yearController.text.trim()),
-                        'institucion': institutionController.text.trim(),
-                        'grado': selectedGrade,
-                        'interno': false,
-                      },
-                    );
+                    Navigator.pop(dialogContext, {
+                      'anio': int.parse(yearController.text.trim()),
+                      'institucion': institutionController.text.trim(),
+                      'grado': selectedGrade,
+                      'interno': false,
+                    });
                   },
                   child: const Text('Agregar'),
                 ),
@@ -217,12 +223,130 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     }
   }
 
+  Future<Map<String, dynamic>?> _showEditGradeDialog(
+    Map<String, dynamic> entry,
+  ) async {
+    final availableGrades = _availableExternalGrades();
+    final currentYear = _controller.anioMatricula ?? DateTime.now().year;
+
+    final formKey = GlobalKey<FormState>();
+    final yearController = TextEditingController(
+      text: (entry['anio']?.toString() ?? '${currentYear - 1}'),
+    );
+    final institutionController = TextEditingController(
+      text: (entry['institucion']?.toString() ?? ''),
+    );
+    final grades = List<String>.from(availableGrades);
+    if (entry['grado'] != null && !grades.contains(entry['grado'].toString())) {
+      grades.insert(0, entry['grado'].toString());
+    }
+    String? selectedGrade =
+        entry['grado']?.toString() ?? (grades.isNotEmpty ? grades.first : null);
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              title: const Text('Editar grado cursado'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: yearController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Año',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        final parsed = int.tryParse(value ?? '');
+                        if (parsed == null) return 'Año inválido';
+                        if (parsed >= currentYear) {
+                          return 'Debe ser menor al año activo';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: institutionController,
+                      decoration: const InputDecoration(
+                        labelText: 'Institución',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Requerido';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Grado',
+                        border: OutlineInputBorder(),
+                      ),
+                      initialValue: selectedGrade,
+                      items:
+                          grades
+                              .map(
+                                (g) => DropdownMenuItem<String>(
+                                  value: g,
+                                  child: Text(g),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (val) => setState(() => selectedGrade = val),
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Requerido'
+                                  : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+                    if (selectedGrade == null) return;
+                    Navigator.pop(dialogContext, {
+                      'anio': int.parse(yearController.text.trim()),
+                      'institucion': institutionController.text.trim(),
+                      'grado': selectedGrade,
+                      'interno': false,
+                    });
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    return result;
+  }
+
   EnrollmentEntryMode _resolveMode() {
     if (widget.isPublicLink) return EnrollmentEntryMode.publico;
     if (widget.modeOverride != null) return widget.modeOverride!;
     final user = context.read<UserProviderV2>().user;
     final role = (user?.role ?? '').trim().toLowerCase();
-    if (role == 'administrador' || role == 'admin' || (user?.isSuperadmin ?? false)) {
+    if (role == 'administrador' ||
+        role == 'admin' ||
+        (user?.isSuperadmin ?? false)) {
       return EnrollmentEntryMode.admin;
     }
     return EnrollmentEntryMode.padreAutenticado;
@@ -312,45 +436,107 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     List<EnrollmentField> visible,
     bool isAdmin,
     bool lockForDoc,
+    bool requireDocStep,
+    bool isBlocked,
   ) {
     List<Step> steps = [];
     final mappedNames = <String>{};
     Step buildStep(String title, List<EnrollmentField> fields, int index) {
+      final isLast = index == steps.length;
+      final isCollapsed = _isStepCollapsed && _currentStep == index;
       return Step(
-        isActive: _currentStep >= index,
+        isActive: _currentStep == index && !_isStepCollapsed,
         state: _currentStep > index ? StepState.complete : StepState.indexed,
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        content: EnrollmentFieldsSection(
-          fields: fields,
-          controllers: _controllers,
-          isReadOnly: (f) => !_controller.canEditField(
-            field: f,
-            role: _roleForFilters(),
-            estado: _currentEstado ?? 'prematriculado',
-            isAdmin: isAdmin,
-            lockForDoc: lockForDoc,
-          ),
-          optionsFor: _optionsFor,
-          labelForValue: _labelForValue,
-          onPickDate: (field, withTime) =>
-              _pickDate(context, field, withTime: withTime),
-          gradeHistoryBuilder: (field) => EnrollmentGradeHistorySection(
-            label: field.label,
-            entries: _controller.gradeHistory,
-            readOnly: _readOnlyForm || lockForDoc,
-            onAdd: _showAddGradeDialog,
-            onRemove: _controller.removeExternalGradeHistory,
-          ),
-          onChanged: (fieldName, v) {
-            _values[fieldName] = v;
-            if (fieldName == 'fechaNacimiento') {
-              _recomputeAge();
-            }
-          },
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        content:
+            isCollapsed
+                ? Transform.translate(
+                    offset: const Offset(0, -24),
+                    child: const SizedBox.shrink(),
+                  )
+                : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    EnrollmentFieldsSection(
+                      fields: fields,
+                      controllers: _controllers,
+                      isReadOnly:
+                          (f) =>
+                              !_controller.canEditField(
+                                field: f,
+                                role: _roleForFilters(),
+                                estado: _currentEstado ?? 'prematriculado',
+                                isAdmin: isAdmin,
+                                lockForDoc: lockForDoc,
+                              ),
+                      optionsFor: _optionsFor,
+                      labelForValue: _labelForValue,
+                      onPickDate:
+                          (field, withTime) =>
+                              _pickDate(context, field, withTime: withTime),
+                      gradeHistoryBuilder:
+                          (field) => EnrollmentGradeHistorySection(
+                            label: field.label,
+                            entries: _controller.gradeHistory,
+                            readOnly: _readOnlyForm || lockForDoc,
+                            onAdd: _showAddGradeDialog,
+                            onRemove: _controller.removeExternalGradeHistory,
+                            onEdit: (entry) async {
+                              final result = await _showEditGradeDialog(entry);
+                              if (result != null) {
+                                _controller.updateExternalGradeHistory(
+                                  entry,
+                                  result,
+                                );
+                                setState(() {});
+                              }
+                            },
+                          ),
+                      onChanged: (fieldName, v) {
+                        _values[fieldName] = v;
+                        if (fieldName == 'fechaNacimiento') {
+                          _recomputeAge();
+                        }
+                        // Immediate UI update and dependent field handling
+                        if (fieldName == 'servicioTransporte' &&
+                            (v == null || v.toLowerCase() != 'true')) {
+                          // clear transporte tipo when transport is disabled
+                          _controllers['servicioTransporteTipo']?.text = '';
+                          _values['servicioTransporteTipo'] = '';
+                        }
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed:
+                              requireDocStep || isBlocked
+                                  ? null
+                                  : () {
+                                    if (isLast) {
+                                      _onSubmit();
+                                    } else {
+                                      _controller.incrementStep();
+                                    }
+                                  },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.redAccent,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: Text(isLast ? 'Guardar' : 'Siguiente'),
+                        ),
+                        const SizedBox(width: 8),
+                        if (index > 0)
+                          TextButton(
+                            onPressed: _controller.decrementStep,
+                            child: const Text('Anterior'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
       );
     }
 
@@ -361,7 +547,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       steps.add(buildStep(section.title, fields, steps.length));
     }
 
-    final remaining = visible.where((f) => !mappedNames.contains(f.name)).toList();
+    final remaining =
+        visible.where((f) => !mappedNames.contains(f.name)).toList();
     if (remaining.isNotEmpty) {
       steps.add(buildStep('Otros', remaining, steps.length));
     }
@@ -378,12 +565,23 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       await DialogUtils.showError(
         context: context,
         title: 'Falta documento',
-        message: 'Primero busca o ingresa el documento del estudiante para continuar.',
+        message:
+            'Primero busca o ingresa el documento del estudiante para continuar.',
       );
       return;
     }
 
-    if (!_controller.validateForm()) return;
+    if (!_controller.validateForm()) {
+      if (_controller.lastValidationError != null &&
+          _controller.lastValidationError!.isNotEmpty) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'Error de validación',
+          message: _controller.lastValidationError!,
+        );
+      }
+      return;
+    }
     final userProvider = context.read<UserProviderV2>();
 
     final SubmitResult result = await _controller.submit(
@@ -410,7 +608,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     final mode = _resolveMode();
     final isAdmin = mode == EnrollmentEntryMode.admin;
     final isBlocked = !isAdmin && _controller.blockedByExistingEnrollment;
-    final requireDocStep = _documentoSeleccionado == null || _documentoSeleccionado!.isEmpty;
+    final requireDocStep =
+        _documentoSeleccionado == null || _documentoSeleccionado!.isEmpty;
     final lockForDoc = (requireDocStep && !_readOnlyForm) || isBlocked;
     final visible = _visibleFields().toList();
 
@@ -424,7 +623,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
               backgroundColor: Colors.white,
               foregroundColor: Colors.redAccent,
               centerTitle: true,
-              leading: const BackToDashboardButton(),
+              leading: const BackToEnrollmentButton(),
               actions: [
                 if (isAdmin)
                   Padding(
@@ -441,122 +640,118 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
               ],
             ),
             backgroundColor: Colors.white,
-            body: _loadingOptions
-                ? const Center(child: CircularProgressIndicator())
-                : SafeArea(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Rol: $role ${widget.isPublicLink ? '(link público)' : ''}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.redAccent,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (isBlocked)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.redAccent.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.redAccent.withValues(alpha: 0.35),
+            body:
+                _loadingOptions
+                    ? const Center(child: CircularProgressIndicator())
+                    : SafeArea(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Rol: $role ${widget.isPublicLink ? '(link público)' : ''}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.redAccent,
                                   ),
                                 ),
-                                child: const Text(
-                                  'Este estudiante ya tiene una matrícula registrada para el año activo.',
+                              ),
+                              const SizedBox(height: 12),
+                              if (isBlocked)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withValues(
+                                      alpha: 0.08,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.redAccent.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Este estudiante ya tiene una matrícula registrada para el año activo.',
+                                    style: TextStyle(
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              if (isBlocked) const SizedBox(height: 12),
+                              if (_childOptions.isNotEmpty)
+                                EnrollmentChildSelector(
+                                  options: _childOptions,
+                                  selectedChildId: _selectedChildId,
+                                  onChanged: _onChildSelected,
+                                ),
+                              EnrollmentDocumentSearchCard(
+                                controller: _documentLookupController,
+                                onSearch: _prefillByDocument,
+                                loading: _loadingPrefill,
+                                selectedDocument: _documentoSeleccionado,
+                              ),
+                              const SizedBox(height: 12),
+                              if (requireDocStep)
+                                const Text(
+                                  'Completa el documento y presiona buscar para habilitar el formulario.',
                                   style: TextStyle(
                                     color: Colors.redAccent,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ),
-                            if (isBlocked) const SizedBox(height: 12),
-                            if (_childOptions.isNotEmpty)
-                              EnrollmentChildSelector(
-                                options: _childOptions,
-                                selectedChildId: _selectedChildId,
-                                onChanged: _onChildSelected,
-                              ),
-                            EnrollmentDocumentSearchCard(
-                              controller: _documentLookupController,
-                              onSearch: _prefillByDocument,
-                              loading: _loadingPrefill,
-                              selectedDocument: _documentoSeleccionado,
-                            ),
-                            const SizedBox(height: 12),
-                            if (requireDocStep)
-                              const Text(
-                                'Completa el documento y presiona buscar para habilitar el formulario.',
-                                style: TextStyle(
-                                  color: Colors.redAccent,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            const SizedBox(height: 12),
-                            Builder(builder: (context) {
-                              final steps = _steps(visible, isAdmin, lockForDoc);
-                              final isLast = _currentStep == steps.length - 1;
-                              return Stepper(
-                                currentStep: _currentStep,
-                                type: StepperType.vertical,
-                                physics: const ClampingScrollPhysics(),
-                                controlsBuilder: (context, details) {
-                                  return Row(
-                                    children: [
-                                      ElevatedButton(
-                                        onPressed: requireDocStep || isBlocked
-                                            ? null
-                                            : () {
-                                                if (isLast) {
-                                                  _onSubmit();
-                                                } else {
-                                                  _controller.incrementStep();
-                                                }
-                                              },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.redAccent,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        child: Text(isLast ? 'Guardar' : 'Siguiente'),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      if (_currentStep > 0)
-                                        TextButton(
-                                          onPressed: _controller.decrementStep,
-                                          child: const Text('Anterior'),
-                                        ),
-                                    ],
+                              const SizedBox(height: 12),
+                              Builder(
+                                builder: (context) {
+                                  final steps = _steps(
+                                    visible,
+                                    isAdmin,
+                                    lockForDoc,
+                                    requireDocStep,
+                                    isBlocked,
+                                  );
+                                  return Stepper(
+                                    currentStep: _currentStep,
+                                    type: StepperType.vertical,
+                                    physics: const ClampingScrollPhysics(),
+                                    controlsBuilder: (context, details) {
+                                      return const SizedBox.shrink();
+                                    },
+                                    onStepTapped: (index) {
+                                      // Toggle: if already open, collapse it; otherwise open it
+                                      if (_currentStep == index &&
+                                          !_isStepCollapsed) {
+                                        _controller.toggleStepCollapse();
+                                      } else {
+                                        _controller.setCurrentStep(index);
+                                      }
+                                    },
+                                    onStepContinue: () {},
+                                    onStepCancel: () {},
+                                    steps: steps,
                                   );
                                 },
-                                onStepTapped: _controller.setCurrentStep,
-                                onStepContinue: () {},
-                                onStepCancel: () {},
-                                steps: steps,
-                              );
-                            }),
-                            const SizedBox(height: 12),
-                            EnrollmentFormActions(
-                              isAdmin: isAdmin,
-                              disabled: requireDocStep || isBlocked,
-                              currentEstado: _currentEstado,
-                              onGuardarRevision: () => _onSubmit(),
-                              onMatricular: () => _onSubmit(matricularAhora: true),
-                            ),
-                          ],
+                              ),
+                              const SizedBox(height: 12),
+                              EnrollmentFormActions(
+                                isAdmin: isAdmin,
+                                disabled: requireDocStep || isBlocked,
+                                currentEstado: _currentEstado,
+                                onGuardarRevision: () => _onSubmit(),
+                                onMatricular:
+                                    () => _onSubmit(matricularAhora: true),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
           );
         },
       ),
