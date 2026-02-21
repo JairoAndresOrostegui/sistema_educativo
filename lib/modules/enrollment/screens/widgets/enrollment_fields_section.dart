@@ -71,7 +71,6 @@ class EnrollmentFieldsSection extends StatelessWidget {
           }
           // Hide reference fields unless fueReferido is enabled
           if ([
-            'observacionesPadres',
             'nombrePadresReferentes',
             'telefonoReferentes',
             'celularReferentes',

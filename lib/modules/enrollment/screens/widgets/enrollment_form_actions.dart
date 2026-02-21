@@ -18,6 +18,7 @@ class EnrollmentFormActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const primaryBlue = Color.fromARGB(255, 29, 49, 179);
     if (isAdmin) {
       final isMatriculado = currentEstado == 'matriculado';
       if (isMatriculado) {
@@ -28,7 +29,7 @@ class EnrollmentFormActions extends StatelessWidget {
             icon: const Icon(Icons.save),
             label: const Text('Guardar cambios'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orangeAccent,
+              backgroundColor: primaryBlue,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
@@ -44,7 +45,7 @@ class EnrollmentFormActions extends StatelessWidget {
               icon: const Icon(Icons.pending_actions),
               label: const Text('Guardar en revisi\u00f3n'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orangeAccent,
+                backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -58,7 +59,7 @@ class EnrollmentFormActions extends StatelessWidget {
               icon: const Icon(Icons.check_circle),
               label: const Text('Matricular ahora'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
+                backgroundColor: primaryBlue,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -75,7 +76,7 @@ class EnrollmentFormActions extends StatelessWidget {
         icon: const Icon(Icons.save),
         label: const Text('Guardar solicitud'),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.redAccent,
+          backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
         ),

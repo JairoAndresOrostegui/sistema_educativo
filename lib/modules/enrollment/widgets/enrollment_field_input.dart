@@ -44,23 +44,28 @@ class EnrollmentFieldInput extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: GestureDetector(
-                      onTap:
+                    child: MouseRegion(
+                      cursor:
                           readOnly
-                              ? null
-                              : () {
-                                controller.text = 'true';
-                                onChanged('true');
-                              },
-                      child: Container(
+                              ? SystemMouseCursors.basic
+                              : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap:
+                            readOnly
+                                ? null
+                                : () {
+                                  controller.text = 'true';
+                                  onChanged('true');
+                                },
+                        child: Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 14,
                           horizontal: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: current ? Colors.red : Colors.white,
+                          color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
                           border: Border.all(
-                            color: current ? Colors.red : Colors.grey[300]!,
+                            color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -87,28 +92,34 @@ class EnrollmentFieldInput extends StatelessWidget {
                             ),
                           ],
                         ),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: GestureDetector(
-                      onTap:
+                    child: MouseRegion(
+                      cursor:
                           readOnly
-                              ? null
-                              : () {
-                                controller.text = 'false';
-                                onChanged('false');
-                              },
-                      child: Container(
+                              ? SystemMouseCursors.basic
+                              : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap:
+                            readOnly
+                                ? null
+                                : () {
+                                  controller.text = 'false';
+                                  onChanged('false');
+                                },
+                        child: Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 14,
                           horizontal: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: !current ? Colors.red : Colors.white,
+                          color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
                           border: Border.all(
-                            color: !current ? Colors.red : Colors.grey[300]!,
+                            color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -134,6 +145,7 @@ class EnrollmentFieldInput extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ),
                         ),
                       ),
                     ),
@@ -157,23 +169,28 @@ class EnrollmentFieldInput extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: GestureDetector(
-                      onTap:
+                    child: MouseRegion(
+                      cursor:
                           readOnly
-                              ? null
-                              : () {
-                                controller.text = 'true';
-                                onChanged('true');
-                              },
-                      child: Container(
+                              ? SystemMouseCursors.basic
+                              : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap:
+                            readOnly
+                                ? null
+                                : () {
+                                  controller.text = 'true';
+                                  onChanged('true');
+                                },
+                        child: Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 14,
                           horizontal: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: current ? Colors.red : Colors.white,
+                          color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
                           border: Border.all(
-                            color: current ? Colors.red : Colors.grey[300]!,
+                            color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -200,28 +217,34 @@ class EnrollmentFieldInput extends StatelessWidget {
                             ),
                           ],
                         ),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: GestureDetector(
-                      onTap:
+                    child: MouseRegion(
+                      cursor:
                           readOnly
-                              ? null
-                              : () {
-                                controller.text = 'false';
-                                onChanged('false');
-                              },
-                      child: Container(
+                              ? SystemMouseCursors.basic
+                              : SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap:
+                            readOnly
+                                ? null
+                                : () {
+                                  controller.text = 'false';
+                                  onChanged('false');
+                                },
+                        child: Container(
                         padding: const EdgeInsets.symmetric(
                           vertical: 14,
                           horizontal: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: !current ? Colors.red : Colors.white,
+                          color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
                           border: Border.all(
-                            color: !current ? Colors.red : Colors.grey[300]!,
+                            color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
                             width: 2,
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -247,6 +270,7 @@ class EnrollmentFieldInput extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ),
                         ),
                       ),
                     ),
@@ -295,26 +319,31 @@ class EnrollmentFieldInput extends StatelessWidget {
                   for (int i = 0; i < opts.length; i++) ...[
                     if (i > 0) const SizedBox(width: 12),
                     Expanded(
-                      child: GestureDetector(
-                        onTap:
+                      child: MouseRegion(
+                        cursor:
                             readOnly
-                                ? null
-                                : () {
-                                  controller.text = opts[i];
-                                  onChanged(opts[i]);
-                                },
-                        child: Container(
+                                ? SystemMouseCursors.basic
+                                : SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap:
+                              readOnly
+                                  ? null
+                                  : () {
+                                    controller.text = opts[i];
+                                    onChanged(opts[i]);
+                                  },
+                          child: Container(
                           padding: const EdgeInsets.symmetric(
                             vertical: 14,
                             horizontal: 16,
                           ),
                           decoration: BoxDecoration(
                             color: current == opts[i]
-                                ? Colors.red
+                                ? const Color.fromARGB(255, 29, 49, 179)
                                 : Colors.white,
                             border: Border.all(
                               color: current == opts[i]
-                                  ? Colors.red
+                                  ? const Color.fromARGB(255, 29, 49, 179)
                                   : Colors.grey[300]!,
                               width: 2,
                             ),
@@ -347,6 +376,7 @@ class EnrollmentFieldInput extends StatelessWidget {
                                 ),
                               ),
                             ],
+                          ),
                           ),
                         ),
                       ),

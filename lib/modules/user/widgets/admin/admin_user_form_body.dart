@@ -116,7 +116,8 @@ class AdminUserFormBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final Map<String, List<Parameter>> groupedPermissions = {};
     for (var perm in allPermissions) {
-      final group = perm.etiqueta.split('.').first;
+      final source = perm.etiqueta.isNotEmpty ? perm.etiqueta : perm.valor;
+      final group = source.split('.').first;
       groupedPermissions.putIfAbsent(group, () => []).add(perm);
     }
 

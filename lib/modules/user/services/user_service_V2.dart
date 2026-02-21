@@ -105,6 +105,17 @@ class UserServiceV2 {
     await eliminarUsuarioAuth(usuario.id);
   }
 
+  Future<void> actualizarQr({
+    required String uid,
+    required String payload,
+  }) async {
+    await _db.collection('users').doc(uid).set({
+      'qrPayload': payload,
+      'qrEnabled': true,
+      'qrUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   /// Registrar historial de acciones del usuario (agrega institution/campus)
   Future<void> registrarHistorial({
     required userModelv2 usuario,

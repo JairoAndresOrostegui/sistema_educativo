@@ -72,14 +72,16 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       ),
     );
 
-    items.add(
-      MenuItemData(
-        label: 'Matr\u00edculas',
-        icon: Icons.assignment_ind,
-        route: '/enrollment',
-        badgeCount: pendingEnrollments,
-      ),
-    );
+    if (esSuperadmin || perms.contains('matricula.ver')) {
+      items.add(
+        MenuItemData(
+          label: 'Matr\u00edculas',
+          icon: Icons.assignment_ind,
+          route: '/enrollment',
+          badgeCount: pendingEnrollments,
+        ),
+      );
+    }
 
     if (esSuperadmin || perms.contains('rutas.ver')) {
       items.add(
@@ -127,6 +129,18 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
           label: 'Autorizaciones',
           icon: Icons.policy,
           route: '/admin_authorization',
+        ),
+      );
+    }
+
+    if (esSuperadmin ||
+        perms.contains('codigoqr.crear') ||
+        perms.contains('codigoqr.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'QR',
+          icon: Icons.qr_code,
+          route: '/admin_qr',
         ),
       );
     }

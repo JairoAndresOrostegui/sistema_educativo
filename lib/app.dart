@@ -20,6 +20,8 @@ import 'modules/route/screens/admin_route_screen.dart';
 import 'modules/route/screens/student_route_screen.dart';
 import 'modules/route/screens/teacher_route_screen.dart';
 import 'modules/parameters/screens/admin_parameters_screen.dart';
+import 'modules/qr/screens/admin_qr_screen.dart';
+import 'modules/qr/screens/student_qr_screen.dart';
 import 'modules/schedule/screens/admin_schedule_screen.dart';
 import 'modules/schedule/screens/student_schedule_screen.dart';
 import 'modules/schedule/screens/teacher_schedule_screen.dart';
@@ -78,6 +80,7 @@ class _AppRouterState extends State<AppRouter> {
             '/admin_authorization',
             '/enrollment',
             '/admin_parameters',
+            '/admin_qr',
           }.contains(path);
         case 'Docente':
           return {
@@ -96,6 +99,7 @@ class _AppRouterState extends State<AppRouter> {
             '/student_document',
             '/student_authorization',
             '/enrollment',
+            '/student_qr',
           }.contains(path);
         default:
           return false;
@@ -182,6 +186,10 @@ class _AppRouterState extends State<AppRouter> {
           path: '/admin_parameters',
           builder: (context, state) => const AdminParametersScreen(),
         ),
+        GoRoute(
+          path: '/admin_qr',
+          builder: (context, state) => const AdminQrScreen(),
+        ),
         // Docente
         GoRoute(
           path: '/teacher_dashboard',
@@ -233,6 +241,10 @@ class _AppRouterState extends State<AppRouter> {
         GoRoute(
           path: '/student_authorization',
           builder: (context, state) => const AuthorizationStudentScreen(),
+        ),
+        GoRoute(
+          path: '/student_qr',
+          builder: (context, state) => const StudentQrScreen(),
         ),
       ],
     );

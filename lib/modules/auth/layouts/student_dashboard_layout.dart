@@ -60,6 +60,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     if (user == null) return;
 
     final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
+    final role = (user.role).trim().toLowerCase();
 
     final items = <MenuItemData>[
       const MenuItemData(
@@ -69,7 +70,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       ),
     ];
 
-    if (perms.contains('matriculas.ver')) {
+    if (perms.contains('matricula.ver')) {
       final showEnrollment = await _shouldShowEnrollmentMenu(user.id);
       if (showEnrollment) {
         items.add(
@@ -80,6 +81,18 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
           ),
         );
       }
+    }
+
+    if (role == 'familiar' &&
+        user.qrEnabled == true &&
+        (user.qrPayload ?? '').isNotEmpty) {
+      items.add(
+        const MenuItemData(
+          label: 'QR',
+          icon: Icons.qr_code,
+          route: '/student_qr',
+        ),
+      );
     }
 
     if (perms.contains('rutas.ver')) {

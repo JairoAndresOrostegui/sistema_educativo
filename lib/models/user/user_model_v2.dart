@@ -31,6 +31,8 @@ class userModelv2 {
   final String? familyRelation;
   final List<String>? studentIds;
   final String? activeStudentId;
+  final String? qrPayload;
+  final bool qrEnabled;
 
   userModelv2({
     required this.id,
@@ -61,6 +63,8 @@ class userModelv2 {
     this.familyRelation,
     this.studentIds,
     this.activeStudentId,
+    this.qrPayload,
+    this.qrEnabled = false,
   });
 
   factory userModelv2.fromFirestore(Map<String, dynamic> map, String id) {
@@ -95,6 +99,8 @@ class userModelv2 {
       familyRelation: map['familyRelation'],
       studentIds: map['studentIds'] != null ? List<String>.from(map['studentIds']) : null,
       activeStudentId: map['activeStudentId'],
+      qrPayload: map['qrPayload'],
+      qrEnabled: map['qrEnabled'] ?? false,
     );
   }
 
@@ -127,6 +133,8 @@ class userModelv2 {
       'familyRelation': familyRelation,
       'studentIds': studentIds,
       'activeStudentId': activeStudentId,
+      'qrPayload': qrPayload,
+      'qrEnabled': qrEnabled,
     };
   }
 
@@ -159,6 +167,8 @@ class userModelv2 {
     String? familyRelation,
     List<String>? studentIds,
     String? activeStudentId,
+    String? qrPayload,
+    bool? qrEnabled,
   }) {
     return userModelv2(
       id: id ?? this.id,
@@ -189,6 +199,8 @@ class userModelv2 {
       familyRelation: familyRelation ?? this.familyRelation,
       studentIds: studentIds ?? this.studentIds,
       activeStudentId: activeStudentId ?? this.activeStudentId,
+      qrPayload: qrPayload ?? this.qrPayload,
+      qrEnabled: qrEnabled ?? this.qrEnabled,
     );
   }
 }

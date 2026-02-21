@@ -181,9 +181,9 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Desmatricular'),
+            title: const Text('Retirar'),
             content: const Text(
-              '¿Deseas marcar este registro como desmatriculado?',
+              '¿Deseas marcar este registro como retirado?',
             ),
             actions: [
               TextButton(
@@ -192,7 +192,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Desmatricular'),
+                child: const Text('Retirar'),
               ),
             ],
           ),
@@ -212,8 +212,8 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       if (!mounted) return;
       await DialogUtils.showSuccess(
         context: context,
-        title: 'Desmatriculado',
-        message: 'Se marcó como desmatriculado.',
+        title: 'Retirado',
+        message: 'Se marco como retirado.',
       );
       _fetch();
     } catch (_) {
@@ -221,7 +221,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       await DialogUtils.showError(
         context: context,
         title: 'Error',
-        message: 'No se pudo desmatricular este registro.',
+        message: 'No se pudo retirar este registro.',
       );
     }
   }
@@ -249,7 +249,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       case 'rechazado':
         return 'Rechazado';
       case 'desmatriculado':
-        return 'Desmatriculado';
+        return 'Retirado';
       case 'pendiente_revision':
         return 'Pendiente';
       case 'prematriculado':
@@ -376,7 +376,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                                           Icons.undo,
                                           color: Colors.orange,
                                         ),
-                                        tooltip: 'Desmatricular',
+                                        tooltip: 'Retirar',
                                       ),
                                   ],
                                 ),

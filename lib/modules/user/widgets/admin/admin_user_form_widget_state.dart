@@ -134,15 +134,49 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   Future<void> _loadPermissions() async {
     try {
       final permissions = await ParametersService().getPermissions();
+      final normalized = _normalizePermissions(permissions);
+      final normalizedFuncionalidades = _normalizeUserPermissions(
+        normalized,
+        widget.usuario?.permissions ?? [],
+      );
       if (mounted) {
         setState(() {
-          _allPermissions = permissions;
-          funcionalidades = List<String>.from(
-            widget.usuario?.permissions ?? [],
-          );
+          _allPermissions = normalized;
+          funcionalidades = normalizedFuncionalidades;
         });
       }
     } catch (_) {}
+  }
+
+  List<Parameter> _normalizePermissions(List<Parameter> input) {
+    return input.map((p) {
+      final etiqueta = p.etiqueta.trim();
+      final valor = p.valor.trim();
+      if (valor.contains('.')) return p;
+      if (etiqueta.isEmpty) return p;
+      final normalizedValue = '${etiqueta.toLowerCase()}.${valor.toLowerCase()}';
+      return Parameter(
+        etiqueta: etiqueta,
+        valor: normalizedValue,
+        orden: p.orden,
+      );
+    }).toList();
+  }
+
+  List<String> _normalizeUserPermissions(
+    List<Parameter> normalizedPermissions,
+    List<String> userPermissions,
+  ) {
+    final normalizedSet = normalizedPermissions.map((p) => p.valor).toSet();
+    return userPermissions.map((perm) {
+      final trimmed = perm.trim();
+      if (trimmed.contains('.')) return trimmed;
+      final match = normalizedSet.firstWhere(
+        (p) => p.endsWith('.$trimmed'),
+        orElse: () => trimmed,
+      );
+      return match;
+    }).toList();
   }
 
   Future<void> _loadGrades() async {

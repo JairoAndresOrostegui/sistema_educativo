@@ -12,6 +12,7 @@ import '../controllers/enrollment_form_controller.dart';
 import '../models/child_option.dart';
 import '../models/enrollment_field.dart';
 import '../models/submit_result.dart';
+import '../export/enrollment_pdf_utils.dart';
 import '../services/enrollment_submit_handler.dart';
 import 'widgets/back_to_enrollment_button.dart';
 import 'widgets/enrollment_child_selector.dart';
@@ -49,6 +50,7 @@ class EnrollmentFormScreen extends StatefulWidget {
 class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   // moved to config\n
   late EnrollmentFormController _controller;
+  final Map<int, List<EnrollmentField>> _stepFields = {};
 
   Map<String, TextEditingController> get _controllers =>
       _controller.controllers;
@@ -441,8 +443,15 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   ) {
     List<Step> steps = [];
     final mappedNames = <String>{};
-    Step buildStep(String title, List<EnrollmentField> fields, int index) {
-      final isLast = index == steps.length;
+    final sectionEntries =
+        <({String title, List<EnrollmentField> fields})>[];
+    Step buildStep(
+      String title,
+      List<EnrollmentField> fields,
+      int index,
+      bool isLast,
+    ) {
+      _stepFields[index] = fields;
       final isCollapsed = _isStepCollapsed && _currentStep == index;
       return Step(
         isActive: _currentStep == index && !_isStepCollapsed,
@@ -450,10 +459,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         content:
             isCollapsed
-                ? Transform.translate(
-                    offset: const Offset(0, -24),
-                    child: const SizedBox.shrink(),
-                  )
+                ? const SizedBox.shrink()
                 : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -497,6 +503,23 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                         if (fieldName == 'fechaNacimiento') {
                           _recomputeAge();
                         }
+                        if (fieldName == 'tieneAcudienteDiferente' &&
+                            (v == null || v.toLowerCase() != 'true')) {
+                          const fieldsToClear = [
+                            'acudientePrincipal',
+                            'nombreAcudiente',
+                            'cedulaAcudiente',
+                            'emailAcudiente',
+                            'celularAcudiente',
+                            'lugarTrabajoAcudiente',
+                            'ocupacionAcudiente',
+                            'cargoAcudiente',
+                          ];
+                          for (final name in fieldsToClear) {
+                            _controllers[name]?.text = '';
+                            _values[name] = '';
+                          }
+                        }
                         // Immediate UI update and dependent field handling
                         if (fieldName == 'servicioTransporte' &&
                             (v == null || v.toLowerCase() != 'true')) {
@@ -508,33 +531,38 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        ElevatedButton(
-                          onPressed:
-                              requireDocStep || isBlocked
-                                  ? null
-                                  : () {
-                                    if (isLast) {
-                                      _onSubmit();
-                                    } else {
-                                      _controller.incrementStep();
-                                    }
-                                  },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: Text(isLast ? 'Guardar' : 'Siguiente'),
-                        ),
-                        const SizedBox(width: 8),
-                        if (index > 0)
-                          TextButton(
-                            onPressed: _controller.decrementStep,
-                            child: const Text('Anterior'),
-                          ),
-                      ],
-                    ),
+                    if (!isLast || index > 0)
+                      Row(
+                        children: [
+                          if (!isLast)
+                            ElevatedButton(
+                              onPressed:
+                                  requireDocStep || isBlocked
+                                      ? null
+                                      : () {
+                                        _validateStepForIndex(
+                                          index,
+                                          isAdmin: isAdmin,
+                                          lockForDoc: lockForDoc,
+                                        ).then((ok) {
+                                          if (!ok) return;
+                                          _controller.incrementStep();
+                                        });
+                                      },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.redAccent,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Siguiente'),
+                            ),
+                          if (!isLast) const SizedBox(width: 8),
+                          if (index > 0)
+                            TextButton(
+                              onPressed: _controller.decrementStep,
+                              child: const Text('Anterior'),
+                            ),
+                        ],
+                      ),
                   ],
                 ),
       );
@@ -544,22 +572,37 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       final fields = section.fieldsFrom(visible).toList();
       if (fields.isEmpty) continue;
       mappedNames.addAll(fields.map((f) => f.name));
-      steps.add(buildStep(section.title, fields, steps.length));
+      sectionEntries.add((title: section.title, fields: fields));
     }
 
     final remaining =
         visible.where((f) => !mappedNames.contains(f.name)).toList();
+    final totalSteps =
+        sectionEntries.length + (remaining.isNotEmpty ? 1 : 0);
+
+    for (var i = 0; i < sectionEntries.length; i++) {
+      final entry = sectionEntries[i];
+      final isLast = i == totalSteps - 1;
+      steps.add(buildStep(entry.title, entry.fields, i, isLast));
+    }
+
     if (remaining.isNotEmpty) {
-      steps.add(buildStep('Otros', remaining, steps.length));
+      steps.add(
+        buildStep('Otros', remaining, totalSteps - 1, true),
+      );
     }
 
     return steps;
   }
 
-  Future<void> _onSubmit({bool matricularAhora = false}) async {
+  Future<void> _onSubmit({
+    bool matricularAhora = false,
+    bool promptPrint = false,
+  }) async {
     final mode = _resolveMode();
     final isAdmin = mode == EnrollmentEntryMode.admin;
-    if (!isAdmin && _controller.blockedByExistingEnrollment) return;
+    final isBlocked = !isAdmin && _controller.blockedByExistingEnrollment;
+    if (isBlocked) return;
     if (_readOnlyForm && !isAdmin) return;
     if (_documentoSeleccionado == null || _documentoSeleccionado!.isEmpty) {
       await DialogUtils.showError(
@@ -570,6 +613,15 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       );
       return;
     }
+
+    final requireDocStep =
+        _documentoSeleccionado == null || _documentoSeleccionado!.isEmpty;
+    final lockForDoc = (requireDocStep && !_readOnlyForm) || isBlocked;
+    final okRequired = await _validateAllRequiredForPadre(
+      isAdmin: isAdmin,
+      lockForDoc: lockForDoc,
+    );
+    if (!okRequired) return;
 
     if (!_controller.validateForm()) {
       if (_controller.lastValidationError != null &&
@@ -600,6 +652,185 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       isEditing: widget.enrollmentId != null,
       controller: _controller,
     );
+
+    if (promptPrint && result.success) {
+      final estado = result.estado ?? _controller.currentEstado;
+      if (estado == 'matriculado') {
+        final shouldPrint = await _confirmPrintEnrollment();
+        if (shouldPrint) {
+          try {
+            await EnrollmentPdfUtils.export(
+              result.payload,
+              estado: estado,
+              anio: _controller.anioMatricula ?? DateTime.now().year,
+            );
+          } catch (e) {
+            if (!mounted) return;
+            await DialogUtils.showError(
+              context: context,
+              title: 'Error al imprimir',
+              message: 'No fue posible generar el recibo de matricula.\n$e',
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Future<bool> _validateAllRequiredForPadre({
+    required bool isAdmin,
+    required bool lockForDoc,
+  }) async {
+    final role = _roleForFilters();
+    if (role != 'padre') return true;
+    final estado = _currentEstado ?? 'prematriculado';
+    final visible = _visibleFields().toList();
+    final missingLabels = <String>[];
+    for (final f in visible) {
+      if (!_isFieldVisibleForValidation(f)) continue;
+      if (f.name == 'nivelesCursadosInstitucion') continue;
+      if (!_controller.canEditField(
+        field: f,
+        role: role,
+        estado: estado,
+        isAdmin: isAdmin,
+        lockForDoc: lockForDoc,
+      )) {
+        continue;
+      }
+      final required = _controller.isRequiredField(
+        field: f,
+        role: role,
+        estado: estado,
+      );
+      if (!required) continue;
+      final value = _controllers[f.name]?.text.trim() ?? '';
+      if (value.isEmpty) {
+        missingLabels.add(f.label);
+      }
+    }
+
+    if (missingLabels.isEmpty) return true;
+    await DialogUtils.showError(
+      context: context,
+      title: 'Faltan campos',
+      message:
+          'Completa los campos obligatorios antes de continuar:\n'
+          '${missingLabels.join(', ')}',
+    );
+    return false;
+  }
+
+  bool _isFieldVisibleForValidation(EnrollmentField f) {
+    // Keep visibility rules in sync with EnrollmentFieldsSection.
+    if (f.name == 'acudientePrincipal') {
+      final tieneAcudiente =
+          (_controllers['tieneAcudienteDiferente']?.text ?? '')
+              .toLowerCase() ==
+          'true';
+      return !tieneAcudiente;
+    }
+    if ([
+      'nombreAcudiente',
+      'cedulaAcudiente',
+      'emailAcudiente',
+      'celularAcudiente',
+      'lugarTrabajoAcudiente',
+      'ocupacionAcudiente',
+      'cargoAcudiente',
+    ].contains(f.name)) {
+      final tieneAcudiente =
+          (_controllers['tieneAcudienteDiferente']?.text ?? '')
+              .toLowerCase() ==
+          'true';
+      return tieneAcudiente;
+    }
+    if (f.name == 'servicioTransporteTipo') {
+      final transporteVal =
+          (_controllers['servicioTransporte']?.text ?? 'false').toLowerCase();
+      return transporteVal == 'true';
+    }
+    if ([
+      'nombrePadresReferentes',
+      'telefonoReferentes',
+      'celularReferentes',
+      'nombreReferido',
+    ].contains(f.name)) {
+      final fueReferido =
+          (_controllers['fueReferido']?.text ?? '').toLowerCase() == 'true';
+      return fueReferido;
+    }
+    return true;
+  }
+
+  Future<bool> _validateStepForIndex(
+    int index, {
+    required bool isAdmin,
+    required bool lockForDoc,
+  }) async {
+    final role = _roleForFilters();
+    if (role != 'padre') return true;
+    final fields = _stepFields[index] ?? const <EnrollmentField>[];
+    final estado = _currentEstado ?? 'prematriculado';
+    final missingLabels = <String>[];
+    for (final f in fields) {
+      if (!_isFieldVisibleForValidation(f)) continue;
+      if (f.name == 'nivelesCursadosInstitucion') continue;
+      if (!_controller.canEditField(
+        field: f,
+        role: role,
+        estado: estado,
+        isAdmin: isAdmin,
+        lockForDoc: lockForDoc,
+      )) {
+        continue;
+      }
+      final required = _controller.isRequiredField(
+        field: f,
+        role: role,
+        estado: estado,
+      );
+      if (!required) continue;
+      final value = _controllers[f.name]?.text.trim() ?? '';
+      if (value.isEmpty) {
+        missingLabels.add(f.label);
+      }
+    }
+
+    if (missingLabels.isEmpty) return true;
+    await DialogUtils.showError(
+      context: context,
+      title: 'Faltan campos',
+      message:
+          'Completa los campos obligatorios antes de continuar:\n'
+          '${missingLabels.join(', ')}',
+    );
+    return false;
+  }
+
+  Future<bool> _confirmPrintEnrollment() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Imprimir'),
+          content: const Text(
+            '¿Desea imprimir el formulario de matrícula?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Si'),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
   }
 
   @override
@@ -716,25 +947,52 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                                     requireDocStep,
                                     isBlocked,
                                   );
-                                  return Stepper(
-                                    currentStep: _currentStep,
-                                    type: StepperType.vertical,
-                                    physics: const ClampingScrollPhysics(),
-                                    controlsBuilder: (context, details) {
-                                      return const SizedBox.shrink();
-                                    },
+                                  return Theme(
+                                    data: Theme.of(context).copyWith(
+                                      dividerColor: Colors.transparent,
+                                    ),
+                                    child: Stepper(
+                                      currentStep: _currentStep,
+                                      type: StepperType.vertical,
+                                      physics: const ClampingScrollPhysics(),
+                                      controlsBuilder: (context, details) {
+                                        return const SizedBox.shrink();
+                                      },
                                     onStepTapped: (index) {
+                                      if (requireDocStep) {
+                                        DialogUtils.showError(
+                                          context: context,
+                                          title: 'Documento requerido',
+                                          message:
+                                              'Busca el documento para habilitar el formulario',
+                                        );
+                                        return;
+                                      }
                                       // Toggle: if already open, collapse it; otherwise open it
                                       if (_currentStep == index &&
                                           !_isStepCollapsed) {
                                         _controller.toggleStepCollapse();
                                       } else {
-                                        _controller.setCurrentStep(index);
+                                        final role = _roleForFilters();
+                                        if (role == 'padre' &&
+                                            index > _currentStep) {
+                                          _validateStepForIndex(
+                                            _currentStep,
+                                            isAdmin: isAdmin,
+                                            lockForDoc: lockForDoc,
+                                          ).then((ok) {
+                                            if (!ok) return;
+                                            _controller.setCurrentStep(index);
+                                          });
+                                        } else {
+                                          _controller.setCurrentStep(index);
+                                        }
                                       }
                                     },
-                                    onStepContinue: () {},
-                                    onStepCancel: () {},
-                                    steps: steps,
+                                      onStepContinue: () {},
+                                      onStepCancel: () {},
+                                      steps: steps,
+                                    ),
                                   );
                                 },
                               ),
@@ -743,7 +1001,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                                 isAdmin: isAdmin,
                                 disabled: requireDocStep || isBlocked,
                                 currentEstado: _currentEstado,
-                                onGuardarRevision: () => _onSubmit(),
+                                onGuardarRevision:
+                                    () => _onSubmit(promptPrint: true),
                                 onMatricular:
                                     () => _onSubmit(matricularAhora: true),
                               ),

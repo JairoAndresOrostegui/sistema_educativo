@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../utils/dialog_utils.dart';
-import '../export/enrollment_pdf_utils.dart';
 import '../controllers/enrollment_form_controller.dart';
 import '../models/submit_result.dart';
 
@@ -31,15 +30,8 @@ class EnrollmentSubmitHandler {
     );
 
     if (estado == 'matriculado') {
-      await EnrollmentPdfUtils.export(
-        result.payload,
-        estado: estado,
-        anio: controller.anioMatricula ?? DateTime.now().year,
-      );
       controller.setReadOnly(true);
-      controller.setEstado(estado);
-    } else {
-      controller.setEstado(estado);
     }
+    controller.setEstado(estado);
   }
 }
