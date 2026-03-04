@@ -81,7 +81,7 @@ class ParameterAdminService {
     if (!doc.exists) return;
     final data = doc.data();
     if (data != null && data['clave'] == 'grade') {
-      throw Exception('La clave \"grade\" no es editable.');
+      throw Exception('La clave "grade" no es editable.');
     }
     await _col.doc(id).delete();
   }

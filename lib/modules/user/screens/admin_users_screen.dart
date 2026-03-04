@@ -150,6 +150,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 child: Text('No hay usuarios disponibles'),
                               )
                               : ListView.builder(
+                                padding: EdgeInsets.only(
+                                  bottom:
+                                      96 +
+                                      MediaQuery.of(context).padding.bottom,
+                                ),
                                 itemCount: usuarios.length,
                                 itemBuilder: (context, index) {
                                   final user = usuarios[index];

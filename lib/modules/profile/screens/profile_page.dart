@@ -309,14 +309,16 @@ class _ProfileDataCard extends StatelessWidget {
               header: true,
               label: 'Información',
               child: Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 8),
-                child: Text(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Center(
+                  child: Text(
                   'Información',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Colors.redAccent,
                   ),
+                ),
                 ),
               ),
             ),

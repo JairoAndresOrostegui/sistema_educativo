@@ -41,7 +41,7 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
       await DialogUtils.showError(
         context: context,
         title: 'Error',
-        message: 'No se pudieron cargar los parametros.\n$e',
+        message: 'No se pudieron cargar los parámetros.\n$e',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -133,7 +133,7 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Parametros'),
+        title: const Text('Parámetros'),
         leading: const BackToDashboardButton(),
         actions: [
           IconButton(
@@ -166,7 +166,7 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _filtroClave,
+                          initialValue: _filtroClave,
                           decoration: const InputDecoration(
                             labelText: 'Clave',
                             border: OutlineInputBorder(),
@@ -195,7 +195,7 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                   if (_items.isEmpty)
                     const Card(
                       child: ListTile(
-                        title: Text('Sin parametros'),
+                        title: Text('Sin parámetros'),
                         subtitle: Text('Crea uno nuevo para empezar.'),
                       ),
                     )
@@ -320,7 +320,7 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
                 )
               else
                 DropdownButtonFormField<String>(
-                  value: _usandoClaveNueva ? '_nueva_' : (_claveSeleccionada?.isEmpty ?? true ? null : _claveSeleccionada),
+                  initialValue: _usandoClaveNueva ? '_nueva_' : (_claveSeleccionada?.isEmpty ?? true ? null : _claveSeleccionada),
                   decoration: const InputDecoration(
                     labelText: 'Clave',
                     border: OutlineInputBorder(),

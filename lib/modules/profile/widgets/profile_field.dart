@@ -17,7 +17,7 @@ class ProfileField extends StatelessWidget {
     super.key,
     required this.title,
     required this.value,
-    this.forceStackOnMobile = true,
+    this.forceStackOnMobile = false,
     this.stackBreakpoint = 600,
     this.padding = const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
     this.titleStyle,
@@ -41,7 +41,8 @@ class ProfileField extends StatelessWidget {
         builder: (context, constraints) {
           final shouldStack =
               !kIsWeb &&
-              (forceStackOnMobile || constraints.maxWidth < stackBreakpoint);
+              forceStackOnMobile &&
+              constraints.maxWidth < stackBreakpoint;
 
           if (shouldStack) {
             return Column(
@@ -58,17 +59,27 @@ class ProfileField extends StatelessWidget {
           }
 
           return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 120),
-                child: Text('$title:', style: titleStyle ?? defaultTitle),
-              ),
-              const SizedBox(width: 8),
               Expanded(
-                child: SelectableText(
-                  value.isEmpty ? '-' : value,
-                  style: valueStyle ?? defaultValue,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '$title:',
+                    textAlign: TextAlign.right,
+                    style: titleStyle ?? defaultTitle,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SelectableText(
+                    value.isEmpty ? '-' : value,
+                    textAlign: TextAlign.left,
+                    style: valueStyle ?? defaultValue,
+                  ),
                 ),
               ),
             ],

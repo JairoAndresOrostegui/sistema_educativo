@@ -137,7 +137,7 @@ class _AdminQrScreenState extends State<AdminQrScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _selectedRole,
+                        initialValue: _selectedRole,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           isDense: true,

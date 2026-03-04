@@ -65,7 +65,7 @@ class AuthService {
 
       if (firebaseUser != null && !firebaseUser.emailVerified) {
         await _auth.signOut();
-        throw Exception('Debes verificar tu correo antes de iniciar sesion.');
+        throw Exception('Debes verificar tu correo antes de iniciar sesión.');
       }
 
       final status = (data['status'] ?? '').toString().toLowerCase();

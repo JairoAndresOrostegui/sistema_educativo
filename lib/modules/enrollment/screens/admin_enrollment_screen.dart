@@ -73,7 +73,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       await DialogUtils.showError(
         context: context,
         title: 'Error',
-        message: 'No se pudo cargar el listado de matriculas.',
+        message: 'No se pudo cargar el listado de matrículas.',
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -270,7 +270,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     return Scaffold(
       appBar: AppBar(
         leading: const BackToDashboardButton(),
-        title: const Text('Gestion de matriculas'),
+        title: const Text('Gestion de matrículas'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -319,7 +319,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                 child:
                     _items.isEmpty
                         ? const ListTile(
-                          title: Text('Sin matriculas en este estado.'),
+                          title: Text('Sin matrículas en este estado.'),
                         )
                         : ListView.builder(
                           itemCount: _items.length,

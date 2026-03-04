@@ -43,7 +43,16 @@ class PublicLogoWidget extends StatelessWidget {
           child: FutureBuilder<bool>(
             future: _probeLogo(logoUrl),
             builder: (context, snapshot) {
+              final isLoading = snapshot.connectionState == ConnectionState.waiting;
               final ok = snapshot.data == true;
+
+              if (isLoading) {
+                return SizedBox(
+                  height: targetHeight * 0.35,
+                  width: targetHeight * 0.35,
+                  child: const CircularProgressIndicator(),
+                );
+              }
 
               if (ok) {
                 return SvgPicture.network(
@@ -58,7 +67,7 @@ class PublicLogoWidget extends StatelessWidget {
 
               // Fallback to local asset to avoid crashing if remote logo fails
               return Image.asset(
-                'assets/logo.jpg',
+                'assets/Logo.jpeg',
                 height: targetHeight,
                 fit: BoxFit.contain,
               );

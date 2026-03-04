@@ -234,6 +234,87 @@ class _AuthorizationStudentScreenState
     }
   }
 
+  Future<void> _onCreatePressed() async {
+    final ctx = context;
+    final requester = context.read<UserProviderV2>().user;
+    if (requester == null) return;
+    if (_children.isEmpty) {
+      await DialogUtils.showError(
+        context: ctx,
+        title: 'Sin estudiantes',
+        message: 'No se encontraron estudiantes vinculados.',
+      );
+      return;
+    }
+    final res = await showDialog<CreateAuthorizationResult>(
+      context: ctx,
+      builder:
+          (_) => AuthorizationCreateDialog(
+            children:
+                _children
+                    .map(
+                      (e) => StudentChoice(
+                        id: e.id,
+                        fullName: e.fullName,
+                        grade: e.grade,
+                      ),
+                    )
+                    .toList(),
+            initialStudentId: _activeStudentId,
+          ),
+    );
+    if (res == null) return;
+
+    if (_busy) return;
+    if (!mounted) return;
+    setState(() => _busy = true);
+
+    try {
+      final kid = _children.firstWhere((c) => c.id == res.studentId);
+      final req = AuthorizationRequest(
+        id: '',
+        institutionId: _institutionId,
+        campusId: _campusId,
+        studentId: kid.id,
+        studentFullName: kid.fullName,
+        grade: kid.grade,
+        requesterId: '',
+        requesterFullName: '',
+        allDay: res.allDay,
+        multiDay: res.multiDay,
+        dateFrom: res.dateFrom,
+        dateTo: res.dateTo,
+        startTime: res.startTime,
+        endTime: res.endTime,
+        reason: res.reason,
+        status: AuthorizationStatus.pending,
+        adminNote: null,
+        evidence: null,
+        resubmissionOfRequestId: null,
+        createdAt: null,
+        updatedAt: null,
+      );
+      await _svc.createRequest(request: req, requester: requester);
+      if (!mounted) return;
+      await _reload();
+      if (!mounted) return;
+      await DialogUtils.showSuccess(
+        context: ctx,
+        title: 'Exito',
+        message: 'Solicitud enviada.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: ctx,
+        title: 'Error',
+        message: e.toString(),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<UserProviderV2>().user;
@@ -265,94 +346,17 @@ class _AuthorizationStudentScreenState
         backgroundColor: Colors.white,
         foregroundColor: Colors.redAccent,
         centerTitle: true,
-        actions: [
-          if (_canCreate)
-            TextButton.icon(
-              onPressed: () async {
-                final ctx = context;
-                if (_children.isEmpty) {
-                  await DialogUtils.showError(
-                    context: ctx,
-                    title: 'Sin estudiantes',
-                    message: 'No se encontraron estudiantes vinculados.',
-                  );
-                  return;
-                }
-                final res = await showDialog<CreateAuthorizationResult>(
-                  context: ctx,
-                  builder:
-                      (_) => AuthorizationCreateDialog(
-                        children:
-                            _children
-                                .map(
-                                  (e) => StudentChoice(
-                                    id: e.id,
-                                    fullName: e.fullName,
-                                    grade: e.grade,
-                                  ),
-                                )
-                                .toList(),
-                        initialStudentId: _activeStudentId,
-                      ),
-                );
-                if (res == null) return;
-
-                if (_busy) return;
-                if (!mounted) return;
-                setState(() => _busy = true);
-
-                try {
-                  final kid = _children.firstWhere(
-                    (c) => c.id == res.studentId,
-                  );
-                  final req = AuthorizationRequest(
-                    id: '',
-                    institutionId: _institutionId,
-                    campusId: _campusId,
-                    studentId: kid.id,
-                    studentFullName: kid.fullName,
-                    grade: kid.grade,
-                    requesterId: '',
-                    requesterFullName: '',
-                    allDay: res.allDay,
-                    multiDay: res.multiDay,
-                    dateFrom: res.dateFrom,
-                    dateTo: res.dateTo,
-                    startTime: res.startTime,
-                    endTime: res.endTime,
-                    reason: res.reason,
-                    status: AuthorizationStatus.pending,
-                    adminNote: null,
-                    evidence: null,
-                    resubmissionOfRequestId: null,
-                    createdAt: null,
-                    updatedAt: null,
-                  );
-                  await _svc.createRequest(request: req, requester: session);
-                  if (!mounted) return;
-                  await _reload();
-                  if (!mounted) return;
-                  await DialogUtils.showSuccess(
-                    context: ctx,
-                    title: 'Exito',
-                    message: 'Solicitud enviada.',
-                  );
-                } catch (e) {
-                  if (!mounted) return;
-                  await DialogUtils.showError(
-                    context: ctx,
-                    title: 'Error',
-                    message: e.toString(),
-                  );
-                } finally {
-                  if (mounted) setState(() => _busy = false);
-                }
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Nueva'),
-            ),
-        ],
       ),
+      floatingActionButton:
+          _canCreate
+              ? FloatingActionButton.extended(
+                onPressed: _busy ? null : _onCreatePressed,
+                icon: const Icon(Icons.add),
+                label: const Text('Nueva'),
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              )
+              : null,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),

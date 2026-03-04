@@ -91,6 +91,10 @@ class AuthorizationService {
   }) async {
     final data =
         request.toMap()..addAll({
+          // Toda solicitud nueva debe iniciar en estado pendiente.
+          'status': AuthorizationStatus.pending.name,
+          'adminNote': null,
+          'evidence': null,
           'requesterId': requester.id,
           'requesterFullName':
               '${requester.firstName} ${requester.lastName}'.trim(),

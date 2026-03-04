@@ -19,7 +19,7 @@ class DashboardLayout extends StatefulWidget {
 }
 
 class _DashboardLayoutState extends State<DashboardLayout> {
-  // URL de la politica
+  // URL de la política
   static const String _privacyUrl =
       'https://desarrolloytecnologiasantander.com/privacidad.html';
 
@@ -31,7 +31,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo abrir',
-          message: 'No se pudo abrir la politica de privacidad.',
+          message: 'No se pudo abrir la política de privacidad.',
         );
       }
     } catch (_) {
@@ -39,7 +39,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       await DialogUtils.showError(
         context: context,
         title: 'No se pudo abrir',
-        message: 'No se pudo abrir la politica de privacidad.',
+        message: 'No se pudo abrir la política de privacidad.',
       );
     }
   }
@@ -333,14 +333,14 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ---- Botón Politica de privacidad ----
+                      // ---- Botón Política de privacidad ----
                       MouseRegion(
                         onEnter: (_) => setState(() => hoveringPrivacy = true),
                         onExit: (_) => setState(() => hoveringPrivacy = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
                           label:
-                              'Politica de privacidad (se abrirá en el navegador)',
+                              'Política de privacidad (se abrirá en el navegador)',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -398,7 +398,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Politica de privacidad',
+                                    'Política de privacidad',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,
@@ -414,7 +414,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
                       const SizedBox(height: 12),
 
-                      // ---- Botón Cerrar sesion ----
+                      // ---- Botón Cerrar sesión ----
                       MouseRegion(
                         onEnter:
                             (_) => setState(() => hoveringCerrarSesion = true),
@@ -422,7 +422,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                             (_) => setState(() => hoveringCerrarSesion = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
-                          label: 'Cerrar sesion',
+                          label: 'Cerrar sesión',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -433,10 +433,10 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                 builder:
                                     (ctx) => AlertDialog(
                                       title: const Text(
-                                        'Deseas cerrar sesion?',
+                                        'Deseas cerrar sesión?',
                                       ),
                                       content: const Text(
-                                        'Se cerrará tu sesion actual.',
+                                        'Se cerrará tu sesión actual.',
                                       ),
                                       actions: [
                                         TextButton(
@@ -447,7 +447,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                         TextButton(
                                           onPressed:
                                               () => Navigator.pop(ctx, true),
-                                          child: const Text('Cerrar sesion'),
+                                          child: const Text('Cerrar sesión'),
                                         ),
                                       ],
                                     ),
@@ -507,7 +507,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Cerrar sesion',
+                                    'Cerrar sesión',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,

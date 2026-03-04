@@ -237,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         const SizedBox(height: 24),
                                         // Boton login
                                         Semantics(
-                                          label: 'Boton para iniciar sesion',
+                                          label: 'Boton para iniciar sesión',
                                           button: true,
                                           child: SizedBox(
                                             width: double.infinity,
@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                       ? null
                                                       : _iniciarSesion,
                                               child: Text(
-                                                'Iniciar sesion',
+                                                'Iniciar sesión',
                                                 style: TextStyle(
                                                   fontFamily: fontGeneral,
                                                   fontWeight: FontWeight.w700,
@@ -363,7 +363,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       await DialogUtils.showError(
         context: context,
-        title: 'Error al iniciar sesion',
+        title: 'Error al iniciar sesión',
         message: 'Respuesta invalida.',
       );
     } catch (e) {
@@ -371,7 +371,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _loading = false);
       await DialogUtils.showError(
         context: context,
-        title: 'Error al iniciar sesion',
+        title: 'Error al iniciar sesión',
         message: e.toString().replaceAll('Exception: ', ''),
       );
     }

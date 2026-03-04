@@ -10,8 +10,19 @@ import java.io.FileInputStream
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+if (!keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "Missing signing file: ${keystorePropertiesFile.absolutePath}\n" +
+            "Create it with: storeFile, storePassword, keyAlias, keyPassword"
+    )
+}
+keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+
+fun requiredKeystoreProperty(name: String): String {
+    return keystoreProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: throw GradleException(
+            "Missing or empty '$name' in key.properties required for release signing."
+        )
 }
 
 
@@ -41,10 +52,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+            keyAlias = requiredKeystoreProperty("keyAlias")
+            keyPassword = requiredKeystoreProperty("keyPassword")
+            storeFile = file(requiredKeystoreProperty("storeFile"))
+            storePassword = requiredKeystoreProperty("storePassword")
         }
     }
 

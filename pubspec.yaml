@@ -63,9 +63,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/Logo.jpeg
-    - assets/logo_izq.png
-    - assets/logo_centro.png
-    - assets/logo_der.png
     - assets/logo_fondo.png
 
 flutter_launcher_icons:

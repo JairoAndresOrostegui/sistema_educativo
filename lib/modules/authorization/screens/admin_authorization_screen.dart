@@ -42,7 +42,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
   bool _loading = true;
 
-  bool _busy = false;
+  String? _updatingRequestId;
 
   List<AuthorizationRequest> _items = [];
 
@@ -89,8 +89,10 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
     await _loadAll();
   }
 
-  Future<void> _loadAll() async {
-    setState(() => _loading = true);
+  Future<void> _loadAll({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _loading = true);
+    }
 
     final page = await _svc.listForAdmin(
       institutionId: _institutionId,
@@ -101,7 +103,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
     setState(() {
       _items = page.items;
 
-      _loading = false;
+      if (showLoading) _loading = false;
     });
   }
 
@@ -151,7 +153,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   }
 
   Future<void> _manage(AuthorizationRequest r) async {
-    if (!_canEdit || _busy) return;
+    if (!_canEdit || _updatingRequestId != null) return;
 
     final res = await showDialog<AdminActionResult>(
       context: context,
@@ -161,7 +163,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
     if (res == null) return;
 
-    setState(() => _busy = true);
+    setState(() => _updatingRequestId = r.id);
 
     try {
       await _svc.updateStatus(
@@ -176,7 +178,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
         admin: _logged!,
       );
 
-      await _loadAll();
+      await _loadAll(showLoading: false);
 
       if (!mounted) return;
 
@@ -198,7 +200,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
         message: e.toString(),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _updatingRequestId = null);
     }
   }
 
@@ -208,7 +210,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
     if (session == null) {
       return const Scaffold(
-        body: SafeArea(child: Center(child: Text('No hay sesion activa.'))),
+        body: SafeArea(child: Center(child: Text('No hay sesión activa.'))),
       );
     }
 
@@ -387,7 +389,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
                                   trailing:
                                       _canEdit &&
-                                              !_busy &&
+                                              _updatingRequestId == null &&
                                               r.status !=
                                                   AuthorizationStatus.finished
                                           ? IconButton(
@@ -397,7 +399,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
                                             ),
                                             onPressed: () => _manage(r),
                                           )
-                                          : _busy
+                                          : _updatingRequestId == r.id
                                           ? const SizedBox(
                                             width: 20,
                                             height: 20,
