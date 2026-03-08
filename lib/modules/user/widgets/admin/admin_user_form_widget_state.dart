@@ -42,6 +42,22 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   String _status = 'activo';
   bool _saving = false;
 
+  String _normalizeEmail(String value) {
+    return value.trim().toLowerCase();
+  }
+
+  String _capitalizeWords(String value) {
+    final normalizedSpaces = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (normalizedSpaces.isEmpty) return '';
+    return normalizedSpaces
+        .split(' ')
+        .map((word) {
+          final lower = word.toLowerCase();
+          return '${lower[0].toUpperCase()}${lower.substring(1)}';
+        })
+        .join(' ');
+  }
+
   List<Parameter> _uniqueByValor(List<Parameter> list) {
     final seen = <String>{};
     return list.where((p) => seen.add(p.valor)).toList();
@@ -498,11 +514,15 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     final userProvider = context.read<UserProviderV2>();
     final usuarioLogueado = userProvider.user!;
     final esNuevo = widget.usuario == null;
+    final personalEmailNormalizado = _normalizeEmail(correo.text);
+    final institucionalEmailNormalizado = _normalizeEmail(
+      correoInstitucional.text,
+    );
 
     final excludeId = widget.usuario?.id;
     final ok = await _controller.validarCamposUnicos(
-      correoPersonal: correo.text,
-      correoInstitucional: correoInstitucional.text,
+      correoPersonal: personalEmailNormalizado,
+      correoInstitucional: institucionalEmailNormalizado,
       documento: documento.text,
       excluirId: excludeId,
       onResetSaving: () {
@@ -521,13 +541,13 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
 
     final nuevoUsuario = userModelv2(
       id: widget.usuario?.id ?? '',
-      firstName: nombres.text.trim(),
-      lastName: apellidos.text.trim(),
-      personalEmail: correo.text.trim(),
-      institutionalEmail: correoInstitucional.text.trim(),
+      firstName: _capitalizeWords(nombres.text),
+      lastName: _capitalizeWords(apellidos.text),
+      personalEmail: personalEmailNormalizado,
+      institutionalEmail: institucionalEmailNormalizado,
       document: documento.text.trim(),
       documentType: _selectedDocumentType ?? 'TI',
-      address: direccion.text.trim(),
+      address: _capitalizeWords(direccion.text),
       phones:
           telefonos.text
               .split(',')
@@ -548,13 +568,13 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       fcmToken: widget.usuario?.fcmToken ?? '',
       photoUrl: fotoUrl ?? '',
       status: _status,
-      birthCountry: birthCountry.text.trim(),
-      birthDepartment: birthDepartment.text.trim(),
-      birthCity: birthCity.text.trim(),
-      residenceCountry: residenceCountry.text.trim(),
-      residenceDepartment: residenceDepartment.text.trim(),
-      residenceCity: residenceCity.text.trim(),
-      familyRelation: familyRelation.text.trim(),
+      birthCountry: _capitalizeWords(birthCountry.text),
+      birthDepartment: _capitalizeWords(birthDepartment.text),
+      birthCity: _capitalizeWords(birthCity.text),
+      residenceCountry: _capitalizeWords(residenceCountry.text),
+      residenceDepartment: _capitalizeWords(residenceDepartment.text),
+      residenceCity: _capitalizeWords(residenceCity.text),
+      familyRelation: _capitalizeWords(familyRelation.text),
       studentIds: studentIds,
       activeStudentId: activeStudentId,
     );

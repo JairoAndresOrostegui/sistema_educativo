@@ -32,7 +32,7 @@ class AuthService {
 
     try {
       final credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
+        email: correoLower,
         password: password.trim(),
       );
 
@@ -56,7 +56,7 @@ class AuthService {
       final correoGuardado =
           (data['institutionalEmail'] ?? '').toString().trim().toLowerCase();
       if (correoGuardado.isNotEmpty &&
-          correoGuardado != email.trim().toLowerCase()) {
+          correoGuardado != correoLower) {
         await _auth.signOut();
         throw Exception(
           'El correo no coincide con el registrado para esta cuenta.',
@@ -193,7 +193,7 @@ class AuthService {
       );
     }
 
-    await _auth.sendPasswordResetEmail(email: email.trim());
+    await _auth.sendPasswordResetEmail(email: emailLower);
   }
 
   Future<void> logout(userModelv2 currentUser) async {

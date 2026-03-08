@@ -16,6 +16,10 @@ class AdminUserFormController {
     required void Function() onResetSaving,
     required Future<void> Function(String title, String message) onError,
   }) async {
+    final correoPersonalNormalizado = correoPersonal.trim().toLowerCase();
+    final correoInstitucionalNormalizado =
+        correoInstitucional.trim().toLowerCase();
+
     // Documento mínimo
     if (documento.trim().length < 6) {
       onResetSaving();
@@ -28,7 +32,7 @@ class AdminUserFormController {
 
     // Correo personal
     if (await _service.existeCorreoPersonal(
-      correoPersonal.trim(),
+      correoPersonalNormalizado,
       excluirId: excluirId,
     )) {
       onResetSaving();
@@ -38,7 +42,7 @@ class AdminUserFormController {
 
     // Correo institucional
     if (await _service.existeCorreoInstitucional(
-      correoInstitucional.trim(),
+      correoInstitucionalNormalizado,
       excluirId: excluirId,
     )) {
       onResetSaving();

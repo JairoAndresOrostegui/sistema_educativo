@@ -138,10 +138,11 @@ class UserServiceV2 {
   // ================== VALIDACIONES DE UNICIDAD ==================
 
   Future<bool> existeCorreoPersonal(String email, {String? excluirId}) async {
+    final normalizedEmail = email.trim().toLowerCase();
     final snap =
         await _db
             .collection('users')
-            .where('personalEmail', isEqualTo: email.trim())
+            .where('personalEmail', isEqualTo: normalizedEmail)
             .limit(5)
             .get();
 
@@ -154,10 +155,11 @@ class UserServiceV2 {
     String email, {
     String? excluirId,
   }) async {
+    final normalizedEmail = email.trim().toLowerCase();
     final snap =
         await _db
             .collection('users')
-            .where('institutionalEmail', isEqualTo: email.trim())
+            .where('institutionalEmail', isEqualTo: normalizedEmail)
             .limit(5)
             .get();
 
