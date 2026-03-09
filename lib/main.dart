@@ -13,14 +13,24 @@ import 'widgets/push_bootstrap.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } else {
+      Firebase.app();
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
 
   // Fondo (Android)
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   try {
     await ThemeProvider.cargarConfiguracion(
-      'desarrolloytecnologiasantander.com',
+      'liceobilinguerodolfollinas.edu.co',
     );
   } catch (e) {
     debugPrint('Error al cargar configuracion de tema: $e');

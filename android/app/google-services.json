@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:732639994966:android:7074e9ab68844152e847f7",
+        "mobilesdk_app_id": "1:732639994966:android:ad6ec170c7f782b8e847f7",
         "android_client_info": {
-          "package_name": "com.desarrolloytecnologiasantander.serodolfollinas"
+          "package_name": "co.edu.liceobilinguerodolfollinas.sistemaeducativo"
         }
       },
       "oauth_client": [],

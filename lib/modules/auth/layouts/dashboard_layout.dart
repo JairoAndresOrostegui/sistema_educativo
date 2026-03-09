@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -19,9 +19,9 @@ class DashboardLayout extends StatefulWidget {
 }
 
 class _DashboardLayoutState extends State<DashboardLayout> {
-  // URL de la política
+  // URL de la polÃ­tica
   static const String _privacyUrl =
-      'https://desarrolloytecnologiasantander.com/privacidad.html';
+      'https://liceobilinguerodolfollinas.edu.co/';
 
   Future<void> openPrivacy() async {
     final uri = Uri.parse(_privacyUrl);
@@ -31,7 +31,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo abrir',
-          message: 'No se pudo abrir la política de privacidad.',
+          message: 'No se pudo abrir la polÃ­tica de privacidad.',
         );
       }
     } catch (_) {
@@ -39,7 +39,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       await DialogUtils.showError(
         context: context,
         title: 'No se pudo abrir',
-        message: 'No se pudo abrir la política de privacidad.',
+        message: 'No se pudo abrir la polÃ­tica de privacidad.',
       );
     }
   }
@@ -69,7 +69,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
   String _greetingBogota() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Buenos días';
+    if (hour < 12) return 'Buenos dÃ­as';
     if (hour < 19) return 'Buenas tardes';
     return 'Buenas noches';
   }
@@ -78,7 +78,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
     final user = context.read<UserProviderV2>().user;
     final fullName =
         user == null ? 'usuario' : '${user.firstName} ${user.lastName}'.trim();
-    final school = ThemeProvider.config?.nombre ?? 'tu institución';
+    final school = ThemeProvider.config?.nombre ?? 'tu instituciÃ³n';
     final greet = _greetingBogota();
 
     final isWideWeb = kIsWeb || MediaQuery.of(context).size.width >= 900;
@@ -323,7 +323,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-            // Zona inferior: PRIVACIDAD + CERRAR SESIÓN
+            // Zona inferior: PRIVACIDAD + CERRAR SESIÃ“N
             SliverFillRemaining(
               hasScrollBody: false,
               child: Align(
@@ -333,14 +333,14 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ---- Botón Política de privacidad ----
+                      // ---- BotÃ³n PolÃ­tica de privacidad ----
                       MouseRegion(
                         onEnter: (_) => setState(() => hoveringPrivacy = true),
                         onExit: (_) => setState(() => hoveringPrivacy = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
                           label:
-                              'Política de privacidad (se abrirá en el navegador)',
+                              'PolÃ­tica de privacidad (se abrirÃ¡ en el navegador)',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -398,7 +398,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Política de privacidad',
+                                    'PolÃ­tica de privacidad',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,
@@ -414,7 +414,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
                       const SizedBox(height: 12),
 
-                      // ---- Botón Cerrar sesión ----
+                      // ---- BotÃ³n Cerrar sesiÃ³n ----
                       MouseRegion(
                         onEnter:
                             (_) => setState(() => hoveringCerrarSesion = true),
@@ -422,7 +422,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                             (_) => setState(() => hoveringCerrarSesion = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
-                          label: 'Cerrar sesión',
+                          label: 'Cerrar sesiÃ³n',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -433,10 +433,10 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                 builder:
                                     (ctx) => AlertDialog(
                                       title: const Text(
-                                        'Deseas cerrar sesión?',
+                                        'Deseas cerrar sesiÃ³n?',
                                       ),
                                       content: const Text(
-                                        'Se cerrará tu sesión actual.',
+                                        'Se cerrarÃ¡ tu sesiÃ³n actual.',
                                       ),
                                       actions: [
                                         TextButton(
@@ -447,7 +447,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                         TextButton(
                                           onPressed:
                                               () => Navigator.pop(ctx, true),
-                                          child: const Text('Cerrar sesión'),
+                                          child: const Text('Cerrar sesiÃ³n'),
                                         ),
                                       ],
                                     ),
@@ -507,7 +507,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Cerrar sesión',
+                                    'Cerrar sesiÃ³n',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,
@@ -545,3 +545,4 @@ class MenuItemData {
     this.badgeCount = 0,
   });
 }
+

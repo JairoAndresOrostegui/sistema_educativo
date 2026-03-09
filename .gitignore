@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
+
+# Local temp/debug files
+/flutter_01.png
+/pglite-debug.log
