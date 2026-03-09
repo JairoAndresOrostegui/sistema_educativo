@@ -366,7 +366,7 @@ class EnrollmentFormController extends ChangeNotifier {
       externalGradeHistory =
           history
               .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e as Map))
+              .map((e) => Map<String, dynamic>.from(e))
               .where((e) => e['interno'] != true)
               .toList();
       _updateGradeHistoryValue();

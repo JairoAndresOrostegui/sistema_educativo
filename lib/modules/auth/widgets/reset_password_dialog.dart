@@ -176,22 +176,26 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
     }
 
     if (!mounted) return;
-    final rootContext = Navigator.of(context, rootNavigator: true).context;
-    Navigator.pop(context);
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    rootNavigator.pop();
 
     if (envioOk) {
+      if (!mounted) return;
       await DialogUtils.showSuccess(
-        context: rootContext,
+        context: context,
         title: 'Recuperación de contraseña',
         message: mensaje,
       );
       return;
     }
 
+    if (!mounted) return;
     await DialogUtils.showError(
-      context: rootContext,
+      context: context,
       title: 'Recuperación de contraseña',
       message: mensaje,
     );
   }
 }
+
+

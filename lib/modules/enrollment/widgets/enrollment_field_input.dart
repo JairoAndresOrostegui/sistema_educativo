@@ -396,6 +396,11 @@ class EnrollmentFieldInput extends StatelessWidget {
                 'madre',
               ].where((o) => distinctOptions.contains(o)).toList();
           final current = controller.text;
+          void onRadioChanged(String? v) {
+            if (readOnly || v == null) return;
+            controller.text = v;
+            onChanged(v);
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -404,21 +409,20 @@ class EnrollmentFieldInput extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 8),
-              ...opts.map(
-                (o) => RadioListTile<String>(
-                  title: Text(labelForValue(o)),
-                  value: o,
-                  groupValue: current,
-                  onChanged:
-                      readOnly
-                          ? null
-                          : (v) {
-                            if (v != null) {
-                              controller.text = v;
-                              onChanged(v);
-                            }
-                          },
-                  contentPadding: EdgeInsets.zero,
+              RadioGroup<String>(
+                groupValue: current,
+                onChanged: onRadioChanged,
+                child: Column(
+                  children: [
+                    ...opts.map(
+                      (o) => RadioListTile<String>(
+                        title: Text(labelForValue(o)),
+                        value: o,
+                        enabled: !readOnly,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -428,6 +432,11 @@ class EnrollmentFieldInput extends StatelessWidget {
         // Special UI for facturaElectronica: radio buttons with conditional options
         if (field.name == 'facturaElectronica') {
           final current = controller.text;
+          void onRadioChanged(String? v) {
+            if (readOnly || v == null) return;
+            controller.text = v;
+            onChanged(v);
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -436,21 +445,20 @@ class EnrollmentFieldInput extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 8),
-              ...distinctOptions.map(
-                (o) => RadioListTile<String>(
-                  title: Text(labelForValue(o)),
-                  value: o,
-                  groupValue: current,
-                  onChanged:
-                      readOnly
-                          ? null
-                          : (v) {
-                            if (v != null) {
-                              controller.text = v;
-                              onChanged(v);
-                            }
-                          },
-                  contentPadding: EdgeInsets.zero,
+              RadioGroup<String>(
+                groupValue: current,
+                onChanged: onRadioChanged,
+                child: Column(
+                  children: [
+                    ...distinctOptions.map(
+                      (o) => RadioListTile<String>(
+                        title: Text(labelForValue(o)),
+                        value: o,
+                        enabled: !readOnly,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

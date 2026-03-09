@@ -48,7 +48,7 @@ class StudentQrScreen extends StatelessWidget {
                     data: payload,
                     size: 240,
                     backgroundColor: Colors.white,
-                    errorStateBuilder: (_, __) {
+                    errorStateBuilder: (context, error) {
                       return const Text(
                         'No se pudo generar el QR.',
                         style: TextStyle(color: Colors.redAccent),

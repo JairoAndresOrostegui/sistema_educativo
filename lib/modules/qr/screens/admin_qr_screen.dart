@@ -176,9 +176,9 @@ class _AdminQrScreenState extends State<AdminQrScreen> {
                     )
                     : ListView.separated(
                       itemCount: _users.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (context, index) =>
                           const Divider(height: 1),
-                      itemBuilder: (_, index) {
+                      itemBuilder: (context, index) {
                         final u = _users[index];
                         final name =
                             '${u.firstName} ${u.lastName}'.trim().isEmpty
@@ -254,7 +254,7 @@ class _QrDetailScreen extends StatelessWidget {
                 data: payload,
                 size: 240,
                 backgroundColor: Colors.white,
-                errorStateBuilder: (_, __) {
+                errorStateBuilder: (context, error) {
                   return const Text(
                     'No se pudo generar el QR.',
                     style: TextStyle(color: Colors.redAccent),
