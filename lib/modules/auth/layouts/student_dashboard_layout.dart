@@ -135,6 +135,14 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       );
     }
 
+    items.add(
+      const MenuItemData(
+        label: 'Mensajería',
+        icon: Icons.chat_bubble_outline,
+        route: '/messages',
+      ),
+    );
+
     if (!mounted) return;
     setState(() {
       _menuItems = items;

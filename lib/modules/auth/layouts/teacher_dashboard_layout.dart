@@ -77,6 +77,14 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
+    items.add(
+      const MenuItemData(
+        label: 'Mensajería',
+        icon: Icons.chat_bubble_outline,
+        route: '/messages',
+      ),
+    );
+
     setState(() {
       _menuItems = items;
       isLoading = false;

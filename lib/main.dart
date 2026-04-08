@@ -30,7 +30,7 @@ void main() async {
 
   try {
     await ThemeProvider.cargarConfiguracion(
-      'liceobilinguerodolfollinas.edu.co',
+      'desarrolloytecnologiasantander.com',
     );
   } catch (e) {
     debugPrint('Error al cargar configuracion de tema: $e');

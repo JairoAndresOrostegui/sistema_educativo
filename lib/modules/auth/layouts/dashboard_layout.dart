@@ -19,7 +19,7 @@ class DashboardLayout extends StatefulWidget {
 }
 
 class _DashboardLayoutState extends State<DashboardLayout> {
-  // URL de la polÃ­tica
+  // URL de la política
   static const String _privacyUrl =
       'https://liceobilinguerodolfollinas.edu.co/';
 
@@ -31,7 +31,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo abrir',
-          message: 'No se pudo abrir la polÃ­tica de privacidad.',
+          message: 'No se pudo abrir la política de privacidad.',
         );
       }
     } catch (_) {
@@ -39,7 +39,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
       await DialogUtils.showError(
         context: context,
         title: 'No se pudo abrir',
-        message: 'No se pudo abrir la polÃ­tica de privacidad.',
+        message: 'No se pudo abrir la política de privacidad.',
       );
     }
   }
@@ -69,7 +69,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
   String _greetingBogota() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Buenos dÃ­as';
+    if (hour < 12) return 'Buenos días';
     if (hour < 19) return 'Buenas tardes';
     return 'Buenas noches';
   }
@@ -78,7 +78,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
     final user = context.read<UserProviderV2>().user;
     final fullName =
         user == null ? 'usuario' : '${user.firstName} ${user.lastName}'.trim();
-    final school = ThemeProvider.config?.nombre ?? 'tu instituciÃ³n';
+    final school = ThemeProvider.config?.nombre ?? 'tu institución';
     final greet = _greetingBogota();
 
     final isWideWeb = kIsWeb || MediaQuery.of(context).size.width >= 900;
@@ -323,7 +323,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-            // Zona inferior: PRIVACIDAD + CERRAR SESIÃ“N
+            // Zona inferior: PRIVACIDAD + CERRAR SESIÓN
             SliverFillRemaining(
               hasScrollBody: false,
               child: Align(
@@ -333,14 +333,14 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ---- BotÃ³n PolÃ­tica de privacidad ----
+                      // ---- Botón Política de privacidad ----
                       MouseRegion(
                         onEnter: (_) => setState(() => hoveringPrivacy = true),
                         onExit: (_) => setState(() => hoveringPrivacy = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
                           label:
-                              'PolÃ­tica de privacidad (se abrirÃ¡ en el navegador)',
+                              'Política de privacidad (se abrirá en el navegador)',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -398,7 +398,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'PolÃ­tica de privacidad',
+                                    'Política de privacidad',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,
@@ -414,7 +414,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
 
                       const SizedBox(height: 12),
 
-                      // ---- BotÃ³n Cerrar sesiÃ³n ----
+                      // ---- Botón Cerrar sesión ----
                       MouseRegion(
                         onEnter:
                             (_) => setState(() => hoveringCerrarSesion = true),
@@ -422,7 +422,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                             (_) => setState(() => hoveringCerrarSesion = false),
                         cursor: SystemMouseCursors.click,
                         child: Semantics(
-                          label: 'Cerrar sesiÃ³n',
+                          label: 'Cerrar sesión',
                           button: true,
                           enabled: true,
                           focusable: true,
@@ -433,10 +433,10 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                 builder:
                                     (ctx) => AlertDialog(
                                       title: const Text(
-                                        'Deseas cerrar sesiÃ³n?',
+                                        'Deseas cerrar sesión?',
                                       ),
                                       content: const Text(
-                                        'Se cerrarÃ¡ tu sesiÃ³n actual.',
+                                        'Se cerrará tu sesión actual.',
                                       ),
                                       actions: [
                                         TextButton(
@@ -447,7 +447,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                         TextButton(
                                           onPressed:
                                               () => Navigator.pop(ctx, true),
-                                          child: const Text('Cerrar sesiÃ³n'),
+                                          child: const Text('Cerrar sesión'),
                                         ),
                                       ],
                                     ),
@@ -507,7 +507,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                   ),
                                   SizedBox(width: 10),
                                   Text(
-                                    'Cerrar sesiÃ³n',
+                                    'Cerrar sesión',
                                     style: TextStyle(
                                       fontSize: 16,
                                       color: Colors.black87,

@@ -1,98 +1,286 @@
-# sistema_educativo
+# Sistema Educativo - Guia de Usuario
 
-Aplicación Flutter para gestión escolar multirol (Administrador, Docente, Estudiante/Familiar) sobre Firebase (Auth/Firestore/Storage/Functions/FCM).
+Aplicacion para gestion escolar con acceso por roles:
+- Administrador
+- Docente
+- Estudiante
+- Familiar
 
-## Arquitectura rápida
-- `lib/main.dart`: inicializa Firebase (`DefaultFirebaseOptions`), solicita permisos FCM (`fRequestPermission`), carga tema dinámico (`ThemeProvider`), arranca `AppRouter` envuelto en `UserProviderV2` + `PushBootstrap`.
-- `lib/app.dart`: `GoRouter` con redirecciones declarativas por rol y rutas a dashboards, perfil y módulos (archivos, rutas, horarios, autorizaciones, historial, usuarios, matrícula). Logout centralizado vía `AuthService`.
-- Estado de usuario: `providers/user_provider_v2.dart` (`ChangeNotifier`) mantiene `UserModelV2`, permisos y `activeStudentId`.
-- Configuración: `config/firebase_options.dart` (usar este), `config/theme_config.dart`.
-- Utils núcleo: notificaciones (`notification_service.dart`, `push_notifications.dart`, `firebase_utils.dart`), parámetros (`parameters_service.dart`), validaciones/formato/snackbar/dialogs (`validators.dart`, `format_utils.dart`, `dialog_utils.dart`, etc.), logs de usuario (`user_log_service.dart`).
+Incluye modulos de matricula, rutas, horarios, documentos, autorizaciones, QR, perfil e historial administrativo.
 
-## Módulos
+## 1. Ingreso al sistema
 
-### Auth (`lib/modules/auth`)
-- Login/reset y protección de rutas por rol. Guards/layouts separan dashboards para Admin/Docente/Estudiante/Familiar.
-- Servicio `authServiceV2.dart`: valida credenciales en Auth + Firestore, exige email verificado y estado activo, normaliza errores; logout registra evento.
-- FCM tokens: pide permiso, guarda/actualiza en `users.fcmToken/fcmTokens`, listener `onTokenRefresh`.
-- Pantallas: `loginScreenV2.dart`, `access_denied_page.dart`; widgets reutilizables (`reset_password_dialog.dart`, logo/título).
+1. Abra la aplicacion (web o app movil).
+2. Ingrese correo y contrasena.
+3. Si olvido la contrasena, use la opcion `Olvidaste tu contrasena?`.
+4. Al iniciar sesion, el sistema muestra el panel segun su rol.
 
-### Authorization (`lib/modules/authorization`)
-- Solicitudes de autorización de estudiantes con FCM a actores (admins/docentes/estudiantes/familiares).
-- Servicio `authorization_service.dart`: consulta por grado/estudiante/admin; crea solicitud con metadata + notifica; actualiza estados (pendiente/aprobada/rechazada/finalizada) y notifica; helpers de hijos para familiares.
-- Pantallas: admin (`admin_authorization_screen.dart`), docente (`teacher_authorization_screen.dart`), estudiante/familiar (`student_authorization_screen.dart` con selección de hijo).
-- Diálogos: creación/acción/detalle (`student_authorization_dialog.dart`, `teacher_authorization_dialog.dart`, `admin_authorization_action_dialog.dart`).
+Notas importantes:
+- Si su cuenta no esta activa o no tiene permisos, no podra entrar a ciertos modulos.
+- El menu puede cambiar segun permisos asignados por el administrador.
 
-### File (`lib/modules/file`)
-- Compartir archivos por grado con trazabilidad de descargas y FCM.
-- Servicio `file_service.dart`: subir a Storage + metadatos en Firestore + notificación a estudiantes/familiares del grado; listar por grado; listar subidos; eliminar en Firestore/Storage.
-- Pantallas: `upload_file_screen.dart` (selector de grado, permisos `archivos.crear/eliminar`), `view_file_screen.dart` (agrupa por mes, marca descargados vía `UserLogService`, familiares eligen hijo).
-- Descarga multiplataforma: `file_utils.dart` (imports condicionales `file_utils_mobile.dart` / `file_utils_web.dart`).
+## 2. Que ve cada rol
 
-### History (`lib/modules/history`)
-- Panel web de auditoría (rutas diarias, gestión de rutas/usuarios/horarios/documentos, logs).
-- Servicios: `daily_route_history_service.dart`, `file_history_service.dart`, `route_history_service.dart`, `schedule_history_service.dart`, `user_history_service.dart`, `user_logs_service.dart` (normalizan datos legacy EN/ES, filtros por tenant/fecha/rol).
-- Vistas y exportes: `view/*` con filtros + export a Excel/PDF; adaptadores web/mobile/stub en `export/`.
-- Solo web; mobile muestra mensaje no disponible.
+### Administrador
+Menu posible:
+- Perfil
+- Gestion de usuarios
+- Parametros
+- Matriculas
+- Gestion de rutas
+- Horario escolar
+- Documentos
+- Historial administrativo
+- Autorizaciones
+- QR
 
-### Profile (`lib/modules/profile`)
-- Ver/editar foto de perfil. `profile_page.dart` usa `UserProviderV2`; `profile_service.dart` sube a Storage y actualiza `photoUrl`.
-- Picker multiplataforma (`profile_image_picker_web.dart`/`mobile`) valida JPG/PNG.
-- Widgets: `profile_field.dart`; reutiliza `admin_photo_widget.dart` del módulo User.
+### Docente
+Menu posible:
+- Perfil
+- Ruta escolar
+- Horario escolar
+- Documentos
+- Autorizaciones
 
-### Route (`lib/modules/route`)
-- Modelos: `route_model.dart`, `daily_route_model.dart`, `student_route_model.dart`.
-- Servicios:
-  - `admin_route_service.dart`: CRUD de rutas por tenant, asigna gestionadores, registra historial `routes_admin_history`.
-  - `daily_route_service.dart`: crea ruta diaria (clona estudiantes), actualiza estados/horas, marca recogido/anulado y direcciones.
-  - `student_route_service.dart`: obtiene ruta diaria del estudiante para web/mapa.
-  - `location_service.dart`: publica `teacherPosition` en `daily_routes` con `Geolocator` (`locationSettings`), permisos vía `permission_handler`.
-  - Helpers: `location_permission_service.dart`.
-- Docente (`screens/teacher_route_screen.dart`): rutas asignadas, crea ruta del día, marca recogido/anulado, avisa llegada y ETA (FCM), inicia/finaliza ruta, comparte ubicación. UI modular (`teacher_route_header.dart`, `teacher_route_student_list.dart`, `teacher_route_student_card.dart`, `teacher_route_controls.dart`); helpers en `utils/teacher_route_helpers.dart` (agrupación de direcciones, tokens FCM).
-- Estudiante/Familiar (`screens/student_route_screen.dart`): selección de estudiante (familiares), estado de ruta diaria y mapa (vista en `widgets/student/route_live_view.dart`).
-- Admin (`screens/admin_route_screen.dart`): lista rutas tenant; CRUD via `admin_route_form_dialog.dart` / `admin_route_form_body.dart`; permisos `rutas.crear/editar/eliminar`.
+### Estudiante / Familiar
+Menu posible:
+- Perfil
+- Matricula (si esta habilitada y aplica)
+- Mis rutas
+- Horario escolar
+- Documentos
+- Autorizaciones
+- QR (familiar habilitado)
 
-### Schedule (`lib/modules/schedule`)
-- Servicio `schedule_service.dart`: CRUD de materias en `subjects`, logging en `schedule_history`, notifica FCM a grado; helpers para docentes (`ParametersService`) y horarios por grado/docente.
-- Admin (`screens/admin_schedule_screen.dart`): selector de grado, vista semanal web / diaria mobile, `SubjectFormDialog`; widgets extraídos (`admin_grade_dropdown.dart`, `admin_day_column.dart`, `admin_subject_item.dart`).
-- Docente (`screens/teacher_schedule_screen.dart`): similar a admin, centrado en materias asignadas al docente.
-- Estudiante/Familiar (`screens/student_schedule_screen.dart`): horario de grado del estudiante; familiares cambian estudiante activo; vista semanal/diaria.
+## 3. Modulos y uso paso a paso
 
-### User (`lib/modules/user`)
-- Servicio `user_service_v2.dart`: CRUD `users` por tenant; crea/elimina en Firebase Auth via Functions; historial `user_history`; validaciones de unicidad.
-- Pantalla `admin_users_screen.dart`: listado + formulario (crear/editar/ver) respetando permisos y bloqueos (no borrarse a sí mismo).
-- Formularios modularizados: `admin_user_form_widget.dart` (state en `admin_user_form_widget_state.dart`), `admin_user_form_body.dart` + secciones, `admin_user_form_controller.dart` para validaciones/subida de foto.
+### 3.1 Perfil
+Permite ver y actualizar datos basicos y foto de perfil.
 
-### Enrollment / Matrícula (`lib/modules/enrollment`)
-- Configuración: `config/enrollment_fields.dart` define campos (roles con permiso de edición, defaults, fórmulas como edad) y `config/enrollment_sections.dart` agrupa los pasos/secciones visibles en el formulario.
-- Modelos: `EnrollmentField`, `Enrollment` (estados `prematriculado`/`pendiente_revision`/`rechazado`/`matriculado`; fuente admin/padre/QR; token opcional para links públicos; metadata de revisión) y `SubmitResult` para encapsular resultado de guardado.
-- Servicios/controlador: `enrollment_service.dart` (CRUD en `enrollments`, búsqueda por id/token/documento, conteo por estado); `controllers/enrollment_form_controller.dart` concentra estado/valores/prefill/opciones/submit; `services/enrollment_submit_handler.dart` maneja diálogos y PDF tras guardar.
-- Formulario (`enrollment_form_screen.dart`): usa Provider + Stepper por secciones, paso inicial de documento con prellenado desde `users` o matrículas previas, cálculo de edad, control de edición por rol, selección de hijos vinculados (rol Familiar), bloqueo en lectura si ya está matriculado; chip de pendientes para admin.
-- Panel admin (`admin_enrollment_screen.dart`): tabs por estado, aprobar/rechazar/editar, crear nueva; al aprobar genera PDF con datos principales.
-- Rutas: `/enrollment_public` (QR/padre sin login) y `/enrollment` (admin abre panel; roles Familiar/Estudiante con permiso `matriculas.ver` abren el formulario). En el menú admin se muestra badge con pendientes `prematriculado/pendiente_revision` en vivo.
+Flujo:
+1. Entre a `Perfil`.
+2. Actualice la imagen o datos permitidos.
+3. Guarde cambios.
 
-### Utils / Core
-- `parameters_service.dart`: lee `parameters` (roles/grados/permisos/tipos de documento activos) y `getUsersByFilters`.
-- `notification_service.dart`: wrapper Cloud Function `enviarNotificacion` (dedupe tokens, timeout).
-- `push_notifications.dart`: inicializa FCM + `flutter_local_notifications`; handler `firebaseMessagingBackgroundHandler`.
-- `firebase_utils.dart`: pide permiso FCM y guarda tokens (`arrayUnion`).
-- `user_log_service.dart`: registra eventos (incluye entorno) y obtiene llaves de descargas.
-- `dialog_utils.dart`: modales de info/exito/error reutilizables.
-- `format_utils.dart`, `validators.dart`, `snackbar_utils.dart`, `color_utils.dart`.
+### 3.2 Matriculas
+Hay dos flujos principales:
+- Flujo administrativo (aprobacion y gestion)
+- Flujo de familia/estudiante (formulario de pre-matricula)
 
-### Config / Navegación / Estado
-- `lib/app.dart`: rutas `go_router` y redirecciones por rol (`homeForRole`, `allowedForRole`).
-- `widgets/push_bootstrap.dart`: inicialización de push en web con `webVapidKey`.
-- `config/theme_config.dart`: carga remota de tema.
-- `config/firebase_options.dart`: opciones actuales generadas por FlutterFire (usar este).
+#### Flujo familia/estudiante
+1. Abra `Matricula`.
+2. Busque o escriba el documento del estudiante.
+3. Complete el formulario por secciones.
+4. Guarde la informacion.
 
-## Cómo correr
-1. `flutter pub get`
-2. Asegurar `lib/config/firebase_options.dart` apunta al proyecto Firebase deseado.
-3. Plataformas activas: Android/iOS/Web (carpetas desktop eliminadas). Ejecutar `flutter run -d <device>`.
+Tambien existe flujo por enlace publico (`/enrollment_public`) para registro sin inicio de sesion.
 
-## Notas operativas
-- Permisos FCM: `main.dart` llama `fRequestPermission` y registra background handler.
-- Geolocalización docente: `LocationService` usa `Geolocator.getCurrentPosition(locationSettings: ...)` y `getPositionStream` con `AndroidSettings/LocationSettings`.
-- Tokens FCM: deduplicación en `notification_service.dart`; `UserLogService` guarda claves descargadas para marcar vistos en vista de archivos.
-- Patrón de diálogos: usar `DialogUtils` + `withValues` en colores (evitar `withOpacity` deprecado) para consistencia.
+Comportamiento:
+- Si ya existe matricula activa del ano en curso, el formulario puede bloquearse.
+- El sistema puede precargar datos por documento.
+- Familiar puede seleccionar hijo cuando tiene varios vinculados.
+
+#### Flujo administrador
+1. Abra `Matriculas`.
+2. Revise pestanas por estado:
+   - Pendientes
+   - Pre-matriculado
+   - Matriculados
+   - Rechazados
+   - Retirados
+3. Abra cada registro y elija accion:
+   - Editar
+   - Aprobar (pasa a `matriculado`)
+   - Rechazar (solicita motivo)
+   - Retirar (para registros ya matriculados)
+4. Al aprobar, se puede generar PDF del registro.
+
+Estados de matricula:
+- `prematriculado`: registro inicial
+- `pendiente_revision`: en validacion administrativa
+- `matriculado`: aprobado
+- `rechazado`: rechazado por revision
+- `desmatriculado`: retirado
+
+### 3.3 Gestion de usuarios (Administrador)
+Permite crear, editar, consultar y eliminar usuarios.
+
+Flujo recomendado:
+1. Entre a `Gestion de usuarios`.
+2. Cree o edite usuario con rol, grado y permisos.
+3. Verifique que el estado quede activo.
+4. Use eliminar solo cuando aplique (evitar borrar usuarios en uso).
+
+### 3.4 Parametros (Administrador)
+Permite configurar catalogos operativos del sistema.
+
+Ejemplos de parametros:
+- Tipos de documento
+- Roles
+- Permisos
+- Variables de matricula (ejemplo: ano activo, habilitacion para familias)
+
+Flujo:
+1. Abra `Parametros`.
+2. Filtre por clave si necesita.
+3. Cree o edite valores.
+4. Defina orden y estado activo/inactivo.
+
+Recomendacion:
+- Mantenga consistentes los valores de permisos antes de crear usuarios.
+
+### 3.5 Horario escolar
+Permite gestionar y consultar materias por grado.
+
+Administrador:
+1. Abra `Horario escolar`.
+2. Seleccione grado.
+3. Cree, edite o elimine materias.
+
+Docente:
+- Consulta su horario asignado.
+
+Estudiante/Familiar:
+- Consulta el horario del estudiante.
+- Familiar puede cambiar estudiante activo cuando corresponde.
+
+### 3.6 Rutas escolares
+Permite planear y ejecutar rutas de transporte.
+
+Administrador:
+- Crea y administra rutas base.
+- Asigna responsables y datos de ruta.
+
+Docente/encargado de ruta:
+1. Abra `Ruta escolar`.
+2. Seleccione ruta asignada.
+3. Inicie ruta del dia.
+4. Marque estados de estudiantes (recogido, no recogido, etc.).
+5. Envie avisos de llegada y tiempo estimado.
+6. Finalice ruta.
+
+Estudiante/Familiar:
+- Consulta `Mi ruta de hoy` con estado y seguimiento.
+
+### 3.7 Documentos
+Permite publicar y consultar archivos por grado.
+
+Administrador/Docente:
+1. Abra `Documentos`.
+2. Seleccione grado.
+3. Cargue archivo (ejemplo: PDF, Word, Excel).
+4. Elimine archivos cuando sea necesario.
+
+Estudiante/Familiar:
+1. Abra `Documentos`.
+2. Busque por listado.
+3. Descargue archivo.
+
+### 3.8 Autorizaciones
+Gestiona solicitudes y respuestas de autorizacion de estudiantes.
+
+Flujo general:
+1. Crear solicitud (segun rol y permisos).
+2. Revisar y responder (aprobar/rechazar).
+3. Estado actualizado para todos los actores.
+
+Estados habituales:
+- Pendiente
+- Aprobada
+- Rechazada
+- Finalizada
+
+### 3.9 QR
+Permite mostrar o administrar codigo QR de usuario.
+
+Administrador:
+- Gestiona QR por usuario.
+
+Familiar/estudiante habilitado:
+- Visualiza su QR en el modulo correspondiente.
+
+### 3.10 Historial administrativo (Web)
+Modulo de auditoria para administracion.
+
+Incluye consultas y exportes de historicos de:
+- Rutas
+- Usuarios
+- Horarios
+- Archivos
+- Registros diarios y logs
+
+Nota:
+- Este modulo esta orientado a uso web administrativo.
+
+## 4. Notificaciones
+
+El sistema envia notificaciones push para eventos como:
+- Novedades de autorizaciones
+- Publicacion de documentos
+- Eventos de ruta y avisos
+
+Recomendaciones:
+- Acepte permisos de notificacion en el dispositivo/navegador.
+- Mantenga sesion iniciada en el dispositivo que usara para recibir alertas.
+
+## 5. Buenas practicas de uso
+
+- Cierre sesion al terminar, sobre todo en equipos compartidos.
+- Verifique siempre grado, documento y rol antes de guardar.
+- En matriculas, complete campos obligatorios antes de avanzar.
+- Evite crear usuarios duplicados con el mismo documento/correo.
+
+## 6. Solucion de problemas comunes
+
+### No puedo iniciar sesion
+- Verifique correo y contrasena.
+- Use recuperacion de contrasena.
+- Valide con administracion que su cuenta este activa.
+
+### No veo un modulo en el menu
+- Su usuario no tiene ese permiso o rol.
+- Solicite habilitacion al administrador.
+
+### No me llegan notificaciones
+- Revise permisos de notificacion del navegador o celular.
+- Cierre sesion e inicie nuevamente para refrescar token.
+
+### No puedo editar una matricula
+- Puede estar en estado bloqueado para su rol.
+- Si es administrador, revise estado y permisos de matricula.
+
+## 7. Guia rapida de primer arranque (Administrador)
+
+Orden sugerido para dejar operativo el sistema:
+1. Crear/validar parametros base.
+2. Crear usuarios administrativos y operativos.
+3. Configurar grados, permisos y ano de matricula.
+4. Cargar horarios iniciales.
+5. Configurar rutas.
+6. Validar flujo de documentos y autorizaciones.
+7. Probar matricula con un usuario familiar.
+
+## 8. Soporte interno
+
+Si necesita ajustes funcionales (nuevos permisos, campos o reglas), registre el requerimiento con:
+- Modulo afectado
+- Rol afectado
+- Pasos para reproducir
+- Resultado esperado
+- Evidencia (captura y fecha)
+
+---
+
+## Anexo tecnico corto (para despliegue local)
+
+Requisitos:
+- Flutter SDK compatible con `sdk: ^3.7.2`
+- Proyecto Firebase configurado
+
+Comandos:
+```bash
+flutter pub get
+flutter run -d chrome
+```
+
+Tambien puede ejecutar en Android/iOS segun dispositivo disponible.

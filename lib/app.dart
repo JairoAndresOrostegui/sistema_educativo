@@ -15,6 +15,7 @@ import 'modules/authorization/screens/teacher_authorization_screen.dart';
 import 'modules/file/screens/upload_file_screen.dart';
 import 'modules/file/screens/view_file_screen.dart';
 import 'modules/history/screens/admin_history_screen.dart';
+import 'modules/messaging/screens/messaging_screen.dart';
 import 'modules/profile/screens/profile_page.dart';
 import 'modules/route/screens/admin_route_screen.dart';
 import 'modules/route/screens/student_route_screen.dart';
@@ -89,6 +90,7 @@ class _AppRouterState extends State<AppRouter> {
             '/teacher_schedule',
             '/teacher_document',
             '/teacher_authorization',
+            '/messages',
           }.contains(path);
         case 'Estudiante':
         case 'Familiar':
@@ -100,6 +102,7 @@ class _AppRouterState extends State<AppRouter> {
             '/student_authorization',
             '/enrollment',
             '/student_qr',
+            '/messages',
           }.contains(path);
         default:
           return false;
@@ -210,6 +213,10 @@ class _AppRouterState extends State<AppRouter> {
         GoRoute(
           path: '/teacher_authorization',
           builder: (context, state) => const AuthorizationTeacherScreen(),
+        ),
+        GoRoute(
+          path: '/messages',
+          builder: (context, state) => const MessagingScreen(),
         ),
         // Estudiante / Familiar
         GoRoute(

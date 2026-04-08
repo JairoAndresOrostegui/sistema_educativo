@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../config/theme_config.dart';
 
@@ -8,17 +7,6 @@ class PublicLogoWidget extends StatelessWidget {
   final double? heightFactor; // Fraction of screen height (0.2 = 20%)
 
   const PublicLogoWidget({super.key, this.heightFactor = 0.2});
-
-  Future<bool> _probeLogo(String url) async {
-    try {
-      final resp = await http
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 5));
-      return resp.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,37 +28,19 @@ class PublicLogoWidget extends StatelessWidget {
             maxHeight: targetHeight,
             maxWidth: targetHeight * 2,
           ),
-          child: FutureBuilder<bool>(
-            future: _probeLogo(logoUrl),
-            builder: (context, snapshot) {
-              final isLoading = snapshot.connectionState == ConnectionState.waiting;
-              final ok = snapshot.data == true;
-
-              if (isLoading) {
-                return SizedBox(
+          child: SvgPicture.network(
+            logoUrl,
+            height: targetHeight,
+            width: targetHeight * 2,
+            fit: BoxFit.contain,
+            placeholderBuilder:
+                (context) => SizedBox(
                   height: targetHeight * 0.35,
                   width: targetHeight * 0.35,
                   child: const CircularProgressIndicator(),
-                );
-              }
-
-              if (ok) {
-                return SvgPicture.network(
-                  logoUrl,
-                  height: targetHeight,
-                  width: targetHeight * 2,
-                  fit: BoxFit.contain,
-                  placeholderBuilder: (context) =>
-                      const CircularProgressIndicator(),
-                );
-              }
-
-              // Fallback to local asset to avoid crashing if remote logo fails
-              return Image.asset(
-                'assets/Logo.jpeg',
-                height: targetHeight,
-                fit: BoxFit.contain,
-              );
+                ),
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox.shrink();
             },
           ),
         ),
