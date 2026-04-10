@@ -157,8 +157,11 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
     final res = await showDialog<AdminActionResult>(
       context: context,
-
-      builder: (_) => AdminAuthorizationActionDialog(currentStatus: r.status),
+      builder:
+          (_) => AdminAuthorizationActionDialog(
+            currentStatus: r.status,
+            requiresRequesterEdit: r.requiresRequesterEdit,
+          ),
     );
 
     if (res == null) return;
@@ -391,7 +394,9 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
                                       _canEdit &&
                                               _updatingRequestId == null &&
                                               r.status !=
-                                                  AuthorizationStatus.finished
+                                                  AuthorizationStatus.finished &&
+                                              r.status !=
+                                                  AuthorizationStatus.rejected
                                           ? IconButton(
                                             icon: const Icon(
                                               Icons.manage_accounts,

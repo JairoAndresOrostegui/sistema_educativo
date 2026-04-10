@@ -315,6 +315,80 @@ class _AuthorizationStudentScreenState
     }
   }
 
+  Future<void> _onEditPressed(AuthorizationRequest request) async {
+    final ctx = context;
+    final requester = context.read<UserProviderV2>().user;
+    if (requester == null || _children.isEmpty) return;
+
+    final res = await showDialog<CreateAuthorizationResult>(
+      context: ctx,
+      builder:
+          (_) => AuthorizationCreateDialog(
+            children:
+                _children
+                    .map(
+                      (e) => StudentChoice(
+                        id: e.id,
+                        fullName: e.fullName,
+                        grade: e.grade,
+                      ),
+                    )
+                    .toList(),
+            initialStudentId: request.studentId,
+            initialValue: CreateAuthorizationResult(
+              studentId: request.studentId,
+              allDay: request.allDay,
+              multiDay: request.multiDay,
+              dateFrom: request.dateFrom,
+              dateTo: request.dateTo,
+              startTime: request.startTime,
+              endTime: request.endTime,
+              reason: request.reason ?? '',
+            ),
+          ),
+    );
+    if (res == null || _busy) return;
+
+    setState(() => _busy = true);
+    try {
+      final kid = _children.firstWhere((c) => c.id == res.studentId);
+      final updated = request.copyWith(
+        studentId: kid.id,
+        studentFullName: kid.fullName,
+        grade: kid.grade,
+        allDay: res.allDay,
+        multiDay: res.multiDay,
+        dateFrom: res.dateFrom,
+        dateTo: res.dateTo,
+        startTime: res.startTime,
+        endTime: res.endTime,
+        reason: res.reason,
+      );
+      await _svc.resubmitRequest(
+        id: request.id,
+        updated: updated,
+        requester: requester,
+      );
+      if (!mounted) return;
+      await _reload();
+      if (!mounted) return;
+      await DialogUtils.showSuccess(
+        context: ctx,
+        title: 'Exito',
+        message: 'Solicitud reenviada.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: ctx,
+        title: 'Error',
+        message: e.toString(),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<UserProviderV2>().user;
@@ -534,6 +608,24 @@ class _AuthorizationStudentScreenState
                                     ],
                                   ),
                                   subtitle: Text(sub),
+                                  trailing:
+                                      session.role == 'Familiar' &&
+                                              r.requesterId == session.id &&
+                                              r.status ==
+                                                  AuthorizationStatus.pending &&
+                                              r.requiresRequesterEdit
+                                          ? IconButton(
+                                            tooltip: 'Corregir y reenviar',
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              color: Colors.redAccent,
+                                            ),
+                                            onPressed:
+                                                _busy
+                                                    ? null
+                                                    : () => _onEditPressed(r),
+                                          )
+                                          : null,
                                   onTap:
                                       () => showDialog(
                                         context: context,

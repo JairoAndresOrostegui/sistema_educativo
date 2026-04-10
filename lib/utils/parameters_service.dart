@@ -108,14 +108,7 @@ class ParametersService {
     final snapshot =
         await _firestore
             .collection('parameters')
-            .where(
-              'clave',
-              whereIn: [
-                'permission',
-                'enrollment',
-                'qr',
-              ],
-            )
+            .where('clave', isEqualTo: 'permission')
             .where('activo', isEqualTo: true)
             .get();
     final parameters =

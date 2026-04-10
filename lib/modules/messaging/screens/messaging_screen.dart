@@ -32,9 +32,21 @@ class _MessagingScreenState extends State<MessagingScreen> {
   MessageContact? _draftContact;
   String? _activeStudentId;
 
+  bool get _hasMessagingPermission {
+    final perms =
+        _logged?.permissions.map((e) => e.trim().toLowerCase()).toSet() ?? {};
+    return (_logged?.isSuperadmin ?? false) ||
+        perms.contains('mensajeria.ver');
+  }
+
   bool get _canUseModule {
     final role = (_logged?.role ?? '').trim();
-    return role == 'Docente' || role == 'Estudiante' || role == 'Familiar';
+    final roleAllowed =
+        role == 'Administrador' ||
+        role == 'Docente' ||
+        role == 'Estudiante' ||
+        role == 'Familiar';
+    return roleAllowed && _hasMessagingPermission;
   }
 
   bool get _isFamily => (_logged?.role ?? '').trim() == 'Familiar';
@@ -167,12 +179,12 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
     try {
       if (activeThread == null && (_draftContact?.isGroup ?? false)) {
-        final targetGrade = _draftContact?.targetGrade ?? '';
-        final sentCount = await _svc.sendMessageToGrade(
+        final sentCount = await _svc.sendMessageToGroup(
           sender: user,
-          grade: targetGrade,
+          group: _draftContact!,
           body: text,
         );
+        final scopeName = _draftContact?.fullName ?? 'grupo seleccionado';
 
         _messageCtrl.clear();
         if (!mounted) return;
@@ -183,8 +195,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showSuccess(
           context: context,
           title: 'Enviado',
-          message:
-              'Mensaje enviado a $sentCount estudiantes del grado $targetGrade.',
+          message: 'Mensaje enviado a $sentCount destinatarios de $scopeName.',
         );
         return;
       }
@@ -838,6 +849,8 @@ class _SearchableContactPickerDialogState
       final haystack = [
         c.fullName,
         c.role,
+        c.groupType ?? '',
+        c.targetRole ?? '',
         c.grade ?? '',
         c.targetGrade ?? '',
         c.studentContextName ?? '',
@@ -882,6 +895,11 @@ class _SearchableContactPickerDialogState
                           c.role,
                           if (c.isGroup &&
                               (c.targetGrade ?? '').trim().isNotEmpty)
+                            'Envio masivo',
+                          if (c.isGroup &&
+                              (c.targetRole ?? '').trim().isNotEmpty)
+                            'Rol: ${c.targetRole}',
+                          if ((c.groupType ?? '').trim() == 'all_users')
                             'Envio masivo',
                           if ((c.grade ?? '').trim().isNotEmpty) c.grade!,
                           if ((c.studentContextName ?? '').trim().isNotEmpty)

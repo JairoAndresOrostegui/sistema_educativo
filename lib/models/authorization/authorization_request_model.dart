@@ -48,6 +48,7 @@ class AuthorizationRequest {
   final String? adminNote;
   final String? evidence;
   final String? resubmissionOfRequestId;
+  final bool requiresRequesterEdit;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -71,6 +72,7 @@ class AuthorizationRequest {
     this.adminNote,
     this.evidence,
     this.resubmissionOfRequestId,
+    this.requiresRequesterEdit = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -117,6 +119,7 @@ class AuthorizationRequest {
           (m['resubmissionOfRequestId'] ?? '').toString().isEmpty
               ? null
               : m['resubmissionOfRequestId'].toString(),
+      requiresRequesterEdit: m['requiresRequesterEdit'] == true,
       createdAt: _toDt(m['createdAt']),
       updatedAt: _toDt(m['updatedAt']),
     );
@@ -142,6 +145,7 @@ class AuthorizationRequest {
       'adminNote': adminNote,
       'evidence': evidence,
       'resubmissionOfRequestId': resubmissionOfRequestId,
+      'requiresRequesterEdit': requiresRequesterEdit,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -167,6 +171,7 @@ class AuthorizationRequest {
     String? adminNote,
     String? evidence,
     String? resubmissionOfRequestId,
+    bool? requiresRequesterEdit,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -191,6 +196,8 @@ class AuthorizationRequest {
       evidence: evidence ?? this.evidence,
       resubmissionOfRequestId:
           resubmissionOfRequestId ?? this.resubmissionOfRequestId,
+      requiresRequesterEdit:
+          requiresRequesterEdit ?? this.requiresRequesterEdit,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

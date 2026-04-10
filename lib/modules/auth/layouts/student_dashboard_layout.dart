@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
-import '../../enrollment/services/enrollment_service.dart';
 import '../../../utils/parameters_service.dart';
+import '../../enrollment/services/enrollment_service.dart';
 import 'dashboard_layout.dart';
 
 class EstudianteDashboardLayout extends StatefulWidget {
@@ -31,7 +31,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       if (!mounted) return;
       final notif = message.notification;
       if (notif == null) return;
-      final titulo = notif.title ?? 'Notificación';
+      final titulo = notif.title ?? 'Notificacion';
       final cuerpo = notif.body ?? '';
       _showAlert(titulo, cuerpo);
     });
@@ -41,17 +41,16 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     if (!mounted) return;
     showDialog(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(titulo),
-            content: Text(cuerpo),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: Text(titulo),
+        content: Text(cuerpo),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
           ),
+        ],
+      ),
     );
   }
 
@@ -60,7 +59,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     if (user == null) return;
 
     final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
-    final role = (user.role).trim().toLowerCase();
+    final role = user.role.trim().toLowerCase();
 
     final items = <MenuItemData>[
       const MenuItemData(
@@ -75,7 +74,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       if (showEnrollment) {
         items.add(
           const MenuItemData(
-            label: 'Matr\u00edcula',
+            label: 'Matricula',
             icon: Icons.assignment_ind,
             route: '/enrollment',
           ),
@@ -135,13 +134,15 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       );
     }
 
-    items.add(
-      const MenuItemData(
-        label: 'Mensajería',
-        icon: Icons.chat_bubble_outline,
-        route: '/messages',
-      ),
-    );
+    if (perms.contains('mensajeria.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Mensajeria',
+          icon: Icons.chat_bubble_outline,
+          route: '/messages',
+        ),
+      );
+    }
 
     if (!mounted) return;
     setState(() {
@@ -172,12 +173,12 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
   Widget build(BuildContext context) {
     return isLoading
         ? const Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: CircularProgressIndicator(color: Colors.redAccent),
+            body: SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.redAccent),
+              ),
             ),
-          ),
-        )
+          )
         : DashboardLayout(menuItems: _menuItems);
   }
 }

@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../../../models/file/file_model.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
+import '../../../utils/notification_tokens.dart';
 
 class FileService {
   final _db = FirebaseFirestore.instance;
@@ -79,19 +80,6 @@ class FileService {
     await ref.delete();
   }
 
-  List<String> _extractTokens(Map<String, dynamic> data) {
-    final out = <String>[];
-    final t1 = data['fcmToken'];
-    if (t1 is String && t1.trim().isNotEmpty) out.add(t1.trim());
-    final tN = data['fcmTokens'];
-    if (tN is List) {
-      out.addAll(
-        tN.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty),
-      );
-    }
-    return out;
-  }
-
   Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
     for (var i = 0; i < list.length; i += size) {
       yield list.sublist(i, i + size > list.length ? list.length : i + size);
@@ -120,7 +108,7 @@ class FileService {
 
       final stuTokens = <String>{};
       for (final d in stuSnap.docs) {
-        stuTokens.addAll(_extractTokens(d.data()));
+        stuTokens.addAll(extractNotificationTokens(d.data()));
       }
 
       final famTokens = <String>{};
@@ -136,7 +124,7 @@ class FileService {
                 .where('studentIds', arrayContainsAny: chunk)
                 .get();
         for (final d in famSnap.docs) {
-          famTokens.addAll(_extractTokens(d.data()));
+          famTokens.addAll(extractNotificationTokens(d.data()));
         }
       }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class StudentChoice {
   final String id;
@@ -36,10 +37,12 @@ class CreateAuthorizationResult {
 class AuthorizationCreateDialog extends StatefulWidget {
   final List<StudentChoice> children;
   final String? initialStudentId;
+  final CreateAuthorizationResult? initialValue;
   const AuthorizationCreateDialog({
     super.key,
     required this.children,
     this.initialStudentId,
+    this.initialValue,
   });
 
   @override
@@ -48,6 +51,10 @@ class AuthorizationCreateDialog extends StatefulWidget {
 }
 
 class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
+  static const String _supportEmail =
+      'liceobilinguerodolfollinaspd@gmail.com';
+  static const String _supportPhoneDigits = '573168706758';
+
   String? _studentId;
   bool _allDay = true;
   bool _multiDay = false;
@@ -66,8 +73,24 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
       );
       _studentId = exists ? widget.initialStudentId : widget.children.first.id;
     }
-    final now = DateTime.now();
-    _dateFrom = DateTime(now.year, now.month, now.day);
+    final initial = widget.initialValue;
+    if (initial != null) {
+      _studentId = initial.studentId;
+      _allDay = initial.allDay;
+      _multiDay = initial.multiDay;
+      _dateFrom = initial.dateFrom;
+      _dateTo = initial.dateTo;
+      if (initial.startTime != null) {
+        _startTod = TimeOfDay.fromDateTime(initial.startTime!);
+      }
+      if (initial.endTime != null) {
+        _endTod = TimeOfDay.fromDateTime(initial.endTime!);
+      }
+      _reasonCtrl.text = initial.reason;
+    } else {
+      final now = DateTime.now();
+      _dateFrom = DateTime(now.year, now.month, now.day);
+    }
   }
 
   @override
@@ -117,6 +140,19 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
   DateTime? _toDateTime(DateTime base, TimeOfDay? tod) {
     if (tod == null) return null;
     return DateTime(base.year, base.month, base.day, tod.hour, tod.minute);
+  }
+
+  Future<void> _openWhatsApp() async {
+    final uri = Uri.parse('https://wa.me/$_supportPhoneDigits');
+    await launchUrl(uri, webOnlyWindowName: '_blank');
+  }
+
+  Future<void> _openEmail() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+    );
+    await launchUrl(uri, webOnlyWindowName: '_blank');
   }
 
   @override
@@ -285,9 +321,29 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                   color: Colors.red.withValues(alpha: .06),
                 ),
                 child: const Text(
-                  'Debes enviar la evidencia del motivo por los canales oficiales (WhatsApp y correo institucional).',
+                  'Debes enviar la evidencia del motivo por los canales oficiales. WhatsApp: +573168706758. Correo institucional: liceobilinguerodolfollinaspd@gmail.com.',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openWhatsApp,
+                      icon: const Icon(Icons.chat),
+                      label: const Text('Abrir WhatsApp'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openEmail,
+                      icon: const Icon(Icons.email_outlined),
+                      label: const Text('Abrir correo'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

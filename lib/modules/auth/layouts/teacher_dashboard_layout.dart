@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dashboard_layout.dart';
+
 import '../../../providers/user_provider_v2.dart';
+import '../../authorization/services/authorization_service.dart';
+import 'dashboard_layout.dart';
 
 class DocenteDashboardLayout extends StatefulWidget {
   const DocenteDashboardLayout({super.key});
@@ -13,6 +17,7 @@ class DocenteDashboardLayout extends StatefulWidget {
 class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
+  StreamSubscription<int>? _pendingAuthSub;
 
   @override
   void initState() {
@@ -77,30 +82,70 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
-    items.add(
-      const MenuItemData(
-        label: 'Mensajería',
-        icon: Icons.chat_bubble_outline,
-        route: '/messages',
-      ),
-    );
+    if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Mensajeria',
+          icon: Icons.chat_bubble_outline,
+          route: '/messages',
+        ),
+      );
+    }
 
     setState(() {
       _menuItems = items;
       isLoading = false;
     });
+
+    if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
+      final grade = (user.grade ?? '').trim();
+      if (grade.isNotEmpty) {
+        _pendingAuthSub?.cancel();
+        _pendingAuthSub = AuthorizationService()
+            .watchPendingCountForGrade(
+              institutionId: user.institution,
+              campusId: user.campus,
+              grade: grade,
+            )
+            .listen((count) {
+              if (!mounted) return;
+              setState(() {
+                _menuItems =
+                    _menuItems
+                        .map(
+                          (m) =>
+                              m.route == '/teacher_authorization'
+                                  ? MenuItemData(
+                                    label: m.label,
+                                    icon: m.icon,
+                                    route: m.route,
+                                    badgeCount: count,
+                                  )
+                                  : m,
+                        )
+                        .toList();
+              });
+            });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _pendingAuthSub?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return isLoading
         ? const Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: CircularProgressIndicator(color: Colors.redAccent),
+            body: SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.redAccent),
+              ),
             ),
-          ),
-        )
+          )
         : DashboardLayout(menuItems: _menuItems);
   }
 }

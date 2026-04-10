@@ -27,7 +27,8 @@ class userModelv2 {
   final String status;
   final List<String> phones;
   final List<String> permissions;
-  final String? fcmToken;
+  final String? webPushToken;
+  final String? mobilePushToken;
   final String? familyRelation;
   final List<String>? studentIds;
   final String? activeStudentId;
@@ -59,7 +60,8 @@ class userModelv2 {
     required this.status,
     required this.phones,
     required this.permissions,
-    this.fcmToken,
+    this.webPushToken,
+    this.mobilePushToken,
     this.familyRelation,
     this.studentIds,
     this.activeStudentId,
@@ -68,6 +70,11 @@ class userModelv2 {
   });
 
   factory userModelv2.fromFirestore(Map<String, dynamic> map, String id) {
+    final notificationTokens =
+        map['notificationTokens'] is Map<String, dynamic>
+            ? map['notificationTokens'] as Map<String, dynamic>
+            : <String, dynamic>{};
+
     return userModelv2(
       id: id,
       firstName: map['firstName'] ?? '',
@@ -77,9 +84,10 @@ class userModelv2 {
       personalEmail: map['personalEmail'] ?? '',
       institutionalEmail: map['institutionalEmail'] ?? '',
       photoUrl: map['photoUrl'],
-      birthDate: map['birthDate'] is Timestamp
-          ? (map['birthDate'] as Timestamp).toDate()
-          : null,
+      birthDate:
+          map['birthDate'] is Timestamp
+              ? (map['birthDate'] as Timestamp).toDate()
+              : null,
       birthCountry: map['birthCountry'],
       birthDepartment: map['birthDepartment'],
       birthCity: map['birthCity'],
@@ -95,17 +103,30 @@ class userModelv2 {
       status: map['status'] ?? 'activo',
       phones: List<String>.from(map['phones'] ?? []),
       permissions: List<String>.from(map['permissions'] ?? []),
-      fcmToken: map['fcmToken'],
+      webPushToken: notificationTokens['web']?.toString(),
+      mobilePushToken: notificationTokens['mobile']?.toString(),
       familyRelation: map['familyRelation'],
-      studentIds: map['studentIds'] != null ? List<String>.from(map['studentIds']) : null,
+      studentIds:
+          map['studentIds'] != null
+              ? List<String>.from(map['studentIds'])
+              : null,
       activeStudentId: map['activeStudentId'],
       qrPayload: map['qrPayload'],
       qrEnabled: map['qrEnabled'] ?? false,
     );
   }
 
+  List<String> get notificationTokens {
+    final out = <String>[];
+    final web = webPushToken?.trim() ?? '';
+    final mobile = mobilePushToken?.trim() ?? '';
+    if (web.isNotEmpty) out.add(web);
+    if (mobile.isNotEmpty && mobile != web) out.add(mobile);
+    return out;
+  }
+
   Map<String, dynamic> toMap() {
-    return {
+    final map = <String, dynamic>{
       'firstName': firstName,
       'lastName': lastName,
       'document': document,
@@ -129,13 +150,25 @@ class userModelv2 {
       'status': status,
       'phones': phones,
       'permissions': permissions,
-      'fcmToken': fcmToken,
       'familyRelation': familyRelation,
       'studentIds': studentIds,
       'activeStudentId': activeStudentId,
       'qrPayload': qrPayload,
       'qrEnabled': qrEnabled,
     };
+
+    final tokenMap = <String, dynamic>{};
+    if ((webPushToken ?? '').trim().isNotEmpty) {
+      tokenMap['web'] = webPushToken!.trim();
+    }
+    if ((mobilePushToken ?? '').trim().isNotEmpty) {
+      tokenMap['mobile'] = mobilePushToken!.trim();
+    }
+    if (tokenMap.isNotEmpty) {
+      map['notificationTokens'] = tokenMap;
+    }
+
+    return map;
   }
 
   userModelv2 copyWith({
@@ -163,7 +196,8 @@ class userModelv2 {
     String? status,
     List<String>? phones,
     List<String>? permissions,
-    String? fcmToken,
+    String? webPushToken,
+    String? mobilePushToken,
     String? familyRelation,
     List<String>? studentIds,
     String? activeStudentId,
@@ -195,7 +229,8 @@ class userModelv2 {
       status: status ?? this.status,
       phones: phones ?? this.phones,
       permissions: permissions ?? this.permissions,
-      fcmToken: fcmToken ?? this.fcmToken,
+      webPushToken: webPushToken ?? this.webPushToken,
+      mobilePushToken: mobilePushToken ?? this.mobilePushToken,
       familyRelation: familyRelation ?? this.familyRelation,
       studentIds: studentIds ?? this.studentIds,
       activeStudentId: activeStudentId ?? this.activeStudentId,

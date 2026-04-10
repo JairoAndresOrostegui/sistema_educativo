@@ -7,6 +7,7 @@ import '../../../utils/navigation_utils.dart';
 import '../services/user_service_v2.dart';
 import '../widgets/admin/admin_photo_widget.dart';
 import '../widgets/admin/admin_user_form_widget.dart';
+import '../widgets/admin/teacher_bulk_import_dialog.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -94,6 +95,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 1,
         leading: const BackToDashboardButton(),
+        actions: [
+          if (esSuperadminActual)
+            IconButton(
+              tooltip: 'Importar docentes',
+              onPressed: _mostrarImportacionDocentes,
+              icon: const Icon(Icons.upload_file),
+            ),
+        ],
       ),
       floatingActionButton:
           (esSuperadminActual ||
@@ -372,6 +381,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           message: 'El usuario se guardo correctamente.',
         );
       }
+    }
+  }
+
+  Future<void> _mostrarImportacionDocentes() async {
+    final bool? shouldRefresh = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => const TeacherBulkImportDialog(),
+    );
+
+    if (shouldRefresh == true) {
+      if (!mounted) return;
+      await _cargarUsuarios();
     }
   }
 }

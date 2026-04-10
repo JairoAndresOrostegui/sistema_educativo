@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/user/user_model_v2.dart';
 
 class UserProviderV2 extends ChangeNotifier {
@@ -17,10 +18,14 @@ class UserProviderV2 extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateFcmToken(String token) {
+  void updateNotificationToken(String token) {
     if (_user == null) return;
-    if (_user!.fcmToken == token) return; // evita rebuilds innecesarios
-    _user = _user!.copyWith(fcmToken: token);
+    final current = kIsWeb ? _user!.webPushToken : _user!.mobilePushToken;
+    if (current == token) return;
+    _user =
+        kIsWeb
+            ? _user!.copyWith(webPushToken: token)
+            : _user!.copyWith(mobilePushToken: token);
     notifyListeners();
   }
 

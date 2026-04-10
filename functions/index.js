@@ -11,22 +11,39 @@ exports.enviarNotificacion = onCall(async (request) => {
   const {tokens, titulo, cuerpo} = request.data;
 
   if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
-    throw new Error("No se proporcionaron tokens válidos.");
+    throw new Error("No se proporcionaron tokens validos.");
   }
 
-  const mensaje = {
-    notification: {
-      title: titulo,
-      body: cuerpo,
-    },
-    tokens,
-  };
+  const cleanTokens = [...new Set(tokens
+      .filter((token) => typeof token === "string")
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0))];
 
-  const respuesta = await admin.messaging().sendEachForMulticast(mensaje);
+  if (cleanTokens.length === 0) {
+    throw new Error("No se proporcionaron tokens validos.");
+  }
+
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (let i = 0; i < cleanTokens.length; i += 500) {
+    const batch = cleanTokens.slice(i, i + 500);
+    const mensaje = {
+      notification: {
+        title: titulo,
+        body: cuerpo,
+      },
+      tokens: batch,
+    };
+
+    const respuesta = await admin.messaging().sendEachForMulticast(mensaje);
+    successCount += respuesta.successCount;
+    failureCount += respuesta.failureCount;
+  }
 
   return {
-    exitosos: respuesta.successCount,
-    fallidos: respuesta.failureCount,
+    exitosos: successCount,
+    fallidos: failureCount,
   };
 });
 

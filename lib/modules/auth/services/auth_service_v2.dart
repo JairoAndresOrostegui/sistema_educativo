@@ -6,7 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../../models/user/user_model_v2.dart';
+import '../../../utils/firebase_utils.dart';
 import '../../../utils/user_log_service.dart';
+import '../../../utils/validators.dart';
 import '../utils/auth_error_mapper.dart';
 
 class AuthService {
@@ -23,16 +25,47 @@ class AuthService {
   static StreamSubscription<String>? _tokenRefreshSub;
 
   Future<userModelv2?> loginWithEmailAndPassword(
-    String email,
+    String identifier,
     String password,
   ) async {
-    final correoLower = email.trim().toLowerCase();
-    final userDoc = await _findUserByInstitutionalEmail(correoLower);
+    final trimmedIdentifier = identifier.trim();
+    final isEmailLogin = Validators.isValidEmail(trimmedIdentifier);
+    final normalizedIdentifier =
+        isEmailLogin ? trimmedIdentifier.toLowerCase() : trimmedIdentifier;
+
+    final userDoc =
+        isEmailLogin
+            ? await _findUserByInstitutionalEmail(normalizedIdentifier)
+            : await _findUserByDocument(normalizedIdentifier);
     await _ensureNotLocked(userDoc);
+
+    if (userDoc == null) {
+      throw Exception(
+        isEmailLogin
+            ? 'No existe una cuenta con ese correo.'
+            : 'No existe un estudiante con ese documento.',
+      );
+    }
+
+    final loginCandidate = userDoc.data() ?? <String, dynamic>{};
+    final loginRole = (loginCandidate['role'] ?? '').toString().trim();
+    final loginEmail =
+        (loginCandidate['institutionalEmail'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    if (!isEmailLogin && loginRole != 'Estudiante') {
+      throw Exception('Solo los estudiantes pueden iniciar sesion con documento.');
+    }
+
+    if (loginEmail.isEmpty) {
+      throw Exception('La cuenta no tiene un correo configurado para acceso.');
+    }
 
     try {
       final credential = await _auth.signInWithEmailAndPassword(
-        email: correoLower,
+        email: loginEmail,
         password: password.trim(),
       );
 
@@ -50,22 +83,25 @@ class AuthService {
         throw Exception('El usuario no esta registrado en la base de datos.');
       }
 
-      final data = userSnap.data() ?? {};
+      final data = userSnap.data() ?? <String, dynamic>{};
       final uidFirestore = userSnap.id;
 
       final correoGuardado =
           (data['institutionalEmail'] ?? '').toString().trim().toLowerCase();
-      if (correoGuardado.isNotEmpty &&
-          correoGuardado != correoLower) {
+      if (correoGuardado.isNotEmpty && correoGuardado != loginEmail) {
         await _auth.signOut();
         throw Exception(
           'El correo no coincide con el registrado para esta cuenta.',
         );
       }
 
-      if (firebaseUser != null && !firebaseUser.emailVerified) {
+      final role = (data['role'] ?? '').toString().trim();
+      final requiresEmailVerification = role != 'Estudiante';
+      if (requiresEmailVerification &&
+          firebaseUser != null &&
+          !firebaseUser.emailVerified) {
         await _auth.signOut();
-        throw Exception('Debes verificar tu correo antes de iniciar sesión.');
+        throw Exception('Debes verificar tu correo antes de iniciar sesion.');
       }
 
       final status = (data['status'] ?? '').toString().toLowerCase();
@@ -76,46 +112,23 @@ class AuthService {
         );
       }
 
-      // limpiar intentos fallidos al login exitoso
-      if (userDoc != null) {
-        await _resetFailedAttempts(userDoc.id);
-      }
+      await _resetFailedAttempts(userDoc.id);
 
       try {
         await FirebaseMessaging.instance.requestPermission();
 
         final token = await FirebaseMessaging.instance.getToken();
         if (token != null && token.isNotEmpty) {
-          final dupSingle =
-              await usuariosRef.where('fcmToken', isEqualTo: token).get();
-          for (final d in dupSingle.docs) {
-            if (d.id != uidFirestore) {
-              await d.reference.update({'fcmToken': FieldValue.delete()});
-            }
-          }
-          final dupArray =
-              await usuariosRef.where('fcmTokens', arrayContains: token).get();
-          for (final d in dupArray.docs) {
-            if (d.id != uidFirestore) {
-              await d.reference.update({
-                'fcmTokens': FieldValue.arrayRemove([token]),
-              });
-            }
-          }
-
-          await usuariosRef.doc(uidFirestore).update({
-            'fcmToken': token,
-            'fcmTokens': FieldValue.arrayUnion([token]),
-          });
+          await saveUserNotificationToken(userId: uidFirestore, token: token);
 
           await _tokenRefreshSub?.cancel();
           _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((
             newToken,
           ) async {
-            await usuariosRef.doc(uidFirestore).update({
-              'fcmToken': newToken,
-              'fcmTokens': FieldValue.arrayUnion([newToken]),
-            });
+            await saveUserNotificationToken(
+              userId: uidFirestore,
+              token: newToken,
+            );
           });
         }
       } catch (_) {
@@ -124,7 +137,6 @@ class AuthService {
 
       final userModel = userModelv2.fromFirestore(data, uidFirestore);
 
-      // Validaciones adicionales de rol y tenant
       if ((userModel.institution).toString().trim().isEmpty ||
           (userModel.campus).toString().trim().isEmpty) {
         await _auth.signOut();
@@ -145,11 +157,9 @@ class AuthService {
     } on FirebaseAuthException catch (e) {
       final code = e.code;
       if (code == 'invalid-credential' || code == 'wrong-password') {
-        if (userDoc != null) {
-          final locked = await _incrementFailedAttempts(userDoc.id);
-          if (locked) {
-            throw Exception(AuthErrorMapper.lockMessage);
-          }
+        final locked = await _incrementFailedAttempts(userDoc.id);
+        if (locked) {
+          throw Exception(AuthErrorMapper.lockMessage);
         }
       }
       throw Exception(AuthErrorMapper.mapFirebaseCode(code));
@@ -161,11 +171,9 @@ class AuthService {
     final emailTrim = email.trim();
     final emailLower = emailTrim.toLowerCase();
 
-    // Intento 1: correo tal cual
     QuerySnapshot<Map<String, dynamic>> query =
         await usuarios.where('institutionalEmail', isEqualTo: emailTrim).get();
 
-    // Intento 2: en minúsculas (para tolerar mayúsculas al escribir)
     if (query.docs.isEmpty && emailLower != emailTrim) {
       query =
           await usuarios
@@ -200,12 +208,14 @@ class AuthService {
     try {
       await UserLogService().logEvent(user: currentUser, event: 'logout');
     } catch (_) {}
+    try {
+      await clearUserNotificationToken(userId: currentUser.id);
+    } catch (_) {}
     await _tokenRefreshSub?.cancel();
     _tokenRefreshSub = null;
     await _auth.signOut();
   }
 
-  // === Manejo de intentos fallidos ===
   Future<DocumentSnapshot<Map<String, dynamic>>?> _findUserByInstitutionalEmail(
     String emailLower,
   ) async {
@@ -223,11 +233,28 @@ class AuthService {
     }
   }
 
+  Future<DocumentSnapshot<Map<String, dynamic>>?> _findUserByDocument(
+    String document,
+  ) async {
+    try {
+      final snap =
+          await _firestore
+              .collection('users')
+              .where('document', isEqualTo: document.trim())
+              .limit(1)
+              .get();
+      if (snap.docs.isEmpty) return null;
+      return snap.docs.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _ensureNotLocked(
     DocumentSnapshot<Map<String, dynamic>>? userDoc,
   ) async {
     if (userDoc == null) return;
-    final data = userDoc.data() ?? {};
+    final data = userDoc.data() ?? <String, dynamic>{};
     final lockedUntil = data['lockedUntil'];
     if (lockedUntil is Timestamp) {
       final dt = lockedUntil.toDate();
@@ -244,7 +271,7 @@ class AuthService {
       final ref = _firestore.collection('users').doc(userId);
       return await _firestore.runTransaction<bool>((txn) async {
         final snap = await txn.get(ref);
-        final data = snap.data() ?? {};
+        final data = snap.data() ?? <String, dynamic>{};
         final current = (data['loginAttempts'] ?? 0) as int;
         final next = current + 1;
         if (next >= 5) {

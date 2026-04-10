@@ -22,7 +22,11 @@ class _PushBootstrapState extends State<PushBootstrap> {
 
     await initializePush(
       webVapidKey: widget.webVapidKey,
-      onNewToken: (t) => saveUserFcmToken(userId: userId, token: t),
+      onNewToken: (t) async {
+        await saveUserNotificationToken(userId: userId, token: t);
+        if (!mounted) return;
+        context.read<UserProviderV2>().updateNotificationToken(t);
+      },
     );
   }
 

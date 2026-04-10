@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/notification_service.dart';
+import '../../../utils/notification_tokens.dart';
 import '../../../utils/parameters_service.dart';
 import '../../../utils/navigation_utils.dart';
 import '../services/file_service.dart';
@@ -103,19 +104,6 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     setState(() => _pickedFile = file);
   }
 
-  List<String> _extractTokens(Map<String, dynamic> data) {
-    final out = <String>[];
-    final t1 = data['fcmToken'];
-    if (t1 is String && t1.trim().isNotEmpty) out.add(t1.trim());
-    final tN = data['fcmTokens'];
-    if (tN is List) {
-      out.addAll(
-        tN.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty),
-      );
-    }
-    return out;
-  }
-
   Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
     for (var i = 0; i < list.length; i += size) {
       yield list.sublist(i, i + size > list.length ? list.length : i + size);
@@ -181,7 +169,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
 
       final stuTokens = <String>{};
       for (final d in stuSnap.docs) {
-        stuTokens.addAll(_extractTokens(d.data()));
+        stuTokens.addAll(extractNotificationTokens(d.data()));
       }
 
       final famTokens = <String>{};
@@ -198,7 +186,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                 .get();
 
         for (final d in famSnap.docs) {
-          famTokens.addAll(_extractTokens(d.data()));
+          famTokens.addAll(extractNotificationTokens(d.data()));
         }
       }
 

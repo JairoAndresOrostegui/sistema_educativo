@@ -148,7 +148,11 @@ class AuthorizationDetailsDialog extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Nota del administrador',
+                  request.status == AuthorizationStatus.rejected
+                      ? 'Motivo del rechazo'
+                      : request.requiresRequesterEdit
+                      ? 'Motivo para correccion'
+                      : 'Nota del administrador',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -163,7 +167,7 @@ class AuthorizationDetailsDialog extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Evidencia',
+                  'Observacion de cierre',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),

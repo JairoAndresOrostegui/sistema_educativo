@@ -23,7 +23,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _loading = false;
@@ -31,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -124,19 +124,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // Email
+                                        // Correo o documento
                                         Semantics(
                                           label:
-                                              'Campo para correo electronico',
+                                              'Campo para correo institucional o documento',
                                           hint:
-                                              'Ingrese su correo institucional',
+                                              'Ingrese su correo institucional o, si es estudiante, su documento',
                                           textField: true,
                                           enabled: true,
                                           focusable: true,
                                           child: TextFormField(
-                                            controller: _emailController,
+                                            controller: _identifierController,
                                             decoration: InputDecoration(
-                                              labelText: 'Correo electronico',
+                                              labelText: 'Correo o documento',
                                               labelStyle: TextStyle(
                                                 color: labelColor,
                                                 fontFamily: fontGeneral,
@@ -160,10 +160,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                                   value.isEmpty) {
                                                 return 'Este campo es obligatorio';
                                               }
-                                              if (!Validators.isValidEmail(
-                                                value,
-                                              )) {
-                                                return 'Ingrese un correo valido';
+                                              final trimmed = value.trim();
+                                              final isEmail = Validators.isValidEmail(
+                                                trimmed,
+                                              );
+                                              final isDocument =
+                                                  RegExp(r'^[0-9]{6,}$').hasMatch(
+                                                    trimmed,
+                                                  );
+                                              if (!isEmail && !isDocument) {
+                                                return 'Ingrese un correo valido o un documento numerico';
                                               }
                                               return null;
                                             },
@@ -330,13 +336,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _iniciarSesion() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final email = _emailController.text.trim();
+    final identifier = _identifierController.text.trim();
     final password = _passwordController.text.trim();
 
     setState(() => _loading = true);
     try {
       final user = await AuthService().loginWithEmailAndPassword(
-        email,
+        identifier,
         password,
       );
 

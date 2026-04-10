@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
+import '../../authorization/services/authorization_service.dart';
 import '../../enrollment/services/enrollment_service.dart';
 import 'dashboard_layout.dart';
 
@@ -20,6 +21,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   bool isLoading = true;
   Stream<QuerySnapshot<Map<String, dynamic>>>? _pendingStream;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingSub;
+  StreamSubscription<int>? _pendingAuthSub;
 
   @override
   void initState() {
@@ -145,11 +147,23 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
+    if (esSuperadmin || perms.contains('mensajeria.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Mensajeria',
+          icon: Icons.chat_bubble_outline,
+          route: '/messages',
+        ),
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _menuItems = items;
       isLoading = false;
     });
+
+    _listenPendingAuthorizations(user.institution, user.campus);
   }
 
   void _listenPending() {
@@ -177,9 +191,38 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     });
   }
 
+  void _listenPendingAuthorizations(String institutionId, String campusId) {
+    _pendingAuthSub?.cancel();
+    _pendingAuthSub = AuthorizationService()
+        .watchPendingCountForAdmin(
+          institutionId: institutionId,
+          campusId: campusId,
+        )
+        .listen((pendingCount) {
+          if (!mounted) return;
+          setState(() {
+            _menuItems =
+                _menuItems
+                    .map(
+                      (m) =>
+                          m.route == '/admin_authorization'
+                              ? MenuItemData(
+                                label: m.label,
+                                icon: m.icon,
+                                route: m.route,
+                                badgeCount: pendingCount,
+                              )
+                              : m,
+                    )
+                    .toList();
+          });
+        });
+  }
+
   @override
   void dispose() {
     _pendingSub?.cancel();
+    _pendingAuthSub?.cancel();
     super.dispose();
   }
 

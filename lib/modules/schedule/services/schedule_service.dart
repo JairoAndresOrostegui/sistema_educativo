@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/schedule/subject_model.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
+import '../../../utils/notification_tokens.dart';
 import '../../../utils/parameters_service.dart';
 
 class ScheduleService {
@@ -256,22 +257,6 @@ class ScheduleService {
     return byDay;
   }
 
-  List<String> _extractTokens(Map<String, dynamic> data) {
-    final out = <String>[];
-
-    // Soporta fcmToken (string) y fcmTokens (lista)
-    final t1 = data['fcmToken'];
-    if (t1 is String && t1.trim().isNotEmpty) out.add(t1.trim());
-
-    final tN = data['fcmTokens'];
-    if (tN is List) {
-      out.addAll(
-        tN.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty),
-      );
-    }
-    return out;
-  }
-
   Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
     for (var i = 0; i < list.length; i += size) {
       yield list.sublist(i, i + size > list.length ? list.length : i + size);
@@ -302,7 +287,7 @@ class ScheduleService {
       // Tokens estudiantes
       final studentTokens = <String>{};
       for (final d in studentsSnap.docs) {
-        studentTokens.addAll(_extractTokens(d.data()));
+        studentTokens.addAll(extractNotificationTokens(d.data()));
       }
 
       // 2) Familiares que tengan esos estudiantes (array-contains-any max 10)
@@ -319,7 +304,7 @@ class ScheduleService {
                 .where('studentIds', arrayContainsAny: chunk)
                 .get();
         for (final d in famSnap.docs) {
-          familyTokens.addAll(_extractTokens(d.data()));
+          familyTokens.addAll(extractNotificationTokens(d.data()));
         }
       }
 

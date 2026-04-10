@@ -15,9 +15,11 @@ class AdminActionResult {
 
 class AdminAuthorizationActionDialog extends StatefulWidget {
   final AuthorizationStatus currentStatus;
+  final bool requiresRequesterEdit;
   const AdminAuthorizationActionDialog({
     super.key,
     required this.currentStatus,
+    this.requiresRequesterEdit = false,
   });
 
   @override
@@ -34,7 +36,10 @@ class _AdminAuthorizationActionDialogState
   @override
   void initState() {
     super.initState();
-    _sel = widget.currentStatus;
+    _sel =
+        widget.currentStatus == AuthorizationStatus.approved
+            ? AuthorizationStatus.finished
+            : AuthorizationStatus.pending;
   }
 
   @override
@@ -49,6 +54,36 @@ class _AdminAuthorizationActionDialogState
       _sel == AuthorizationStatus.rejected;
 
   bool get _needsEvidence => _sel == AuthorizationStatus.finished;
+
+  List<DropdownMenuItem<AuthorizationStatus>> get _items {
+    if (widget.currentStatus == AuthorizationStatus.approved) {
+      return const [
+        DropdownMenuItem(
+          value: AuthorizationStatus.finished,
+          child: Text('Finalizada'),
+        ),
+      ];
+    }
+
+    if (widget.currentStatus == AuthorizationStatus.pending) {
+      return const [
+        DropdownMenuItem(
+          value: AuthorizationStatus.pending,
+          child: Text('Pendiente para correccion'),
+        ),
+        DropdownMenuItem(
+          value: AuthorizationStatus.approved,
+          child: Text('Aprobada'),
+        ),
+        DropdownMenuItem(
+          value: AuthorizationStatus.rejected,
+          child: Text('Rechazada'),
+        ),
+      ];
+    }
+
+    return const [];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,24 +109,7 @@ class _AdminAuthorizationActionDialogState
                 labelText: 'Nuevo estado',
                 border: OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: AuthorizationStatus.pending,
-                  child: Text('Pendiente'),
-                ),
-                DropdownMenuItem(
-                  value: AuthorizationStatus.approved,
-                  child: Text('Aprobada'),
-                ),
-                DropdownMenuItem(
-                  value: AuthorizationStatus.rejected,
-                  child: Text('Rechazada'),
-                ),
-                DropdownMenuItem(
-                  value: AuthorizationStatus.finished,
-                  child: Text('Finalizada'),
-                ),
-              ],
+              items: _items,
               onChanged: (v) => setState(() => _sel = v),
             ),
             const SizedBox(height: 12),
@@ -100,8 +118,11 @@ class _AdminAuthorizationActionDialogState
                 controller: _noteCtrl,
                 minLines: 3,
                 maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Nota para el padre/estudiante',
+                decoration: InputDecoration(
+                  labelText:
+                      _sel == AuthorizationStatus.rejected
+                          ? 'Motivo del rechazo'
+                          : 'Motivo para correccion',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -111,7 +132,7 @@ class _AdminAuthorizationActionDialogState
                 minLines: 3,
                 maxLines: 6,
                 decoration: const InputDecoration(
-                  labelText: 'Evidencia de salida',
+                  labelText: 'Observacion de cierre',
                   border: OutlineInputBorder(),
                 ),
               ),

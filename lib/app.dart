@@ -51,6 +51,13 @@ class _AppRouterState extends State<AppRouter> {
   }
 
   GoRouter _buildRouter(UserProviderV2 userProvider) {
+    bool hasMessagingAccess(dynamic user) {
+      if (user == null) return false;
+      final perms =
+          user.permissions.map((e) => e.trim().toLowerCase()).toSet();
+      return user.isSuperadmin || perms.contains('mensajeria.ver');
+    }
+
     String homeForRole(String? role) {
       switch (role) {
         case 'Administrador':
@@ -65,7 +72,8 @@ class _AppRouterState extends State<AppRouter> {
       }
     }
 
-    bool allowedForRole(String? role, String path) {
+    bool allowedForRole(dynamic user, String path) {
+      final role = user?.role as String?;
       const commons = {'/profile', '/logout', '/access_denied'};
       if (commons.contains(path)) return true;
 
@@ -82,6 +90,7 @@ class _AppRouterState extends State<AppRouter> {
             '/enrollment',
             '/admin_parameters',
             '/admin_qr',
+            if (hasMessagingAccess(user)) '/messages',
           }.contains(path);
         case 'Docente':
           return {
@@ -90,7 +99,7 @@ class _AppRouterState extends State<AppRouter> {
             '/teacher_schedule',
             '/teacher_document',
             '/teacher_authorization',
-            '/messages',
+            if (hasMessagingAccess(user)) '/messages',
           }.contains(path);
         case 'Estudiante':
         case 'Familiar':
@@ -102,7 +111,7 @@ class _AppRouterState extends State<AppRouter> {
             '/student_authorization',
             '/enrollment',
             '/student_qr',
-            '/messages',
+            if (hasMessagingAccess(user)) '/messages',
           }.contains(path);
         default:
           return false;
@@ -126,7 +135,7 @@ class _AppRouterState extends State<AppRouter> {
         final home = homeForRole(user.role);
         if (loggingIn) return home;
 
-        if (!allowedForRole(user.role, currentPath)) {
+        if (!allowedForRole(user, currentPath)) {
           return '/access_denied';
         }
 

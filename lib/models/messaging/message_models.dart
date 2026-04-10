@@ -5,7 +5,9 @@ class MessageContact {
   final String fullName;
   final String role;
   final bool isGroup;
+  final String? groupType;
   final String? targetGrade;
+  final String? targetRole;
   final String? grade;
   final String? studentContextId;
   final String? studentContextName;
@@ -16,7 +18,9 @@ class MessageContact {
     required this.fullName,
     required this.role,
     this.isGroup = false,
+    this.groupType,
     this.targetGrade,
+    this.targetRole,
     this.grade,
     this.studentContextId,
     this.studentContextName,

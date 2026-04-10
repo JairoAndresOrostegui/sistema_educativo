@@ -11,13 +11,16 @@ Incluye modulos de matricula, rutas, horarios, documentos, autorizaciones, QR, p
 ## 1. Ingreso al sistema
 
 1. Abra la aplicacion (web o app movil).
-2. Ingrese correo y contrasena.
-3. Si olvido la contrasena, use la opcion `Olvidaste tu contrasena?`.
+2. Ingrese sus credenciales segun el rol:
+   - Administrador, Docente y Familiar: `correo institucional + contrasena`
+   - Estudiante: `documento + contrasena`
+3. Si olvido la contrasena, use la opcion `Olvidaste tu contrasena?` solo para cuentas con acceso por correo.
 4. Al iniciar sesion, el sistema muestra el panel segun su rol.
 
 Notas importantes:
 - Si su cuenta no esta activa o no tiene permisos, no podra entrar a ciertos modulos.
 - El menu puede cambiar segun permisos asignados por el administrador.
+- En el caso de estudiantes, el sistema autentica internamente con Firebase Auth usando el correo institucional registrado, pero la pantalla de acceso permite entrar con documento.
 
 ## 2. Que ve cada rol
 
@@ -110,6 +113,23 @@ Flujo recomendado:
 2. Cree o edite usuario con rol, grado y permisos.
 3. Verifique que el estado quede activo.
 4. Use eliminar solo cuando aplique (evitar borrar usuarios en uso).
+
+Importacion masiva de docentes:
+- Solo disponible para superadmin.
+- Se realiza desde el icono de carga dentro de `Gestion de usuarios`.
+- Permite importar docentes desde Excel.
+
+Columnas recomendadas para Excel:
+- Obligatorias: `nombres`, `apellidos`, `documento`, `correo`, `grado`
+- Opcionales: `tipo_documento`, `correo_institucional`, `estado`
+- Alternativa de nombre: `nombre_completo`
+
+Notas de importacion:
+- Los docentes se crean con rol `Docente`.
+- La contrasena inicial queda igual al `documento`.
+- Si `correo_institucional` no se envia, se usa el valor de `correo`.
+- `tipo_documento` acepta abreviaturas como `CC` o el valor completo configurado en parametros.
+- La institucion y la sede se toman del superadmin logueado que ejecuta la importacion.
 
 ### 3.4 Parametros (Administrador)
 Permite configurar catalogos operativos del sistema.
@@ -233,8 +253,9 @@ Recomendaciones:
 ## 6. Solucion de problemas comunes
 
 ### No puedo iniciar sesion
-- Verifique correo y contrasena.
-- Use recuperacion de contrasena.
+- Si es estudiante, verifique documento y contrasena.
+- Si es administrador, docente o familiar, verifique correo institucional y contrasena.
+- Use recuperacion de contrasena solo en cuentas con acceso por correo.
 - Valide con administracion que su cuenta este activa.
 
 ### No veo un modulo en el menu
@@ -268,6 +289,11 @@ Si necesita ajustes funcionales (nuevos permisos, campos o reglas), registre el 
 - Pasos para reproducir
 - Resultado esperado
 - Evidencia (captura y fecha)
+
+## 9. Pendientes funcionales
+
+Pendiente urgente:
+- Implementar flujo de cambio y reseteo de contrasena para estudiantes sin depender de correo. La autenticacion por documento ya esta activa, pero falta el mecanismo administrativo y/o autoservicio controlado para actualizar la clave cuando el estudiante la olvide o necesite cambiarla.
 
 ---
 
