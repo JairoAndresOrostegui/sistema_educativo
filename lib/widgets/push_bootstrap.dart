@@ -33,7 +33,9 @@ class _PushBootstrapState extends State<PushBootstrap> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<UserProviderV2>().user;
-    if (user != null) {
+    if (user == null) {
+      _initedForUserId = null;
+    } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _ensureInitForUser(user.id);
       });

@@ -1,9 +1,6 @@
 // ignore: file_names
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/firebase_utils.dart';
@@ -22,7 +19,6 @@ class AuthService {
     'Estudiante',
     'Familiar',
   ];
-  static StreamSubscription<String>? _tokenRefreshSub;
 
   Future<userModelv2?> loginWithEmailAndPassword(
     String identifier,
@@ -114,27 +110,6 @@ class AuthService {
 
       await _resetFailedAttempts(userDoc.id);
 
-      try {
-        await FirebaseMessaging.instance.requestPermission();
-
-        final token = await FirebaseMessaging.instance.getToken();
-        if (token != null && token.isNotEmpty) {
-          await saveUserNotificationToken(userId: uidFirestore, token: token);
-
-          await _tokenRefreshSub?.cancel();
-          _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((
-            newToken,
-          ) async {
-            await saveUserNotificationToken(
-              userId: uidFirestore,
-              token: newToken,
-            );
-          });
-        }
-      } catch (_) {
-        // Silencia error de FCM sin afectar login
-      }
-
       final userModel = userModelv2.fromFirestore(data, uidFirestore);
 
       if ((userModel.institution).toString().trim().isEmpty ||
@@ -211,8 +186,6 @@ class AuthService {
     try {
       await clearUserNotificationToken(userId: currentUser.id);
     } catch (_) {}
-    await _tokenRefreshSub?.cancel();
-    _tokenRefreshSub = null;
     await _auth.signOut();
   }
 

@@ -26,6 +26,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   String? _selectedGrade;
   String _selectedDay = 'lunes';
   bool _isLoading = false;
+  String? _loadError;
   List<userModelv2> _teachers = [];
   Map<String, List<SubjectModel>> _allSchedules = {};
   List<String> _availableGrades = [];
@@ -81,8 +82,15 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
               .map((p) => p.valor.trim())
               .where((g) => g.toLowerCase() != 'no aplica')
               .toList();
-      setState(() => _availableGrades = grades);
-    } catch (_) {}
+      setState(() {
+        _availableGrades = grades;
+        _loadError = null;
+      });
+    } catch (e) {
+      setState(() {
+        _loadError = 'No se pudieron cargar los grados. $e';
+      });
+    }
     setState(() => _isLoading = false);
   }
 
@@ -95,8 +103,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           institutionId: currentUser.institution,
           campusId: currentUser.campus,
         );
+        _loadError = null;
       }
-    } catch (_) {}
+    } catch (e) {
+      _loadError = 'No se pudieron cargar los docentes. $e';
+    }
     setState(() => _isLoading = false);
   }
 
@@ -335,6 +346,27 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
               onChanged: (String? newGrade) => _loadSchedulesForGrade(newGrade),
               availableGrades: _availableGrades,
             ),
+            if (_loadError != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.redAccent.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Text(
+                  _loadError!,
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             if (_isLoading)
               const Expanded(child: Center(child: CircularProgressIndicator()))

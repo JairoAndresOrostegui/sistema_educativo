@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:intl/intl.dart';
@@ -29,6 +31,7 @@ class AuthorizationAdminScreen extends StatefulWidget {
 
 class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   final _svc = AuthorizationService();
+  StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
 
@@ -86,25 +89,24 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
       return;
     }
 
-    await _loadAll();
+    _subscribeToItems();
   }
 
-  Future<void> _loadAll({bool showLoading = true}) async {
-    if (showLoading) {
-      setState(() => _loading = true);
-    }
-
-    final page = await _svc.listForAdmin(
-      institutionId: _institutionId,
-
-      campusId: _campusId,
-    );
-
-    setState(() {
-      _items = page.items;
-
-      if (showLoading) _loading = false;
-    });
+  void _subscribeToItems() {
+    _itemsSub?.cancel();
+    setState(() => _loading = true);
+    _itemsSub = _svc
+        .watchForAdmin(
+          institutionId: _institutionId,
+          campusId: _campusId,
+        )
+        .listen((items) {
+          if (!mounted) return;
+          setState(() {
+            _items = items;
+            _loading = false;
+          });
+        });
   }
 
   String _fmtD(DateTime? d) =>
@@ -181,8 +183,6 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
         admin: _logged!,
       );
 
-      await _loadAll(showLoading: false);
-
       if (!mounted) return;
 
       await DialogUtils.showSuccess(
@@ -205,6 +205,12 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
     } finally {
       if (mounted) setState(() => _updatingRequestId = null);
     }
+  }
+
+  @override
+  void dispose() {
+    _itemsSub?.cancel();
+    super.dispose();
   }
 
   @override

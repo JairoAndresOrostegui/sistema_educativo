@@ -30,6 +30,7 @@ import 'modules/enrollment/screens/enrollment_form_screen.dart';
 import 'modules/enrollment/screens/admin_enrollment_screen.dart';
 import 'modules/user/screens/admin_users_screen.dart';
 import 'providers/user_provider_v2.dart';
+import 'utils/app_navigator.dart';
 
 class AppRouter extends StatefulWidget {
   const AppRouter({super.key});
@@ -119,6 +120,7 @@ class _AppRouterState extends State<AppRouter> {
     }
 
     return GoRouter(
+      navigatorKey: appNavigatorKey,
       initialLocation: '/login',
       refreshListenable: userProvider,
       errorBuilder: (context, state) => const AccessDeniedPage(),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -22,6 +24,7 @@ class AuthorizationTeacherScreen extends StatefulWidget {
 class _AuthorizationTeacherScreenState
     extends State<AuthorizationTeacherScreen> {
   final _svc = AuthorizationService();
+  StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
   bool _isSuperadmin = false;
@@ -83,7 +86,7 @@ class _AuthorizationTeacherScreenState
       _activeGrade = g;
     }
 
-    await _reload();
+    _subscribeToItems();
   }
 
   DocumentSnapshot<Map<String, dynamic>>? get _cursor =>
@@ -106,62 +109,51 @@ class _AuthorizationTeacherScreenState
         ..add(null);
       _pageIndex = 0;
     });
-    await _loadPage();
+    _subscribeToItems();
   }
 
-  Future<void> _loadPage() async {
+  void _subscribeToItems() {
     if (_activeGrade == null || _activeGrade!.isEmpty) {
       setState(() => _loading = false);
       return;
     }
-    try {
-      final page = await _svc.listForGrade(
-        institutionId: _institutionId,
-        campusId: _campusId,
-        grade: _activeGrade!,
-        limit: _perPage,
-        startAfter: _cursor,
-      );
-      setState(() {
-        _items.addAll(page.items);
-        _hasNext = page.hasNext;
-        if (page.lastDoc != null) {
-          if (_cursors.length == _pageIndex + 1) {
-            _cursors.add(page.lastDoc);
-          } else {
-            _cursors[_pageIndex + 1] = page.lastDoc;
-          }
-        }
-        _loading = false;
-      });
-    } catch (e) {
-      if (mounted) {
-        await DialogUtils.showError(
-          context: context,
-          title: 'Error',
-          message: e.toString(),
+    _itemsSub?.cancel();
+    _itemsSub = _svc
+        .watchForGrade(
+          institutionId: _institutionId,
+          campusId: _campusId,
+          grade: _activeGrade!,
+          limit: _perPage,
+        )
+        .listen(
+          (items) {
+            if (!mounted) return;
+            setState(() {
+              _items
+                ..clear()
+                ..addAll(items);
+              _hasNext = false;
+              _loading = false;
+            });
+          },
+          onError: (Object error) async {
+            if (!mounted) return;
+            await DialogUtils.showError(
+              context: context,
+              title: 'Error',
+              message: error.toString(),
+            );
+            if (mounted) setState(() => _loading = false);
+          },
         );
-      }
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
   Future<void> _nextPage() async {
-    if (!_hasNext || _loading) return;
-    setState(() {
-      _pageIndex += 1;
-      _loading = true;
-    });
-    await _loadPage();
+    return;
   }
 
   Future<void> _prevPage() async {
-    if (_pageIndex == 0 || _loading) return;
-    setState(() {
-      _pageIndex -= 1;
-      _loading = true;
-    });
-    await _loadPage();
+    return;
   }
 
   String _fmtD(DateTime? d) =>
@@ -198,6 +190,12 @@ class _AuthorizationTeacherScreenState
     final parts = text.trim().split(RegExp(r'\s+'));
     if (parts.length <= n) return text.trim();
     return '${parts.take(n).join(' ')}...';
+  }
+
+  @override
+  void dispose() {
+    _itemsSub?.cancel();
+    super.dispose();
   }
 
   @override

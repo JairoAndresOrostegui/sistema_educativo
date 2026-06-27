@@ -31,6 +31,49 @@ class AuthorizationService {
   final _db = FirebaseFirestore.instance;
   static const _col = 'authorization_requests';
 
+  Stream<List<AuthorizationRequest>> watchForStudent({
+    required String institutionId,
+    required String campusId,
+    required String studentId,
+    int limit = 20,
+  }) {
+    return _db
+        .collection(_col)
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId)
+        .where('studentId', isEqualTo: studentId)
+        .snapshots()
+        .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
+  }
+
+  Stream<List<AuthorizationRequest>> watchForGrade({
+    required String institutionId,
+    required String campusId,
+    required String grade,
+    int limit = 20,
+  }) {
+    return _db
+        .collection(_col)
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId)
+        .where('grade', isEqualTo: grade)
+        .snapshots()
+        .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
+  }
+
+  Stream<List<AuthorizationRequest>> watchForAdmin({
+    required String institutionId,
+    required String campusId,
+    int limit = 50,
+  }) {
+    return _db
+        .collection(_col)
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId)
+        .snapshots()
+        .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
+  }
+
   Future<AuthorizationPage> listForStudent({
     required String institutionId,
     required String campusId,
@@ -404,5 +447,23 @@ class AuthorizationService {
     for (var i = 0; i < list.length; i += size) {
       yield list.sublist(i, i + size > list.length ? list.length : i + size);
     }
+  }
+
+  List<AuthorizationRequest> _sortedItemsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snap, {
+    required int limit,
+  }) {
+    final items =
+        snap.docs
+            .map((d) => AuthorizationRequest.fromMap(d.data(), d.id))
+            .toList()
+          ..sort((a, b) {
+            final da = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final db = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return db.compareTo(da);
+          });
+
+    if (items.length <= limit) return items;
+    return items.take(limit).toList();
   }
 }

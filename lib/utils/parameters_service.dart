@@ -13,6 +13,22 @@ class Parameter {
 class ParametersService {
   final _firestore = FirebaseFirestore.instance;
 
+  Parameter _mapParameter(Map<String, dynamic> data) {
+    final valor = (data['valor'] ?? '').toString().trim();
+    final etiquetaRaw = data['etiqueta'];
+    final etiqueta =
+        (etiquetaRaw == null ? valor : etiquetaRaw.toString()).trim();
+    final ordenRaw = data['orden'];
+    final orden =
+        ordenRaw is int
+            ? ordenRaw
+            : ordenRaw is num
+            ? ordenRaw.toInt()
+            : int.tryParse(ordenRaw?.toString() ?? '') ?? 0;
+
+    return Parameter(etiqueta: etiqueta, valor: valor, orden: orden);
+  }
+
   Future<List<Parameter>> getDocumentTypes() async {
     final snapshot =
         await _firestore
@@ -21,15 +37,7 @@ class ParametersService {
             .where('activo', isEqualTo: true)
             .get();
 
-    final parameters =
-        snapshot.docs.map((doc) {
-          final data = doc.data();
-          return Parameter(
-            etiqueta: data['etiqueta'],
-            valor: data['valor'],
-            orden: data['orden'],
-          );
-        }).toList();
+    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
@@ -46,11 +54,11 @@ class ParametersService {
 
     final parameters =
         snapshot.docs.map((doc) {
-          final data = doc.data();
+          final mapped = _mapParameter(doc.data());
           return Parameter(
-            etiqueta: data['valor'],
-            valor: data['valor'],
-            orden: data['orden'],
+            etiqueta: mapped.valor,
+            valor: mapped.valor,
+            orden: mapped.orden,
           );
         }).toList();
 
@@ -66,15 +74,7 @@ class ParametersService {
             .where('activo', isEqualTo: true)
             .get();
 
-    final parameters =
-        snapshot.docs.map((doc) {
-          final data = doc.data();
-          return Parameter(
-            etiqueta: data['etiqueta'],
-            valor: data['valor'],
-            orden: data['orden'],
-          );
-        }).toList();
+    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
@@ -89,15 +89,7 @@ class ParametersService {
             .where('activo', isEqualTo: true)
             .get();
 
-    final parameters =
-        snapshot.docs.map((doc) {
-          final data = doc.data();
-          return Parameter(
-            etiqueta: data['etiqueta'],
-            valor: data['valor'],
-            orden: data['orden'],
-          );
-        }).toList();
+    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
@@ -111,15 +103,7 @@ class ParametersService {
             .where('clave', isEqualTo: 'permission')
             .where('activo', isEqualTo: true)
             .get();
-    final parameters =
-        snapshot.docs.map((doc) {
-          final data = doc.data();
-          return Parameter(
-            etiqueta: data['etiqueta'],
-            valor: data['valor'],
-            orden: data['orden'],
-          );
-        }).toList();
+    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
