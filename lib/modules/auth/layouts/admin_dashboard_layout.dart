@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -159,9 +160,10 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin ||
-        perms.contains('sitio_web.ver') ||
-        perms.contains('sitio_web.editar')) {
+    if (kIsWeb &&
+        (esSuperadmin ||
+            perms.contains('sitio_web.ver') ||
+            perms.contains('sitio_web.editar'))) {
       items.add(
         const MenuItemData(
           label: 'Sitio web',

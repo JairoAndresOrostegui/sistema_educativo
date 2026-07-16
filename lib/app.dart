@@ -62,7 +62,7 @@ class _AppRouterState extends State<AppRouter> {
     }
 
     bool hasWebsiteAccess(dynamic user) {
-      if (user == null) return false;
+      if (!kIsWeb || user == null) return false;
       final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
       return user.isSuperadmin ||
           perms.contains('sitio_web.ver') ||
@@ -139,10 +139,24 @@ class _AppRouterState extends State<AppRouter> {
         final user = userProvider.user;
         final currentPath = state.uri.path;
         final loggingIn = currentPath == '/login';
-        const publicPaths = {'/', '/login', '/enrollment_public'};
+        const publicWebsitePaths = {
+          '/',
+          '/about',
+          '/admissions',
+          '/learning',
+          '/news-events',
+          '/parents',
+        };
+        const publicPaths = {
+          ...publicWebsitePaths,
+          '/login',
+          '/enrollment_public',
+        };
 
-        if (!kIsWeb && currentPath == '/') return '/login';
-        if (currentPath == '/') return null;
+        if (!kIsWeb && publicWebsitePaths.contains(currentPath)) {
+          return '/login';
+        }
+        if (publicWebsitePaths.contains(currentPath)) return null;
 
         if (user == null) {
           return publicPaths.contains(currentPath) ? null : '/login';
@@ -160,7 +174,32 @@ class _AppRouterState extends State<AppRouter> {
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => const PublicWebsiteScreen(),
+          builder: (context, state) => const PublicWebsiteScreen(slug: 'home'),
+        ),
+        GoRoute(
+          path: '/about',
+          builder: (context, state) => const PublicWebsiteScreen(slug: 'about'),
+        ),
+        GoRoute(
+          path: '/admissions',
+          builder:
+              (context, state) => const PublicWebsiteScreen(slug: 'admissions'),
+        ),
+        GoRoute(
+          path: '/learning',
+          builder:
+              (context, state) => const PublicWebsiteScreen(slug: 'learning'),
+        ),
+        GoRoute(
+          path: '/news-events',
+          builder:
+              (context, state) =>
+                  const PublicWebsiteScreen(slug: 'news-events'),
+        ),
+        GoRoute(
+          path: '/parents',
+          builder:
+              (context, state) => const PublicWebsiteScreen(slug: 'parents'),
         ),
         GoRoute(
           path: '/login',

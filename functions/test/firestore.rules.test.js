@@ -123,6 +123,24 @@ describe("Reglas Firestore", () => {
     await assertSucceeds(setDoc(doc(editorDb, "website/main"), {
       schoolName: "Liceo Bilingüe Rodolfo R. Llinás",
     }));
+    await assertFails(setDoc(doc(adminDb, "website_pages/about"), {
+      label: "Ataque",
+    }));
+    await assertSucceeds(setDoc(doc(editorDb, "website_pages/about"), {
+      label: "About",
+      slug: "about",
+      blocks: [],
+    }));
+  });
+
+  it("mantiene publicas las paginas pero protege los formularios", async () => {
+    const publicDb = env.unauthenticatedContext().firestore();
+    const editorDb = env.authenticatedContext("site-editor").firestore();
+    await assertSucceeds(getDoc(doc(publicDb, "website_pages/about")));
+    await assertFails(setDoc(doc(publicDb, "website_submissions/spam"), {
+      message: "contenido no validado",
+    }));
+    await assertSucceeds(getDoc(doc(editorDb, "website_submissions/example")));
   });
 
   it("reserva la asignacion de permisos al superadministrador", async () => {

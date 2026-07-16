@@ -3,6 +3,7 @@
 const {setGlobalOptions} = require("firebase-functions/v2");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 admin.initializeApp();
 setGlobalOptions({maxInstances: 10, region: "us-central1"});
@@ -240,4 +241,74 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
     if (error.code === "auth/user-not-found") return {success: true};
     throw new HttpsError("internal", "No se pudo eliminar el usuario.");
   }
+});
+
+exports.submitWebsiteForm = onCall(async (request) => {
+  const data = request.data || {};
+  if (typeof data.website === "string" && data.website.trim() !== "") {
+    return {success: true};
+  }
+
+  const pageId = requiredString(data.pageId, "pageId", 80);
+  const blockId = requiredString(data.blockId, "blockId", 120);
+  const name = requiredString(data.name, "nombre", 120);
+  const email = requiredString(data.email, "correo", 254).toLowerCase();
+  const message = requiredString(data.message, "mensaje", 3000);
+  const phone = typeof data.phone === "string" ? data.phone.trim() : "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || phone.length > 40) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Los datos de contacto no son validos.",
+    );
+  }
+
+  const pageSnapshot = await db.collection("website_pages").doc(pageId).get();
+  const blocks = pageSnapshot.data()?.blocks;
+  const validForm = pageSnapshot.exists && Array.isArray(blocks) &&
+    blocks.some((block) => block?.id === blockId &&
+      block?.type === "contactForm" && block?.enabled !== false);
+  if (!validForm) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El formulario no esta disponible.",
+    );
+  }
+
+  const forwarded = request.rawRequest.headers["x-forwarded-for"];
+  const remoteAddress = Array.isArray(forwarded) ? forwarded[0] :
+    (forwarded || request.rawRequest.ip || "unknown").toString().split(",")[0];
+  const rateId = crypto.createHash("sha256")
+      .update(`website-form:${remoteAddress}`)
+      .digest("hex");
+  const rateRef = db.collection("website_form_rate_limits").doc(rateId);
+  const now = admin.firestore.Timestamp.now();
+  await db.runTransaction(async (transaction) => {
+    const rateSnapshot = await transaction.get(rateRef);
+    const lastAt = rateSnapshot.data()?.lastAt;
+    if (lastAt instanceof admin.firestore.Timestamp &&
+        now.toMillis() - lastAt.toMillis() < 60000) {
+      throw new HttpsError(
+          "resource-exhausted",
+          "Espera un momento antes de enviar otro mensaje.",
+      );
+    }
+    transaction.set(rateRef, {
+      lastAt: now,
+      expiresAt: admin.firestore.Timestamp.fromMillis(
+          now.toMillis() + 24 * 60 * 60 * 1000,
+      ),
+    });
+  });
+
+  await db.collection("website_submissions").add({
+    pageId,
+    blockId,
+    name,
+    email,
+    phone,
+    message,
+    status: "new",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return {success: true};
 });

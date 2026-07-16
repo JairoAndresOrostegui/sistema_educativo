@@ -61,5 +61,39 @@ void main() {
       expect(decoded.backgroundColor, '#112233');
       expect(decoded.textColor, '#FFFFFF');
     });
+
+    test('crea una pagina independiente para cada menu', () {
+      final bundle = WebsiteBundle.defaults;
+      expect(bundle.pages.map((page) => page.slug), [
+        'home',
+        'about',
+        'admissions',
+        'learning',
+        'news-events',
+        'parents',
+      ]);
+      expect(bundle.pages.map((page) => page.id).toSet().length, 6);
+    });
+
+    test('conserva configuracion responsive y referencia de Storage', () {
+      const block = WebsiteBlock(
+        id: 'responsive',
+        mobileOrder: 4,
+        showOnDesktop: false,
+        mobileImagePosition: 'background',
+        mobileTitleSize: 27,
+        image: WebsiteAsset(
+          url: 'https://example.test/image.jpg',
+          storagePath: 'website/image.jpg',
+        ),
+      );
+      final decoded = WebsiteBlock.fromMap(block.toMap());
+      expect(decoded.mobileOrder, 4);
+      expect(decoded.showOnDesktop, isFalse);
+      expect(decoded.mobileImagePosition, 'background');
+      expect(decoded.mobileTitleSize, 27);
+      expect(decoded.image.storagePath, 'website/image.jpg');
+      expect(decoded.image.isManaged, isTrue);
+    });
   });
 }

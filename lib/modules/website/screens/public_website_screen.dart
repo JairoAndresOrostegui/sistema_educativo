@@ -1,586 +1,720 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/website_content.dart';
 import '../services/website_service.dart';
 
 class PublicWebsiteScreen extends StatefulWidget {
-  const PublicWebsiteScreen({super.key});
+  final String slug;
+
+  const PublicWebsiteScreen({super.key, this.slug = 'home'});
 
   @override
   State<PublicWebsiteScreen> createState() => _PublicWebsiteScreenState();
 }
 
 class _PublicWebsiteScreenState extends State<PublicWebsiteScreen> {
-  final _topKey = GlobalKey();
-  final _contactKey = GlobalKey();
-  final Map<String, GlobalKey> _pageKeys = {
-    for (final id in ['about', 'admissions', 'learning', 'news', 'parents'])
-      id: GlobalKey(),
-  };
+  late Future<({WebsiteSiteConfig config, WebsitePage page})?> _future;
 
-  void _goTo(GlobalKey key) {
-    final target = key.currentContext;
-    if (target != null) {
-      Scrollable.ensureVisible(
-        target,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeOutCubic,
-      );
-    }
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<WebsiteContent>(
-      stream: WebsiteService().watch(),
-      builder: (context, snapshot) {
-        final content = snapshot.data ?? WebsiteContent.defaults;
-        final color = _hexColor(content.primaryColor);
-        for (final item in content.navigation) {
-          _pageKeys.putIfAbsent(item.id, GlobalKey.new);
-        }
-        return Scaffold(
-          backgroundColor: const Color(0xFFFAF8F5),
-          body: SelectionArea(
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: _Header(
-                    key: _topKey,
-                    content: content,
-                    color: color,
-                    onHome: () => _goTo(_topKey),
-                    onNavigate: (id) => _goTo(_pageKeys[id]!),
-                    onLogin: () => context.go('/login'),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: _Hero(content: content, color: color),
-                ),
-                SliverToBoxAdapter(
-                  child: _Sections(
-                    content: content,
-                    color: color,
-                    pageKeys: _pageKeys,
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  key: _contactKey,
-                  child: _Footer(content: content, color: color),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  void didUpdateWidget(covariant PublicWebsiteScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.slug != widget.slug) _load();
   }
-}
 
-class _Header extends StatelessWidget {
-  final WebsiteContent content;
-  final Color color;
-  final VoidCallback onHome;
-  final ValueChanged<String> onNavigate;
-  final VoidCallback onLogin;
-
-  const _Header({
-    super.key,
-    required this.content,
-    required this.color,
-    required this.onHome,
-    required this.onNavigate,
-    required this.onLogin,
-  });
+  void _load() {
+    _future = WebsiteService().getPublicPage(widget.slug);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      elevation: 2,
-      color: Colors.white,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 850;
-          final navigation =
-              content.navigation.where((item) => item.enabled).toList();
-          return Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 18 : 48,
-              vertical: 14,
-            ),
-            child: Row(
-              children: [
-                InkWell(
-                  onTap: onHome,
-                  borderRadius: BorderRadius.circular(8),
-                  child: _SiteImage(
-                    url: content.logoUrl,
-                    width: compact ? 48 : 62,
-                    height: compact ? 48 : 62,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        content.schoolName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: compact ? 16 : 21,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      if (!compact)
-                        Text(
-                          content.tagline,
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                    ],
-                  ),
-                ),
-                if (!compact) ...[
-                  for (final item in navigation)
-                    TextButton(
-                      onPressed: () => onNavigate(item.id),
-                      child: Text(item.label),
-                    ),
-                  const SizedBox(width: 10),
-                ] else
-                  PopupMenuButton<String>(
-                    tooltip: 'Navegación',
-                    icon: const Icon(Icons.menu),
-                    onSelected: onNavigate,
-                    itemBuilder:
-                        (context) => [
-                          for (final item in navigation)
-                            PopupMenuItem(
-                              value: item.id,
-                              child: Text(item.label),
-                            ),
-                        ],
-                  ),
-                FilledButton.icon(
-                  onPressed: onLogin,
-                  style: FilledButton.styleFrom(backgroundColor: color),
-                  icon: const Icon(Icons.login, size: 19),
-                  label: Text(compact ? 'Ingresar' : 'Iniciar sesión'),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _Hero extends StatelessWidget {
-  final WebsiteContent content;
-  final Color color;
-
-  const _Hero({required this.content, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: MediaQuery.sizeOf(context).width < 700 ? 610 : 590,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _SiteImage(url: content.heroImageUrl, fit: BoxFit.cover),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xDD230405),
-                  Color(0x991C0505),
-                  Color(0x22000000),
-                ],
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.sizeOf(context).width < 700 ? 24 : 80,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 700),
+  Widget build(BuildContext context) =>
+      FutureBuilder<({WebsiteSiteConfig config, WebsitePage page})?>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final data = snapshot.data;
+          if (snapshot.hasError || data == null) {
+            return Scaffold(
+              body: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Text(
-                        content.tagline.toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      content.heroTitle,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize:
-                            MediaQuery.sizeOf(context).width < 700 ? 39 : 62,
-                        height: 1.04,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      content.heroBody,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 19,
-                        height: 1.55,
-                      ),
+                    const Icon(Icons.web_asset_off_outlined, size: 58),
+                    const SizedBox(height: 14),
+                    const Text('Esta página no está disponible.'),
+                    const SizedBox(height: 14),
+                    FilledButton(
+                      onPressed: () => context.go('/'),
+                      child: const Text('Ir al inicio'),
                     ),
                   ],
                 ),
               ),
+            );
+          }
+          return WebsitePreviewCanvas(
+            config: data.config,
+            page: data.page,
+            previewMobile: MediaQuery.sizeOf(context).width < 760,
+          );
+        },
+      );
+}
+
+class WebsitePreviewCanvas extends StatelessWidget {
+  final WebsiteSiteConfig config;
+  final WebsitePage page;
+  final bool previewMobile;
+  final bool editorMode;
+  final String? selectedBlockId;
+  final ValueChanged<String>? onBlockSelected;
+  final void Function(int oldIndex, int newIndex)? onReorder;
+
+  const WebsitePreviewCanvas({
+    super.key,
+    required this.config,
+    required this.page,
+    required this.previewMobile,
+    this.editorMode = false,
+    this.selectedBlockId,
+    this.onBlockSelected,
+    this.onReorder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = _orderedVisibleBlocks(page.blocks, previewMobile);
+    final content = <Widget>[
+      for (final block in blocks)
+        _EditableBlockFrame(
+          key: ValueKey(block.id),
+          selected: selectedBlockId == block.id,
+          editorMode: editorMode,
+          onTap: () => onBlockSelected?.call(block.id),
+          child: WebsiteBlockView(
+            config: config,
+            pageId: page.id,
+            block: block,
+            mobile: previewMobile,
+            preview: editorMode,
+          ),
+        ),
+    ];
+
+    final header = WebsiteHeader(
+      config: config,
+      compact: previewMobile,
+      preview: editorMode,
+    );
+    final footer = WebsiteFooter(config: config, compact: previewMobile);
+    if (!editorMode) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFAF8F5),
+        body: SelectionArea(
+          child: ListView(children: [header, ...content, footer]),
+        ),
+      );
+    }
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAF8F5),
+      body: SelectionArea(
+        child: Column(
+          children: [
+            header,
+            Expanded(
+              child: ReorderableListView(
+                buildDefaultDragHandles: true,
+                onReorder: onReorder!,
+                children: content,
+              ),
+            ),
+            footer,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class WebsiteHeader extends StatelessWidget {
+  final WebsiteSiteConfig config;
+  final bool compact;
+  final bool preview;
+
+  const WebsiteHeader({
+    super.key,
+    required this.config,
+    required this.compact,
+    this.preview = false,
+  });
+
+  void _go(BuildContext context, String path) {
+    if (!preview) context.go(path);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = websiteHexColor(config.primaryColor);
+    final navigation = config.navigation.where((item) => item.enabled).toList();
+    return Material(
+      elevation: 2,
+      color: Colors.white,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 14 : 42,
+          vertical: 12,
+        ),
+        child: Row(
+          children: [
+            InkWell(
+              onTap: () => _go(context, '/'),
+              child: WebsiteImage(
+                asset: config.logo,
+                width: compact ? 45 : 58,
+                height: compact ? 45 : 58,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    config.schoolName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: websiteTextStyle(
+                      config.fontFamily,
+                      fontSize: compact ? 14 : 19,
+                      fontWeight: FontWeight.w800,
+                      color: primary,
+                    ),
+                  ),
+                  if (!compact)
+                    Text(
+                      config.tagline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+            if (compact)
+              PopupMenuButton<String>(
+                tooltip: 'Navegación',
+                icon: const Icon(Icons.menu),
+                onSelected: (slug) => _go(context, '/$slug'),
+                itemBuilder:
+                    (context) => [
+                      for (final item in navigation)
+                        PopupMenuItem(
+                          value: item.resolvedSlug,
+                          child: Text(item.label),
+                        ),
+                    ],
+              )
+            else
+              for (final item in navigation)
+                TextButton(
+                  onPressed: () => _go(context, '/${item.resolvedSlug}'),
+                  child: Text(item.label),
+                ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: () => _go(context, '/login'),
+              style: FilledButton.styleFrom(backgroundColor: primary),
+              icon: const Icon(Icons.login, size: 18),
+              label: Text(compact ? 'Login' : 'Iniciar sesión'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class WebsiteBlockView extends StatelessWidget {
+  final WebsiteSiteConfig config;
+  final String pageId;
+  final WebsiteBlock block;
+  final bool mobile;
+  final bool preview;
+
+  const WebsiteBlockView({
+    super.key,
+    required this.config,
+    required this.pageId,
+    required this.block,
+    required this.mobile,
+    this.preview = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final padding = (mobile ? block.mobilePadding : block.padding).toDouble();
+    final background = websiteHexColor(
+      block.backgroundColor,
+      fallback: const Color(0xFFFAF8F5),
+    );
+    final maxWidth = switch (block.contentWidth) {
+      'narrow' => 720.0,
+      'normal' => 960.0,
+      _ => 1280.0,
+    };
+    Widget child = switch (block.type) {
+      'hero' => _hero(context),
+      'text' => _copy(context),
+      'image' => _image(height: mobile ? 290 : 520),
+      'button' => _button(context),
+      'divider' => _divider(),
+      'spacer' => SizedBox(height: mobile ? 34 : 64),
+      'contactForm' => WebsiteContactForm(
+        pageId: pageId,
+        block: block,
+        preview: preview,
+      ),
+      'socialLinks' => WebsiteSocialLinks(
+        links: config.socialLinks,
+        color: websiteHexColor(block.textColor),
+        preview: preview,
+      ),
+      _ => _imageText(context),
+    };
+    if (block.type == 'hero') return child;
+    return ColoredBox(
+      color: background,
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _hero(BuildContext context) {
+    final text = _copy(context, hero: true);
+    return SizedBox(
+      height: mobile ? 560 : 620,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          WebsiteImage(asset: block.image, fit: _fit),
+          ColoredBox(color: Colors.black.withValues(alpha: .52)),
+          Align(
+            alignment: _alignment,
+            child: Padding(
+              padding: EdgeInsets.all(
+                (mobile ? block.mobilePadding : block.padding).toDouble(),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 850),
+                child: text,
+              ),
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class _Sections extends StatelessWidget {
-  final WebsiteContent content;
-  final Color color;
-  final Map<String, GlobalKey> pageKeys;
+  Widget _imageText(BuildContext context) {
+    final image = _image(height: mobile ? 280 : 410);
+    final copy = _copy(context);
+    final position = mobile ? block.mobileImagePosition : block.imagePosition;
+    if (position == 'background') return _hero(context);
+    if (mobile || position == 'top') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [image, const SizedBox(height: 22), copy],
+      );
+    }
+    final imageFirst = position != 'right';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children:
+          imageFirst
+              ? [
+                Expanded(child: image),
+                const SizedBox(width: 34),
+                Expanded(child: copy),
+              ]
+              : [
+                Expanded(child: copy),
+                const SizedBox(width: 34),
+                Expanded(child: image),
+              ],
+    );
+  }
 
-  const _Sections({
-    required this.content,
-    required this.color,
-    required this.pageKeys,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final navigation =
-        content.navigation.where((item) => item.enabled).toList();
+  Widget _copy(BuildContext context, {bool hero = false}) {
+    final color = websiteHexColor(
+      block.textColor,
+      fallback: hero ? Colors.white : const Color(0xFF212121),
+    );
+    final align = websiteTextAlign(block.textAlignment);
+    final cross = websiteCrossAxisAlignment(block.textAlignment);
     return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: cross,
       children: [
-        for (final item in navigation)
-          _PageSection(
-            key: pageKeys[item.id],
-            navigation: item,
-            sections:
-                content.sections
-                    .where(
-                      (section) => section.enabled && section.pageId == item.id,
-                    )
-                    .toList(),
-            color: color,
+        if (block.showAccent) ...[
+          Container(
+            width: 58,
+            height: 5,
+            color: websiteHexColor(block.accentColor),
           ),
+          const SizedBox(height: 18),
+        ],
+        if (block.title.isNotEmpty)
+          Text(
+            block.title,
+            textAlign: align,
+            style: websiteTextStyle(
+              block.fontFamily,
+              fontSize:
+                  (mobile ? block.mobileTitleSize : block.titleSize).toDouble(),
+              height: 1.12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        if (block.body.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            block.body,
+            textAlign: align,
+            style: websiteTextStyle(
+              block.fontFamily,
+              fontSize:
+                  (mobile ? block.mobileBodySize : block.bodySize).toDouble(),
+              height: 1.55,
+              color: color.withValues(alpha: .92),
+            ),
+          ),
+        ],
+        if (block.buttonLabel.isNotEmpty && block.buttonUrl.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          FilledButton(
+            onPressed:
+                preview
+                    ? null
+                    : () => openWebsiteLink(context, block.buttonUrl),
+            style: FilledButton.styleFrom(
+              backgroundColor: websiteHexColor(block.accentColor),
+            ),
+            child: Text(block.buttonLabel),
+          ),
+        ],
       ],
     );
   }
+
+  Widget _image({required double height}) => ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: WebsiteImage(
+      asset: block.image,
+      width: double.infinity,
+      height: height,
+      fit: _fit,
+    ),
+  );
+
+  Widget _button(BuildContext context) => Align(
+    alignment: _alignment,
+    child: FilledButton(
+      onPressed:
+          preview || block.buttonUrl.isEmpty
+              ? null
+              : () => openWebsiteLink(context, block.buttonUrl),
+      style: FilledButton.styleFrom(
+        backgroundColor: websiteHexColor(block.accentColor),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+      ),
+      child: Text(block.buttonLabel.isEmpty ? 'Botón' : block.buttonLabel),
+    ),
+  );
+
+  Widget _divider() => Align(
+    alignment: _alignment,
+    child: Container(
+      width: block.contentWidth == 'wide' ? double.infinity : 180,
+      height: 4,
+      color: websiteHexColor(block.accentColor),
+    ),
+  );
+
+  BoxFit get _fit =>
+      block.imageFit == 'contain' ? BoxFit.contain : BoxFit.cover;
+
+  Alignment get _alignment => switch (block.textAlignment) {
+    'center' => Alignment.center,
+    'right' => Alignment.centerRight,
+    _ => Alignment.centerLeft,
+  };
 }
 
-class _PageSection extends StatelessWidget {
-  final WebsiteNavigationItem navigation;
-  final List<WebsiteSection> sections;
-  final Color color;
+class WebsiteContactForm extends StatefulWidget {
+  final String pageId;
+  final WebsiteBlock block;
+  final bool preview;
 
-  const _PageSection({
+  const WebsiteContactForm({
     super.key,
-    required this.navigation,
-    required this.sections,
-    required this.color,
+    required this.pageId,
+    required this.block,
+    required this.preview,
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (sections.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 68),
-      child: Column(
-        children: [
-          Text(
-            navigation.label.toUpperCase(),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.8,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(width: 62, height: 4, color: color),
-          const SizedBox(height: 42),
-          for (var index = 0; index < sections.length; index++) ...[
-            _SectionCard(section: sections[index], color: color),
-            if (index != sections.length - 1) const SizedBox(height: 38),
-          ],
-        ],
-      ),
-    );
-  }
+  State<WebsiteContactForm> createState() => _WebsiteContactFormState();
 }
 
-class _SectionCard extends StatelessWidget {
-  final WebsiteSection section;
-  final Color color;
+class _WebsiteContactFormState extends State<WebsiteContactForm> {
+  final _key = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _phone = TextEditingController();
+  final _message = TextEditingController();
+  final _website = TextEditingController();
+  bool _sending = false;
 
-  const _SectionCard({required this.section, required this.color});
-
-  Future<void> _openLink(BuildContext context) async {
-    if (section.buttonUrl.startsWith('/')) {
-      context.go(section.buttonUrl);
-      return;
+  @override
+  void dispose() {
+    for (final controller in [_name, _email, _phone, _message, _website]) {
+      controller.dispose();
     }
-    final uri = Uri.tryParse(section.buttonUrl);
-    if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
-      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (widget.preview || !(_key.currentState?.validate() ?? false)) return;
+    setState(() => _sending = true);
+    try {
+      await WebsiteService().submitContactForm(
+        pageId: widget.pageId,
+        blockId: widget.block.id,
+        name: _name.text,
+        email: _email.text,
+        phone: _phone.text,
+        message: _message.text,
+        website: _website.text,
+      );
+      if (!mounted) return;
+      _key.currentState?.reset();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tu mensaje fue enviado correctamente.')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No fue posible enviar el mensaje.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 760;
-    final textAlign = _textAlign(section.textAlignment);
-    final crossAxisAlignment = _crossAxisAlignment(section.textAlignment);
-    final imageFit =
-        section.imageFit == 'contain' ? BoxFit.contain : BoxFit.cover;
-    final background = _hexColor(
-      section.backgroundColor,
-      fallback: const Color(0xFFFAF8F5),
-    );
-    final textColor = _hexColor(
-      section.textColor,
-      fallback: const Color(0xFF212121),
-    );
-    final maxWidth = switch (section.contentWidth) {
-      'narrow' => 720.0,
-      'normal' => 940.0,
-      _ => 1180.0,
-    };
-    final image = ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: _SiteImage(
-        url: section.imageUrl,
-        height: compact ? 280 : 390,
-        width: double.infinity,
-        fit: imageFit,
-      ),
-    );
-    final copy = Padding(
-      padding: EdgeInsets.all(compact ? 22 : 38),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: crossAxisAlignment,
-        children: [
-          Container(width: 58, height: 5, color: color),
-          const SizedBox(height: 22),
+  Widget build(BuildContext context) => Form(
+    key: _key,
+    child: Column(
+      crossAxisAlignment: websiteCrossAxisAlignment(widget.block.textAlignment),
+      children: [
+        if (widget.block.title.isNotEmpty)
           Text(
-            section.title,
-            textAlign: textAlign,
-            style: TextStyle(
-              fontSize: 34,
-              height: 1.1,
+            widget.block.title,
+            style: websiteTextStyle(
+              widget.block.fontFamily,
+              fontSize: widget.block.titleSize.toDouble(),
               fontWeight: FontWeight.w800,
-              color: textColor,
+              color: websiteHexColor(widget.block.textColor),
             ),
           ),
-          const SizedBox(height: 18),
-          Text(
-            section.body,
-            textAlign: textAlign,
-            style: TextStyle(
-              fontSize: 17,
-              height: 1.65,
-              color: textColor.withValues(alpha: .9),
-            ),
-          ),
-          if (section.buttonLabel.isNotEmpty &&
-              section.buttonUrl.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () => _openLink(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor:
-                    section.imagePosition == 'background' ? textColor : color,
-              ),
-              icon: const Icon(Icons.arrow_forward),
-              label: Text(section.buttonLabel),
-            ),
-          ],
+        if (widget.block.body.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(widget.block.body),
         ],
-      ),
-    );
-
-    Widget layout;
-    if (section.imagePosition == 'background') {
-      layout = SizedBox(
-        height: compact ? 480 : 520,
-        child: Stack(
-          fit: StackFit.expand,
+        const SizedBox(height: 22),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
           children: [
-            _SiteImage(url: section.imageUrl, fit: imageFit),
-            const ColoredBox(color: Color(0x99000000)),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: copy,
-              ),
-            ),
+            _field(_name, 'Nombre', required: true),
+            _field(_email, 'Correo', required: true),
+            _field(_phone, 'Teléfono'),
           ],
         ),
-      );
-    } else if (compact || section.imagePosition == 'top') {
-      layout = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [image, copy],
-      );
-    } else {
-      final imageFirst = section.imagePosition != 'right';
-      layout = Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children:
-            imageFirst
-                ? [Expanded(child: image), Expanded(child: copy)]
-                : [Expanded(child: copy), Expanded(child: image)],
-      );
-    }
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
+        const SizedBox(height: 14),
+        TextFormField(
+          controller: _message,
+          minLines: 4,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            labelText: 'Mensaje',
+            border: OutlineInputBorder(),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: layout,
-          ),
+          validator:
+              (value) =>
+                  value == null || value.trim().length < 5
+                      ? 'Escribe un mensaje.'
+                      : null,
         ),
+        Offstage(offstage: true, child: TextFormField(controller: _website)),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: widget.preview || _sending ? null : _submit,
+          icon:
+              _sending
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.send_outlined),
+          label: const Text('Enviar mensaje'),
+        ),
+      ],
+    ),
+  );
+
+  Widget _field(
+    TextEditingController controller,
+    String label, {
+    bool required = false,
+  }) => SizedBox(
+    width: 300,
+    child: TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
       ),
-    );
-  }
+      validator:
+          required
+              ? (value) =>
+                  value == null || value.trim().isEmpty
+                      ? 'Campo obligatorio.'
+                      : null
+              : null,
+    ),
+  );
 }
 
-class _Footer extends StatelessWidget {
-  final WebsiteContent content;
+class WebsiteSocialLinks extends StatelessWidget {
+  final List<WebsiteSocialLink> links;
   final Color color;
+  final bool preview;
 
-  const _Footer({required this.content, required this.color});
+  const WebsiteSocialLinks({
+    super.key,
+    required this.links,
+    required this.color,
+    this.preview = false,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    final contacts = <Widget>[
-      if (content.address.isNotEmpty)
-        _Contact(icon: Icons.location_on_outlined, text: content.address),
-      if (content.phone.isNotEmpty)
-        _Contact(icon: Icons.phone_outlined, text: content.phone),
-      if (content.email.isNotEmpty)
-        _Contact(icon: Icons.email_outlined, text: content.email),
-    ];
-    return ColoredBox(
-      color: const Color(0xFF25090A),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 55),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1180),
-            child: Wrap(
-              spacing: 60,
-              runSpacing: 30,
-              alignment: WrapAlignment.spaceBetween,
+  Widget build(BuildContext context) => Wrap(
+    spacing: 10,
+    children: [
+      for (final link in links.where(
+        (item) => item.enabled && item.url.isNotEmpty,
+      ))
+        IconButton.filledTonal(
+          tooltip: link.platform,
+          color: color,
+          onPressed: preview ? null : () => openWebsiteLink(context, link.url),
+          icon: Icon(_socialIcon(link.platform)),
+        ),
+    ],
+  );
+}
+
+class WebsiteFooter extends StatelessWidget {
+  final WebsiteSiteConfig config;
+  final bool compact;
+
+  const WebsiteFooter({super.key, required this.config, required this.compact});
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: const Color(0xFF25090A),
+    child: Padding(
+      padding: EdgeInsets.all(compact ? 24 : 42),
+      child: Wrap(
+        spacing: 50,
+        runSpacing: 24,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          SizedBox(
+            width: compact ? 290 : 430,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 430,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        content.schoolName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 25,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        content.tagline,
-                        style: TextStyle(
-                          color: color.withValues(alpha: .95),
-                          fontSize: 17,
-                        ),
-                      ),
-                    ],
+                Text(
+                  config.schoolName,
+                  style: websiteTextStyle(
+                    config.fontFamily,
+                    color: Colors.white,
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                SizedBox(
-                  width: 430,
-                  child:
-                      contacts.isEmpty
-                          ? const Text(
-                            'Los datos de contacto se pueden agregar desde el editor del sitio.',
-                            style: TextStyle(color: Colors.white70),
-                          )
-                          : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: contacts,
-                          ),
+                const SizedBox(height: 8),
+                Text(
+                  config.tagline,
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 14),
+                WebsiteSocialLinks(
+                  links: config.socialLinks,
+                  color: Colors.white,
                 ),
               ],
             ),
           ),
-        ),
+          SizedBox(
+            width: compact ? 290 : 430,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (config.address.isNotEmpty)
+                  _contact(Icons.location_on_outlined, config.address),
+                if (config.phone.isNotEmpty)
+                  _contact(Icons.phone_outlined, config.phone),
+                if (config.email.isNotEmpty)
+                  _contact(Icons.email_outlined, config.email),
+              ],
+            ),
+          ),
+        ],
       ),
-    );
-  }
-}
+    ),
+  );
 
-class _Contact extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _Contact({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 13),
+  Widget _contact(IconData icon, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 11),
     child: Row(
       children: [
         Icon(icon, color: Colors.white70),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(text, style: const TextStyle(color: Colors.white)),
         ),
@@ -589,14 +723,15 @@ class _Contact extends StatelessWidget {
   );
 }
 
-class _SiteImage extends StatelessWidget {
-  final String url;
+class WebsiteImage extends StatelessWidget {
+  final WebsiteAsset asset;
   final double? width;
   final double? height;
   final BoxFit fit;
 
-  const _SiteImage({
-    required this.url,
+  const WebsiteImage({
+    super.key,
+    required this.asset,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -604,18 +739,18 @@ class _SiteImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (url.startsWith('asset:')) {
+    if (asset.url.startsWith('asset:')) {
       return Image.asset(
-        url.substring('asset:'.length),
+        asset.url.substring('asset:'.length),
         width: width,
         height: height,
         fit: fit,
         errorBuilder: _error,
       );
     }
-    if (url.startsWith('https://')) {
+    if (asset.url.startsWith('https://')) {
       return Image.network(
-        url,
+        asset.url,
         width: width,
         height: height,
         fit: fit,
@@ -633,27 +768,138 @@ class _SiteImage extends StatelessWidget {
     height: height,
     color: const Color(0xFFE9E1DC),
     child: const Center(
-      child: Icon(Icons.image_outlined, size: 54, color: Colors.black38),
+      child: Icon(Icons.image_outlined, size: 48, color: Colors.black38),
     ),
   );
 }
 
-TextAlign _textAlign(String value) => switch (value) {
-  'center' => TextAlign.center,
-  'right' => TextAlign.right,
-  _ => TextAlign.left,
-};
+class _EditableBlockFrame extends StatelessWidget {
+  final Widget child;
+  final bool editorMode;
+  final bool selected;
+  final VoidCallback onTap;
 
-CrossAxisAlignment _crossAxisAlignment(String value) => switch (value) {
-  'center' => CrossAxisAlignment.center,
-  'right' => CrossAxisAlignment.end,
-  _ => CrossAxisAlignment.start,
-};
+  const _EditableBlockFrame({
+    super.key,
+    required this.child,
+    required this.editorMode,
+    required this.selected,
+    required this.onTap,
+  });
 
-Color _hexColor(String value, {Color fallback = const Color(0xFFB71C1C)}) {
+  @override
+  Widget build(BuildContext context) {
+    if (!editorMode) return child;
+    return InkWell(
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? Colors.blue : Colors.transparent,
+            width: selected ? 3 : 1,
+          ),
+        ),
+        child: Stack(
+          children: [
+            child,
+            if (selected)
+              const Positioned(
+                top: 6,
+                left: 6,
+                child: Chip(
+                  avatar: Icon(Icons.drag_indicator, size: 17),
+                  label: Text('Arrastra para ordenar'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<WebsiteBlock> _orderedVisibleBlocks(
+  List<WebsiteBlock> blocks,
+  bool mobile,
+) {
+  final visible =
+      blocks
+          .where(
+            (block) =>
+                block.enabled &&
+                (mobile ? block.showOnMobile : block.showOnDesktop),
+          )
+          .toList();
+  if (mobile) visible.sort((a, b) => a.mobileOrder.compareTo(b.mobileOrder));
+  return visible;
+}
+
+Future<void> openWebsiteLink(BuildContext context, String value) async {
+  if (value.startsWith('/')) {
+    context.go(value);
+    return;
+  }
+  final uri = Uri.tryParse(value);
+  if (uri != null &&
+      (uri.scheme == 'https' ||
+          uri.scheme == 'http' ||
+          uri.scheme == 'mailto')) {
+    await launchUrl(uri, mode: LaunchMode.platformDefault);
+  }
+}
+
+TextStyle websiteTextStyle(
+  String family, {
+  double? fontSize,
+  double? height,
+  FontWeight? fontWeight,
+  Color? color,
+}) {
+  const supported = {
+    'Roboto',
+    'Lato',
+    'Montserrat',
+    'Poppins',
+    'Playfair Display',
+  };
+  final selected = supported.contains(family) ? family : 'Montserrat';
+  return GoogleFonts.getFont(
+    selected,
+    fontSize: fontSize,
+    height: height,
+    fontWeight: fontWeight,
+    color: color,
+  );
+}
+
+Color websiteHexColor(
+  String value, {
+  Color fallback = const Color(0xFFB71C1C),
+}) {
   final clean = value.replaceAll('#', '').trim();
   final parsed = int.tryParse(clean, radix: 16);
   return parsed == null || clean.length != 6
       ? fallback
       : Color(0xFF000000 | parsed);
 }
+
+TextAlign websiteTextAlign(String value) => switch (value) {
+  'center' => TextAlign.center,
+  'right' => TextAlign.right,
+  _ => TextAlign.left,
+};
+
+CrossAxisAlignment websiteCrossAxisAlignment(String value) => switch (value) {
+  'center' => CrossAxisAlignment.center,
+  'right' => CrossAxisAlignment.end,
+  _ => CrossAxisAlignment.start,
+};
+
+IconData _socialIcon(String value) => switch (value.toLowerCase()) {
+  'facebook' => Icons.facebook,
+  'youtube' => Icons.play_circle_fill,
+  'instagram' => Icons.camera_alt_outlined,
+  'tiktok' => Icons.music_note,
+  'linkedin' => Icons.business,
+  _ => Icons.link,
+};

@@ -123,6 +123,20 @@ service cloud.firestore {
       allow create, update, delete: if hasPermission('sitio_web.editar');
     }
 
+    match /website_pages/{pageId} {
+      allow read: if true;
+      allow create, update, delete: if hasPermission('sitio_web.editar');
+    }
+
+    match /website_submissions/{submissionId} {
+      allow read, update, delete: if hasPermission('sitio_web.editar');
+      allow create: if false;
+    }
+
+    match /website_form_rate_limits/{documentId} {
+      allow read, write: if false;
+    }
+
     match /message_threads/{threadId} {
       function participant(data) {
         return active() && request.auth.uid in data.participantIds;
