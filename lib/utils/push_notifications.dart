@@ -1,22 +1,32 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'app_navigator.dart';
+import '../config/firebase_options.dart';
 
 final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
 bool _webNotificationVisible = false;
+bool _pushListenersInitialized = false;
+Future<void> Function(String token)? _tokenHandler;
 
 Future<void> initializePush({
   required Future<void> Function(String token) onNewToken,
   String? webVapidKey,
 }) async {
   final messaging = FirebaseMessaging.instance;
+  _tokenHandler = onNewToken;
 
-  await messaging.requestPermission();
+  final permission = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  if (permission.authorizationStatus == AuthorizationStatus.denied) return;
 
   const channel = AndroidNotificationChannel(
     'high_importance_channel',
@@ -37,32 +47,40 @@ Future<void> initializePush({
   );
   await _fln.initialize(initSettings);
 
-  FirebaseMessaging.onMessage.listen((message) async {
-    final title = _resolveTitle(message);
-    final body = _resolveBody(message);
+  if (!_pushListenersInitialized) {
+    _pushListenersInitialized = true;
+    FirebaseMessaging.onMessage.listen((message) async {
+      final title = _resolveTitle(message);
+      final body = _resolveBody(message);
 
-    if (kIsWeb) {
-      await _showWebNotificationDialog(title: title, body: body);
-      return;
-    }
+      if (kIsWeb) {
+        await _showWebNotificationDialog(title: title, body: body);
+        return;
+      }
 
-    await _fln.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'high_importance_channel',
-          'Notificaciones importantes',
-          channelDescription:
-              'Canal para mensajes importantes del sistema educativo',
-          importance: Importance.high,
-          priority: Priority.high,
+      await _fln.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'high_importance_channel',
+            'Notificaciones importantes',
+            channelDescription:
+                'Canal para mensajes importantes del sistema educativo',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+          iOS: DarwinNotificationDetails(),
         ),
-        iOS: DarwinNotificationDetails(),
-      ),
-    );
-  });
+      );
+    });
+
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      final handler = _tokenHandler;
+      if (token.isNotEmpty && handler != null) await handler(token);
+    });
+  }
 
   String? token;
   if (kIsWeb) {
@@ -73,11 +91,9 @@ Future<void> initializePush({
   if (token != null && token.isNotEmpty) {
     await onNewToken(token);
   }
-
-  FirebaseMessaging.instance.onTokenRefresh.listen((t) async {
-    if (t.isNotEmpty) await onNewToken(t);
-  });
 }
+
+void clearPushTokenHandler() => _tokenHandler = null;
 
 String _resolveTitle(RemoteMessage message) {
   final title = message.notification?.title?.trim() ?? '';
@@ -206,5 +222,10 @@ Future<void> _showWebNotificationDialog({
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // En segundo plano el sistema operativo o el service worker muestran la push.
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+  // El sistema operativo o el service worker muestran la notificacion.
 }

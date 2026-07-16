@@ -133,7 +133,8 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       final originalName = _pickedFile!.name;
       final storageName =
           '${DateTime.now().millisecondsSinceEpoch}_$originalName';
-      final storagePath = 'files/$_grade/$storageName';
+      final storagePath =
+          'files/$institutionId/$campusId/$_grade/$storageName';
 
       final ref = FirebaseStorage.instance.ref().child(storagePath);
       await ref.putData(_pickedFile!.bytes!);

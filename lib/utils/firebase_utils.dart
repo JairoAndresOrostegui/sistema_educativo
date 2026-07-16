@@ -34,24 +34,6 @@ Future<void> saveUserNotificationToken({
   final docRef = users.doc(userId);
   final slotPath = 'notificationTokens.$_notificationSlot';
 
-  final sameWeb =
-      await users.where('notificationTokens.web', isEqualTo: cleanToken).get();
-  for (final doc in sameWeb.docs) {
-    if (doc.id == userId && _notificationSlot == 'web') continue;
-    await doc.reference.update({'notificationTokens.web': FieldValue.delete()});
-  }
-
-  final sameMobile =
-      await users
-          .where('notificationTokens.mobile', isEqualTo: cleanToken)
-          .get();
-  for (final doc in sameMobile.docs) {
-    if (doc.id == userId && _notificationSlot == 'mobile') continue;
-    await doc.reference.update({
-      'notificationTokens.mobile': FieldValue.delete(),
-    });
-  }
-
   try {
     await docRef.update({
       slotPath: cleanToken,

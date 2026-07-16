@@ -151,6 +151,20 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     try {
       final permissions = await ParametersService().getPermissions();
       final normalized = _normalizePermissions(permissions);
+      if (!normalized.any((p) => p.valor == 'sitio_web.ver')) {
+        normalized.add(
+          Parameter(etiqueta: 'Sitio web', valor: 'sitio_web.ver', orden: 900),
+        );
+      }
+      if (!normalized.any((p) => p.valor == 'sitio_web.editar')) {
+        normalized.add(
+          Parameter(
+            etiqueta: 'Sitio web',
+            valor: 'sitio_web.editar',
+            orden: 901,
+          ),
+        );
+      }
       final normalizedFuncionalidades = _normalizeUserPermissions(
         normalized,
         widget.usuario?.permissions ?? [],
@@ -170,7 +184,8 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       final valor = p.valor.trim();
       if (valor.contains('.')) return p;
       if (etiqueta.isEmpty) return p;
-      final normalizedValue = '${etiqueta.toLowerCase()}.${valor.toLowerCase()}';
+      final normalizedValue =
+          '${etiqueta.toLowerCase()}.${valor.toLowerCase()}';
       return Parameter(
         etiqueta: etiqueta,
         valor: normalizedValue,

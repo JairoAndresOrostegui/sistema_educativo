@@ -191,7 +191,7 @@ class AdminUserFormBody extends StatelessWidget {
           groupedPermissions: groupedPermissions,
           funcionalidades: funcionalidades,
           onFuncionalidadChanged: onFuncionalidadChanged,
-          soloLectura: soloLectura,
+          soloLectura: soloLectura || !esSuperadminActual,
         ),
       ],
     );

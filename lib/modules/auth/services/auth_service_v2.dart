@@ -1,5 +1,6 @@
 // ignore: file_names
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../models/user/user_model_v2.dart';
@@ -26,38 +27,10 @@ class AuthService {
   ) async {
     final trimmedIdentifier = identifier.trim();
     final isEmailLogin = Validators.isValidEmail(trimmedIdentifier);
-    final normalizedIdentifier =
-        isEmailLogin ? trimmedIdentifier.toLowerCase() : trimmedIdentifier;
-
-    final userDoc =
-        isEmailLogin
-            ? await _findUserByInstitutionalEmail(normalizedIdentifier)
-            : await _findUserByDocument(normalizedIdentifier);
-    await _ensureNotLocked(userDoc);
-
-    if (userDoc == null) {
-      throw Exception(
-        isEmailLogin
-            ? 'No existe una cuenta con ese correo.'
-            : 'No existe un estudiante con ese documento.',
-      );
-    }
-
-    final loginCandidate = userDoc.data() ?? <String, dynamic>{};
-    final loginRole = (loginCandidate['role'] ?? '').toString().trim();
     final loginEmail =
-        (loginCandidate['institutionalEmail'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-
-    if (!isEmailLogin && loginRole != 'Estudiante') {
-      throw Exception('Solo los estudiantes pueden iniciar sesion con documento.');
-    }
-
-    if (loginEmail.isEmpty) {
-      throw Exception('La cuenta no tiene un correo configurado para acceso.');
-    }
+        isEmailLogin
+            ? trimmedIdentifier.toLowerCase()
+            : await _resolveStudentEmail(trimmedIdentifier);
 
     try {
       final credential = await _auth.signInWithEmailAndPassword(
@@ -108,8 +81,6 @@ class AuthService {
         );
       }
 
-      await _resetFailedAttempts(userDoc.id);
-
       final userModel = userModelv2.fromFirestore(data, uidFirestore);
 
       if ((userModel.institution).toString().trim().isEmpty ||
@@ -130,52 +101,15 @@ class AuthService {
 
       return userModel;
     } on FirebaseAuthException catch (e) {
-      final code = e.code;
-      if (code == 'invalid-credential' || code == 'wrong-password') {
-        final locked = await _incrementFailedAttempts(userDoc.id);
-        if (locked) {
-          throw Exception(AuthErrorMapper.lockMessage);
-        }
-      }
-      throw Exception(AuthErrorMapper.mapFirebaseCode(code));
+      throw Exception(AuthErrorMapper.mapFirebaseCode(e.code));
     }
   }
 
   Future<void> sendPasswordResetEmail(String email) async {
-    final usuarios = _firestore.collection('users');
-    final emailTrim = email.trim();
-    final emailLower = emailTrim.toLowerCase();
-
-    QuerySnapshot<Map<String, dynamic>> query =
-        await usuarios.where('institutionalEmail', isEqualTo: emailTrim).get();
-
-    if (query.docs.isEmpty && emailLower != emailTrim) {
-      query =
-          await usuarios
-              .where('institutionalEmail', isEqualTo: emailLower)
-              .get();
+    final emailLower = email.trim().toLowerCase();
+    if (!Validators.isValidEmail(emailLower)) {
+      throw Exception('Ingresa un correo valido.');
     }
-
-    if (query.docs.isEmpty) {
-      throw Exception('No existe una cuenta con ese correo.');
-    }
-
-    final userData = query.docs.first.data();
-    final role = userData['role']?.toString() ?? '';
-    final status = userData['status']?.toString().toLowerCase() ?? '';
-
-    if (role == 'Estudiante') {
-      throw Exception(
-        'Este correo pertenece a un estudiante. Por favor, comuniquese con el administrador.',
-      );
-    }
-
-    if (status != estadoActivo) {
-      throw Exception(
-        'El usuario esta inactivo. Solicite ayuda al administrador.',
-      );
-    }
-
     await _auth.sendPasswordResetEmail(email: emailLower);
   }
 
@@ -189,86 +123,22 @@ class AuthService {
     await _auth.signOut();
   }
 
-  Future<DocumentSnapshot<Map<String, dynamic>>?> _findUserByInstitutionalEmail(
-    String emailLower,
-  ) async {
+  Future<String> _resolveStudentEmail(String document) async {
     try {
-      final snap =
-          await _firestore
-              .collection('users')
-              .where('institutionalEmail', isEqualTo: emailLower)
-              .limit(1)
-              .get();
-      if (snap.docs.isEmpty) return null;
-      return snap.docs.first;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<DocumentSnapshot<Map<String, dynamic>>?> _findUserByDocument(
-    String document,
-  ) async {
-    try {
-      final snap =
-          await _firestore
-              .collection('users')
-              .where('document', isEqualTo: document.trim())
-              .limit(1)
-              .get();
-      if (snap.docs.isEmpty) return null;
-      return snap.docs.first;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _ensureNotLocked(
-    DocumentSnapshot<Map<String, dynamic>>? userDoc,
-  ) async {
-    if (userDoc == null) return;
-    final data = userDoc.data() ?? <String, dynamic>{};
-    final lockedUntil = data['lockedUntil'];
-    if (lockedUntil is Timestamp) {
-      final dt = lockedUntil.toDate();
-      if (DateTime.now().isBefore(dt)) {
-        throw Exception(
-          'Cuenta bloqueada por intentos fallidos. Intenta de nuevo en 15 minutos.',
-        );
-      }
-    }
-  }
-
-  Future<bool> _incrementFailedAttempts(String userId) async {
-    try {
-      final ref = _firestore.collection('users').doc(userId);
-      return await _firestore.runTransaction<bool>((txn) async {
-        final snap = await txn.get(ref);
-        final data = snap.data() ?? <String, dynamic>{};
-        final current = (data['loginAttempts'] ?? 0) as int;
-        final next = current + 1;
-        if (next >= 5) {
-          final lockUntil = Timestamp.fromDate(
-            DateTime.now().add(const Duration(minutes: 15)),
-          );
-          txn.update(ref, {'loginAttempts': 0, 'lockedUntil': lockUntil});
-          return true;
-        } else {
-          txn.update(ref, {'loginAttempts': next});
-          return false;
-        }
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'resolverLoginPorDocumento',
+      );
+      final result = await callable.call(<String, dynamic>{
+        'documento': document.trim(),
       });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final email = (data['email'] ?? '').toString().trim().toLowerCase();
+      if (email.isEmpty) throw Exception();
+      return email;
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'No existe una cuenta con ese documento.');
     } catch (_) {
-      return false;
+      throw Exception('No se pudo validar el documento. Intenta nuevamente.');
     }
-  }
-
-  Future<void> _resetFailedAttempts(String userId) async {
-    try {
-      await _firestore.collection('users').doc(userId).update({
-        'loginAttempts': 0,
-        'lockedUntil': FieldValue.delete(),
-      });
-    } catch (_) {}
   }
 }

@@ -21,7 +21,8 @@ class FileService {
     required String campusId,
   }) async {
     final path =
-        'files/$grade/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
+        'files/$institutionId/$campusId/$grade/'
+        '${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}';
     final ref = _storage.ref().child(path);
 
     await ref.putFile(file);

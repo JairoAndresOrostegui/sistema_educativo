@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -29,6 +30,8 @@ import 'modules/schedule/screens/teacher_schedule_screen.dart';
 import 'modules/enrollment/screens/enrollment_form_screen.dart';
 import 'modules/enrollment/screens/admin_enrollment_screen.dart';
 import 'modules/user/screens/admin_users_screen.dart';
+import 'modules/website/screens/public_website_screen.dart';
+import 'modules/website/screens/website_editor_screen.dart';
 import 'providers/user_provider_v2.dart';
 import 'utils/app_navigator.dart';
 
@@ -54,9 +57,16 @@ class _AppRouterState extends State<AppRouter> {
   GoRouter _buildRouter(UserProviderV2 userProvider) {
     bool hasMessagingAccess(dynamic user) {
       if (user == null) return false;
-      final perms =
-          user.permissions.map((e) => e.trim().toLowerCase()).toSet();
+      final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
       return user.isSuperadmin || perms.contains('mensajeria.ver');
+    }
+
+    bool hasWebsiteAccess(dynamic user) {
+      if (user == null) return false;
+      final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
+      return user.isSuperadmin ||
+          perms.contains('sitio_web.ver') ||
+          perms.contains('sitio_web.editar');
     }
 
     String homeForRole(String? role) {
@@ -91,6 +101,7 @@ class _AppRouterState extends State<AppRouter> {
             '/enrollment',
             '/admin_parameters',
             '/admin_qr',
+            if (hasWebsiteAccess(user)) '/website_admin',
             if (hasMessagingAccess(user)) '/messages',
           }.contains(path);
         case 'Docente':
@@ -121,14 +132,17 @@ class _AppRouterState extends State<AppRouter> {
 
     return GoRouter(
       navigatorKey: appNavigatorKey,
-      initialLocation: '/login',
+      initialLocation: kIsWeb ? '/' : '/login',
       refreshListenable: userProvider,
       errorBuilder: (context, state) => const AccessDeniedPage(),
       redirect: (context, state) {
         final user = userProvider.user;
         final currentPath = state.uri.path;
         final loggingIn = currentPath == '/login';
-        const publicPaths = {'/login', '/enrollment_public'};
+        const publicPaths = {'/', '/login', '/enrollment_public'};
+
+        if (!kIsWeb && currentPath == '/') return '/login';
+        if (currentPath == '/') return null;
 
         if (user == null) {
           return publicPaths.contains(currentPath) ? null : '/login';
@@ -145,15 +159,20 @@ class _AppRouterState extends State<AppRouter> {
       },
       routes: [
         GoRoute(
+          path: '/',
+          builder: (context, state) => const PublicWebsiteScreen(),
+        ),
+        GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
         ),
         GoRoute(
           path: '/enrollment_public',
-          builder: (context, state) => const EnrollmentFormScreen(
-            isPublicLink: true,
-            modeOverride: EnrollmentEntryMode.publico,
-          ),
+          builder:
+              (context, state) => const EnrollmentFormScreen(
+                isPublicLink: true,
+                modeOverride: EnrollmentEntryMode.publico,
+              ),
         ),
         GoRoute(
           path: '/access_denied',
@@ -204,6 +223,10 @@ class _AppRouterState extends State<AppRouter> {
           path: '/admin_qr',
           builder: (context, state) => const AdminQrScreen(),
         ),
+        GoRoute(
+          path: '/website_admin',
+          builder: (context, state) => const WebsiteEditorScreen(),
+        ),
         // Docente
         GoRoute(
           path: '/teacher_dashboard',
@@ -251,7 +274,8 @@ class _AppRouterState extends State<AppRouter> {
           builder: (context, state) {
             final user = context.read<UserProviderV2>().user;
             final role = (user?.role ?? '').trim().toLowerCase();
-            final isAdmin = (user?.isSuperadmin ?? false) || role == 'administrador';
+            final isAdmin =
+                (user?.isSuperadmin ?? false) || role == 'administrador';
             if (isAdmin) return const AdminEnrollmentScreen();
             return const EnrollmentFormScreen();
           },
@@ -326,5 +350,3 @@ class _LogoutRedirectState extends State<_LogoutRedirect> {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
-
-

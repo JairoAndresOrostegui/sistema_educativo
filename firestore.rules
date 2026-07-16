@@ -1,18 +1,263 @@
-rules_version='2'
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2025, 10, 18);
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function active() {
+      return signedIn() && me().status == 'activo';
+    }
+
+    function admin() {
+      return active() && (me().isSuperadmin == true || me().role == 'Administrador');
+    }
+
+    function superadmin() {
+      return active() && me().isSuperadmin == true;
+    }
+
+    function teacher() {
+      return active() && me().role == 'Docente';
+    }
+
+    function family() {
+      return active() && me().role == 'Familiar';
+    }
+
+    function hasPermission(permission) {
+      return active() &&
+        (superadmin() ||
+         (me().permissions is list && me().permissions.hasAny([permission])));
+    }
+
+    function sameTenant(data) {
+      return active() &&
+        (superadmin() ||
+          ((data.institution == me().institution || data.institutionId == me().institution) &&
+           (data.campus == me().campus || data.campusId == me().campus)));
+    }
+
+    function validUserTenant(data) {
+      return data.institution is string && data.institution.size() > 0 &&
+        data.campus is string && data.campus.size() > 0;
+    }
+
+    match /configuracion_colegios/{id} {
+      allow read: if true;
+      allow write: if admin();
+    }
+
+    match /parameters/{id} {
+      allow read: if true;
+      allow write: if admin();
+    }
+
+    match /users/{userId} {
+      allow read: if active() &&
+        (request.auth.uid == userId || superadmin() ||
+         (resource.data.institution == me().institution &&
+          resource.data.campus == me().campus));
+
+      allow create: if admin() && validUserTenant(request.resource.data) &&
+        (superadmin() ||
+         (request.resource.data.institution == me().institution &&
+          request.resource.data.campus == me().campus)) &&
+        request.resource.data.role in ['Administrador', 'Docente', 'Estudiante', 'Familiar'] &&
+        request.resource.data.isSuperadmin == false &&
+        (superadmin() ||
+         (request.resource.data.permissions is list &&
+          request.resource.data.permissions.size() == 0));
+
+      allow update: if admin() && validUserTenant(request.resource.data) &&
+        (superadmin() ||
+         (resource.data.institution == me().institution &&
+          resource.data.campus == me().campus &&
+          request.resource.data.institution == resource.data.institution &&
+          request.resource.data.campus == resource.data.campus)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isSuperadmin']) || superadmin()) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['permissions']) || superadmin());
+
+      allow update: if active() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'notificationTokens', 'fcmToken', 'fcmTokens', 'photoUrl',
+          'activeStudentId', 'qrPayload', 'qrEnabled', 'qrUpdatedAt'
+        ]);
+
+      allow update: if teacher() &&
+        resource.data.institution == me().institution && resource.data.campus == me().campus &&
+        resource.data.role == 'Estudiante' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['routeAddress', 'direccionRuta']);
+
+      allow delete: if admin() && request.auth.uid != userId &&
+        (superadmin() ||
+         (resource.data.institution == me().institution && resource.data.campus == me().campus));
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow create: if request.auth == null &&
+        request.resource.data.createdByRole == 'publico' &&
+        request.resource.data.estado == 'prematriculado' &&
+        request.resource.data.data is map &&
+        request.resource.data.data.numeroIdentidad is string &&
+        request.resource.data.data.numeroIdentidad.size() >= 5;
+      allow create: if active() &&
+        (admin() || (family() && request.resource.data.createdByUserId == request.auth.uid));
+      allow read: if admin() ||
+        (active() && resource.data.createdByUserId == request.auth.uid);
+      allow update: if admin() ||
+        (family() && resource.data.createdByUserId == request.auth.uid &&
+         resource.data.estado in ['prematriculado', 'pendiente_revision'] &&
+         request.resource.data.createdByUserId == resource.data.createdByUserId &&
+         request.resource.data.estado == resource.data.estado);
+      allow delete: if admin();
+    }
+
+    match /website/{documentId} {
+      allow read: if true;
+      allow create, update, delete: if hasPermission('sitio_web.editar');
+    }
+
+    match /message_threads/{threadId} {
+      function participant(data) {
+        return active() && request.auth.uid in data.participantIds;
+      }
+      allow read: if participant(resource.data);
+      allow create: if participant(request.resource.data) && sameTenant(request.resource.data) &&
+        request.resource.data.participantIds.size() >= 2;
+      allow update: if participant(resource.data) && participant(request.resource.data) &&
+        request.resource.data.participantIds == resource.data.participantIds &&
+        request.resource.data.institutionId == resource.data.institutionId &&
+        request.resource.data.campusId == resource.data.campusId;
+      allow delete: if admin() && sameTenant(resource.data);
+
+      match /messages/{messageId} {
+        function parent() {
+          return get(/databases/$(database)/documents/message_threads/$(threadId)).data;
+        }
+        allow read: if active() && request.auth.uid in parent().participantIds;
+        allow create: if active() && request.auth.uid in parent().participantIds &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.recipientId in parent().participantIds &&
+          request.resource.data.body is string &&
+          request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 4000;
+        allow update, delete: if false;
+      }
+    }
+
+    match /authorization_requests/{id} {
+      allow read: if sameTenant(resource.data);
+      allow create: if sameTenant(request.resource.data) &&
+        request.resource.data.requesterId == request.auth.uid &&
+        request.resource.data.status == 'pending';
+      allow update: if admin() && sameTenant(resource.data);
+      allow update: if sameTenant(resource.data) &&
+        resource.data.requesterId == request.auth.uid &&
+        request.resource.data.requesterId == resource.data.requesterId &&
+        request.resource.data.status == 'pending';
+      allow delete: if admin() && sameTenant(resource.data);
+    }
+
+    match /files/{id} {
+      allow read: if sameTenant(resource.data);
+      allow create: if (admin() || teacher()) && sameTenant(request.resource.data) &&
+        request.resource.data.uploadedBy == request.auth.uid;
+      allow update: if false;
+      allow delete: if sameTenant(resource.data) &&
+        (admin() || resource.data.uploadedBy == request.auth.uid);
+    }
+
+    match /subjects/{id} {
+      allow read: if sameTenant(resource.data);
+      allow create: if admin() && sameTenant(request.resource.data);
+      allow update, delete: if admin() && sameTenant(resource.data);
+    }
+
+    match /routes/{id} {
+      allow read: if sameTenant(resource.data);
+      allow create: if admin() && sameTenant(request.resource.data);
+      allow update, delete: if admin() && sameTenant(resource.data);
+    }
+
+    match /daily_routes/{routeId} {
+      allow read: if sameTenant(resource.data);
+      allow create: if teacher() && sameTenant(request.resource.data) &&
+        request.resource.data.gestionador == request.auth.uid;
+      allow update: if sameTenant(resource.data) &&
+        (admin() || (teacher() && resource.data.gestionador == request.auth.uid));
+      allow delete: if admin() && sameTenant(resource.data);
+
+      match /students/{studentId} {
+        function route() {
+          return get(/databases/$(database)/documents/daily_routes/$(routeId)).data;
+        }
+        allow read: if sameTenant(route());
+        allow write: if sameTenant(route()) &&
+          (admin() || (teacher() && route().gestionador == request.auth.uid));
+      }
+    }
+
+    match /user_logs/{id} {
+      allow create: if sameTenant(request.resource.data) &&
+        request.resource.data.userId == request.auth.uid;
+      allow read: if admin() || (active() && resource.data.userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    match /user_history/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create: if sameTenant(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /routes_admin_history/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create: if sameTenant(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /schedule_history/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create: if sameTenant(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /historial_usuarios/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    match /historial_rutas_admin/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    match /historial_horarios/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    match /archivos/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow write: if false;
+    }
+
+    match /students/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow write: if false;
+    }
+
+    match /estudiantes/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow write: if false;
     }
   }
 }

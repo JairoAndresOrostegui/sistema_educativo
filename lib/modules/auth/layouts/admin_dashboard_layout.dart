@@ -42,8 +42,10 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
 
     int pendingEnrollments = 0;
     try {
-      pendingEnrollments = await EnrollmentService()
-          .countByEstados(['prematriculado', 'pendiente_revision']);
+      pendingEnrollments = await EnrollmentService().countByEstados([
+        'prematriculado',
+        'pendiente_revision',
+      ]);
     } catch (_) {
       pendingEnrollments = 0;
     }
@@ -157,6 +159,18 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
+    if (esSuperadmin ||
+        perms.contains('sitio_web.ver') ||
+        perms.contains('sitio_web.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Sitio web',
+          icon: Icons.language,
+          route: '/website_admin',
+        ),
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _menuItems = items;
@@ -167,26 +181,29 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   }
 
   void _listenPending() {
-    _pendingStream = FirebaseFirestore.instance
-        .collection('enrollments')
-        .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
-        .snapshots();
+    _pendingStream =
+        FirebaseFirestore.instance
+            .collection('enrollments')
+            .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
+            .snapshots();
     _pendingSub = _pendingStream!.listen((snapshot) {
       final count = snapshot.size;
       if (!mounted) return;
       setState(() {
-        _menuItems = _menuItems
-            .map(
-              (m) => m.route == '/enrollment'
-                  ? MenuItemData(
-                      label: m.label,
-                      icon: m.icon,
-                      route: m.route,
-                      badgeCount: count,
-                    )
-                  : m,
-            )
-            .toList();
+        _menuItems =
+            _menuItems
+                .map(
+                  (m) =>
+                      m.route == '/enrollment'
+                          ? MenuItemData(
+                            label: m.label,
+                            icon: m.icon,
+                            route: m.route,
+                            badgeCount: count,
+                          )
+                          : m,
+                )
+                .toList();
       });
     });
   }
@@ -230,12 +247,12 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   Widget build(BuildContext context) {
     return isLoading
         ? const Scaffold(
-            body: SafeArea(
-              child: Center(
-                child: CircularProgressIndicator(color: Colors.redAccent),
-              ),
+          body: SafeArea(
+            child: Center(
+              child: CircularProgressIndicator(color: Colors.redAccent),
             ),
-          )
+          ),
+        )
         : DashboardLayout(menuItems: _menuItems);
   }
 }

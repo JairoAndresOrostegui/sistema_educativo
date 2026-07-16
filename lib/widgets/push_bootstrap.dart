@@ -35,6 +35,7 @@ class _PushBootstrapState extends State<PushBootstrap> {
     final user = context.watch<UserProviderV2>().user;
     if (user == null) {
       _initedForUserId = null;
+      clearPushTokenHandler();
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _ensureInitForUser(user.id);

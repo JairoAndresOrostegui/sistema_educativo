@@ -101,8 +101,8 @@ class UserServiceV2 {
 
   /// Eliminar usuario completamente del sistema (Auth + Firestore)
   Future<void> eliminar(userModelv2 usuario) async {
-    await _db.collection('users').doc(usuario.id).delete();
     await eliminarUsuarioAuth(usuario.id);
+    await _db.collection('users').doc(usuario.id).delete();
   }
 
   Future<void> actualizarQr({

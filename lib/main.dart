@@ -7,7 +7,6 @@ import 'app.dart';
 import 'config/firebase_options.dart';
 import 'config/theme_config.dart';
 import 'providers/user_provider_v2.dart';
-import 'utils/firebase_utils.dart';
 import 'utils/push_notifications.dart';
 import 'widgets/push_bootstrap.dart';
 
@@ -36,8 +35,6 @@ void main() async {
     debugPrint('Error al cargar configuracion de tema: $e');
     ThemeProvider.config = ThemeConfig.fromMap({});
   }
-
-  await fRequestPermission();
 
   runApp(
     ChangeNotifierProvider(

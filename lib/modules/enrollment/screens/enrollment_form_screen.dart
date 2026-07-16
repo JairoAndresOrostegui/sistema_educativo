@@ -638,7 +638,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
 
     final SubmitResult result = await _controller.submit(
       isAdmin: isAdmin,
-      isPublicLink: widget.isPublicLink,
+      isPublicLink: mode == EnrollmentEntryMode.publico,
       matricularAhora: matricularAhora,
       enrollmentId: widget.enrollmentId,
       token: widget.token,

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -33,10 +32,9 @@ class _AuthorizationTeacherScreenState
   late String _campusId;
 
   final List<AuthorizationRequest> _items = [];
-  final List<dynamic> _cursors = [null];
   bool _loading = false;
   bool _hasNext = false;
-  int _pageIndex = 0;
+  final int _pageIndex = 0;
   final int _perPage = 20;
   bool _noGradeNotified = false;
 
@@ -86,29 +84,6 @@ class _AuthorizationTeacherScreenState
       _activeGrade = g;
     }
 
-    _subscribeToItems();
-  }
-
-  DocumentSnapshot<Map<String, dynamic>>? get _cursor =>
-      _cursors[_pageIndex] as DocumentSnapshot<Map<String, dynamic>>?;
-
-  Future<void> _reload() async {
-    if (_activeGrade == null || _activeGrade!.isEmpty) {
-      setState(() {
-        _items.clear();
-        _hasNext = false;
-      });
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _items.clear();
-      _hasNext = false;
-      _cursors
-        ..clear()
-        ..add(null);
-      _pageIndex = 0;
-    });
     _subscribeToItems();
   }
 

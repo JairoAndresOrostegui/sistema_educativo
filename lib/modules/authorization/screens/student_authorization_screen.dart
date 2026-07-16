@@ -2,7 +2,6 @@
 
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -121,9 +120,6 @@ class _AuthorizationStudentScreenState
 
     setState(() {}); // otros roles: solo para completar ciclo
   }
-
-  DocumentSnapshot<Map<String, dynamic>>? get _cursor =>
-      _cursors[_pageIndex] as DocumentSnapshot<Map<String, dynamic>>?;
 
   Future<void> _reload() async {
     if (_activeStudentId == null) {

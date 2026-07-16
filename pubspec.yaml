@@ -64,6 +64,7 @@ flutter:
   assets:
     - assets/Logo.jpeg
     - assets/logo_fondo.png
+    - assets/pagina_inicio/
 
 flutter_launcher_icons:
   android: true
