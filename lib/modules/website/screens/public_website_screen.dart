@@ -118,12 +118,26 @@ class WebsitePreviewCanvas extends StatelessWidget {
       compact: previewMobile,
       preview: editorMode,
     );
-    final footer = WebsiteFooter(config: config, compact: previewMobile);
+    final footer = WebsiteFooter(
+      config: config,
+      compact: previewMobile,
+      preview: editorMode,
+    );
     if (!editorMode) {
       return Scaffold(
         backgroundColor: const Color(0xFFFAF8F5),
         body: SelectionArea(
-          child: ListView(children: [header, ...content, footer]),
+          child: CustomScrollView(
+            slivers: [
+              SliverList.list(children: [header, ...content]),
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Column(
+                  children: [const Spacer(), if (config.footer.enabled) footer],
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -140,7 +154,7 @@ class WebsitePreviewCanvas extends StatelessWidget {
                 children: content,
               ),
             ),
-            footer,
+            if (config.footer.enabled) footer,
           ],
         ),
       ),
@@ -650,77 +664,235 @@ class WebsiteSocialLinks extends StatelessWidget {
 class WebsiteFooter extends StatelessWidget {
   final WebsiteSiteConfig config;
   final bool compact;
+  final bool preview;
 
-  const WebsiteFooter({super.key, required this.config, required this.compact});
+  const WebsiteFooter({
+    super.key,
+    required this.config,
+    required this.compact,
+    this.preview = false,
+  });
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: const Color(0xFF25090A),
-    child: Padding(
-      padding: EdgeInsets.all(compact ? 24 : 42),
-      child: Wrap(
-        spacing: 50,
-        runSpacing: 24,
-        alignment: WrapAlignment.spaceBetween,
+  Widget build(BuildContext context) {
+    final footer = config.footer;
+    final textColor = websiteHexColor(footer.textColor, fallback: Colors.white);
+    final secondaryColor = websiteHexColor(
+      footer.secondaryTextColor,
+      fallback: Colors.white70,
+    );
+    final accentColor = websiteHexColor(footer.accentColor);
+    final font =
+        footer.fontFamily.isEmpty ? config.fontFamily : footer.fontFamily;
+    final alignment = switch (footer.alignment) {
+      'center' => CrossAxisAlignment.center,
+      'right' => CrossAxisAlignment.end,
+      _ => CrossAxisAlignment.start,
+    };
+    final textAlign = switch (footer.alignment) {
+      'center' => TextAlign.center,
+      'right' => TextAlign.right,
+      _ => TextAlign.left,
+    };
+    final address = footer.useGlobalContact ? config.address : footer.address;
+    final phone = footer.useGlobalContact ? config.phone : footer.phone;
+    final email = footer.useGlobalContact ? config.email : footer.email;
+    final logo = footer.useSiteLogo ? config.logo : footer.logo;
+    final title = footer.title.isEmpty ? config.schoolName : footer.title;
+    final description =
+        footer.description.isEmpty ? config.tagline : footer.description;
+    final navigation = config.navigation.where((item) => item.enabled).toList();
+
+    Widget identity = SizedBox(
+      width: compact ? double.infinity : 390,
+      child: Column(
+        crossAxisAlignment: alignment,
         children: [
-          SizedBox(
-            width: compact ? 290 : 430,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  config.schoolName,
-                  style: websiteTextStyle(
-                    config.fontFamily,
-                    color: Colors.white,
-                    fontSize: 23,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  config.tagline,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 14),
-                WebsiteSocialLinks(
-                  links: config.socialLinks,
-                  color: Colors.white,
-                ),
-              ],
+          if (footer.showLogo && logo.url.isNotEmpty) ...[
+            WebsiteImage(
+              asset: logo,
+              width: footer.logoSize.toDouble(),
+              height: footer.logoSize.toDouble(),
+              fit: BoxFit.contain,
             ),
-          ),
-          SizedBox(
-            width: compact ? 290 : 430,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (config.address.isNotEmpty)
-                  _contact(Icons.location_on_outlined, config.address),
-                if (config.phone.isNotEmpty)
-                  _contact(Icons.phone_outlined, config.phone),
-                if (config.email.isNotEmpty)
-                  _contact(Icons.email_outlined, config.email),
-              ],
+            const SizedBox(height: 14),
+          ],
+          if (title.isNotEmpty)
+            Text(
+              title,
+              textAlign: textAlign,
+              style: websiteTextStyle(
+                font,
+                color: textColor,
+                fontSize: footer.titleSize.toDouble(),
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
+          if (footer.showDescription && description.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: textAlign,
+              style: websiteTextStyle(
+                font,
+                color: secondaryColor,
+                fontSize: footer.bodySize.toDouble(),
+              ),
+            ),
+          ],
+          if (footer.showSocialLinks) ...[
+            const SizedBox(height: 16),
+            WebsiteSocialLinks(
+              links: config.socialLinks,
+              color: accentColor,
+              preview: preview,
+            ),
+          ],
         ],
       ),
-    ),
-  );
+    );
 
-  Widget _contact(IconData icon, String text) => Padding(
-    padding: const EdgeInsets.only(bottom: 11),
-    child: Row(
-      children: [
-        Icon(icon, color: Colors.white70),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(text, style: const TextStyle(color: Colors.white)),
+    Widget contact = SizedBox(
+      width: compact ? double.infinity : 310,
+      child: Column(
+        crossAxisAlignment: alignment,
+        children: [
+          if (footer.contactTitle.isNotEmpty)
+            _heading(footer.contactTitle, font, textColor, textAlign),
+          if (address.isNotEmpty)
+            _contact(Icons.location_on_outlined, address, textColor, font),
+          if (phone.isNotEmpty)
+            _contact(Icons.phone_outlined, phone, textColor, font),
+          if (email.isNotEmpty)
+            _contact(Icons.email_outlined, email, textColor, font),
+        ],
+      ),
+    );
+
+    Widget links = SizedBox(
+      width: compact ? double.infinity : 230,
+      child: Column(
+        crossAxisAlignment: alignment,
+        children: [
+          if (footer.linksTitle.isNotEmpty)
+            _heading(footer.linksTitle, font, textColor, textAlign),
+          for (final item in navigation)
+            TextButton(
+              onPressed:
+                  preview ? null : () => context.go('/${item.resolvedSlug}'),
+              style: TextButton.styleFrom(
+                foregroundColor: textColor,
+                padding: const EdgeInsets.symmetric(vertical: 5),
+              ),
+              child: Text(item.label, textAlign: textAlign),
+            ),
+        ],
+      ),
+    );
+
+    final sections = <Widget>[
+      identity,
+      if (footer.showContact) contact,
+      if (footer.showNavigation) links,
+    ];
+    final content =
+        footer.layout == 'centered'
+            ? Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                for (var i = 0; i < sections.length; i++) ...[
+                  sections[i],
+                  if (i < sections.length - 1) const SizedBox(height: 28),
+                ],
+              ],
+            )
+            : Wrap(
+              spacing: 50,
+              runSpacing: 28,
+              alignment: WrapAlignment.spaceBetween,
+              children: sections,
+            );
+
+    final copyright =
+        footer.copyrightText.isEmpty
+            ? '© ${DateTime.now().year} ${config.schoolName}'
+            : footer.copyrightText;
+    return ColoredBox(
+      color: websiteHexColor(
+        footer.backgroundColor,
+        fallback: const Color(0xFF25090A),
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: footer.maxWidth.toDouble()),
+          child: Padding(
+            padding: EdgeInsets.all(
+              (compact ? footer.mobilePadding : footer.padding).toDouble(),
+            ),
+            child: Column(
+              children: [
+                content,
+                if (footer.showCopyright && copyright.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  Divider(color: secondaryColor.withValues(alpha: 0.35)),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: switch (footer.alignment) {
+                      'center' => Alignment.center,
+                      'right' => Alignment.centerRight,
+                      _ => Alignment.centerLeft,
+                    },
+                    child: Text(
+                      copyright,
+                      textAlign: textAlign,
+                      style: websiteTextStyle(
+                        font,
+                        color: secondaryColor,
+                        fontSize: footer.bodySize.toDouble(),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
+
+  Widget _heading(String text, String font, Color color, TextAlign textAlign) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(
+          text,
+          textAlign: textAlign,
+          style: websiteTextStyle(
+            font,
+            color: color,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+
+  Widget _contact(IconData icon, String text, Color color, String font) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 11),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                text,
+                style: websiteTextStyle(font, color: color, fontSize: 15),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class WebsiteImage extends StatelessWidget {

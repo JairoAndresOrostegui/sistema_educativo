@@ -25,6 +25,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   String _selectedPageId = 'home';
   String? _selectedBlockId;
   bool _editingSite = false;
+  bool _editingFooter = false;
   bool _mobilePreview = false;
   bool _loading = true;
   bool _saving = false;
@@ -172,17 +173,21 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   Future<void> _uploadImage({
     WebsiteBlock? targetBlock,
     bool logo = false,
+    bool footerLogo = false,
   }) async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null) return;
     final lower = picked.name.toLowerCase();
     if (!lower.endsWith('.jpg') &&
         !lower.endsWith('.jpeg') &&
+        !lower.endsWith('.jpe') &&
+        !lower.endsWith('.jfif') &&
         !lower.endsWith('.png')) {
-      _message('Solo se permiten imágenes JPG o PNG.', error: true);
+      _message('Solo se permiten imágenes JPG, JPEG, JFIF o PNG.', error: true);
       return;
     }
-    final target = logo ? 'logo' : targetBlock!.id;
+    final target =
+        logo ? 'logo' : (footerLogo ? 'footer_logo' : targetBlock!.id);
     setState(() => _uploading = target);
     try {
       final asset = await _service.uploadImage(
@@ -190,9 +195,18 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         fileName: picked.name,
       );
       _sessionUploads.add(asset.storagePath);
-      final previous = logo ? _bundle!.config.logo : targetBlock!.image;
+      final previous =
+          logo
+              ? _bundle!.config.logo
+              : (footerLogo ? _bundle!.config.footer.logo : targetBlock!.image);
       if (logo) {
         _replaceConfig(_bundle!.config.copyWith(logo: asset));
+      } else if (footerLogo) {
+        _replaceConfig(
+          _bundle!.config.copyWith(
+            footer: _bundle!.config.footer.copyWith(logo: asset),
+          ),
+        );
       } else {
         _replaceBlock(targetBlock!.copyWith(image: asset));
       }
@@ -201,7 +215,16 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
       }
     } catch (error) {
       if (mounted) {
-        _message('No fue posible subir la imagen: $error', error: true);
+        final detail = error.toString();
+        final guidance =
+            detail.contains('storage/unauthorized') ||
+                    detail.contains('La sesión expiró')
+                ? ' Verifica que esta cuenta esté activa y tenga "sitio_web.editar"; luego cierra sesión, ingresa de nuevo y recarga la página.'
+                : '';
+        _message(
+          'No fue posible subir la imagen: $detail$guidance',
+          error: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _uploading = null);
@@ -236,6 +259,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     setState(() {
       _selectedBlockId = block.id;
       _editingSite = false;
+      _editingFooter = false;
     });
   }
 
@@ -360,7 +384,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
               ),
               if (canEdit)
                 TextButton.icon(
-                  onPressed: _showSubmissions,
+                  onPressed: () => context.go('/website_messages'),
                   icon: const Icon(Icons.inbox_outlined),
                   label: const Text('Mensajes'),
                 ),
@@ -410,6 +434,18 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           onTap:
               () => setState(() {
                 _editingSite = true;
+                _editingFooter = false;
+                _selectedBlockId = null;
+              }),
+        ),
+        ListTile(
+          selected: _editingFooter,
+          leading: const Icon(Icons.vertical_align_bottom_outlined),
+          title: const Text('Pie de página'),
+          onTap:
+              () => setState(() {
+                _editingSite = false;
+                _editingFooter = true;
                 _selectedBlockId = null;
               }),
         ),
@@ -430,7 +466,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         for (final page in _bundle!.pages)
           ListTile(
             dense: true,
-            selected: !_editingSite && page.id == _page.id,
+            selected: !_editingSite && !_editingFooter && page.id == _page.id,
             leading: Icon(
               page.id == 'home'
                   ? Icons.home_outlined
@@ -447,6 +483,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                   _selectedPageId = page.id;
                   _selectedBlockId = null;
                   _editingSite = false;
+                  _editingFooter = false;
                 }),
           ),
         const Divider(),
@@ -481,6 +518,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                     () => setState(() {
                       _selectedBlockId = block.id;
                       _editingSite = false;
+                      _editingFooter = false;
                     }),
               );
             },
@@ -522,6 +560,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                           (id) => setState(() {
                             _selectedBlockId = id;
                             _editingSite = false;
+                            _editingFooter = false;
                           }),
                       onReorder: _reorderPreview,
                     ),
@@ -538,7 +577,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     child:
         _editingSite
             ? _siteProperties()
-            : (_block == null ? _pageProperties() : _blockProperties(_block!)),
+            : (_editingFooter
+                ? _footerProperties()
+                : (_block == null
+                    ? _pageProperties()
+                    : _blockProperties(_block!))),
   );
 
   Widget _siteProperties() {
@@ -604,6 +647,223 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         const SizedBox(height: 12),
         for (var index = 0; index < config.socialLinks.length; index++)
           _socialEditor(config, index),
+      ],
+    );
+  }
+
+  Widget _footerProperties() {
+    final config = _bundle!.config;
+    final footer = config.footer;
+    void update(WebsiteFooterConfig value) {
+      _replaceConfig(config.copyWith(footer: value));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        _propertyTitle('Pie de página', Icons.vertical_align_bottom_outlined),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar pie de página'),
+          value: footer.enabled,
+          onChanged: (value) => update(footer.copyWith(enabled: value)),
+        ),
+        _dropdown(
+          'Distribución',
+          footer.layout,
+          const {'columns': 'Columnas', 'centered': 'Centrado'},
+          (value) => update(footer.copyWith(layout: value)),
+        ),
+        _dropdown(
+          'Alineación',
+          footer.alignment,
+          const {'left': 'Izquierda', 'center': 'Centro', 'right': 'Derecha'},
+          (value) => update(footer.copyWith(alignment: value)),
+        ),
+        _dropdown(
+          'Tipografía',
+          footer.fontFamily,
+          const {
+            '': 'Usar tipografía general',
+            'Roboto': 'Roboto',
+            'Lato': 'Lato',
+            'Montserrat': 'Montserrat',
+            'Poppins': 'Poppins',
+            'Playfair Display': 'Playfair Display',
+          },
+          (value) => update(footer.copyWith(fontFamily: value)),
+        ),
+        _text(
+          'Título (vacío usa nombre del colegio)',
+          footer.title,
+          (value) => update(footer.copyWith(title: value)),
+          lines: 2,
+        ),
+        _text(
+          'Descripción (vacía usa frase institucional)',
+          footer.description,
+          (value) => update(footer.copyWith(description: value)),
+          lines: 3,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar descripción'),
+          value: footer.showDescription,
+          onChanged: (value) => update(footer.copyWith(showDescription: value)),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar logo'),
+          value: footer.showLogo,
+          onChanged: (value) => update(footer.copyWith(showLogo: value)),
+        ),
+        if (footer.showLogo) ...[
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Usar logo principal'),
+            value: footer.useSiteLogo,
+            onChanged: (value) => update(footer.copyWith(useSiteLogo: value)),
+          ),
+          if (!footer.useSiteLogo)
+            _imageControl(
+              'Logo del pie de página',
+              footer.logo,
+              _uploading == 'footer_logo',
+              () => _uploadImage(footerLogo: true),
+            ),
+          _slider(
+            'Tamaño del logo',
+            footer.logoSize,
+            32,
+            180,
+            (value) => update(footer.copyWith(logoSize: value)),
+          ),
+        ],
+        const Divider(height: 32),
+        _text(
+          'Color de fondo',
+          footer.backgroundColor,
+          (value) => update(footer.copyWith(backgroundColor: value)),
+        ),
+        _text(
+          'Color de texto',
+          footer.textColor,
+          (value) => update(footer.copyWith(textColor: value)),
+        ),
+        _text(
+          'Color de texto secundario',
+          footer.secondaryTextColor,
+          (value) => update(footer.copyWith(secondaryTextColor: value)),
+        ),
+        _text(
+          'Color de redes y acentos',
+          footer.accentColor,
+          (value) => update(footer.copyWith(accentColor: value)),
+        ),
+        _slider(
+          'Tamaño del título',
+          footer.titleSize,
+          14,
+          48,
+          (value) => update(footer.copyWith(titleSize: value)),
+        ),
+        _slider(
+          'Tamaño del texto',
+          footer.bodySize,
+          11,
+          26,
+          (value) => update(footer.copyWith(bodySize: value)),
+        ),
+        _slider(
+          'Espaciado escritorio',
+          footer.padding,
+          8,
+          100,
+          (value) => update(footer.copyWith(padding: value)),
+        ),
+        _slider(
+          'Espaciado móvil',
+          footer.mobilePadding,
+          8,
+          64,
+          (value) => update(footer.copyWith(mobilePadding: value)),
+        ),
+        _slider(
+          'Ancho máximo',
+          footer.maxWidth,
+          720,
+          1600,
+          (value) => update(footer.copyWith(maxWidth: value)),
+        ),
+        const Divider(height: 32),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar datos de contacto'),
+          value: footer.showContact,
+          onChanged: (value) => update(footer.copyWith(showContact: value)),
+        ),
+        if (footer.showContact) ...[
+          _text(
+            'Título de contacto',
+            footer.contactTitle,
+            (value) => update(footer.copyWith(contactTitle: value)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Usar contacto de configuración global'),
+            value: footer.useGlobalContact,
+            onChanged:
+                (value) => update(footer.copyWith(useGlobalContact: value)),
+          ),
+          if (!footer.useGlobalContact) ...[
+            _text(
+              'Dirección del footer',
+              footer.address,
+              (value) => update(footer.copyWith(address: value)),
+            ),
+            _text(
+              'Teléfono del footer',
+              footer.phone,
+              (value) => update(footer.copyWith(phone: value)),
+            ),
+            _text(
+              'Correo del footer',
+              footer.email,
+              (value) => update(footer.copyWith(email: value)),
+            ),
+          ],
+        ],
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar redes sociales'),
+          value: footer.showSocialLinks,
+          onChanged: (value) => update(footer.copyWith(showSocialLinks: value)),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar enlaces de navegación'),
+          value: footer.showNavigation,
+          onChanged: (value) => update(footer.copyWith(showNavigation: value)),
+        ),
+        if (footer.showNavigation)
+          _text(
+            'Título de enlaces',
+            footer.linksTitle,
+            (value) => update(footer.copyWith(linksTitle: value)),
+          ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Mostrar copyright'),
+          value: footer.showCopyright,
+          onChanged: (value) => update(footer.copyWith(showCopyright: value)),
+        ),
+        if (footer.showCopyright)
+          _text(
+            'Copyright (vacío genera el año automáticamente)',
+            footer.copyrightText,
+            (value) => update(footer.copyWith(copyrightText: value)),
+            lines: 2,
+          ),
       ],
     );
   }
@@ -913,76 +1173,6 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     );
     if (type != null) _addBlock(type);
   }
-
-  Future<void> _showSubmissions() => showDialog<void>(
-    context: context,
-    builder:
-        (dialogContext) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.inbox_outlined),
-              SizedBox(width: 10),
-              Text('Mensajes del sitio'),
-            ],
-          ),
-          content: SizedBox(
-            width: 760,
-            height: 560,
-            child: StreamBuilder<List<WebsiteSubmission>>(
-              stream: _service.watchSubmissions(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final submissions = snapshot.data!;
-                if (submissions.isEmpty) {
-                  return const Center(
-                    child: Text('Todavía no se han recibido mensajes.'),
-                  );
-                }
-                return ListView.separated(
-                  itemCount: submissions.length,
-                  separatorBuilder: (_, _) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final item = submissions[index];
-                    final date = item.createdAt?.toLocal().toString() ?? '';
-                    return ListTile(
-                      leading: Icon(
-                        item.status == 'new'
-                            ? Icons.mark_email_unread_outlined
-                            : Icons.drafts_outlined,
-                        color:
-                            item.status == 'new' ? Colors.red.shade700 : null,
-                      ),
-                      title: Text(item.name),
-                      subtitle: Text(
-                        '${item.email}${item.phone.isEmpty ? '' : ' · ${item.phone}'}\n'
-                        '${item.message}\n$date',
-                      ),
-                      isThreeLine: true,
-                      onTap:
-                          item.status == 'new'
-                              ? () => _service.markSubmissionRead(item.id)
-                              : null,
-                      trailing: IconButton(
-                        tooltip: 'Eliminar mensaje',
-                        onPressed: () => _service.deleteSubmission(item.id),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        ),
-  );
 
   Widget _propertyTitle(String title, IconData icon) => Padding(
     padding: const EdgeInsets.only(bottom: 18),

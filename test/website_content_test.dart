@@ -95,5 +95,36 @@ void main() {
       expect(decoded.image.storagePath, 'website/image.jpg');
       expect(decoded.image.isManaged, isTrue);
     });
+
+    test('serializa el footer independiente y su logo administrado', () {
+      const footer = WebsiteFooterConfig(
+        layout: 'centered',
+        alignment: 'center',
+        backgroundColor: '#101820',
+        textColor: '#F5F5F5',
+        showNavigation: true,
+        useSiteLogo: false,
+        showLogo: true,
+        logo: WebsiteAsset(
+          url: 'https://example.test/footer.png',
+          storagePath: 'website/footer.png',
+        ),
+      );
+      const config = WebsiteSiteConfig(
+        schoolName: 'Liceo',
+        tagline: '',
+        footer: footer,
+      );
+
+      final decoded = WebsiteSiteConfig.fromMap(config.toMap());
+      expect(decoded.footer.layout, 'centered');
+      expect(decoded.footer.alignment, 'center');
+      expect(decoded.footer.showNavigation, isTrue);
+      expect(decoded.footer.logo.isManaged, isTrue);
+      expect(
+        WebsiteBundle(config: decoded, pages: const []).managedAssetPaths,
+        contains('website/footer.png'),
+      );
+    });
   });
 }

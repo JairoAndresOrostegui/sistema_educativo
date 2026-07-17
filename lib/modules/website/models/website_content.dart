@@ -364,6 +364,215 @@ class WebsitePage {
   );
 }
 
+class WebsiteFooterConfig {
+  final bool enabled;
+  final String layout;
+  final String alignment;
+  final String backgroundColor;
+  final String textColor;
+  final String secondaryTextColor;
+  final String accentColor;
+  final String fontFamily;
+  final String title;
+  final String description;
+  final String contactTitle;
+  final String linksTitle;
+  final String copyrightText;
+  final WebsiteAsset logo;
+  final bool useSiteLogo;
+  final bool showLogo;
+  final bool showDescription;
+  final bool showContact;
+  final bool showSocialLinks;
+  final bool showNavigation;
+  final bool showCopyright;
+  final bool useGlobalContact;
+  final String address;
+  final String phone;
+  final String email;
+  final int titleSize;
+  final int bodySize;
+  final int padding;
+  final int mobilePadding;
+  final int logoSize;
+  final int maxWidth;
+
+  const WebsiteFooterConfig({
+    this.enabled = true,
+    this.layout = 'columns',
+    this.alignment = 'left',
+    this.backgroundColor = '#25090A',
+    this.textColor = '#FFFFFF',
+    this.secondaryTextColor = '#D7C6C6',
+    this.accentColor = '#B71C1C',
+    this.fontFamily = '',
+    this.title = '',
+    this.description = '',
+    this.contactTitle = 'Contáctanos',
+    this.linksTitle = 'Enlaces',
+    this.copyrightText = '',
+    this.logo = const WebsiteAsset(),
+    this.useSiteLogo = true,
+    this.showLogo = false,
+    this.showDescription = true,
+    this.showContact = true,
+    this.showSocialLinks = true,
+    this.showNavigation = false,
+    this.showCopyright = true,
+    this.useGlobalContact = true,
+    this.address = '',
+    this.phone = '',
+    this.email = '',
+    this.titleSize = 23,
+    this.bodySize = 15,
+    this.padding = 42,
+    this.mobilePadding = 24,
+    this.logoSize = 72,
+    this.maxWidth = 1280,
+  });
+
+  factory WebsiteFooterConfig.fromMap(Map<String, dynamic>? map) {
+    if (map == null) return const WebsiteFooterConfig();
+    final rawLogo = map['logo'];
+    return WebsiteFooterConfig(
+      enabled: map['enabled'] != false,
+      layout: (map['layout'] ?? 'columns').toString(),
+      alignment: (map['alignment'] ?? 'left').toString(),
+      backgroundColor: (map['backgroundColor'] ?? '#25090A').toString(),
+      textColor: (map['textColor'] ?? '#FFFFFF').toString(),
+      secondaryTextColor: (map['secondaryTextColor'] ?? '#D7C6C6').toString(),
+      accentColor: (map['accentColor'] ?? '#B71C1C').toString(),
+      fontFamily: (map['fontFamily'] ?? '').toString(),
+      title: (map['title'] ?? '').toString(),
+      description: (map['description'] ?? '').toString(),
+      contactTitle: (map['contactTitle'] ?? 'Contáctanos').toString(),
+      linksTitle: (map['linksTitle'] ?? 'Enlaces').toString(),
+      copyrightText: (map['copyrightText'] ?? '').toString(),
+      logo:
+          rawLogo is Map
+              ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawLogo))
+              : const WebsiteAsset(),
+      useSiteLogo: map['useSiteLogo'] != false,
+      showLogo: map['showLogo'] == true,
+      showDescription: map['showDescription'] != false,
+      showContact: map['showContact'] != false,
+      showSocialLinks: map['showSocialLinks'] != false,
+      showNavigation: map['showNavigation'] == true,
+      showCopyright: map['showCopyright'] != false,
+      useGlobalContact: map['useGlobalContact'] != false,
+      address: (map['address'] ?? '').toString(),
+      phone: (map['phone'] ?? '').toString(),
+      email: (map['email'] ?? '').toString(),
+      titleSize: WebsiteBlock._int(map['titleSize'], 23),
+      bodySize: WebsiteBlock._int(map['bodySize'], 15),
+      padding: WebsiteBlock._int(map['padding'], 42),
+      mobilePadding: WebsiteBlock._int(map['mobilePadding'], 24),
+      logoSize: WebsiteBlock._int(map['logoSize'], 72),
+      maxWidth: WebsiteBlock._int(map['maxWidth'], 1280),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'enabled': enabled,
+    'layout': layout,
+    'alignment': alignment,
+    'backgroundColor': backgroundColor.trim(),
+    'textColor': textColor.trim(),
+    'secondaryTextColor': secondaryTextColor.trim(),
+    'accentColor': accentColor.trim(),
+    'fontFamily': fontFamily,
+    'title': title.trim(),
+    'description': description.trim(),
+    'contactTitle': contactTitle.trim(),
+    'linksTitle': linksTitle.trim(),
+    'copyrightText': copyrightText.trim(),
+    'logo': logo.toMap(),
+    'useSiteLogo': useSiteLogo,
+    'showLogo': showLogo,
+    'showDescription': showDescription,
+    'showContact': showContact,
+    'showSocialLinks': showSocialLinks,
+    'showNavigation': showNavigation,
+    'showCopyright': showCopyright,
+    'useGlobalContact': useGlobalContact,
+    'address': address.trim(),
+    'phone': phone.trim(),
+    'email': email.trim(),
+    'titleSize': titleSize,
+    'bodySize': bodySize,
+    'padding': padding,
+    'mobilePadding': mobilePadding,
+    'logoSize': logoSize,
+    'maxWidth': maxWidth,
+  };
+
+  WebsiteFooterConfig copyWith({
+    bool? enabled,
+    String? layout,
+    String? alignment,
+    String? backgroundColor,
+    String? textColor,
+    String? secondaryTextColor,
+    String? accentColor,
+    String? fontFamily,
+    String? title,
+    String? description,
+    String? contactTitle,
+    String? linksTitle,
+    String? copyrightText,
+    WebsiteAsset? logo,
+    bool? useSiteLogo,
+    bool? showLogo,
+    bool? showDescription,
+    bool? showContact,
+    bool? showSocialLinks,
+    bool? showNavigation,
+    bool? showCopyright,
+    bool? useGlobalContact,
+    String? address,
+    String? phone,
+    String? email,
+    int? titleSize,
+    int? bodySize,
+    int? padding,
+    int? mobilePadding,
+    int? logoSize,
+    int? maxWidth,
+  }) => WebsiteFooterConfig(
+    enabled: enabled ?? this.enabled,
+    layout: layout ?? this.layout,
+    alignment: alignment ?? this.alignment,
+    backgroundColor: backgroundColor ?? this.backgroundColor,
+    textColor: textColor ?? this.textColor,
+    secondaryTextColor: secondaryTextColor ?? this.secondaryTextColor,
+    accentColor: accentColor ?? this.accentColor,
+    fontFamily: fontFamily ?? this.fontFamily,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    contactTitle: contactTitle ?? this.contactTitle,
+    linksTitle: linksTitle ?? this.linksTitle,
+    copyrightText: copyrightText ?? this.copyrightText,
+    logo: logo ?? this.logo,
+    useSiteLogo: useSiteLogo ?? this.useSiteLogo,
+    showLogo: showLogo ?? this.showLogo,
+    showDescription: showDescription ?? this.showDescription,
+    showContact: showContact ?? this.showContact,
+    showSocialLinks: showSocialLinks ?? this.showSocialLinks,
+    showNavigation: showNavigation ?? this.showNavigation,
+    showCopyright: showCopyright ?? this.showCopyright,
+    useGlobalContact: useGlobalContact ?? this.useGlobalContact,
+    address: address ?? this.address,
+    phone: phone ?? this.phone,
+    email: email ?? this.email,
+    titleSize: titleSize ?? this.titleSize,
+    bodySize: bodySize ?? this.bodySize,
+    padding: padding ?? this.padding,
+    mobilePadding: mobilePadding ?? this.mobilePadding,
+    logoSize: logoSize ?? this.logoSize,
+    maxWidth: maxWidth ?? this.maxWidth,
+  );
+}
+
 class WebsiteSiteConfig {
   final String schoolName;
   final String tagline;
@@ -375,6 +584,7 @@ class WebsiteSiteConfig {
   final String fontFamily;
   final List<WebsiteNavigationItem> navigation;
   final List<WebsiteSocialLink> socialLinks;
+  final WebsiteFooterConfig footer;
 
   const WebsiteSiteConfig({
     required this.schoolName,
@@ -387,6 +597,7 @@ class WebsiteSiteConfig {
     this.fontFamily = 'Montserrat',
     this.navigation = const [],
     this.socialLinks = const [],
+    this.footer = const WebsiteFooterConfig(),
   });
 
   factory WebsiteSiteConfig.fromMap(Map<String, dynamic> map) {
@@ -405,6 +616,12 @@ class WebsiteSiteConfig {
       fontFamily: (map['fontFamily'] ?? 'Montserrat').toString(),
       navigation: _maps(map['navigation'], WebsiteNavigationItem.fromMap),
       socialLinks: _maps(map['socialLinks'], WebsiteSocialLink.fromMap),
+      footer:
+          map['footer'] is Map
+              ? WebsiteFooterConfig.fromMap(
+                Map<String, dynamic>.from(map['footer'] as Map),
+              )
+              : const WebsiteFooterConfig(),
     );
   }
 
@@ -419,7 +636,8 @@ class WebsiteSiteConfig {
     'fontFamily': fontFamily,
     'navigation': navigation.map((item) => item.toMap()).toList(),
     'socialLinks': socialLinks.map((item) => item.toMap()).toList(),
-    'version': 3,
+    'footer': footer.toMap(),
+    'version': 4,
   };
 
   WebsiteSiteConfig copyWith({
@@ -433,6 +651,7 @@ class WebsiteSiteConfig {
     String? fontFamily,
     List<WebsiteNavigationItem>? navigation,
     List<WebsiteSocialLink>? socialLinks,
+    WebsiteFooterConfig? footer,
   }) => WebsiteSiteConfig(
     schoolName: schoolName ?? this.schoolName,
     tagline: tagline ?? this.tagline,
@@ -444,6 +663,7 @@ class WebsiteSiteConfig {
     fontFamily: fontFamily ?? this.fontFamily,
     navigation: navigation ?? this.navigation,
     socialLinks: socialLinks ?? this.socialLinks,
+    footer: footer ?? this.footer,
   );
 
   static List<T> _maps<T>(dynamic raw, T Function(Map<String, dynamic>) read) =>
@@ -470,6 +690,7 @@ class WebsiteBundle {
 
   Set<String> get managedAssetPaths => {
     if (config.logo.isManaged) config.logo.storagePath,
+    if (config.footer.logo.isManaged) config.footer.logo.storagePath,
     for (final page in pages)
       for (final block in page.blocks)
         if (block.image.isManaged) block.image.storagePath,

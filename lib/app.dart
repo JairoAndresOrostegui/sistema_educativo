@@ -32,6 +32,7 @@ import 'modules/enrollment/screens/admin_enrollment_screen.dart';
 import 'modules/user/screens/admin_users_screen.dart';
 import 'modules/website/screens/public_website_screen.dart';
 import 'modules/website/screens/website_editor_screen.dart';
+import 'modules/website/screens/website_submissions_screen.dart';
 import 'providers/user_provider_v2.dart';
 import 'utils/app_navigator.dart';
 
@@ -69,6 +70,12 @@ class _AppRouterState extends State<AppRouter> {
           perms.contains('sitio_web.editar');
     }
 
+    bool hasWebsiteEditAccess(dynamic user) {
+      if (!kIsWeb || user == null) return false;
+      final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
+      return user.isSuperadmin || perms.contains('sitio_web.editar');
+    }
+
     String homeForRole(String? role) {
       switch (role) {
         case 'Administrador':
@@ -102,6 +109,7 @@ class _AppRouterState extends State<AppRouter> {
             '/admin_parameters',
             '/admin_qr',
             if (hasWebsiteAccess(user)) '/website_admin',
+            if (hasWebsiteEditAccess(user)) '/website_messages',
             if (hasMessagingAccess(user)) '/messages',
           }.contains(path);
         case 'Docente':
@@ -265,6 +273,10 @@ class _AppRouterState extends State<AppRouter> {
         GoRoute(
           path: '/website_admin',
           builder: (context, state) => const WebsiteEditorScreen(),
+        ),
+        GoRoute(
+          path: '/website_messages',
+          builder: (context, state) => const WebsiteSubmissionsScreen(),
         ),
         // Docente
         GoRoute(

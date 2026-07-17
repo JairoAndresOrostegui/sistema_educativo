@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../models/website_content.dart';
@@ -189,11 +190,21 @@ class WebsiteService {
       throw Exception('La imagen supera el máximo permitido de 10 MB.');
     }
     final lower = fileName.toLowerCase();
+    final allowed = ['.jpg', '.jpeg', '.jpe', '.jfif', '.png'];
+    if (!allowed.any(lower.endsWith)) {
+      throw Exception('Formato no permitido. Usa JPG, JPEG, JFIF o PNG.');
+    }
     final extension = lower.endsWith('.png') ? 'png' : 'jpg';
     final contentType = extension == 'png' ? 'image/png' : 'image/jpeg';
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final path = 'website/${DateTime.now().microsecondsSinceEpoch}_$safeName';
     final reference = _storage.ref(path);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('La sesión expiró. Cierra sesión e ingresa nuevamente.');
+    }
+    // Fuerza la renovación del token para que Storage evalúe la sesión actual.
+    await user.getIdToken(true);
     await reference.putData(
       bytes,
       SettableMetadata(
@@ -248,6 +259,9 @@ class WebsiteService {
 
   Future<void> markSubmissionRead(String id) =>
       _db.collection('website_submissions').doc(id).update({'status': 'read'});
+
+  Future<void> markSubmissionUnread(String id) =>
+      _db.collection('website_submissions').doc(id).update({'status': 'new'});
 
   Future<void> deleteSubmission(String id) =>
       _db.collection('website_submissions').doc(id).delete();
