@@ -1,0 +1,22 @@
+[
+  {
+    "origin": [
+      "https://sistema-educativo-rl.web.app",
+      "https://sistema-educativo-rl--pr1-agent-portal-web-cms-7xafrgte.web.app",
+      "https://liceobilinguerodolfollinas.edu.co",
+      "https://www.liceobilinguerodolfollinas.edu.co",
+      "https://desarrolloytecnologiasantander.com",
+      "https://www.desarrolloytecnologiasantander.com",
+      "http://localhost:62474",
+      "http://127.0.0.1:62474"
+    ],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": [
+      "Content-Type",
+      "x-goog-generation",
+      "x-goog-metageneration",
+      "x-goog-resumable"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
