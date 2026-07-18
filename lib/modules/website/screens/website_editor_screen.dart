@@ -353,6 +353,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         return Scaffold(
           backgroundColor: const Color(0xFFE9EDF2),
           appBar: AppBar(
+            leading: IconButton(
+              tooltip: 'Volver al menu de administracion',
+              onPressed: () => context.go('/admin_dashboard'),
+              icon: const Icon(Icons.arrow_back),
+            ),
             title: Text(
               canEdit ? 'Constructor del sitio web' : 'Vista del sitio web',
             ),
@@ -1302,7 +1307,14 @@ class _EditorUnavailable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Administrar sitio web')),
+    appBar: AppBar(
+      leading: IconButton(
+        tooltip: 'Volver al menu de administracion',
+        onPressed: () => context.go('/admin_dashboard'),
+        icon: const Icon(Icons.arrow_back),
+      ),
+      title: const Text('Administrar sitio web'),
+    ),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
