@@ -15,6 +15,9 @@ const ALLOWED_ROLES = new Set([
   "Estudiante",
   "Familiar",
 ]);
+const AUTH_WEB_API_KEY = "AIzaSyBjfpuzVCTvKEMdYGYjMa619SSJ1yL8Jho";
+const EMAIL_VERIFICATION_CONTINUE_URL =
+  "https://sistema-educativo-rl.web.app/#/login";
 
 /**
  * Valida y normaliza una cadena recibida por una funcion callable.
@@ -32,6 +35,49 @@ function requiredString(value, field, maxLength = 200) {
     throw new HttpsError("invalid-argument", `${field} no es valido.`);
   }
   return clean;
+}
+
+/**
+ * Solicita a Firebase Auth el correo de verificacion para una cuenta nueva.
+ * @param {string} email Correo institucional de la cuenta.
+ * @param {string} password Contrasena inicial, usada solo para crear la sesion.
+ * @return {Promise<void>}
+ */
+async function sendInstitutionalVerificationEmail(email, password) {
+  const signInResponse = await fetch(
+      "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword" +
+        `?key=${AUTH_WEB_API_KEY}`,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({email, password, returnSecureToken: true}),
+      },
+  );
+  const signInData = await signInResponse.json();
+  if (!signInResponse.ok || typeof signInData.idToken !== "string") {
+    throw new Error(signInData.error?.message || "No se pudo iniciar sesion.");
+  }
+
+  const verificationResponse = await fetch(
+      "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode" +
+        `?key=${AUTH_WEB_API_KEY}`,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          requestType: "VERIFY_EMAIL",
+          idToken: signInData.idToken,
+          continueUrl: EMAIL_VERIFICATION_CONTINUE_URL,
+        }),
+      },
+  );
+  const verificationData = await verificationResponse.json();
+  if (!verificationResponse.ok) {
+    throw new Error(
+        verificationData.error?.message ||
+          "No se pudo enviar el correo de verificacion.",
+    );
+  }
 }
 
 /**
@@ -198,19 +244,32 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Rol o contrasena no validos.");
   }
 
+  let usuario;
   try {
-    const usuario = await admin.auth().createUser({
+    usuario = await admin.auth().createUser({
       email,
       password,
       displayName: `${nombres} ${apellidos}`.trim(),
     });
+    await sendInstitutionalVerificationEmail(email, password);
+    await admin.auth().revokeRefreshTokens(usuario.uid);
     return {exito: true, uid: usuario.uid};
   } catch (error) {
     console.error("Error creando usuario:", error.code);
+    if (usuario?.uid) {
+      try {
+        await admin.auth().deleteUser(usuario.uid);
+      } catch (cleanupError) {
+        console.error("Error revirtiendo usuario:", cleanupError.code);
+      }
+    }
     if (error.code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "El correo ya esta registrado.");
     }
-    throw new HttpsError("internal", "No se pudo crear el usuario.");
+    throw new HttpsError(
+        "internal",
+        "No se pudo crear el usuario ni enviar su correo de verificacion.",
+    );
   }
 });
 
