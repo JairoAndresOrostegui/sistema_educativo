@@ -6,12 +6,14 @@ class MessageContact {
   final String role;
   final bool isGroup;
   final String? groupType;
-  final String? targetGrade;
+  final String? targetGroupId;
   final String? targetRole;
-  final String? grade;
+  final String? groupId;
+  final String? groupName;
   final String? studentContextId;
   final String? studentContextName;
-  final String? studentContextGrade;
+  final String? studentContextGroupId;
+  final String? studentContextGroupName;
 
   const MessageContact({
     required this.id,
@@ -19,12 +21,14 @@ class MessageContact {
     required this.role,
     this.isGroup = false,
     this.groupType,
-    this.targetGrade,
+    this.targetGroupId,
     this.targetRole,
-    this.grade,
+    this.groupId,
+    this.groupName,
     this.studentContextId,
     this.studentContextName,
-    this.studentContextGrade,
+    this.studentContextGroupId,
+    this.studentContextGroupName,
   });
 }
 
@@ -35,7 +39,8 @@ class MessageThreadSummary {
   final Map<String, String> participantRoles;
   final String? contextStudentId;
   final String? contextStudentName;
-  final String? contextStudentGrade;
+  final String? contextStudentGroupId;
+  final String? contextStudentGroupName;
   final String? lastMessage;
   final String? lastSenderId;
   final String? lastSenderName;
@@ -48,17 +53,15 @@ class MessageThreadSummary {
     required this.participantRoles,
     this.contextStudentId,
     this.contextStudentName,
-    this.contextStudentGrade,
+    this.contextStudentGroupId,
+    this.contextStudentGroupName,
     this.lastMessage,
     this.lastSenderId,
     this.lastSenderName,
     this.lastMessageAt,
   });
 
-  factory MessageThreadSummary.fromMap(
-    Map<String, dynamic> data,
-    String id,
-  ) {
+  factory MessageThreadSummary.fromMap(Map<String, dynamic> data, String id) {
     final rawNames = (data['participantNames'] as Map?) ?? const {};
     final rawRoles = (data['participantRoles'] as Map?) ?? const {};
     final ts = data['lastMessageAt'];
@@ -72,15 +75,22 @@ class MessageThreadSummary {
       participantRoles: rawRoles.map(
         (key, value) => MapEntry(key.toString(), (value ?? '').toString()),
       ),
-      contextStudentId: (data['contextStudentId'] ?? '').toString().trim().isEmpty
+      contextStudentId:
+          (data['contextStudentId'] ?? '').toString().trim().isEmpty
           ? null
           : data['contextStudentId'].toString(),
-      contextStudentName: (data['contextStudentName'] ?? '').toString().trim().isEmpty
+      contextStudentName:
+          (data['contextStudentName'] ?? '').toString().trim().isEmpty
           ? null
           : data['contextStudentName'].toString(),
-      contextStudentGrade: (data['contextStudentGrade'] ?? '').toString().trim().isEmpty
+      contextStudentGroupId:
+          (data['contextStudentGroupId'] ?? '').toString().trim().isEmpty
           ? null
-          : data['contextStudentGrade'].toString(),
+          : data['contextStudentGroupId'].toString(),
+      contextStudentGroupName:
+          (data['contextStudentGroupName'] ?? '').toString().trim().isEmpty
+          ? null
+          : data['contextStudentGroupName'].toString(),
       lastMessage: data['lastMessage']?.toString(),
       lastSenderId: data['lastSenderId']?.toString(),
       lastSenderName: data['lastSenderName']?.toString(),
@@ -89,21 +99,28 @@ class MessageThreadSummary {
   }
 
   String peerNameFor(String userId) {
-    final peerId =
-        participantIds.cast<String?>().firstWhere((id) => id != userId, orElse: () => null);
+    final peerId = participantIds.cast<String?>().firstWhere(
+      (id) => id != userId,
+      orElse: () => null,
+    );
     if (peerId == null) return 'Conversación';
     return participantNames[peerId] ?? 'Conversación';
   }
 
   String peerRoleFor(String userId) {
-    final peerId =
-        participantIds.cast<String?>().firstWhere((id) => id != userId, orElse: () => null);
+    final peerId = participantIds.cast<String?>().firstWhere(
+      (id) => id != userId,
+      orElse: () => null,
+    );
     if (peerId == null) return '';
     return participantRoles[peerId] ?? '';
   }
 
   String? peerIdFor(String userId) {
-    return participantIds.cast<String?>().firstWhere((id) => id != userId, orElse: () => null);
+    return participantIds.cast<String?>().firstWhere(
+      (id) => id != userId,
+      orElse: () => null,
+    );
   }
 }
 
@@ -143,11 +160,13 @@ class MessageItem {
 class MessagingChildContext {
   final String id;
   final String fullName;
-  final String grade;
+  final String groupId;
+  final String groupName;
 
   const MessagingChildContext({
     required this.id,
     required this.fullName,
-    required this.grade,
+    required this.groupId,
+    required this.groupName,
   });
 }

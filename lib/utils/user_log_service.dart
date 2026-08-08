@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -15,20 +16,19 @@ class UserLogService {
     final common = <String, dynamic>{
       'appVersion': pkg.version,
       'buildNumber': pkg.buildNumber,
-      'platform':
-          kIsWeb
-              ? 'web'
-              : Platform.isAndroid
-              ? 'android'
-              : Platform.isIOS
-              ? 'ios'
-              : Platform.isMacOS
-              ? 'macos'
-              : Platform.isWindows
-              ? 'windows'
-              : Platform.isLinux
-              ? 'linux'
-              : 'unknown',
+      'platform': kIsWeb
+          ? 'web'
+          : Platform.isAndroid
+          ? 'android'
+          : Platform.isIOS
+          ? 'ios'
+          : Platform.isMacOS
+          ? 'macos'
+          : Platform.isWindows
+          ? 'windows'
+          : Platform.isLinux
+          ? 'linux'
+          : 'unknown',
     };
 
     try {
@@ -78,24 +78,18 @@ class UserLogService {
     Map<String, dynamic>? extra,
   }) async {
     final env = await _collectEnv();
-    final doc = {
-      'userId': user.id,
-      'fullName': '${user.firstName} ${user.lastName}',
-      'role': user.role,
-      'institution': user.institution,
-      'campus': user.campus,
-      'grade': user.grade,
-      'event': event,
-      'timestamp': FieldValue.serverTimestamp(),
-      'env': env,
-      if (extra != null) 'extra': extra,
-    };
-    await _db.collection('user_logs').add(doc);
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'registrarAuditoria',
+    );
+    await callable.call({
+      'type': 'user_log',
+      'payload': {'event': event, 'env': env, 'extra': ?extra},
+    });
   }
 
   Future<Set<String>> getDownloadedFileKeys({
     required String userId,
-    String? grade,
+    String? groupId,
     int limit = 100,
   }) async {
     Query q = _db
@@ -103,12 +97,14 @@ class UserLogService {
         .where('userId', isEqualTo: userId)
         .where('event', isEqualTo: 'file_download');
 
-    if (grade != null && grade.isNotEmpty) {
-      q = q.where('extra.grade', isEqualTo: grade);
+    if (groupId != null && groupId.isNotEmpty) {
+      q = q.where('extra.groupId', isEqualTo: groupId);
     }
 
-    final snap =
-        await q.orderBy('timestamp', descending: true).limit(limit).get();
+    final snap = await q
+        .orderBy('timestamp', descending: true)
+        .limit(limit)
+        .get();
 
     final out = <String>{};
     for (final d in snap.docs) {

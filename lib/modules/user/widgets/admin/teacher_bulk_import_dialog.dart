@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 import 'package:sistema_educativo/modules/user/services/teacher_bulk_import_service.dart';
 import 'package:sistema_educativo/providers/user_provider_v2.dart';
@@ -8,7 +9,8 @@ class TeacherBulkImportDialog extends StatefulWidget {
   const TeacherBulkImportDialog({super.key});
 
   @override
-  State<TeacherBulkImportDialog> createState() => _TeacherBulkImportDialogState();
+  State<TeacherBulkImportDialog> createState() =>
+      _TeacherBulkImportDialogState();
 }
 
 class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
@@ -20,7 +22,7 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
   bool _shouldRefresh = false;
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       withData: true,
       type: FileType.custom,
       allowedExtensions: const <String>['xlsx', 'xls'],
@@ -135,9 +137,11 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: .05),
+                  color: AppPalette.primary.withValues(alpha: .05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  border: Border.all(
+                    color: AppPalette.primary.withValues(alpha: .15),
+                  ),
                 ),
                 child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,9 +151,13 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
                       style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     SizedBox(height: 8),
-                    Text('Obligatorias: nombres, apellidos, documento, correo, grado'),
+                    Text(
+                      'Obligatorias: nombres, apellidos, documento, correo, grado',
+                    ),
                     SizedBox(height: 4),
-                    Text('Opcionales: tipo_documento, correo_institucional, estado'),
+                    Text(
+                      'Opcionales: tipo_documento, correo_institucional, estado',
+                    ),
                     SizedBox(height: 8),
                     Text(
                       'Si solo tienes una columna de nombre completo, usa nombre_completo en lugar de nombres y apellidos.',
@@ -174,27 +182,31 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
                       style: theme.textTheme.bodyMedium,
                     ),
                   ElevatedButton.icon(
-                    onPressed:
-                        _loading || _selectedFile?.bytes == null ? null : _import,
-                    icon:
-                        _loading
-                            ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                            : const Icon(Icons.upload_file),
-                    label: Text(_loading ? 'Importando...' : 'Importar docentes'),
+                    onPressed: _loading || _selectedFile?.bytes == null
+                        ? null
+                        : _import,
+                    icon: _loading
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppPalette.surface,
+                            ),
+                          )
+                        : const Icon(Icons.upload_file),
+                    label: Text(
+                      _loading ? 'Importando...' : 'Importar docentes',
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
               Expanded(
                 child: SingleChildScrollView(
-                  child: _result == null ? _buildExampleTable() : _buildResultCard(),
+                  child: _result == null
+                      ? _buildExampleTable()
+                      : _buildResultCard(),
                 ),
               ),
               const SizedBox(height: 12),
@@ -237,7 +249,7 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
     ];
 
     return Table(
-      border: TableBorder.all(color: Colors.black12),
+      border: TableBorder.all(color: AppPalette.outline.withValues(alpha: .20)),
       columnWidths: const <int, TableColumnWidth>{
         0: IntrinsicColumnWidth(),
         1: IntrinsicColumnWidth(),
@@ -248,27 +260,27 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
         6: FlexColumnWidth(),
         7: IntrinsicColumnWidth(),
       },
-      children:
-          rows.map((row) {
-            final isHeader = row == rows.first;
-            return TableRow(
-              decoration: BoxDecoration(
-                color: isHeader ? Colors.black.withValues(alpha: .04) : null,
+      children: rows.map((row) {
+        final isHeader = row == rows.first;
+        return TableRow(
+          decoration: BoxDecoration(
+            color: isHeader
+                ? AppPalette.onSurface.withValues(alpha: .04)
+                : null,
+          ),
+          children: row.map((cell) {
+            return Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                cell,
+                style: TextStyle(
+                  fontWeight: isHeader ? FontWeight.w700 : FontWeight.w400,
+                ),
               ),
-              children:
-                  row.map((cell) {
-                    return Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(
-                        cell,
-                        style: TextStyle(
-                          fontWeight: isHeader ? FontWeight.w700 : FontWeight.w400,
-                        ),
-                      ),
-                    );
-                  }).toList(),
             );
           }).toList(),
+        );
+      }).toList(),
     );
   }
 
@@ -282,9 +294,11 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: .06),
+            color: AppPalette.success.withValues(alpha: .06),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green.withValues(alpha: .16)),
+            border: Border.all(
+              color: AppPalette.success.withValues(alpha: .16),
+            ),
           ),
           child: Text(
             'Filas procesadas: ${result.totalRows} | Creados: ${result.createdCount} | Fallidos: ${result.failedCount}',
@@ -301,9 +315,11 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: .05),
+                color: AppPalette.primary.withValues(alpha: .05),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.red.withValues(alpha: .14)),
+                border: Border.all(
+                  color: AppPalette.primary.withValues(alpha: .14),
+                ),
               ),
               child: Text(
                 failure.rowNumber > 0

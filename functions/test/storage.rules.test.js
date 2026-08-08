@@ -1,6 +1,4 @@
 "use strict";
-/* eslint-env mocha */
-
 const fs = require("fs");
 const path = require("path");
 const {
@@ -27,10 +25,10 @@ describe("Reglas Storage del sitio web", () => {
   before(async () => {
     env = await initializeTestEnvironment({
       projectId,
-      firestore: {host: "127.0.0.1", port: 8080},
+      firestore: {host: "127.0.0.1", port: 8180},
       storage: {
         host: "127.0.0.1",
-        port: 9199,
+        port: 9299,
         rules: fs.readFileSync(
             path.resolve(__dirname, "../../storage.rules"),
             "utf8",
@@ -51,6 +49,27 @@ describe("Reglas Storage del sitio web", () => {
         permissions: ["sitio_web.editar"],
       }));
       await setDoc(doc(db, "users/admin"), activeUser());
+      await setDoc(doc(db, "users/teacher"), activeUser({
+        role: "Docente",
+        groupId: "group-5a",
+        permissions: ["archivos.ver", "archivos.crear"],
+      }));
+      await setDoc(doc(db, "users/student"), activeUser({
+        role: "Estudiante",
+        groupId: "group-5a",
+        permissions: ["archivos.ver"],
+      }));
+      await setDoc(doc(db, "users/student-other"), activeUser({
+        role: "Estudiante",
+        groupId: "group-6a",
+        permissions: ["archivos.ver"],
+      }));
+      await setDoc(doc(db, "users/family"), activeUser({
+        role: "Familiar",
+        studentIds: ["student"],
+        activeStudentId: "student",
+        permissions: ["archivos.ver"],
+      }));
     });
   });
 
@@ -77,5 +96,85 @@ describe("Reglas Storage del sitio web", () => {
 
   it("rechaza la carga a quien no administra el sitio", async () => {
     await assertFails(upload("admin", "rechazado.png", "image/png"));
+  });
+
+  it("solo carga con reserva exacta y metadatos correctos", async () => {
+    const bytes = Buffer.from("archivo de prueba");
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "files/file-1"), {
+        institutionId: "inst-1",
+        campusId: "campus-1",
+        groupId: "group-5a",
+        status: "uploading",
+        uploadedBy: "teacher",
+        expectedSize: bytes.length,
+        contentType: "application/pdf",
+        storagePath: "files/group-5a/file-1/guia.pdf",
+      });
+    });
+    const storage = env.authenticatedContext("teacher").storage(
+        `gs://${projectId}.firebasestorage.app`,
+    );
+    await assertSucceeds(storage.ref("files/group-5a/file-1/guia.pdf").put(
+        bytes,
+        {
+          contentType: "application/pdf",
+          customMetadata: {
+            fileId: "file-1",
+            groupId: "group-5a",
+            uploadedBy: "teacher",
+          },
+        },
+    ));
+    await assertFails(storage.ref("files/group-5a/file-1/otro.pdf").put(
+        bytes,
+        {contentType: "application/pdf"},
+    ));
+  });
+
+  it("aÃ­sla las descargas por grupo e hijo activo", async () => {
+    const bytes = Buffer.from("archivo de prueba");
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "files/file-2"), {
+        institutionId: "inst-1",
+        campusId: "campus-1",
+        groupId: "group-5a",
+        status: "uploading",
+        uploadedBy: "teacher",
+        expectedSize: bytes.length,
+        contentType: "application/pdf",
+        storagePath: "files/group-5a/file-2/guia.pdf",
+      });
+    });
+    const teacherStorage = env.authenticatedContext("teacher").storage(
+        `gs://${projectId}.firebasestorage.app`,
+    );
+    const reference = teacherStorage.ref("files/group-5a/file-2/guia.pdf");
+    await reference.put(bytes, {
+      contentType: "application/pdf",
+      customMetadata: {
+        fileId: "file-2",
+        groupId: "group-5a",
+        uploadedBy: "teacher",
+      },
+    });
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "files/file-2"), {
+        status: "active",
+      }, {merge: true});
+    });
+    const studentRef = env.authenticatedContext("student").storage(
+        `gs://${projectId}.firebasestorage.app`,
+    ).ref(reference.fullPath);
+    const familyRef = env.authenticatedContext("family").storage(
+        `gs://${projectId}.firebasestorage.app`,
+    ).ref(reference.fullPath);
+    const otherRef = env.authenticatedContext("student-other").storage(
+        `gs://${projectId}.firebasestorage.app`,
+    ).ref(reference.fullPath);
+    await assertSucceeds(studentRef.getMetadata());
+    await assertSucceeds(familyRef.getMetadata());
+    await assertFails(otherRef.getMetadata());
+    await assertFails(reference.delete());
   });
 });

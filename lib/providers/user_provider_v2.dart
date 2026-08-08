@@ -22,10 +22,9 @@ class UserProviderV2 extends ChangeNotifier {
     if (_user == null) return;
     final current = kIsWeb ? _user!.webPushToken : _user!.mobilePushToken;
     if (current == token) return;
-    _user =
-        kIsWeb
-            ? _user!.copyWith(webPushToken: token)
-            : _user!.copyWith(mobilePushToken: token);
+    _user = kIsWeb
+        ? _user!.copyWith(webPushToken: token)
+        : _user!.copyWith(mobilePushToken: token);
     notifyListeners();
   }
 

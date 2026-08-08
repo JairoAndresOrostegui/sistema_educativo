@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
@@ -43,10 +44,11 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
 
     int pendingEnrollments = 0;
     try {
-      pendingEnrollments = await EnrollmentService().countByEstados([
-        'prematriculado',
-        'pendiente_revision',
-      ]);
+      pendingEnrollments = await EnrollmentService().countByEstados(
+        ['prematriculado', 'pendiente_revision', 'correccion_solicitada'],
+        institution: esSuperadmin ? null : user.institution,
+        campus: esSuperadmin ? null : user.campus,
+      );
     } catch (_) {
       pendingEnrollments = 0;
     }
@@ -77,7 +79,9 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       ),
     );
 
-    if (esSuperadmin || perms.contains('matricula.ver')) {
+    if (esSuperadmin ||
+        perms.contains('matricula.ver') ||
+        perms.contains('matricula.editar')) {
       items.add(
         MenuItemData(
           label: 'Matr\u00edculas',
@@ -98,7 +102,11 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin || perms.contains('horarios.ver')) {
+    if (esSuperadmin ||
+        perms.contains('horarios.ver') ||
+        perms.contains('horarios.crear') ||
+        perms.contains('horarios.editar') ||
+        perms.contains('horarios.eliminar')) {
       items.add(
         const MenuItemData(
           label: 'Horario escolar',
@@ -128,7 +136,9 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin || perms.contains('autorizaciones.ver')) {
+    if (esSuperadmin ||
+        perms.contains('autorizaciones.ver') ||
+        perms.contains('autorizaciones.editar')) {
       items.add(
         const MenuItemData(
           label: 'Autorizaciones',
@@ -179,61 +189,78 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       isLoading = false;
     });
 
-    _listenPendingAuthorizations(user.institution, user.campus);
+    _listenPendingAuthorizations(
+      user.institution,
+      user.campus,
+      allCampuses: user.isSuperadmin,
+    );
   }
 
   void _listenPending() {
-    _pendingStream =
-        FirebaseFirestore.instance
-            .collection('enrollments')
-            .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
-            .snapshots();
+    final user = context.read<UserProviderV2>().user;
+    if (user == null) return;
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('enrollments')
+        .where(
+          'estado',
+          whereIn: [
+            'prematriculado',
+            'pendiente_revision',
+            'correccion_solicitada',
+          ],
+        );
+    if (!user.isSuperadmin) {
+      query = query
+          .where('institution', isEqualTo: user.institution)
+          .where('campus', isEqualTo: user.campus);
+    }
+    _pendingStream = query.snapshots();
     _pendingSub = _pendingStream!.listen((snapshot) {
       final count = snapshot.size;
       if (!mounted) return;
       setState(() {
-        _menuItems =
-            _menuItems
-                .map(
-                  (m) =>
-                      m.route == '/enrollment'
-                          ? MenuItemData(
-                            label: m.label,
-                            icon: m.icon,
-                            route: m.route,
-                            badgeCount: count,
-                          )
-                          : m,
-                )
-                .toList();
+        _menuItems = _menuItems
+            .map(
+              (m) => m.route == '/enrollment'
+                  ? MenuItemData(
+                      label: m.label,
+                      icon: m.icon,
+                      route: m.route,
+                      badgeCount: count,
+                    )
+                  : m,
+            )
+            .toList();
       });
     });
   }
 
-  void _listenPendingAuthorizations(String institutionId, String campusId) {
+  void _listenPendingAuthorizations(
+    String institutionId,
+    String campusId, {
+    required bool allCampuses,
+  }) {
     _pendingAuthSub?.cancel();
     _pendingAuthSub = AuthorizationService()
         .watchPendingCountForAdmin(
-          institutionId: institutionId,
-          campusId: campusId,
+          institutionId: allCampuses ? null : institutionId,
+          campusId: allCampuses ? null : campusId,
         )
         .listen((pendingCount) {
           if (!mounted) return;
           setState(() {
-            _menuItems =
-                _menuItems
-                    .map(
-                      (m) =>
-                          m.route == '/admin_authorization'
-                              ? MenuItemData(
-                                label: m.label,
-                                icon: m.icon,
-                                route: m.route,
-                                badgeCount: pendingCount,
-                              )
-                              : m,
-                    )
-                    .toList();
+            _menuItems = _menuItems
+                .map(
+                  (m) => m.route == '/admin_authorization'
+                      ? MenuItemData(
+                          label: m.label,
+                          icon: m.icon,
+                          route: m.route,
+                          badgeCount: pendingCount,
+                        )
+                      : m,
+                )
+                .toList();
           });
         });
   }
@@ -248,13 +275,13 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? const Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: CircularProgressIndicator(color: Colors.redAccent),
+        ? Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: AppPalette.primary),
+              ),
             ),
-          ),
-        )
+          )
         : DashboardLayout(menuItems: _menuItems);
   }
 }

@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -55,15 +56,12 @@ class _AdminQrScreenState extends State<AdminQrScreen> {
   List<userModelv2> _filterUsers(List<userModelv2> all, String roleKey) {
     final roleSet = _roleValues(roleKey);
     return all
-        .where(
-          (u) => roleSet.contains(u.role.trim().toLowerCase()),
-        )
+        .where((u) => roleSet.contains(u.role.trim().toLowerCase()))
         .toList()
       ..sort(
-        (a, b) =>
-            '${a.firstName} ${a.lastName}'.compareTo(
-              '${b.firstName} ${b.lastName}',
-            ),
+        (a, b) => '${a.firstName} ${a.lastName}'.compareTo(
+          '${b.firstName} ${b.lastName}',
+        ),
       );
   }
 
@@ -91,9 +89,9 @@ class _AdminQrScreenState extends State<AdminQrScreen> {
       await _userService.actualizarQr(uid: user.id, payload: payload);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo guardar el QR.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo guardar el QR.')));
       return;
     }
 
@@ -107,7 +105,7 @@ class _AdminQrScreenState extends State<AdminQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final roles = const [
+    final roles = [
       {'key': 'padres', 'label': 'Padres'},
       {'key': 'estudiantes', 'label': 'Estudiantes'},
       {'key': 'docentes', 'label': 'Docentes'},
@@ -115,91 +113,88 @@ class _AdminQrScreenState extends State<AdminQrScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR'),
-        leading: const BackToDashboardButton(),
+        title: Text('QR'),
+        leading: BackToDashboardButton(),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Tipo de usuario:',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _selectedRole,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        items:
-                            roles
-                                .map(
-                                  (r) => DropdownMenuItem<String>(
-                                    value: r['key'],
-                                    child: Text(r['label']!),
-                                  ),
-                                )
-                                .toList(),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            _selectedRole = value;
-                            _users = _filterUsers(_allUsers, _selectedRole);
-                          });
-                        },
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Tipo de usuario:',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: _loadUsers,
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Actualizar',
-                    ),
-                  ],
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _selectedRole,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          items: roles
+                              .map(
+                                (r) => DropdownMenuItem<String>(
+                                  value: r['key'],
+                                  child: Text(r['label']!),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _selectedRole = value;
+                              _users = _filterUsers(_allUsers, _selectedRole);
+                            });
+                          },
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      IconButton(
+                        onPressed: _loadUsers,
+                        icon: Icon(Icons.refresh),
+                        tooltip: 'Actualizar',
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _users.isEmpty
-                    ? const Center(
-                      child: Text('No hay usuarios disponibles.'),
-                    )
-                    : ListView.separated(
-                      itemCount: _users.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final u = _users[index];
-                        final name =
-                            '${u.firstName} ${u.lastName}'.trim().isEmpty
+                Expanded(
+                  child: _users.isEmpty
+                      ? Center(child: Text('No hay usuarios disponibles.'))
+                      : ListView.separated(
+                          itemCount: _users.length,
+                          separatorBuilder: (context, index) =>
+                              Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final u = _users[index];
+                            final name =
+                                '${u.firstName} ${u.lastName}'.trim().isEmpty
                                 ? 'Sin nombre'
                                 : '${u.firstName} ${u.lastName}'.trim();
-                        return ListTile(
-                          title: Text(name),
-                          subtitle: Text(
-                            '${u.role} • ${u.document.isEmpty ? 'Sin documento' : u.document}',
-                          ),
-                          trailing: TextButton.icon(
-                            onPressed: () => _showQr(u),
-                            icon: const Icon(Icons.qr_code_2),
-                            label: const Text('Generar QR'),
-                          ),
-                        );
-                      },
-                    ),
-              ),
-            ],
-          ),
+                            return ListTile(
+                              title: Text(name),
+                              subtitle: Text(
+                                '${u.role} • ${u.document.isEmpty ? 'Sin documento' : u.document}',
+                              ),
+                              trailing: TextButton.icon(
+                                onPressed: () => _showQr(u),
+                                icon: Icon(Icons.qr_code_2),
+                                label: Text('Generar QR'),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -208,56 +203,51 @@ class _QrDetailScreen extends StatelessWidget {
   final userModelv2 user;
   final String payload;
 
-  const _QrDetailScreen({
-    required this.user,
-    required this.payload,
-  });
+  const _QrDetailScreen({required this.user, required this.payload});
 
   @override
   Widget build(BuildContext context) {
-    final name =
-        '${user.firstName} ${user.lastName}'.trim().isEmpty
-            ? 'Sin nombre'
-            : '${user.firstName} ${user.lastName}'.trim();
+    final name = '${user.firstName} ${user.lastName}'.trim().isEmpty
+        ? 'Sin nombre'
+        : '${user.firstName} ${user.lastName}'.trim();
     final subtitle =
         '${user.role} - ${user.document.isEmpty ? 'Sin documento' : user.document}';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR de usuario'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        title: Text('QR de usuario'),
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 18,
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: AppPalette.onSurface.withValues(alpha: .54),
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: const TextStyle(color: Colors.black54),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
+              SizedBox(height: 20),
               QrImageView(
                 data: payload,
                 size: 240,
-                backgroundColor: Colors.white,
+                backgroundColor: AppPalette.surface,
                 errorStateBuilder: (context, error) {
-                  return const Text(
+                  return Text(
                     'No se pudo generar el QR.',
-                    style: TextStyle(color: Colors.redAccent),
+                    style: TextStyle(color: AppPalette.primary),
                   );
                 },
               ),
@@ -268,7 +258,3 @@ class _QrDetailScreen extends StatelessWidget {
     );
   }
 }
-
-
-
-

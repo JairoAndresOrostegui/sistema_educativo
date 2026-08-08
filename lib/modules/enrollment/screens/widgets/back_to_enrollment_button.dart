@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 class BackToEnrollmentButton extends StatelessWidget {
   final Color? color;
@@ -9,7 +10,7 @@ class BackToEnrollmentButton extends StatelessWidget {
     return IconButton(
       onPressed: () => Navigator.pop(context),
       icon: const Icon(Icons.arrow_back),
-      color: color ?? Colors.redAccent,
+      color: color ?? AppPalette.primary,
       tooltip: 'Volver a gestión de matrículas',
     );
   }

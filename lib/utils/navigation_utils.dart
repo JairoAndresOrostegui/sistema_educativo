@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -35,8 +36,8 @@ class BackToDashboardButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       onPressed: () => NavigationUtils.goHome(context),
-      icon: const Icon(Icons.arrow_back),
-      color: color ?? Colors.redAccent,
+      icon: Icon(Icons.arrow_back),
+      color: color ?? AppPalette.primary,
       tooltip: 'Volver al menú principal',
     );
   }

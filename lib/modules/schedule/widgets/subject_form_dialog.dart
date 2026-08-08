@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/schedule/subject_model.dart';
@@ -134,7 +135,8 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
       endTime: Timestamp.fromDate(endTimeDateTime),
       id: widget.subjectToEdit?.id ?? '',
       campusId: widget.subjectToEdit?.campusId ?? '',
-      grade: widget.subjectToEdit?.grade ?? '',
+      groupId: widget.subjectToEdit?.groupId ?? '',
+      groupName: widget.subjectToEdit?.groupName ?? '',
       institutionId: widget.subjectToEdit?.institutionId ?? '',
     );
 
@@ -186,15 +188,14 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                     DropdownButtonFormField<String>(
                       initialValue: _selectedTeacherId,
                       decoration: const InputDecoration(labelText: 'Profesor'),
-                      items:
-                          widget.teachers.map((teacher) {
-                            return DropdownMenuItem<String>(
-                              value: teacher.id,
-                              child: Text(
-                                '${teacher.firstName} ${teacher.lastName}',
-                              ),
-                            );
-                          }).toList(),
+                      items: widget.teachers.map((teacher) {
+                        return DropdownMenuItem<String>(
+                          value: teacher.id,
+                          child: Text(
+                            '${teacher.firstName} ${teacher.lastName}',
+                          ),
+                        );
+                      }).toList(),
                       onChanged: (String? value) {
                         setState(() {
                           _selectedTeacherId = value;
@@ -227,13 +228,12 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                         decoration: const InputDecoration(
                           labelText: 'Día de la semana',
                         ),
-                        items:
-                            widget.daysOfWeek.map((day) {
-                              return DropdownMenuItem<String>(
-                                value: day,
-                                child: Text(day.capitalize()),
-                              );
-                            }).toList(),
+                        items: widget.daysOfWeek.map((day) {
+                          return DropdownMenuItem<String>(
+                            value: day,
+                            child: Text(day.capitalize()),
+                          );
+                        }).toList(),
                         onChanged: (String? value) {
                           if (value != null) {
                             setState(() {
@@ -254,8 +254,9 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                       children: [
                         Expanded(
                           child: ElevatedButton(
-                            onPressed:
-                                _submitting ? null : () => _selectTime(true),
+                            onPressed: _submitting
+                                ? null
+                                : () => _selectTime(true),
                             child: Text(
                               _startTime == null
                                   ? 'Hora de inicio'
@@ -266,8 +267,9 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed:
-                                _submitting ? null : () => _selectTime(false),
+                            onPressed: _submitting
+                                ? null
+                                : () => _selectTime(false),
                             child: Text(
                               _endTime == null
                                   ? 'Hora de fin'
@@ -282,7 +284,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                         padding: const EdgeInsets.only(top: 16),
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(color: Colors.red),
+                          style: TextStyle(color: AppPalette.primary),
                         ),
                       ),
                   ],
@@ -298,14 +300,13 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
           ),
           ElevatedButton.icon(
             onPressed: _submitting ? null : _saveSubject,
-            icon:
-                _submitting
-                    ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.save),
+            icon: _submitting
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save),
             label: Text(_submitting ? 'Guardando...' : 'Guardar'),
           ),
         ],

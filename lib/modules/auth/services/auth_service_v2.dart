@@ -7,19 +7,12 @@ import '../../../models/user/user_model_v2.dart';
 import '../../../utils/firebase_utils.dart';
 import '../../../utils/user_log_service.dart';
 import '../../../utils/validators.dart';
+import '../utils/auth_access_policy.dart';
 import '../utils/auth_error_mapper.dart';
 
 class AuthService {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
-
-  static const String estadoActivo = 'activo';
-  static const List<String> _rolesPermitidos = <String>[
-    'Administrador',
-    'Docente',
-    'Estudiante',
-    'Familiar',
-  ];
 
   Future<userModelv2?> loginWithEmailAndPassword(
     String identifier,
@@ -27,10 +20,9 @@ class AuthService {
   ) async {
     final trimmedIdentifier = identifier.trim();
     final isEmailLogin = Validators.isValidEmail(trimmedIdentifier);
-    final loginEmail =
-        isEmailLogin
-            ? trimmedIdentifier.toLowerCase()
-            : await _resolveStudentEmail(trimmedIdentifier);
+    final loginEmail = isEmailLogin
+        ? trimmedIdentifier.toLowerCase()
+        : await _resolveStudentEmail(trimmedIdentifier);
 
     try {
       final credential = await _auth.signInWithEmailAndPassword(
@@ -55,8 +47,10 @@ class AuthService {
       final data = userSnap.data() ?? <String, dynamic>{};
       final uidFirestore = userSnap.id;
 
-      final correoGuardado =
-          (data['institutionalEmail'] ?? '').toString().trim().toLowerCase();
+      final correoGuardado = (data['institutionalEmail'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
       if (correoGuardado.isNotEmpty && correoGuardado != loginEmail) {
         await _auth.signOut();
         throw Exception(
@@ -65,7 +59,8 @@ class AuthService {
       }
 
       final role = (data['role'] ?? '').toString().trim();
-      final requiresEmailVerification = role != 'Estudiante';
+      final requiresEmailVerification =
+          AuthAccessPolicy.requiresEmailVerification(role);
       if (requiresEmailVerification &&
           firebaseUser != null &&
           !firebaseUser.emailVerified) {
@@ -73,8 +68,8 @@ class AuthService {
         throw Exception('Debes verificar tu correo antes de iniciar sesion.');
       }
 
-      final status = (data['status'] ?? '').toString().toLowerCase();
-      if (status != estadoActivo) {
+      final status = (data['status'] ?? '').toString();
+      if (!AuthAccessPolicy.isActiveStatus(status)) {
         await _auth.signOut();
         throw Exception(
           'El usuario esta inactivo. Comuniquese con el administrador.',
@@ -88,7 +83,7 @@ class AuthService {
         await _auth.signOut();
         throw Exception(AuthErrorMapper.missingTenantMessage);
       }
-      if (!_rolesPermitidos.contains(userModel.role)) {
+      if (!AuthAccessPolicy.isAllowedRole(userModel.role)) {
         await _auth.signOut();
         throw Exception(AuthErrorMapper.invalidRoleMessage);
       }

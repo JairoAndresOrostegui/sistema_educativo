@@ -10,7 +10,7 @@ class AuthErrorMapper {
 
   static String mapFirebaseCode(String code) {
     return _firebaseMessages[code] ??
-        'Ocurrio un error al iniciar sesión. Codigo: $code';
+        'Ocurrio un error al iniciar sesion. Codigo: $code';
   }
 
   static const String lockMessage =

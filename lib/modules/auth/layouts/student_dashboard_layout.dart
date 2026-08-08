@@ -1,5 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
@@ -69,7 +70,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       ),
     ];
 
-    if (perms.contains('matricula.ver')) {
+    if (role == 'familiar' && perms.contains('matricula.ver')) {
       final showEnrollment = await _shouldShowEnrollmentMenu(user.id);
       if (showEnrollment) {
         items.add(
@@ -124,7 +125,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       );
     }
 
-    if (perms.contains('autorizaciones.ver')) {
+    if (role == 'familiar' && perms.contains('autorizaciones.ver')) {
       items.add(
         const MenuItemData(
           label: 'Autorizaciones',
@@ -172,10 +173,10 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? const Scaffold(
+        ? Scaffold(
             body: SafeArea(
               child: Center(
-                child: CircularProgressIndicator(color: Colors.redAccent),
+                child: CircularProgressIndicator(color: AppPalette.primary),
               ),
             ),
           )

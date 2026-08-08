@@ -50,10 +50,9 @@ class WebsiteSubmission {
       phone: (data['phone'] ?? '').toString(),
       message: (data['message'] ?? '').toString(),
       status: (data['status'] ?? 'new').toString(),
-      createdAt:
-          data['createdAt'] is Timestamp
-              ? (data['createdAt'] as Timestamp).toDate()
-              : null,
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
     );
   }
 }
@@ -89,10 +88,9 @@ class WebsiteService {
     final pageSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
     if (configSnapshot.exists && configSnapshot.data() != null) {
       final config = WebsiteSiteConfig.fromMap(configSnapshot.data()!);
-      final pages =
-          pageSnapshot.docs
-              .map((doc) => WebsitePage.fromMap(doc.id, doc.data()))
-              .toList();
+      final pages = pageSnapshot.docs
+          .map((doc) => WebsitePage.fromMap(doc.id, doc.data()))
+          .toList();
       return WebsiteBundle(
         config: config,
         pages: pages.isEmpty ? WebsiteBundle.defaults.pages : pages,

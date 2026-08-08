@@ -54,32 +54,28 @@ class LocationService {
       debugPrint('LocationService: error en posición inicial -> $e');
     }
 
-    final settings =
-        (defaultTargetPlatform == TargetPlatform.android)
-            ? AndroidSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
-              distanceFilter: 25,
-              intervalDuration: const Duration(
-                seconds: 10,
-              ),
-            )
-            : const LocationSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
-              distanceFilter: 25,
-            );
+    final settings = (defaultTargetPlatform == TargetPlatform.android)
+        ? AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 25,
+            intervalDuration: const Duration(seconds: 10),
+          )
+        : const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 25,
+          );
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: settings,
-    ).listen((pos) async {
-      try {
-        await _writeIfNeeded(
-          rutaDiaDocId,
-          GeoPoint(pos.latitude, pos.longitude),
-        );
-      } catch (e) {
-        debugPrint('LocationService: error procesando posición -> $e');
-      }
-    });
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
+        .listen((pos) async {
+          try {
+            await _writeIfNeeded(
+              rutaDiaDocId,
+              GeoPoint(pos.latitude, pos.longitude),
+            );
+          } catch (e) {
+            debugPrint('LocationService: error procesando posición -> $e');
+          }
+        });
   }
 
   Future<void> _writeIfNeeded(

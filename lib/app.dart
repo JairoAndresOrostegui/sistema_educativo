@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'config/theme_config.dart';
+
 import 'modules/auth/guards/admin_dashboard_guard.dart';
 import 'modules/auth/guards/student_dashboard_guard.dart';
 import 'modules/auth/guards/teacher_dashboard_guard.dart';
 import 'modules/auth/screens/access_denied_page.dart';
 import 'modules/auth/screens/loginScreenV2.dart';
 import 'modules/auth/services/auth_service_v2.dart';
+import 'modules/auth/utils/auth_access_policy.dart';
 import 'modules/authorization/screens/admin_authorization_screen.dart';
 import 'modules/authorization/screens/student_authorization_screen.dart';
 import 'modules/authorization/screens/teacher_authorization_screen.dart';
@@ -56,88 +59,6 @@ class _AppRouterState extends State<AppRouter> {
   }
 
   GoRouter _buildRouter(UserProviderV2 userProvider) {
-    bool hasMessagingAccess(dynamic user) {
-      if (user == null) return false;
-      final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
-      return user.isSuperadmin || perms.contains('mensajeria.ver');
-    }
-
-    bool hasWebsiteAccess(dynamic user) {
-      if (!kIsWeb || user == null) return false;
-      final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
-      return user.isSuperadmin ||
-          perms.contains('sitio_web.ver') ||
-          perms.contains('sitio_web.editar');
-    }
-
-    bool hasWebsiteEditAccess(dynamic user) {
-      if (!kIsWeb || user == null) return false;
-      final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
-      return user.isSuperadmin || perms.contains('sitio_web.editar');
-    }
-
-    String homeForRole(String? role) {
-      switch (role) {
-        case 'Administrador':
-          return '/admin_dashboard';
-        case 'Docente':
-          return '/teacher_dashboard';
-        case 'Estudiante':
-        case 'Familiar':
-          return '/student_dashboard';
-        default:
-          return '/access_denied';
-      }
-    }
-
-    bool allowedForRole(dynamic user, String path) {
-      final role = user?.role as String?;
-      const commons = {'/profile', '/logout', '/access_denied'};
-      if (commons.contains(path)) return true;
-
-      switch (role) {
-        case 'Administrador':
-          return {
-            '/admin_dashboard',
-            '/admin_user',
-            '/management_route',
-            '/management_schedule',
-            '/management_document',
-            '/view_history',
-            '/admin_authorization',
-            '/enrollment',
-            '/admin_parameters',
-            '/admin_qr',
-            if (hasWebsiteAccess(user)) '/website_admin',
-            if (hasWebsiteEditAccess(user)) '/website_messages',
-            if (hasMessagingAccess(user)) '/messages',
-          }.contains(path);
-        case 'Docente':
-          return {
-            '/teacher_dashboard',
-            '/execute_route',
-            '/teacher_schedule',
-            '/teacher_document',
-            '/teacher_authorization',
-            if (hasMessagingAccess(user)) '/messages',
-          }.contains(path);
-        case 'Estudiante':
-        case 'Familiar':
-          return {
-            '/student_dashboard',
-            '/my_route',
-            '/my_schedule',
-            '/student_document',
-            '/student_authorization',
-            '/enrollment',
-            '/student_qr',
-            if (hasMessagingAccess(user)) '/messages',
-          }.contains(path);
-        default:
-          return false;
-      }
-    }
-
     return GoRouter(
       navigatorKey: appNavigatorKey,
       initialLocation: kIsWeb ? '/' : '/login',
@@ -170,10 +91,16 @@ class _AppRouterState extends State<AppRouter> {
           return publicPaths.contains(currentPath) ? null : '/login';
         }
 
-        final home = homeForRole(user.role);
+        final home = AuthAccessPolicy.homeForRole(user.role);
         if (loggingIn) return home;
 
-        if (!allowedForRole(user, currentPath)) {
+        if (!AuthAccessPolicy.isPathAllowed(
+          role: user.role,
+          isSuperadmin: user.isSuperadmin,
+          permissions: user.permissions,
+          path: currentPath,
+          isWeb: kIsWeb,
+        )) {
           return '/access_denied';
         }
 
@@ -190,24 +117,23 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/admissions',
-          builder:
-              (context, state) => const PublicWebsiteScreen(slug: 'admissions'),
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'admissions'),
         ),
         GoRoute(
           path: '/learning',
-          builder:
-              (context, state) => const PublicWebsiteScreen(slug: 'learning'),
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'learning'),
         ),
         GoRoute(
           path: '/news-events',
-          builder:
-              (context, state) =>
-                  const PublicWebsiteScreen(slug: 'news-events'),
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'news-events'),
         ),
         GoRoute(
           path: '/parents',
-          builder:
-              (context, state) => const PublicWebsiteScreen(slug: 'parents'),
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'parents'),
         ),
         GoRoute(
           path: '/login',
@@ -215,11 +141,10 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/enrollment_public',
-          builder:
-              (context, state) => const EnrollmentFormScreen(
-                isPublicLink: true,
-                modeOverride: EnrollmentEntryMode.publico,
-              ),
+          builder: (context, state) => const EnrollmentFormScreen(
+            isPublicLink: true,
+            modeOverride: EnrollmentEntryMode.publico,
+          ),
         ),
         GoRoute(
           path: '/access_denied',
@@ -327,7 +252,9 @@ class _AppRouterState extends State<AppRouter> {
             final role = (user?.role ?? '').trim().toLowerCase();
             final isAdmin =
                 (user?.isSuperadmin ?? false) || role == 'administrador';
-            if (isAdmin) return const AdminEnrollmentScreen();
+            if (isAdmin || role == 'docente') {
+              return const AdminEnrollmentScreen();
+            }
             return const EnrollmentFormScreen();
           },
         ),
@@ -351,7 +278,7 @@ class _AppRouterState extends State<AppRouter> {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Sistema Educativo',
-      theme: ThemeData(primarySwatch: Colors.indigo),
+      theme: ThemeProvider.themeData,
       routerConfig: router,
     );
   }

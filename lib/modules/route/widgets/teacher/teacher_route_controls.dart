@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/daily_route_model.dart';
@@ -24,28 +25,28 @@ class TeacherRouteControls extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Iniciar ruta'),
+              icon: Icon(Icons.play_arrow),
+              label: Text('Iniciar ruta'),
               onPressed: onStart,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                textStyle: const TextStyle(fontSize: 16),
+                padding: EdgeInsets.symmetric(vertical: 12),
+                textStyle: TextStyle(fontSize: 16),
               ),
             ),
           ),
         if (estado == EstadoRuta.activa) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.stop),
-              label: const Text('Finalizar ruta'),
+              icon: Icon(Icons.stop),
+              label: Text('Finalizar ruta'),
               onPressed: onFinalize,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                textStyle: const TextStyle(fontSize: 16),
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 12),
+                textStyle: TextStyle(fontSize: 16),
+                backgroundColor: AppPalette.error,
+                foregroundColor: AppPalette.surface,
               ),
             ),
           ),

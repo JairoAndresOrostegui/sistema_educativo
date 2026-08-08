@@ -3,7 +3,10 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
-Future<void> descargarArchivoPlataforma(String url, String nombreArchivo) async {
+Future<void> descargarArchivoPlataforma(
+  String url,
+  String nombreArchivo,
+) async {
   final ref = FirebaseStorage.instance.refFromURL(url);
   final bytes = await ref.getData();
 

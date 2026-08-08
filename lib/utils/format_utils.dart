@@ -46,10 +46,10 @@ class FormatUtils {
   }
 
   static String formatoFechaHora(DateTime fecha) {
-  return DateFormat('yyyy-MM-dd HH:mm').format(fecha);
-}
+    return DateFormat('yyyy-MM-dd HH:mm').format(fecha);
+  }
 
-static String formatoHora(DateTime fecha) {
-  return DateFormat('HH:mm').format(fecha);
-}
+  static String formatoHora(DateTime fecha) {
+    return DateFormat('HH:mm').format(fecha);
+  }
 }

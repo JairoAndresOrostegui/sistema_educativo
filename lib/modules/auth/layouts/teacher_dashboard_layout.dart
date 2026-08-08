@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
@@ -42,6 +43,18 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       ),
     ];
 
+    if (user.isSuperadmin ||
+        perms.contains('usuarios.ver') ||
+        perms.contains('usuarios.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Gesti\u00f3n de usuarios',
+          icon: Icons.group,
+          route: '/admin_user',
+        ),
+      );
+    }
+
     if (user.isSuperadmin || perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
@@ -82,6 +95,18 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
+    if (user.isSuperadmin ||
+        perms.contains('matricula.ver') ||
+        perms.contains('matricula.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Matrículas',
+          icon: Icons.assignment_ind,
+          route: '/enrollment',
+        ),
+      );
+    }
+
     if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
       items.add(
         const MenuItemData(
@@ -98,32 +123,30 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
     });
 
     if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
-      final grade = (user.grade ?? '').trim();
-      if (grade.isNotEmpty) {
+      final groupId = (user.groupId ?? '').trim();
+      if (groupId.isNotEmpty) {
         _pendingAuthSub?.cancel();
         _pendingAuthSub = AuthorizationService()
-            .watchPendingCountForGrade(
+            .watchPendingCountForGroup(
               institutionId: user.institution,
               campusId: user.campus,
-              grade: grade,
+              groupId: groupId,
             )
             .listen((count) {
               if (!mounted) return;
               setState(() {
-                _menuItems =
-                    _menuItems
-                        .map(
-                          (m) =>
-                              m.route == '/teacher_authorization'
-                                  ? MenuItemData(
-                                    label: m.label,
-                                    icon: m.icon,
-                                    route: m.route,
-                                    badgeCount: count,
-                                  )
-                                  : m,
-                        )
-                        .toList();
+                _menuItems = _menuItems
+                    .map(
+                      (m) => m.route == '/teacher_authorization'
+                          ? MenuItemData(
+                              label: m.label,
+                              icon: m.icon,
+                              route: m.route,
+                              badgeCount: count,
+                            )
+                          : m,
+                    )
+                    .toList();
               });
             });
       }
@@ -139,10 +162,10 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? const Scaffold(
+        ? Scaffold(
             body: SafeArea(
               child: Center(
-                child: CircularProgressIndicator(color: Colors.redAccent),
+                child: CircularProgressIndicator(color: AppPalette.primary),
               ),
             ),
           )

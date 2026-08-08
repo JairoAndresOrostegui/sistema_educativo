@@ -25,26 +25,23 @@ class FamilySection extends StatelessWidget {
           controller: familyRelation,
           decoration: const InputDecoration(labelText: 'Relacion Familiar'),
           readOnly: soloLectura,
-          validator:
-              (value) =>
-                  (value == null || value.isEmpty)
-                      ? 'Este campo es obligatorio'
-                      : null,
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'Este campo es obligatorio'
+              : null,
         ),
         const SizedBox(height: 8),
         Autocomplete<userModelv2>(
           initialValue: const TextEditingValue(text: ''),
-          displayStringForOption:
-              (option) =>
-                  '${option.firstName} ${option.lastName} (${option.document})',
+          displayStringForOption: (option) =>
+              '${option.firstName} ${option.lastName} (${option.document})',
           optionsBuilder: (textEditingValue) {
             if (textEditingValue.text.isEmpty) {
               return const Iterable<userModelv2>.empty();
             }
             final query = textEditingValue.text.toLowerCase();
             return availableStudents.where((option) {
-              final name =
-                  '${option.firstName} ${option.lastName}'.toLowerCase();
+              final name = '${option.firstName} ${option.lastName}'
+                  .toLowerCase();
               final document = option.document.toLowerCase();
               return name.contains(query) || document.contains(query);
             });
@@ -56,28 +53,29 @@ class FamilySection extends StatelessWidget {
               onStudentIdsChanged(updatedStudentIds);
             }
           },
-          fieldViewBuilder: (
-            BuildContext context,
-            TextEditingController textEditingController,
-            FocusNode focusNode,
-            VoidCallback onFieldSubmitted,
-          ) {
-            return TextFormField(
-              controller: textEditingController,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                labelText: 'Estudiantes a cargo',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    textEditingController.clear();
-                    onStudentIdsChanged([]);
-                  },
-                ),
-              ),
-            );
-          },
+          fieldViewBuilder:
+              (
+                BuildContext context,
+                TextEditingController textEditingController,
+                FocusNode focusNode,
+                VoidCallback onFieldSubmitted,
+              ) {
+                return TextFormField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    labelText: 'Estudiantes a cargo',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        textEditingController.clear();
+                        onStudentIdsChanged([]);
+                      },
+                    ),
+                  ),
+                );
+              },
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -109,23 +107,22 @@ class FamilySection extends StatelessWidget {
   }) {
     final student = students.firstWhere(
       (s) => s.id == id,
-      orElse:
-          () => userModelv2(
-            id: id,
-            firstName: 'Estudiante',
-            lastName: 'No encontrado',
-            document: '',
-            documentType: '',
-            personalEmail: '',
-            institutionalEmail: '',
-            role: 'Estudiante',
-            institution: '',
-            campus: '',
-            isSuperadmin: false,
-            status: 'activo',
-            phones: [],
-            permissions: [],
-          ),
+      orElse: () => userModelv2(
+        id: id,
+        firstName: 'Estudiante',
+        lastName: 'No encontrado',
+        document: '',
+        documentType: '',
+        personalEmail: '',
+        institutionalEmail: '',
+        role: 'Estudiante',
+        institution: '',
+        campus: '',
+        isSuperadmin: false,
+        status: 'activo',
+        phones: [],
+        permissions: [],
+      ),
     );
     return Chip(
       label: Text('${student.firstName} ${student.lastName}'),

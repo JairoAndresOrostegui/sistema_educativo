@@ -28,12 +28,10 @@ void main() async {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   try {
-    await ThemeProvider.cargarConfiguracion(
-      'desarrolloytecnologiasantander.com',
-    );
+    await ThemeProvider.cargarConfiguracion();
   } catch (e) {
     debugPrint('Error al cargar configuracion de tema: $e');
-    ThemeProvider.config = ThemeConfig.fromMap({});
+    ThemeProvider.usarConfiguracionPredeterminada();
   }
 
   runApp(

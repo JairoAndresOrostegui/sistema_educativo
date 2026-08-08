@@ -285,12 +285,12 @@ const List<EnrollmentField> enrollmentFieldConfig = [
     optionsSource: 'sedes',
   ),
   EnrollmentField(
-    name: 'gradoAspirado',
-    label: 'Grado',
+    name: 'groupId',
+    label: 'Grupo',
     type: 'enum',
     required: true,
     editableBy: ['padre'],
-    optionsSource: 'grados',
+    optionsSource: 'academicGroups',
   ),
   EnrollmentField(
     name: 'nivelesCursadosInstitucion',

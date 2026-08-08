@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -62,19 +63,16 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('¿Eliminar ruta?'),
-        content: const Text('Esta acción no se puede deshacer.'),
+        title: Text('¿Eliminar ruta?'),
+        content: Text('Esta acción no se puede deshacer.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Eliminar',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: Text('Eliminar', style: TextStyle(color: AppPalette.error)),
           ),
         ],
       ),
@@ -115,17 +113,17 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
     final canDelete = isSuperadmin || permissions.contains('rutas.eliminar');
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        title: const Text('School route management'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        title: Text('School route management'),
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
-        leading: const BackToDashboardButton(),
+        leading: BackToDashboardButton(),
         actions: [
           if (canCreate)
             IconButton(
-              icon: const Icon(Icons.add),
+              icon: Icon(Icons.add),
               onPressed: () => mostrarFormularioRuta(
                 context: context,
                 onGuardar: _loadRoutes,
@@ -141,108 +139,107 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                 onGuardar: _loadRoutes,
               ),
               tooltip: 'Crear nueva ruta',
-              child: const Icon(Icons.add),
+              child: Icon(Icons.add),
             )
           : null,
       body: SafeArea(
         child: isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(child: CircularProgressIndicator())
             : routes.isEmpty
-                ? const Center(child: Text('No hay rutas registradas.'))
-                : Scrollbar(
-                    controller: _routesScrollController,
-                    thumbVisibility: true,
-                    child: ListView.separated(
-                      controller: _routesScrollController,
-                      padding: const EdgeInsets.all(16),
-                      itemCount: routes.length,
-                      separatorBuilder: (context, _) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final route = routes[index];
+            ? Center(child: Text('No hay rutas registradas.'))
+            : Scrollbar(
+                controller: _routesScrollController,
+                thumbVisibility: true,
+                child: ListView.separated(
+                  controller: _routesScrollController,
+                  padding: EdgeInsets.all(16),
+                  itemCount: routes.length,
+                  separatorBuilder: (context, _) => SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final route = routes[index];
 
-                        return Semantics(
-                          container: true,
-                          label:
-                              'Ruta ${route.name}. Dirección de inicio: ${route.startAddress}.',
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOut,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                    color: Colors.red.withValues(alpha: .15),
-                                  ),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                    colors: [
-                                      Colors.red.withValues(alpha: .06),
-                                      Colors.white,
-                                    ],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.03),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                            ),
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                route.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              subtitle: Text(route.startAddress),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (canEdit)
-                                    Semantics(
-                                      button: true,
-                                      label: 'Editar ruta ${route.name}',
-                                      child: IconButton(
-                                        icon: const Icon(
-                                          Icons.edit,
-                                          color: Colors.blueAccent,
-                                        ),
-                                        onPressed: () => mostrarFormularioRuta(
-                                          context: context,
-                                          rutaModel: route,
-                                          onGuardar: _loadRoutes,
-                                        ),
-                                        tooltip: 'Editar ruta',
-                                      ),
-                                    ),
-                                  if (canDelete)
-                                    Semantics(
-                                      button: true,
-                                      label: 'Eliminar ruta ${route.name}',
-                                      child: IconButton(
-                                        icon: const Icon(
-                                          Icons.delete,
-                                          color: Colors.redAccent,
-                                        ),
-                                        onPressed: () => _deleteRoute(route),
-                                        tooltip: 'Eliminar ruta',
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
+                    return Semantics(
+                      container: true,
+                      label:
+                          'Ruta ${route.name}. Dirección de inicio: ${route.startAddress}.',
+                      child: AnimatedContainer(
+                        duration: Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppPalette.error.withValues(alpha: .15),
                           ),
-                        );
-                      },
-                    ),
-                  ),
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              AppPalette.error.withValues(alpha: .06),
+                              AppPalette.surface,
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppPalette.onSurface.withValues(
+                                alpha: 0.03,
+                              ),
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            route.name,
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(route.startAddress),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (canEdit)
+                                Semantics(
+                                  button: true,
+                                  label: 'Editar ruta ${route.name}',
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.edit,
+                                      color: AppPalette.info,
+                                    ),
+                                    onPressed: () => mostrarFormularioRuta(
+                                      context: context,
+                                      rutaModel: route,
+                                      onGuardar: _loadRoutes,
+                                    ),
+                                    tooltip: 'Editar ruta',
+                                  ),
+                                ),
+                              if (canDelete)
+                                Semantics(
+                                  button: true,
+                                  label: 'Eliminar ruta ${route.name}',
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.delete,
+                                      color: AppPalette.primary,
+                                    ),
+                                    onPressed: () => _deleteRoute(route),
+                                    tooltip: 'Eliminar ruta',
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
       ),
     );
   }

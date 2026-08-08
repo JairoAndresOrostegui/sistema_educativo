@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +15,7 @@ import '../models/enrollment_field.dart';
 import '../models/submit_result.dart';
 import '../export/enrollment_pdf_utils.dart';
 import '../services/enrollment_submit_handler.dart';
+import '../../user/services/active_student_service.dart';
 import 'widgets/back_to_enrollment_button.dart';
 import 'widgets/enrollment_child_selector.dart';
 import 'widgets/enrollment_document_search_card.dart';
@@ -27,6 +29,8 @@ class EnrollmentFormScreen extends StatefulWidget {
   final bool isPublicLink;
   final EnrollmentEntryMode? modeOverride;
   final int? anioMatricula;
+  final String? initialLinkedStudentId;
+  final bool forceReadOnly;
   final String? token;
   final String? enrollmentId;
   final Map<String, dynamic>? existingData;
@@ -37,6 +41,8 @@ class EnrollmentFormScreen extends StatefulWidget {
     this.isPublicLink = false,
     this.modeOverride,
     this.anioMatricula,
+    this.initialLinkedStudentId,
+    this.forceReadOnly = false,
     this.token,
     this.enrollmentId,
     this.existingData,
@@ -77,15 +83,18 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     _controller.initDefaults(
       anioInicial: widget.anioMatricula,
       initialEstado: widget.initialEstado,
+      initialLinkedStudentId: widget.initialLinkedStudentId,
       existingData: widget.existingData,
       readOnly:
-          widget.initialEstado == 'matriculado' &&
-          _resolveMode() != EnrollmentEntryMode.admin,
+          widget.forceReadOnly ||
+          (widget.initialEstado == 'matriculado' &&
+              _resolveMode() != EnrollmentEntryMode.admin),
     );
     _controller.loadAnioFromParameters();
     _controller.loadOptions();
     _controller.loadPendingCount(
       isAdmin: _resolveMode() == EnrollmentEntryMode.admin,
+      userProvider: context.read<UserProviderV2>(),
     );
     _controller.loadChildrenIfNeeded(context.read<UserProviderV2>());
   }
@@ -105,7 +114,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   }
 
   List<String> _availableExternalGrades() {
-    final aspirado = _controllers['gradoAspirado']?.text ?? '';
+    final aspirado = _controllers['groupId']?.text ?? '';
     return _controller.availableExternalGrades(aspirado);
   }
 
@@ -175,21 +184,17 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                         border: OutlineInputBorder(),
                       ),
                       initialValue: selectedGrade,
-                      items:
-                          availableGrades
-                              .map(
-                                (g) => DropdownMenuItem<String>(
-                                  value: g,
-                                  child: Text(g),
-                                ),
-                              )
-                              .toList(),
+                      items: availableGrades
+                          .map(
+                            (g) => DropdownMenuItem<String>(
+                              value: g,
+                              child: Text(g),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (val) => setState(() => selectedGrade = val),
-                      validator:
-                          (value) =>
-                              (value == null || value.isEmpty)
-                                  ? 'Requerido'
-                                  : null,
+                      validator: (value) =>
+                          (value == null || value.isEmpty) ? 'Requerido' : null,
                     ),
                   ],
                 ),
@@ -294,21 +299,17 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                         border: OutlineInputBorder(),
                       ),
                       initialValue: selectedGrade,
-                      items:
-                          grades
-                              .map(
-                                (g) => DropdownMenuItem<String>(
-                                  value: g,
-                                  child: Text(g),
-                                ),
-                              )
-                              .toList(),
+                      items: grades
+                          .map(
+                            (g) => DropdownMenuItem<String>(
+                              value: g,
+                              child: Text(g),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (val) => setState(() => selectedGrade = val),
-                      validator:
-                          (value) =>
-                              (value == null || value.isEmpty)
-                                  ? 'Requerido'
-                                  : null,
+                      validator: (value) =>
+                          (value == null || value.isEmpty) ? 'Requerido' : null,
                     ),
                   ],
                 ),
@@ -425,13 +426,31 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   }
 
   Future<void> _prefillByDocument() async {
-    await _controller.prefillByDocument(readOnly: _readOnlyForm);
+    await _controller.prefillByDocument(
+      readOnly: _readOnlyForm,
+      userProvider: context.read<UserProviderV2>(),
+    );
     setState(() {});
   }
 
   Future<void> _onChildSelected(ChildOption? selected) async {
-    await _controller.onChildSelected(selected);
-    setState(() {});
+    try {
+      if (selected != null) {
+        await ActiveStudentService().select(
+          userProvider: context.read<UserProviderV2>(),
+          studentId: selected.id,
+        );
+      }
+      await _controller.onChildSelected(selected);
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: context,
+        title: 'No fue posible cambiar de estudiante',
+        message: 'Verifica la conexión e inténtalo nuevamente.',
+      );
+    }
   }
 
   List<Step> _steps(
@@ -443,8 +462,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   ) {
     List<Step> steps = [];
     final mappedNames = <String>{};
-    final sectionEntries =
-        <({String title, List<EnrollmentField> fields})>[];
+    final sectionEntries = <({String title, List<EnrollmentField> fields})>[];
     Step buildStep(
       String title,
       List<EnrollmentField> fields,
@@ -457,114 +475,109 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
         isActive: _currentStep == index && !_isStepCollapsed,
         state: _currentStep > index ? StepState.complete : StepState.indexed,
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        content:
-            isCollapsed
-                ? const SizedBox.shrink()
-                : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    EnrollmentFieldsSection(
-                      fields: fields,
-                      controllers: _controllers,
-                      isReadOnly:
-                          (f) =>
-                              !_controller.canEditField(
-                                field: f,
-                                role: _roleForFilters(),
-                                estado: _currentEstado ?? 'prematriculado',
-                                isAdmin: isAdmin,
-                                lockForDoc: lockForDoc,
-                              ),
-                      optionsFor: _optionsFor,
-                      labelForValue: _labelForValue,
-                      onPickDate:
-                          (field, withTime) =>
-                              _pickDate(context, field, withTime: withTime),
-                      gradeHistoryBuilder:
-                          (field) => EnrollmentGradeHistorySection(
-                            label: field.label,
-                            entries: _controller.gradeHistory,
-                            readOnly: _readOnlyForm || lockForDoc,
-                            onAdd: _showAddGradeDialog,
-                            onRemove: _controller.removeExternalGradeHistory,
-                            onEdit: (entry) async {
-                              final result = await _showEditGradeDialog(entry);
-                              if (result != null) {
-                                _controller.updateExternalGradeHistory(
-                                  entry,
-                                  result,
-                                );
-                                setState(() {});
-                              }
-                            },
-                          ),
-                      onChanged: (fieldName, v) {
-                        _values[fieldName] = v;
-                        if (fieldName == 'fechaNacimiento') {
-                          _recomputeAge();
-                        }
-                        if (fieldName == 'tieneAcudienteDiferente' &&
-                            (v == null || v.toLowerCase() != 'true')) {
-                          const fieldsToClear = [
-                            'acudientePrincipal',
-                            'nombreAcudiente',
-                            'cedulaAcudiente',
-                            'emailAcudiente',
-                            'celularAcudiente',
-                            'lugarTrabajoAcudiente',
-                            'ocupacionAcudiente',
-                            'cargoAcudiente',
-                          ];
-                          for (final name in fieldsToClear) {
-                            _controllers[name]?.text = '';
-                            _values[name] = '';
-                          }
-                        }
-                        // Immediate UI update and dependent field handling
-                        if (fieldName == 'servicioTransporte' &&
-                            (v == null || v.toLowerCase() != 'true')) {
-                          // clear transporte tipo when transport is disabled
-                          _controllers['servicioTransporteTipo']?.text = '';
-                          _values['servicioTransporteTipo'] = '';
-                        }
-                        setState(() {});
-                      },
+        content: isCollapsed
+            ? const SizedBox.shrink()
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  EnrollmentFieldsSection(
+                    fields: fields,
+                    controllers: _controllers,
+                    isReadOnly: (f) => !_controller.canEditField(
+                      field: f,
+                      role: _roleForFilters(),
+                      estado: _currentEstado ?? 'prematriculado',
+                      isAdmin: isAdmin,
+                      lockForDoc: lockForDoc,
                     ),
-                    const SizedBox(height: 16),
-                    if (!isLast || index > 0)
-                      Row(
-                        children: [
-                          if (!isLast)
-                            ElevatedButton(
-                              onPressed:
-                                  requireDocStep || isBlocked
-                                      ? null
-                                      : () {
-                                        _validateStepForIndex(
-                                          index,
-                                          isAdmin: isAdmin,
-                                          lockForDoc: lockForDoc,
-                                        ).then((ok) {
-                                          if (!ok) return;
-                                          _controller.incrementStep();
-                                        });
-                                      },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.redAccent,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text('Siguiente'),
+                    optionsFor: _optionsFor,
+                    labelForValue: _labelForValue,
+                    onPickDate: (field, withTime) =>
+                        _pickDate(context, field, withTime: withTime),
+                    gradeHistoryBuilder: (field) =>
+                        EnrollmentGradeHistorySection(
+                          label: field.label,
+                          entries: _controller.gradeHistory,
+                          readOnly: _readOnlyForm || lockForDoc,
+                          onAdd: _showAddGradeDialog,
+                          onRemove: _controller.removeExternalGradeHistory,
+                          onEdit: (entry) async {
+                            final result = await _showEditGradeDialog(entry);
+                            if (result != null) {
+                              _controller.updateExternalGradeHistory(
+                                entry,
+                                result,
+                              );
+                              setState(() {});
+                            }
+                          },
+                        ),
+                    onChanged: (fieldName, v) {
+                      _values[fieldName] = v;
+                      if (fieldName == 'fechaNacimiento') {
+                        _recomputeAge();
+                      }
+                      if (fieldName == 'tieneAcudienteDiferente' &&
+                          (v == null || v.toLowerCase() != 'true')) {
+                        const fieldsToClear = [
+                          'acudientePrincipal',
+                          'nombreAcudiente',
+                          'cedulaAcudiente',
+                          'emailAcudiente',
+                          'celularAcudiente',
+                          'lugarTrabajoAcudiente',
+                          'ocupacionAcudiente',
+                          'cargoAcudiente',
+                        ];
+                        for (final name in fieldsToClear) {
+                          _controllers[name]?.text = '';
+                          _values[name] = '';
+                        }
+                      }
+                      // Immediate UI update and dependent field handling
+                      if (fieldName == 'servicioTransporte' &&
+                          (v == null || v.toLowerCase() != 'true')) {
+                        // clear transporte tipo when transport is disabled
+                        _controllers['servicioTransporteTipo']?.text = '';
+                        _values['servicioTransporteTipo'] = '';
+                      }
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  if (!isLast || index > 0)
+                    Row(
+                      children: [
+                        if (!isLast)
+                          ElevatedButton(
+                            onPressed: requireDocStep || isBlocked
+                                ? null
+                                : () {
+                                    _validateStepForIndex(
+                                      index,
+                                      isAdmin: isAdmin,
+                                      lockForDoc: lockForDoc,
+                                    ).then((ok) {
+                                      if (!ok) return;
+                                      _controller.incrementStep();
+                                    });
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppPalette.primary,
+                              foregroundColor: AppPalette.surface,
                             ),
-                          if (!isLast) const SizedBox(width: 8),
-                          if (index > 0)
-                            TextButton(
-                              onPressed: _controller.decrementStep,
-                              child: const Text('Anterior'),
-                            ),
-                        ],
-                      ),
-                  ],
-                ),
+                            child: const Text('Siguiente'),
+                          ),
+                        if (!isLast) const SizedBox(width: 8),
+                        if (index > 0)
+                          TextButton(
+                            onPressed: _controller.decrementStep,
+                            child: const Text('Anterior'),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
       );
     }
 
@@ -575,10 +588,10 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       sectionEntries.add((title: section.title, fields: fields));
     }
 
-    final remaining =
-        visible.where((f) => !mappedNames.contains(f.name)).toList();
-    final totalSteps =
-        sectionEntries.length + (remaining.isNotEmpty ? 1 : 0);
+    final remaining = visible
+        .where((f) => !mappedNames.contains(f.name))
+        .toList();
+    final totalSteps = sectionEntries.length + (remaining.isNotEmpty ? 1 : 0);
 
     for (var i = 0; i < sectionEntries.length; i++) {
       final entry = sectionEntries[i];
@@ -587,9 +600,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     }
 
     if (remaining.isNotEmpty) {
-      steps.add(
-        buildStep('Otros', remaining, totalSteps - 1, true),
-      );
+      steps.add(buildStep('Otros', remaining, totalSteps - 1, true));
     }
 
     return steps;
@@ -725,8 +736,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     // Keep visibility rules in sync with EnrollmentFieldsSection.
     if (f.name == 'acudientePrincipal') {
       final tieneAcudiente =
-          (_controllers['tieneAcudienteDiferente']?.text ?? '')
-              .toLowerCase() ==
+          (_controllers['tieneAcudienteDiferente']?.text ?? '').toLowerCase() ==
           'true';
       return !tieneAcudiente;
     }
@@ -740,8 +750,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       'cargoAcudiente',
     ].contains(f.name)) {
       final tieneAcudiente =
-          (_controllers['tieneAcudienteDiferente']?.text ?? '')
-              .toLowerCase() ==
+          (_controllers['tieneAcudienteDiferente']?.text ?? '').toLowerCase() ==
           'true';
       return tieneAcudiente;
     }
@@ -814,9 +823,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Imprimir'),
-          content: const Text(
-            '¿Desea imprimir el formulario de matrícula?',
-          ),
+          content: const Text('¿Desea imprimir el formulario de matrícula?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -851,8 +858,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
           return Scaffold(
             appBar: AppBar(
               title: const Text('Formulario de matrícula'),
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.redAccent,
+              backgroundColor: AppPalette.surface,
+              foregroundColor: AppPalette.primary,
               centerTitle: true,
               leading: const BackToEnrollmentButton(),
               actions: [
@@ -861,103 +868,104 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                     padding: const EdgeInsets.only(right: 12),
                     child: Chip(
                       label: Text('Pendientes: $_pendingCount'),
-                      backgroundColor: Colors.redAccent.withValues(alpha: .08),
-                      labelStyle: const TextStyle(
-                        color: Colors.redAccent,
+                      backgroundColor: AppPalette.primary.withValues(
+                        alpha: .08,
+                      ),
+                      labelStyle: TextStyle(
+                        color: AppPalette.primary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
               ],
             ),
-            backgroundColor: Colors.white,
-            body:
-                _loadingOptions
-                    ? const Center(child: CircularProgressIndicator())
-                    : SafeArea(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            children: [
-                              Align(
-                                alignment: Alignment.centerLeft,
+            backgroundColor: AppPalette.surface,
+            body: _loadingOptions
+                ? const Center(child: CircularProgressIndicator())
+                : SafeArea(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Rol: $role ${widget.isPublicLink ? '(link público)' : ''}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppPalette.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (isBlocked)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.primary.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppPalette.primary.withValues(
+                                      alpha: 0.35,
+                                    ),
+                                  ),
+                                ),
                                 child: Text(
-                                  'Rol: $role ${widget.isPublicLink ? '(link público)' : ''}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.redAccent,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              if (isBlocked)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent.withValues(
-                                      alpha: 0.08,
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.redAccent.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Este estudiante ya tiene una matrícula registrada para el año activo.',
-                                    style: TextStyle(
-                                      color: Colors.redAccent,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              if (isBlocked) const SizedBox(height: 12),
-                              if (_childOptions.isNotEmpty)
-                                EnrollmentChildSelector(
-                                  options: _childOptions,
-                                  selectedChildId: _selectedChildId,
-                                  onChanged: _onChildSelected,
-                                ),
-                              EnrollmentDocumentSearchCard(
-                                controller: _documentLookupController,
-                                onSearch: _prefillByDocument,
-                                loading: _loadingPrefill,
-                                selectedDocument: _documentoSeleccionado,
-                              ),
-                              const SizedBox(height: 12),
-                              if (requireDocStep)
-                                const Text(
-                                  'Completa el documento y presiona buscar para habilitar el formulario.',
+                                  'Este estudiante ya tiene una matrícula registrada para el año activo.',
                                   style: TextStyle(
-                                    color: Colors.redAccent,
+                                    color: AppPalette.primary,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              const SizedBox(height: 12),
-                              Builder(
-                                builder: (context) {
-                                  final steps = _steps(
-                                    visible,
-                                    isAdmin,
-                                    lockForDoc,
-                                    requireDocStep,
-                                    isBlocked,
-                                  );
-                                  return Theme(
-                                    data: Theme.of(context).copyWith(
-                                      dividerColor: Colors.transparent,
-                                    ),
-                                    child: Stepper(
-                                      currentStep: _currentStep,
-                                      type: StepperType.vertical,
-                                      physics: const ClampingScrollPhysics(),
-                                      controlsBuilder: (context, details) {
-                                        return const SizedBox.shrink();
-                                      },
+                              ),
+                            if (isBlocked) const SizedBox(height: 12),
+                            if (_childOptions.isNotEmpty)
+                              EnrollmentChildSelector(
+                                options: _childOptions,
+                                selectedChildId: _selectedChildId,
+                                onChanged: _onChildSelected,
+                              ),
+                            EnrollmentDocumentSearchCard(
+                              controller: _documentLookupController,
+                              onSearch: _prefillByDocument,
+                              loading: _loadingPrefill,
+                              selectedDocument: _documentoSeleccionado,
+                            ),
+                            const SizedBox(height: 12),
+                            if (requireDocStep)
+                              Text(
+                                'Completa el documento y presiona buscar para habilitar el formulario.',
+                                style: TextStyle(
+                                  color: AppPalette.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            const SizedBox(height: 12),
+                            Builder(
+                              builder: (context) {
+                                final steps = _steps(
+                                  visible,
+                                  isAdmin,
+                                  lockForDoc,
+                                  requireDocStep,
+                                  isBlocked,
+                                );
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    dividerColor: AppPalette.transparent,
+                                  ),
+                                  child: Stepper(
+                                    currentStep: _currentStep,
+                                    type: StepperType.vertical,
+                                    physics: const ClampingScrollPhysics(),
+                                    controlsBuilder: (context, details) {
+                                      return const SizedBox.shrink();
+                                    },
                                     onStepTapped: (index) {
                                       if (requireDocStep) {
                                         DialogUtils.showError(
@@ -989,28 +997,29 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                                         }
                                       }
                                     },
-                                      onStepContinue: () {},
-                                      onStepCancel: () {},
-                                      steps: steps,
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 12),
+                                    onStepContinue: () {},
+                                    onStepCancel: () {},
+                                    steps: steps,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            if (!_readOnlyForm)
                               EnrollmentFormActions(
                                 isAdmin: isAdmin,
                                 disabled: requireDocStep || isBlocked,
                                 currentEstado: _currentEstado,
-                                onGuardarRevision:
-                                    () => _onSubmit(promptPrint: true),
-                                onMatricular:
-                                    () => _onSubmit(matricularAhora: true),
+                                onGuardarRevision: () =>
+                                    _onSubmit(promptPrint: true),
+                                onMatricular: () =>
+                                    _onSubmit(matricularAhora: true),
                               ),
-                            ],
-                          ),
+                          ],
                         ),
                       ),
                     ),
+                  ),
           );
         },
       ),

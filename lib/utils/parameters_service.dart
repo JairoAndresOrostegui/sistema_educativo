@@ -10,34 +10,77 @@ class Parameter {
   Parameter({required this.etiqueta, required this.valor, required this.orden});
 }
 
+class InstitutionOption {
+  final String id;
+  final String label;
+  final List<String> campuses;
+
+  const InstitutionOption({
+    required this.id,
+    required this.label,
+    required this.campuses,
+  });
+}
+
 class ParametersService {
   final _firestore = FirebaseFirestore.instance;
 
   Parameter _mapParameter(Map<String, dynamic> data) {
     final valor = (data['valor'] ?? '').toString().trim();
     final etiquetaRaw = data['etiqueta'];
-    final etiqueta =
-        (etiquetaRaw == null ? valor : etiquetaRaw.toString()).trim();
+    final etiqueta = (etiquetaRaw == null ? valor : etiquetaRaw.toString())
+        .trim();
     final ordenRaw = data['orden'];
-    final orden =
-        ordenRaw is int
-            ? ordenRaw
-            : ordenRaw is num
-            ? ordenRaw.toInt()
-            : int.tryParse(ordenRaw?.toString() ?? '') ?? 0;
+    final orden = ordenRaw is int
+        ? ordenRaw
+        : ordenRaw is num
+        ? ordenRaw.toInt()
+        : int.tryParse(ordenRaw?.toString() ?? '') ?? 0;
 
     return Parameter(etiqueta: etiqueta, valor: valor, orden: orden);
   }
 
-  Future<List<Parameter>> getDocumentTypes() async {
-    final snapshot =
-        await _firestore
-            .collection('parameters')
-            .where('clave', isEqualTo: 'documentType')
-            .where('activo', isEqualTo: true)
-            .get();
+  Future<List<InstitutionOption>> getInstitutions() async {
+    final snapshot = await _firestore
+        .collection('configuracion_colegios')
+        .get();
+    final institutions = <InstitutionOption>[];
+    for (final document in snapshot.docs) {
+      final data = document.data();
+      final id = (data['institutionId'] ?? '').toString().trim();
+      if (id.isEmpty) continue;
+      final rawCampuses = data['sedes'];
+      final campuses = <String>{};
+      if (rawCampuses is List) {
+        for (final item in rawCampuses) {
+          final value = item is Map
+              ? (item['id'] ?? item['nombre'] ?? '').toString().trim()
+              : item.toString().trim();
+          if (value.isNotEmpty) campuses.add(value);
+        }
+      }
+      institutions.add(
+        InstitutionOption(
+          id: id,
+          label: (data['nombre'] ?? id).toString().trim(),
+          campuses: campuses.toList()..sort(),
+        ),
+      );
+    }
+    institutions.sort((a, b) => a.label.compareTo(b.label));
+    return institutions;
+  }
 
-    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
+  Future<List<Parameter>> getDocumentTypes() async {
+    final snapshot = await _firestore
+        .collection('parameters')
+        .where('clave', isEqualTo: 'documentType')
+        .where('activo', isEqualTo: true)
+        .get();
+
+    final parameters = snapshot.docs
+        .map((doc) => _mapParameter(doc.data()))
+        .toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
@@ -45,51 +88,35 @@ class ParametersService {
   }
 
   Future<List<Parameter>> getRoles() async {
-    final snapshot =
-        await _firestore
-            .collection('parameters')
-            .where('clave', isEqualTo: 'role')
-            .where('activo', isEqualTo: true)
-            .get();
+    final snapshot = await _firestore
+        .collection('parameters')
+        .where('clave', isEqualTo: 'role')
+        .where('activo', isEqualTo: true)
+        .get();
 
-    final parameters =
-        snapshot.docs.map((doc) {
-          final mapped = _mapParameter(doc.data());
-          return Parameter(
-            etiqueta: mapped.valor,
-            valor: mapped.valor,
-            orden: mapped.orden,
-          );
-        }).toList();
+    final parameters = snapshot.docs.map((doc) {
+      final mapped = _mapParameter(doc.data());
+      return Parameter(
+        etiqueta: mapped.valor,
+        valor: mapped.valor,
+        orden: mapped.orden,
+      );
+    }).toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
-    return parameters;
-  }
-
-  Future<List<Parameter>> getGrades() async {
-    final snapshot =
-        await _firestore
-            .collection('parameters')
-            .where('clave', isEqualTo: 'grade')
-            .where('activo', isEqualTo: true)
-            .get();
-
-    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
-
-    parameters.sort((a, b) => a.orden.compareTo(b.orden));
-
     return parameters;
   }
 
   Future<List<Parameter>> getEps() async {
-    final snapshot =
-        await _firestore
-            .collection('parameters')
-            .where('clave', isEqualTo: 'eps')
-            .where('activo', isEqualTo: true)
-            .get();
+    final snapshot = await _firestore
+        .collection('parameters')
+        .where('clave', isEqualTo: 'eps')
+        .where('activo', isEqualTo: true)
+        .get();
 
-    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
+    final parameters = snapshot.docs
+        .map((doc) => _mapParameter(doc.data()))
+        .toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
@@ -97,13 +124,14 @@ class ParametersService {
   }
 
   Future<List<Parameter>> getPermissions() async {
-    final snapshot =
-        await _firestore
-            .collection('parameters')
-            .where('clave', isEqualTo: 'permission')
-            .where('activo', isEqualTo: true)
-            .get();
-    final parameters = snapshot.docs.map((doc) => _mapParameter(doc.data())).toList();
+    final snapshot = await _firestore
+        .collection('parameters')
+        .where('clave', isEqualTo: 'permission')
+        .where('activo', isEqualTo: true)
+        .get();
+    final parameters = snapshot.docs
+        .map((doc) => _mapParameter(doc.data()))
+        .toList();
 
     parameters.sort((a, b) => a.orden.compareTo(b.orden));
 
@@ -112,13 +140,12 @@ class ParametersService {
 
   Future<bool> getEnrollmentParentEnabled() async {
     try {
-      final snapshot =
-          await _firestore
-              .collection('parameters')
-              .where('clave', isEqualTo: 'enrollment_parent_enabled')
-              .where('activo', isEqualTo: true)
-              .limit(1)
-              .get();
+      final snapshot = await _firestore
+          .collection('parameters')
+          .where('clave', isEqualTo: 'enrollment_parent_enabled')
+          .where('activo', isEqualTo: true)
+          .limit(1)
+          .get();
       if (snapshot.docs.isEmpty) return false;
       final valor = snapshot.docs.first.data()['valor'];
       if (valor is bool) return valor;
@@ -135,13 +162,12 @@ class ParametersService {
 
   Future<int?> getEnrollmentYear() async {
     try {
-      final snapshot =
-          await _firestore
-              .collection('parameters')
-              .where('clave', isEqualTo: 'enrollment_year')
-              .where('activo', isEqualTo: true)
-              .limit(1)
-              .get();
+      final snapshot = await _firestore
+          .collection('parameters')
+          .where('clave', isEqualTo: 'enrollment_year')
+          .where('activo', isEqualTo: true)
+          .limit(1)
+          .get();
       if (snapshot.docs.isEmpty) return null;
       final valor = snapshot.docs.first.data()['valor'];
       if (valor is int) return valor;
@@ -157,7 +183,6 @@ class ParametersService {
     required String institution,
     required String campus,
     required String role,
-    String? grade,
   }) async {
     try {
       Query<Map<String, dynamic>> query = FirebaseFirestore.instance
@@ -166,10 +191,6 @@ class ParametersService {
           .where('campus', isEqualTo: campus)
           .where('role', isEqualTo: role)
           .where('status', isEqualTo: 'activo');
-
-      if (grade != null && grade.isNotEmpty) {
-        query = query.where('grade', isEqualTo: grade);
-      }
 
       final QuerySnapshot<Map<String, dynamic>> result = await query.get();
 

@@ -8,22 +8,21 @@ class ShrinkOneLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder:
-          (ctx, constraints) => SizedBox(
-            width: constraints.maxWidth,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                text,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.visible,
-                textAlign: TextAlign.left,
-                style: style,
-              ),
-            ),
+      builder: (ctx, constraints) => SizedBox(
+        width: constraints.maxWidth,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            textAlign: TextAlign.left,
+            style: style,
           ),
+        ),
+      ),
     );
   }
 }

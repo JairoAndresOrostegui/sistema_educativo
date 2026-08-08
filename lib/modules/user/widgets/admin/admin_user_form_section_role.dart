@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:sistema_educativo/utils/parameters_service.dart';
+import 'package:sistema_educativo/models/academic/academic_group.dart';
 
 class RoleSection extends StatelessWidget {
   final String? safeRole;
@@ -9,9 +10,9 @@ class RoleSection extends StatelessWidget {
   final String status;
   final void Function(String?) onStatusChanged;
   final String rol;
-  final String? safeGrade;
-  final List<Parameter> grades;
-  final void Function(String?) onGradeChanged;
+  final String? safeGroupId;
+  final List<AcademicGroup> groups;
+  final void Function(String?) onGroupChanged;
   final bool soloLectura;
   const RoleSection({
     super.key,
@@ -21,9 +22,9 @@ class RoleSection extends StatelessWidget {
     required this.status,
     required this.onStatusChanged,
     required this.rol,
-    required this.safeGrade,
-    required this.grades,
-    required this.onGradeChanged,
+    required this.safeGroupId,
+    required this.groups,
+    required this.onGroupChanged,
     required this.soloLectura,
   });
 
@@ -58,29 +59,27 @@ class RoleSection extends StatelessWidget {
             DropdownMenuItem(value: 'inactivo', child: Text('Inactivo')),
           ],
           onChanged: soloLectura ? null : onStatusChanged,
-          validator:
-              (value) => value == null ? 'El estado es obligatorio' : null,
+          validator: (value) =>
+              value == null ? 'El estado es obligatorio' : null,
         ),
         const SizedBox(height: 8),
         if (rol == 'Estudiante' || rol == 'Docente')
           DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: 'Grado'),
-            initialValue: safeGrade,
+            decoration: const InputDecoration(labelText: 'Grupo'),
+            initialValue: safeGroupId,
             items: [
               const DropdownMenuItem(
                 value: null,
-                child: Text('Seleccione un grado'),
+                child: Text('Seleccione un grupo'),
               ),
-              ...grades.map(
-                (g) => DropdownMenuItem<String>(
-                  value: g.valor,
-                  child: Text('${g.valor} - ${g.etiqueta}'),
-                ),
+              ...groups.map(
+                (g) =>
+                    DropdownMenuItem<String>(value: g.id, child: Text(g.name)),
               ),
             ],
-            onChanged: soloLectura ? null : onGradeChanged,
-            validator:
-                (value) => value == null ? 'El grado es obligatorio' : null,
+            onChanged: soloLectura ? null : onGroupChanged,
+            validator: (value) =>
+                value == null ? 'El grupo es obligatorio' : null,
           ),
       ],
     );

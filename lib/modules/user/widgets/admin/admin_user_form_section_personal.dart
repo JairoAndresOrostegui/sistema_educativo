@@ -14,6 +14,7 @@ class PersonalSection extends StatelessWidget {
   final List<Parameter> documentTypes;
   final void Function(String?) onDocumentTypeChanged;
   final bool soloLectura;
+  final bool esNuevo;
   const PersonalSection({
     super.key,
     required this.nombres,
@@ -25,6 +26,7 @@ class PersonalSection extends StatelessWidget {
     required this.documentTypes,
     required this.onDocumentTypeChanged,
     required this.soloLectura,
+    required this.esNuevo,
   });
 
   @override
@@ -35,22 +37,18 @@ class PersonalSection extends StatelessWidget {
           controller: nombres,
           decoration: const InputDecoration(labelText: 'Nombres'),
           readOnly: soloLectura,
-          validator:
-              (value) =>
-                  (value == null || value.isEmpty)
-                      ? 'Este campo es obligatorio'
-                      : null,
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'Este campo es obligatorio'
+              : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: apellidos,
           decoration: const InputDecoration(labelText: 'Apellidos'),
           readOnly: soloLectura,
-          validator:
-              (value) =>
-                  (value == null || value.isEmpty)
-                      ? 'Este campo es obligatorio'
-                      : null,
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'Este campo es obligatorio'
+              : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -70,8 +68,12 @@ class PersonalSection extends StatelessWidget {
         const SizedBox(height: 8),
         TextFormField(
           controller: correoInstitucional,
-          decoration: const InputDecoration(labelText: 'Correo Institucional'),
-          readOnly: soloLectura,
+          decoration: InputDecoration(
+            labelText: esNuevo
+                ? 'Correo Institucional'
+                : 'Correo Institucional (no editable)',
+          ),
+          readOnly: soloLectura || !esNuevo,
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'Este campo es obligatorio';
@@ -116,9 +118,8 @@ class PersonalSection extends StatelessWidget {
             ),
           ],
           onChanged: soloLectura ? null : onDocumentTypeChanged,
-          validator:
-              (value) =>
-                  value == null ? 'El tipo de documento es obligatorio' : null,
+          validator: (value) =>
+              value == null ? 'El tipo de documento es obligatorio' : null,
         ),
         const SizedBox(height: 8),
       ],

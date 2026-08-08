@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -60,10 +61,10 @@ class RouteLiveView extends StatelessWidget {
       stream: service.streamDailyRoute(dailyRouteId),
       builder: (context, routeSnap) {
         if (!routeSnap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator());
         }
         if (!routeSnap.data!.exists) {
-          return const Center(child: Text('Ruta no encontrada.'));
+          return Center(child: Text('Ruta no encontrada.'));
         }
 
         final data = routeSnap.data!.data() as Map<String, dynamic>;
@@ -71,14 +72,10 @@ class RouteLiveView extends StatelessWidget {
         final rawStatus = str(data, ['status', 'estado'], 'pending');
         final status = normalizeStatus(rawStatus);
 
-        final routeName = str(
-          data,
-          [
-            'routeName',
-            'nombreRuta',
-          ],
-          'Ruta escolar',
-        );
+        final routeName = str(data, [
+          'routeName',
+          'nombreRuta',
+        ], 'Ruta escolar');
 
         final newPos = _readTeacherPosition(data);
         if (status == 'active' && newPos != null) {
@@ -94,47 +91,43 @@ class RouteLiveView extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Semantics(
-                label:
-                    status == 'active'
-                        ? 'Mapa mostrando ubicación del bus escolar.'
-                        : status == 'finished'
-                        ? 'La ruta ha finalizado. El mapa ya no está disponible.'
-                        : 'La ruta aún no ha iniciado.',
-                child:
-                    status == 'active'
-                        ? GoogleMap(
-                          onMapCreated: onMapCreated,
-                          initialCameraPosition: CameraPosition(
-                            target:
-                                teacherPosition ??
-                                const LatLng(7.119349, -73.122742),
-                            zoom: 15,
-                          ),
-                          markers:
-                              teacherPosition != null
-                                  ? {
-                                    Marker(
-                                      markerId: const MarkerId('bus'),
-                                      position: teacherPosition!,
-                                      infoWindow: const InfoWindow(
-                                        title: 'Ubicación del bus',
-                                      ),
-                                    ),
-                                  }
-                                  : {},
-                        )
-                        : Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(
-                              status == 'finished'
-                                  ? 'La ruta ha finalizado. El mapa ya no está disponible.'
-                                  : 'La ruta aún no ha iniciado.',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 16),
-                            ),
+                label: status == 'active'
+                    ? 'Mapa mostrando ubicación del bus escolar.'
+                    : status == 'finished'
+                    ? 'La ruta ha finalizado. El mapa ya no está disponible.'
+                    : 'La ruta aún no ha iniciado.',
+                child: status == 'active'
+                    ? GoogleMap(
+                        onMapCreated: onMapCreated,
+                        initialCameraPosition: CameraPosition(
+                          target:
+                              teacherPosition ?? LatLng(7.119349, -73.122742),
+                          zoom: 15,
+                        ),
+                        markers: teacherPosition != null
+                            ? {
+                                Marker(
+                                  markerId: MarkerId('bus'),
+                                  position: teacherPosition!,
+                                  infoWindow: InfoWindow(
+                                    title: 'Ubicación del bus',
+                                  ),
+                                ),
+                              }
+                            : {},
+                      )
+                    : Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text(
+                            status == 'finished'
+                                ? 'La ruta ha finalizado. El mapa ya no está disponible.'
+                                : 'La ruta aún no ha iniciado.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 16),
                           ),
                         ),
+                      ),
               ),
             ),
             Expanded(
@@ -146,54 +139,49 @@ class RouteLiveView extends StatelessWidget {
                 ),
                 builder: (context, estSnap) {
                   if (!estSnap.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                    return Center(child: CircularProgressIndicator());
                   }
                   if (!estSnap.data!.exists) {
-                    return const Center(
+                    return Center(
                       child: Text('No estás asignado a esta ruta.'),
                     );
                   }
 
                   final est = estSnap.data!.data() as Map<String, dynamic>;
                   final picked = boolf(est, ['picked', 'recogido'], false);
-                  final address = str(
-                    est,
-                    [
-                      'address',
-                      'direccion',
-                    ],
-                    'Sin dirección',
-                  );
+                  final address = str(est, [
+                    'address',
+                    'direccion',
+                  ], 'Sin dirección');
                   final pickedAt = ts(est, ['pickupTime', 'horaRecogida']);
-                  final notices = intf(
-                    est,
-                    [
-                      'arrivalNotices',
-                      'avisosEnviados',
-                    ],
-                    0,
-                  );
+                  final notices = intf(est, [
+                    'arrivalNotices',
+                    'avisosEnviados',
+                  ], 0);
 
                   return Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(16),
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: Colors.red.withValues(alpha: .15),
+                          color: AppPalette.error.withValues(alpha: .15),
                         ),
                         gradient: LinearGradient(
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
-                          colors: [Colors.red.withValues(alpha: .06), Colors.white],
+                          colors: [
+                            AppPalette.error.withValues(alpha: .06),
+                            AppPalette.surface,
+                          ],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
+                            color: AppPalette.onSurface.withValues(alpha: 0.03),
                             blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
@@ -205,7 +193,7 @@ class RouteLiveView extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   routeName,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 16,
                                   ),
@@ -216,17 +204,16 @@ class RouteLiveView extends StatelessWidget {
                               StatusChip(status: status),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Semantics(
                             label: 'Dirección asignada: $address',
                             child: Text('Dirección: $address'),
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
                           Semantics(
-                            label:
-                                picked
-                                    ? 'Estado de recogida: Sí'
-                                    : 'Estado de recogida: No',
+                            label: picked
+                                ? 'Estado de recogida: Sí'
+                                : 'Estado de recogida: No',
                             child: Text('Recogido: ${picked ? "Sí" : "No"}'),
                           ),
                           if (pickedAt != null)
@@ -234,16 +221,16 @@ class RouteLiveView extends StatelessWidget {
                               'Hora de recogida: '
                               '${TimeOfDay.fromDateTime(pickedAt.toDate()).format(context)}',
                             ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
                           if (notices > 0) Text('Avisos enviados: $notices'),
-                          const Spacer(),
+                          Spacer(),
                           Text(
                             status == 'pending'
                                 ? 'La ruta aún no inicia.'
                                 : status == 'active'
                                 ? 'La ruta está en camino.'
                                 : 'La ruta ha finalizado por hoy.',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -265,27 +252,27 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    late final MaterialColor base;
+    late final Color base;
     late final String label;
 
     switch (status) {
       case 'active':
-        base = Colors.green;
+        base = AppPalette.success;
         label = 'Activa';
         break;
       case 'finished':
-        base = Colors.grey;
+        base = AppPalette.outline;
         label = 'Finalizada';
         break;
       default:
-        base = Colors.orange;
+        base = AppPalette.warning;
         label = 'Pendiente';
     }
 
     return Semantics(
       label: 'Estado: $label',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: base.withValues(alpha: .12),
           border: Border.all(color: base.withValues(alpha: .35)),
@@ -293,10 +280,7 @@ class StatusChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: TextStyle(
-            color: base.shade800,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: base, fontWeight: FontWeight.w700),
         ),
       ),
     );

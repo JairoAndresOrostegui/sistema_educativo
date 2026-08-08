@@ -17,7 +17,7 @@ class ExportUtilsPlatform {
 
     sheet.appendRow([
       TextCellValue('Nombre del archivo'),
-      TextCellValue('Grado'),
+      TextCellValue('Grupo'),
       TextCellValue('Subido por'),
       TextCellValue('Fecha de subida'),
     ]);
@@ -30,7 +30,7 @@ class ExportUtilsPlatform {
 
       sheet.appendRow([
         TextCellValue(log['nombre'] ?? ''),
-        TextCellValue(log['grado'] ?? ''),
+        TextCellValue(log['grupo'] ?? ''),
         TextCellValue(log['subidoPor'] ?? ''),
         TextCellValue(fechaTexto),
       ]);

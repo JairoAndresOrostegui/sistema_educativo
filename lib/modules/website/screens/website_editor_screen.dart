@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -112,11 +113,10 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           item,
     ];
     setState(
-      () =>
-          _bundle = WebsiteBundle(
-            config: _bundle!.config.copyWith(navigation: navigation),
-            pages: pages,
-          ),
+      () => _bundle = WebsiteBundle(
+        config: _bundle!.config.copyWith(navigation: navigation),
+        pages: pages,
+      ),
     );
   }
 
@@ -152,10 +152,9 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
       if (!mounted) return;
       setState(() => _publishedBundle = bundle);
       _sessionUploads.removeAll(bundle.managedAssetPaths);
-      final cleanup =
-          result.deletedAssets == 0
-              ? ''
-              : ' Se eliminaron ${result.deletedAssets} imágenes anteriores.';
+      final cleanup = result.deletedAssets == 0
+          ? ''
+          : ' Se eliminaron ${result.deletedAssets} imágenes anteriores.';
       _message('Sitio publicado correctamente.$cleanup');
       if (result.cleanupWarnings.isNotEmpty) {
         _message(
@@ -186,8 +185,9 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
       _message('Solo se permiten imágenes JPG, JPEG, JFIF o PNG.', error: true);
       return;
     }
-    final target =
-        logo ? 'logo' : (footerLogo ? 'footer_logo' : targetBlock!.id);
+    final target = logo
+        ? 'logo'
+        : (footerLogo ? 'footer_logo' : targetBlock!.id);
     setState(() => _uploading = target);
     try {
       final asset = await _service.uploadImage(
@@ -195,10 +195,9 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         fileName: picked.name,
       );
       _sessionUploads.add(asset.storagePath);
-      final previous =
-          logo
-              ? _bundle!.config.logo
-              : (footerLogo ? _bundle!.config.footer.logo : targetBlock!.image);
+      final previous = logo
+          ? _bundle!.config.logo
+          : (footerLogo ? _bundle!.config.footer.logo : targetBlock!.image);
       if (logo) {
         _replaceConfig(_bundle!.config.copyWith(logo: asset));
       } else if (footerLogo) {
@@ -218,9 +217,9 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         final detail = error.toString();
         final guidance =
             detail.contains('storage/unauthorized') ||
-                    detail.contains('La sesión expiró')
-                ? ' Verifica que esta cuenta esté activa y tenga "sitio_web.editar"; luego cierra sesión, ingresa de nuevo y recarga la página.'
-                : '';
+                detail.contains('La sesión expiró')
+            ? ' Verifica que esta cuenta esté activa y tenga "sitio_web.editar"; luego cierra sesión, ingresa de nuevo y recarga la página.'
+            : '';
         _message(
           'No fue posible subir la imagen: $detail$guidance',
           error: true,
@@ -277,7 +276,6 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   }
 
   void _reorderDesktop(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
     final blocks = [..._page.blocks];
     final item = blocks.removeAt(oldIndex);
     blocks.insert(newIndex, item);
@@ -285,15 +283,13 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   }
 
   void _reorderPreview(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
-    final visible =
-        _page.blocks
-            .where(
-              (block) =>
-                  block.enabled &&
-                  (_mobilePreview ? block.showOnMobile : block.showOnDesktop),
-            )
-            .toList();
+    final visible = _page.blocks
+        .where(
+          (block) =>
+              block.enabled &&
+              (_mobilePreview ? block.showOnMobile : block.showOnDesktop),
+        )
+        .toList();
     if (_mobilePreview) {
       visible.sort((a, b) => a.mobileOrder.compareTo(b.mobileOrder));
       final item = visible.removeAt(oldIndex);
@@ -333,7 +329,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: error ? Colors.red.shade700 : Colors.green.shade700,
+        backgroundColor: error ? AppPalette.error : AppPalette.success,
       ),
     );
   }
@@ -351,7 +347,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         }
         final canEdit = _canEdit(context);
         return Scaffold(
-          backgroundColor: const Color(0xFFE9EDF2),
+          backgroundColor: AppPalette.surfaceContainer,
           appBar: AppBar(
             leading: IconButton(
               tooltip: 'Volver al menu de administracion',
@@ -376,14 +372,13 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                   ),
                 ],
                 selected: {_mobilePreview},
-                onSelectionChanged:
-                    (value) => setState(() => _mobilePreview = value.first),
+                onSelectionChanged: (value) =>
+                    setState(() => _mobilePreview = value.first),
               ),
               const SizedBox(width: 12),
               TextButton.icon(
-                onPressed:
-                    () =>
-                        context.go(_page.id == 'home' ? '/' : '/${_page.slug}'),
+                onPressed: () =>
+                    context.go(_page.id == 'home' ? '/' : '/${_page.slug}'),
                 icon: const Icon(Icons.open_in_new),
                 label: const Text('Abrir página'),
               ),
@@ -398,14 +393,13 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                   padding: const EdgeInsets.only(right: 14),
                   child: FilledButton.icon(
                     onPressed: _saving || _uploading != null ? null : _publish,
-                    icon:
-                        _saving
-                            ? const SizedBox(
-                              width: 17,
-                              height: 17,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Icon(Icons.publish),
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.publish),
                     label: Text(_saving ? 'Publicando...' : 'Publicar'),
                   ),
                 ),
@@ -429,33 +423,31 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   }
 
   Widget _leftPanel() => ColoredBox(
-    color: Colors.white,
+    color: AppPalette.surface,
     child: Column(
       children: [
         ListTile(
           selected: _editingSite,
           leading: const Icon(Icons.tune),
           title: const Text('Configuración global'),
-          onTap:
-              () => setState(() {
-                _editingSite = true;
-                _editingFooter = false;
-                _selectedBlockId = null;
-              }),
+          onTap: () => setState(() {
+            _editingSite = true;
+            _editingFooter = false;
+            _selectedBlockId = null;
+          }),
         ),
         ListTile(
           selected: _editingFooter,
           leading: const Icon(Icons.vertical_align_bottom_outlined),
           title: const Text('Pie de página'),
-          onTap:
-              () => setState(() {
-                _editingSite = false;
-                _editingFooter = true;
-                _selectedBlockId = null;
-              }),
+          onTap: () => setState(() {
+            _editingSite = false;
+            _editingFooter = true;
+            _selectedBlockId = null;
+          }),
         ),
         const Divider(),
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: Align(
             alignment: Alignment.centerLeft,
@@ -463,7 +455,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
               'PÁGINAS',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: Colors.black54,
+                color: AppPalette.onSurface.withValues(alpha: .54),
               ),
             ),
           ),
@@ -483,13 +475,12 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
               page.enabled ? Icons.visibility : Icons.visibility_off,
               size: 18,
             ),
-            onTap:
-                () => setState(() {
-                  _selectedPageId = page.id;
-                  _selectedBlockId = null;
-                  _editingSite = false;
-                  _editingFooter = false;
-                }),
+            onTap: () => setState(() {
+              _selectedPageId = page.id;
+              _selectedBlockId = null;
+              _editingSite = false;
+              _editingFooter = false;
+            }),
           ),
         const Divider(),
         Padding(
@@ -505,7 +496,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           child: ReorderableListView.builder(
             buildDefaultDragHandles: true,
             itemCount: _page.blocks.length,
-            onReorder: _reorderDesktop,
+            onReorderItem: _reorderDesktop,
             itemBuilder: (context, index) {
               final block = _page.blocks[index];
               return ListTile(
@@ -519,12 +510,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                onTap:
-                    () => setState(() {
-                      _selectedBlockId = block.id;
-                      _editingSite = false;
-                      _editingFooter = false;
-                    }),
+                onTap: () => setState(() {
+                  _selectedBlockId = block.id;
+                  _editingSite = false;
+                  _editingFooter = false;
+                }),
               );
             },
           ),
@@ -536,55 +526,55 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   Widget _preview() {
     final width = _mobilePreview ? 390.0 : 1120.0;
     return LayoutBuilder(
-      builder:
-          (context, constraints) => ColoredBox(
-            color: const Color(0xFFDDE2E8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.all(18),
-              child: SizedBox(
-                width: width,
-                height: constraints.maxHeight - 36,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 18),
-                    ],
-                    borderRadius: BorderRadius.circular(8),
+      builder: (context, constraints) => ColoredBox(
+        color: AppPalette.outline,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.all(18),
+          child: SizedBox(
+            width: width,
+            height: constraints.maxHeight - 36,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppPalette.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppPalette.onSurface.withValues(alpha: .26),
+                    blurRadius: 18,
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: WebsitePreviewCanvas(
-                      config: _bundle!.config,
-                      page: _page,
-                      previewMobile: _mobilePreview,
-                      editorMode: true,
-                      selectedBlockId: _selectedBlockId,
-                      onBlockSelected:
-                          (id) => setState(() {
-                            _selectedBlockId = id;
-                            _editingSite = false;
-                            _editingFooter = false;
-                          }),
-                      onReorder: _reorderPreview,
-                    ),
-                  ),
+                ],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: WebsitePreviewCanvas(
+                  config: _bundle!.config,
+                  page: _page,
+                  previewMobile: _mobilePreview,
+                  editorMode: true,
+                  selectedBlockId: _selectedBlockId,
+                  onBlockSelected: (id) => setState(() {
+                    _selectedBlockId = id;
+                    _editingSite = false;
+                    _editingFooter = false;
+                  }),
+                  onReorder: _reorderPreview,
                 ),
               ),
             ),
           ),
+        ),
+      ),
     );
   }
 
   Widget _propertiesPanel() => ColoredBox(
-    color: Colors.white,
-    child:
-        _editingSite
-            ? _siteProperties()
-            : (_editingFooter
-                ? _footerProperties()
-                : (_block == null
+    color: AppPalette.surface,
+    child: _editingSite
+        ? _siteProperties()
+        : (_editingFooter
+              ? _footerProperties()
+              : (_block == null
                     ? _pageProperties()
                     : _blockProperties(_block!))),
   );
@@ -817,8 +807,8 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Usar contacto de configuración global'),
             value: footer.useGlobalContact,
-            onChanged:
-                (value) => update(footer.copyWith(useGlobalContact: value)),
+            onChanged: (value) =>
+                update(footer.copyWith(useGlobalContact: value)),
           ),
           if (!footer.useGlobalContact) ...[
             _text(
@@ -931,18 +921,17 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           contentPadding: EdgeInsets.zero,
           title: const Text('Página publicada'),
           value: page.enabled,
-          onChanged:
-              page.id == 'home'
-                  ? null
-                  : (value) => _replacePage(page.copyWith(enabled: value)),
+          onChanged: page.id == 'home'
+              ? null
+              : (value) => _replacePage(page.copyWith(enabled: value)),
         ),
         if (page.id != 'home')
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Mostrar en navegación'),
             value: page.showInNavigation,
-            onChanged:
-                (value) => _replacePage(page.copyWith(showInNavigation: value)),
+            onChanged: (value) =>
+                _replacePage(page.copyWith(showInNavigation: value)),
           ),
         const SizedBox(height: 16),
         const Text(
@@ -965,7 +954,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           ),
           IconButton(
             tooltip: 'Eliminar bloque',
-            color: Colors.red,
+            color: AppPalette.error,
             onPressed: () => _deleteBlock(block),
             icon: const Icon(Icons.delete_outline),
           ),
@@ -1129,15 +1118,15 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         contentPadding: EdgeInsets.zero,
         title: const Text('Visible en escritorio'),
         value: block.showOnDesktop,
-        onChanged:
-            (value) => _replaceBlock(block.copyWith(showOnDesktop: value)),
+        onChanged: (value) =>
+            _replaceBlock(block.copyWith(showOnDesktop: value)),
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Visible en móvil'),
         value: block.showOnMobile,
-        onChanged:
-            (value) => _replaceBlock(block.copyWith(showOnMobile: value)),
+        onChanged: (value) =>
+            _replaceBlock(block.copyWith(showOnMobile: value)),
       ),
     ],
   );
@@ -1145,36 +1134,35 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   Future<void> _showAddBlock() async {
     final type = await showDialog<String>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Agregar bloque'),
-            content: SizedBox(
-              width: 480,
-              child: GridView.count(
-                shrinkWrap: true,
-                crossAxisCount: 2,
-                childAspectRatio: 2.8,
-                children: [
-                  for (final type in const [
-                    'hero',
-                    'text',
-                    'image',
-                    'imageText',
-                    'button',
-                    'divider',
-                    'spacer',
-                    'contactForm',
-                    'socialLinks',
-                  ])
-                    ListTile(
-                      leading: Icon(_blockIcon(type)),
-                      title: Text(_blockTypeLabel(type)),
-                      onTap: () => Navigator.pop(context, type),
-                    ),
-                ],
-              ),
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('Agregar bloque'),
+        content: SizedBox(
+          width: 480,
+          child: GridView.count(
+            shrinkWrap: true,
+            crossAxisCount: 2,
+            childAspectRatio: 2.8,
+            children: [
+              for (final type in const [
+                'hero',
+                'text',
+                'image',
+                'imageText',
+                'button',
+                'divider',
+                'spacer',
+                'contactForm',
+                'socialLinks',
+              ])
+                ListTile(
+                  leading: Icon(_blockIcon(type)),
+                  title: Text(_blockTypeLabel(type)),
+                  onTap: () => Navigator.pop(context, type),
+                ),
+            ],
           ),
+        ),
+      ),
     );
     if (type != null) _addBlock(type);
   }
@@ -1183,7 +1171,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     padding: const EdgeInsets.only(bottom: 18),
     child: Row(
       children: [
-        Icon(icon, color: Colors.red.shade700),
+        Icon(icon, color: AppPalette.error),
         const SizedBox(width: 9),
         Expanded(
           child: Text(
@@ -1287,14 +1275,13 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         ),
         OutlinedButton.icon(
           onPressed: loading ? null : onUpload,
-          icon:
-              loading
-                  ? const SizedBox(
-                    width: 15,
-                    height: 15,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(Icons.upload),
+          icon: loading
+              ? const SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.upload),
           label: Text(loading ? 'Subiendo' : 'Cambiar'),
         ),
       ],

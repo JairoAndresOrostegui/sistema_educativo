@@ -18,10 +18,6 @@ service firebase.storage {
       return active() && (me().isSuperadmin == true || me().role == 'Administrador');
     }
 
-    function teacher() {
-      return active() && me().role == 'Docente';
-    }
-
     function canEditWebsite() {
       return active() &&
         (me().isSuperadmin == true ||
@@ -39,6 +35,49 @@ service firebase.storage {
       return request.resource != null && request.resource.size <= maxBytes;
     }
 
+    function hasPermission(permission) {
+      return active() &&
+        (me().isSuperadmin == true ||
+         (me().permissions is list && me().permissions.hasAny([permission])));
+    }
+
+    function fileRecord(fileId) {
+      return firestore.get(
+        /databases/(default)/documents/files/$(fileId)
+      ).data;
+    }
+
+    function familyCanReadFile(file) {
+      let studentId = me().activeStudentId;
+      return me().role == 'Familiar' && hasPermission('archivos.ver') &&
+        studentId is string && me().studentIds is list &&
+        studentId in me().studentIds &&
+        firestore.get(/databases/(default)/documents/users/$(studentId))
+          .data.status == 'activo' &&
+        firestore.get(/databases/(default)/documents/users/$(studentId))
+          .data.institution == me().institution &&
+        firestore.get(/databases/(default)/documents/users/$(studentId))
+          .data.campus == me().campus &&
+        firestore.get(/databases/(default)/documents/users/$(studentId))
+          .data.groupId == file.groupId;
+    }
+
+    function canReadFile(file) {
+      return active() && file.status == 'active' &&
+        (me().isSuperadmin == true ||
+         (file.institutionId == me().institution &&
+          file.campusId == me().campus &&
+          ((me().role == 'Administrador' &&
+            (hasPermission('archivos.ver') ||
+             hasPermission('archivos.crear') ||
+             hasPermission('archivos.eliminar'))) ||
+           (me().role == 'Docente' && hasPermission('archivos.ver') &&
+            me().groupId == file.groupId) ||
+           (me().role == 'Estudiante' && hasPermission('archivos.ver') &&
+            me().groupId == file.groupId) ||
+           familyCanReadFile(file))));
+    }
+
     match /fotos_perfil/{userId}/{fileName} {
       allow read: if active();
       allow create, update: if ((active() && request.auth.uid == userId) ||
@@ -49,16 +88,20 @@ service firebase.storage {
         (admin() && sameTenantUser(userId));
     }
 
-    match /files/{institution}/{campus}/{grade}/{fileName} {
-      allow read: if active() &&
-        (me().isSuperadmin == true ||
-         (institution == me().institution && campus == me().campus));
-      allow create, update: if (admin() || teacher()) &&
-        institution == me().institution && campus == me().campus &&
+    match /files/{groupId}/{fileId}/{fileName} {
+      allow read: if canReadFile(fileRecord(fileId));
+      allow create: if active() && request.resource.metadata.fileId == fileId &&
+        request.resource.metadata.groupId == groupId &&
+        request.resource.metadata.uploadedBy == request.auth.uid &&
+        fileRecord(fileId).status == 'uploading' &&
+        fileRecord(fileId).uploadedBy == request.auth.uid &&
+        fileRecord(fileId).groupId == groupId &&
+        fileRecord(fileId).storagePath ==
+          'files/' + groupId + '/' + fileId + '/' + fileName &&
+        request.resource.size == fileRecord(fileId).expectedSize &&
+        request.resource.contentType == fileRecord(fileId).contentType &&
         safeUpload(25 * 1024 * 1024);
-      allow delete: if (admin() || teacher()) &&
-        (me().isSuperadmin == true ||
-         (institution == me().institution && campus == me().campus));
+      allow update, delete: if false;
     }
 
     match /website/{allPaths=**} {
@@ -67,13 +110,6 @@ service firebase.storage {
         safeUpload(10 * 1024 * 1024) &&
         request.resource.contentType.matches('image/(jpeg|jpg|pjpeg|png)');
       allow delete: if canEditWebsite();
-    }
-
-    // Compatibilidad de solo lectura y borrado administrativo para archivos antiguos.
-    match /files/{grade}/{fileName} {
-      allow read: if active();
-      allow delete: if admin();
-      allow create, update: if false;
     }
 
     match /{allPaths=**} {

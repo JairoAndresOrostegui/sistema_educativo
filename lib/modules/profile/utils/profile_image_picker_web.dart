@@ -26,4 +26,3 @@ Future<(List<int>?, String)> pickImage() async {
 
   return completer.future;
 }
-

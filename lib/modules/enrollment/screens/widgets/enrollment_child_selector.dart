@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../models/child_option.dart';
 
@@ -19,11 +20,11 @@ class EnrollmentChildSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Selecciona al estudiante vinculado',
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            color: Colors.redAccent,
+            color: AppPalette.primary,
           ),
         ),
         const SizedBox(height: 8),
@@ -39,7 +40,7 @@ class EnrollmentChildSelector extends StatelessWidget {
                 (c) => DropdownMenuItem(
                   value: c.id,
                   child: Text(
-                    '${c.nombre} (${c.document ?? 'Sin documento'})',
+                    '${c.nombre} • ${c.data['groupName'] ?? 'Sin grupo'}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -50,8 +51,10 @@ class EnrollmentChildSelector extends StatelessWidget {
               onChanged(null);
               return;
             }
-            final selected =
-                options.firstWhere((c) => c.id == val, orElse: () => options.first);
+            final selected = options.firstWhere(
+              (c) => c.id == val,
+              orElse: () => options.first,
+            );
             onChanged(selected);
           },
         ),

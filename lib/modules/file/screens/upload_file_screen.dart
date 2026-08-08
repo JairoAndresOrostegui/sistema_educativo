@@ -1,18 +1,23 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../models/academic/academic_group.dart';
+import '../../../models/file/file_model.dart';
+import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
+import '../../../utils/academic_group_service.dart';
 import '../../../utils/dialog_utils.dart';
-import '../../../utils/notification_service.dart';
-import '../../../utils/notification_tokens.dart';
-import '../../../utils/parameters_service.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/parameters_service.dart';
+import '../../../utils/user_log_service.dart';
+import '../../schedule/services/schedule_service.dart';
+import '../../user/services/active_student_service.dart';
 import '../services/file_service.dart';
+import '../utils/file_utils.dart';
 
 class UploadFileScreen extends StatefulWidget {
   const UploadFileScreen({super.key});
@@ -22,535 +27,569 @@ class UploadFileScreen extends StatefulWidget {
 }
 
 class _UploadFileScreenState extends State<UploadFileScreen> {
-  final ParametersService _params = ParametersService();
-  final ScrollController _scrollCtrl = ScrollController();
+  final _service = FileService();
+  final _groupService = AcademicGroupService();
+  final _parameters = ParametersService();
+  final _schedule = ScheduleService();
+  final _selectedFiles = <String>{};
 
-  String? _grade;
-  PlatformFile? _pickedFile;
-  bool _loading = false;
-  List<Map<String, dynamic>> _uploadedFiles = [];
-  bool _canCreate = false;
-  bool _canDelete = false;
-  List<String> _grades = [];
+  bool _loading = true;
+  bool _busy = false;
+  double? _uploadProgress;
+  List<InstitutionOption> _institutions = [];
+  List<AcademicGroup> _groups = [];
+  List<userModelv2> _children = [];
+  List<FileModel> _files = [];
+  FileStorageSummary? _summary;
+  String? _institutionId;
+  String? _campusId;
+  String? _groupId;
+  String? _activeStudentId;
+
+  userModelv2 get _user => context.read<UserProviderV2>().user!;
+  bool get _isStaff => _user.role == 'Administrador' || _user.role == 'Docente';
+  bool get _canCreate =>
+      _user.isSuperadmin || _user.permissions.contains('archivos.crear');
+  bool get _canDelete =>
+      _user.isSuperadmin || _user.permissions.contains('archivos.eliminar');
 
   @override
   void initState() {
     super.initState();
-    final user = context.read<UserProviderV2>().user!;
-    final permissions = user.permissions;
-    _canCreate = permissions.contains('archivos.crear');
-    _canDelete = permissions.contains('archivos.eliminar');
-    _loadGrades();
-    _loadUploadedFiles();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadGrades() async {
-    try {
-      final params = await _params.getGrades();
-      if (!mounted) return;
-      setState(() {
-        _grades =
-            params
-                .map((p) => p.valor.trim())
-                .where((g) => g.toLowerCase() != 'no aplica')
-                .toList();
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _selectFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
-      withData: true,
-    );
-
-    if (result == null || result.files.isEmpty) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Seleccion de archivo',
-        message: 'No file selected.',
-      );
-      return;
-    }
-
-    final file = result.files.first;
-    final ext = file.extension?.toLowerCase();
-
-    if (!['pdf', 'doc', 'docx', 'xls', 'xlsx'].contains(ext)) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Formato no permitido',
-        message: 'Only PDF, Word or Excel files are allowed.',
-      );
-      return;
-    }
-
-    if (file.bytes == null) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Error',
-        message: 'Error reading file.',
-      );
-      return;
-    }
-
-    setState(() => _pickedFile = file);
-  }
-
-  Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
-    for (var i = 0; i < list.length; i += size) {
-      yield list.sublist(i, i + size > list.length ? list.length : i + size);
-    }
-  }
-
-  Future<void> _upload() async {
-    if (!_canCreate) return;
-
-    if (_pickedFile == null || _grade == null) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Campos requeridos',
-        message: 'All fields are required.',
-      );
-      return;
-    }
-
+  Future<void> _bootstrap() async {
     setState(() => _loading = true);
-
     try {
-      final user = context.read<UserProviderV2>().user!;
-      final uploaderId = user.id;
-      final uploaderName = '${user.firstName} ${user.lastName}';
-      final institutionId = user.institution;
-      final campusId = user.campus;
-      final originalName = _pickedFile!.name;
-      final storageName =
-          '${DateTime.now().millisecondsSinceEpoch}_$originalName';
-      final storagePath =
-          'files/$institutionId/$campusId/$_grade/$storageName';
-
-      final ref = FirebaseStorage.instance.ref().child(storagePath);
-      await ref.putData(_pickedFile!.bytes!);
-      final url = await ref.getDownloadURL();
-
-      final docRef =
-          await FirebaseFirestore.instance.collection('files').add({
-            'grade': _grade,
-            'name': originalName,
-            'url': url,
-            'createdAt': FieldValue.serverTimestamp(),
-            'uploadedBy': uploaderId,
-            'uploaderName': uploaderName,
-            'storagePath': storagePath,
-            'institutionId': institutionId,
-            'campusId': campusId,
-          });
-
-      await docRef.update({'id': docRef.id});
-
-      final usersCol = FirebaseFirestore.instance.collection('users');
-
-      final stuSnap =
-          await usersCol
-              .where('institution', isEqualTo: institutionId)
-              .where('campus', isEqualTo: campusId)
-              .where('role', isEqualTo: 'Estudiante')
-              .where('grade', isEqualTo: _grade)
-              .where('status', isEqualTo: 'activo')
-              .get();
-
-      final studentIds = stuSnap.docs.map((d) => d.id).toList();
-
-      final stuTokens = <String>{};
-      for (final d in stuSnap.docs) {
-        stuTokens.addAll(extractNotificationTokens(d.data()));
-      }
-
-      final famTokens = <String>{};
-      for (final chunk in _chunks(studentIds, 10)) {
-        if (chunk.isEmpty) continue;
-
-        final famSnap =
-            await usersCol
-                .where('institution', isEqualTo: institutionId)
-                .where('campus', isEqualTo: campusId)
-                .where('role', isEqualTo: 'Familiar')
-                .where('status', isEqualTo: 'activo')
-                .where('studentIds', arrayContainsAny: chunk)
-                .get();
-
-        for (final d in famSnap.docs) {
-          famTokens.addAll(extractNotificationTokens(d.data()));
+      final user = _user;
+      _institutionId = user.institution;
+      _campusId = user.campus;
+      _institutions = await _parameters.getInstitutions();
+      if (user.role == 'Familiar') {
+        _children = await _schedule.getUsersByIds(
+          userIds: user.studentIds ?? const [],
+          institutionId: user.institution,
+          campusId: user.campus,
+        );
+        if (_children.isNotEmpty) {
+          final saved = user.activeStudentId ?? '';
+          final selected = _children.any((child) => child.id == saved)
+              ? saved
+              : _children.first.id;
+          await _selectChild(selected, reload: false);
         }
+      } else if (user.role == 'Estudiante' || user.role == 'Docente') {
+        _groupId = user.groupId;
+      } else {
+        await _loadGroups();
+        _groupId = _groups.isEmpty ? null : _groups.first.id;
       }
-
-      final tokens = {...stuTokens, ...famTokens}.toList();
-
-      if (tokens.isNotEmpty) {
-        await enviarNotificacion(
-          tokens: tokens,
-          titulo: 'Nuevo archivo disponible',
-          cuerpo: 'Revisa el archivo "$originalName" recien subido.',
-          grado: _grade,
-        );
-      }
-
-      await DialogUtils.showSuccess(
-        context: context,
-        title: 'Exito',
-        message: 'File uploaded successfully.',
-      );
-
-      setState(() {
-        _pickedFile = null;
-      });
-
-      _loadUploadedFiles();
-    } catch (e) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Error al subir',
-        message: '$e',
-      );
-    }
-
-    setState(() => _loading = false);
-  }
-
-  Future<void> _loadUploadedFiles() async {
-    final user = context.read<UserProviderV2>().user!;
-    final files = await FileService().getUploadedFiles(
-      currentUser: user,
-      selectedGrade: _grade,
-    );
-
-    if (!mounted) return;
-    setState(() => _uploadedFiles = files);
-  }
-
-  Future<void> _deleteFile(Map<String, dynamic> file) async {
-    if (!_canDelete) return;
-
-    try {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder:
-            (ctx) => AlertDialog(
-              title: const Text('Delete file'),
-              content: const Text('Are you sure you want to delete this file?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  child: const Text('Delete'),
-                ),
-              ],
-            ),
-      );
-
-      if (confirm != true) return;
-
-      final docId = file['id'] as String?;
-      final url = file['url'] as String?;
-
-      if (docId == null || url == null) {
-        await DialogUtils.showError(
-          context: context,
-          title: 'Referencia invalida',
-          message: 'Invalid file reference.',
-        );
-        return;
-      }
-
-      await FileService().deleteFile(docId, url);
-
-      if (!mounted) return;
-
-      await DialogUtils.showSuccess(
-        context: context,
-        title: 'Archivo',
-        message: 'File deleted.',
-      );
-
-      await _loadUploadedFiles();
-    } catch (e) {
+      await _reloadContent();
+    } catch (error) {
       if (mounted) {
         await DialogUtils.showError(
           context: context,
-          title: 'Error al eliminar',
-          message: '$e',
+          title: 'No fue posible cargar Archivos',
+          message: error.toString(),
         );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadGroups() async {
+    if (_institutionId == null || _campusId == null) return;
+    _groups = await _groupService.list(
+      institutionId: _institutionId!,
+      campusId: _campusId!,
+    );
+  }
+
+  Future<void> _reloadContent() async {
+    if (_institutionId == null || _campusId == null || _groupId == null) {
+      if (mounted) setState(() => _files = []);
+      return;
+    }
+    final results = await Future.wait([
+      _service.list(
+        institutionId: _institutionId!,
+        campusId: _campusId!,
+        groupId: _groupId!,
+      ),
+      if (_isStaff)
+        _service.summary(institutionId: _institutionId)
+      else
+        Future<FileStorageSummary?>.value(null),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _files = results.first as List<FileModel>;
+      _summary = results.last as FileStorageSummary?;
+      _selectedFiles.clear();
+    });
+  }
+
+  Future<void> _changeTenant(String institution, String campus) async {
+    setState(() {
+      _loading = true;
+      _institutionId = institution;
+      _campusId = campus;
+      _groupId = null;
+    });
+    try {
+      await _loadGroups();
+      _groupId = _groups.isEmpty ? null : _groups.first.id;
+      await _reloadContent();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _selectChild(String id, {bool reload = true}) async {
+    final child = _children.firstWhere((item) => item.id == id);
+    await ActiveStudentService().select(
+      userProvider: context.read<UserProviderV2>(),
+      studentId: id,
+    );
+    _activeStudentId = id;
+    _groupId = child.groupId;
+    if (reload) await _reloadContent();
+  }
+
+  String? _mimeFor(PlatformFile file) {
+    return switch (file.extension?.toLowerCase()) {
+      'pdf' => 'application/pdf',
+      'doc' => 'application/msword',
+      'docx' =>
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls' => 'application/vnd.ms-excel',
+      'xlsx' =>
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      _ => null,
+    };
+  }
+
+  Future<void> _upload() async {
+    if (!_canCreate || _groupId == null) return;
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    final mime = _mimeFor(file);
+    if (file.bytes == null || mime == null) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Archivo no permitido',
+        message: 'Selecciona un PDF, Word o Excel válido.',
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _uploadProgress = 0;
+    });
+    try {
+      await _service.upload(
+        bytes: file.bytes!,
+        name: file.name,
+        contentType: mime,
+        institutionId: _institutionId!,
+        campusId: _campusId!,
+        groupId: _groupId!,
+        onProgress: (progress) {
+          if (mounted) setState(() => _uploadProgress = progress.ratio);
+        },
+      );
+      await _reloadContent();
+      if (mounted) {
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Archivo publicado',
+          message: 'La carga y su registro finalizaron correctamente.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible publicar',
+          message: error.toString(),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _uploadProgress = null;
+        });
       }
     }
   }
 
-  BoxDecoration _boxDecoration(BuildContext context) {
-    return BoxDecoration(
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.red.withValues(alpha: .15)),
-      gradient: LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [Colors.red.withValues(alpha: .06), Colors.white],
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.03),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    );
+  Future<void> _download(FileModel file) async {
+    setState(() => _busy = true);
+    try {
+      final url = await _service.downloadUrl(file);
+      await descargarArchivoDesdeURL(url, file.name);
+      await UserLogService().logEvent(
+        user: _user,
+        event: 'file_download',
+        extra: {
+          'fileId': file.id,
+          'name': file.name,
+          'groupId': file.groupId,
+          'groupName': file.groupName,
+          'sizeBytes': file.sizeBytes,
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
-  ButtonStyle _primaryButtonStyle() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: Colors.redAccent,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      minimumSize: const Size(140, 44),
+  Future<void> _deleteSelected() async {
+    if (!_canDelete || _selectedFiles.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar archivos'),
+        content: Text(
+          'Se eliminarán ${_selectedFiles.length} archivos de Storage y sus '
+          'registros. La acción quedará auditada.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await _service.deleteSelected(_selectedFiles);
+      await _reloadContent();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteOldFiles() async {
+    if (!_user.isSuperadmin) return;
+    final count = _summary?.oldFilesCount ?? 0;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Limpieza por antigüedad'),
+        content: Text(
+          'Se eliminarán todos los archivos con más de 60 días ($count '
+          'detectados actualmente). La acción quedará auditada.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Ejecutar limpieza'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      final deleted = await _service.deleteOlderThanRetention();
+      await _reloadContent();
+      if (mounted) {
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Limpieza finalizada',
+          message: 'Se eliminaron $deleted archivos.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _size(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(1)} KiB';
+  }
+
+  InstitutionOption? get _selectedInstitution {
+    for (final institution in _institutions) {
+      if (institution.id == _institutionId) return institution;
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
-
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
-        centerTitle: true,
         leading: const BackToDashboardButton(),
-        title: const Text('Upload file (Word, Excel, PDF)'),
+        title: const Text('Archivos'),
+        actions: [
+          IconButton(
+            onPressed: _busy ? null : _bootstrap,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: Scrollbar(
-          controller: _scrollCtrl,
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            controller: _scrollCtrl,
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: isWide ? 960 : 720),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+      floatingActionButton: _canCreate && _groupId != null
+          ? FloatingActionButton.extended(
+              onPressed: _busy ? null : _upload,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Publicar archivo'),
+            )
+          : null,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                ListView(
+                  padding: const EdgeInsets.all(16),
                   children: [
-                    Container(
-                      decoration: _boxDecoration(context),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Share with grade',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: Colors.redAccent.withValues(alpha: .95),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          DropdownButtonFormField<String>(
-                            initialValue: _grade,
-                            items:
-                                _grades
-                                    .map(
-                                      (g) => DropdownMenuItem(
-                                        value: g,
-                                        child: Text(g),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged: (v) async {
-                              setState(() => _grade = v);
-                              await _loadUploadedFiles();
-                            },
-                            decoration: InputDecoration(
-                              labelText: 'Grade',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(
-                                  color: Colors.red.withValues(alpha: .25),
+                    if (_user.isSuperadmin) _tenantSelectors(),
+                    if (_user.role == 'Familiar' && _children.isNotEmpty)
+                      DropdownButtonFormField<String>(
+                        initialValue: _activeStudentId,
+                        decoration: const InputDecoration(
+                          labelText: 'Hijo seleccionado',
+                        ),
+                        items: _children
+                            .map(
+                              (child) => DropdownMenuItem(
+                                value: child.id,
+                                child: Text(
+                                  '${child.firstName} ${child.lastName} • '
+                                  '${child.groupName ?? 'Sin grupo'}',
                                 ),
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Colors.redAccent,
-                                  width: 1.4,
-                                ),
+                            )
+                            .toList(),
+                        onChanged: _busy
+                            ? null
+                            : (value) {
+                                if (value != null) _selectChild(value);
+                              },
+                      ),
+                    if (_user.role == 'Administrador')
+                      DropdownButtonFormField<String>(
+                        initialValue: _groupId,
+                        decoration: const InputDecoration(labelText: 'Grupo'),
+                        items: _groups
+                            .map(
+                              (group) => DropdownMenuItem(
+                                value: group.id,
+                                child: Text(group.name),
                               ),
-                              isDense: true,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          if (_canCreate)
-                            Row(
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: _selectFile,
-                                  icon: const Icon(Icons.attach_file),
-                                  label: const Text('Select file'),
-                                  style: _primaryButtonStyle(),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 200),
-                                    child:
-                                        _pickedFile == null
-                                            ? const SizedBox.shrink()
-                                            : Text(
-                                              _pickedFile!.name,
-                                              key: ValueKey(_pickedFile!.name),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
+                            )
+                            .toList(),
+                        onChanged: _busy
+                            ? null
+                            : (value) async {
+                                setState(() => _groupId = value);
+                                await _reloadContent();
+                              },
+                      ),
+                    if (_summary != null) ...[
+                      const SizedBox(height: 16),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Almacenamiento del módulo',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(value: _summary!.ratio),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${_size(_summary!.usedBytes)} de '
+                                '${_size(_summary!.limitBytes)} utilizados • '
+                                'máximo ${_size(_summary!.maxFileBytes)} por archivo',
+                              ),
+                              if (_user.isSuperadmin) ...[
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: _busy ? null : _deleteOldFiles,
+                                  icon: const Icon(Icons.auto_delete_outlined),
+                                  label: Text(
+                                    'Eliminar archivos de más de 60 días '
+                                    '(${_summary!.oldFilesCount})',
                                   ),
                                 ),
                               ],
-                            ),
-                          const SizedBox(height: 16),
-                          if (_canCreate)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child:
-                                  _loading
-                                      ? const SizedBox(
-                                        height: 28,
-                                        width: 28,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                      : ElevatedButton.icon(
-                                        onPressed: _upload,
-                                        icon: const Icon(Icons.upload),
-                                        label: const Text('Upload'),
-                                        style: _primaryButtonStyle(),
-                                      ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      decoration: _boxDecoration(context),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: const [
-                              Icon(Icons.folder, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text(
-                                'Your uploaded files',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                ),
-                              ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          if (_uploadedFiles.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text('No files uploaded yet.'),
-                            )
-                          else
-                            ListView.separated(
-                              padding: EdgeInsets.zero,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _uploadedFiles.length,
-                              separatorBuilder:
-                                  (context, _) => const SizedBox(height: 8),
-                              itemBuilder: (_, i) {
-                                final file = _uploadedFiles[i];
-                                final name = file['name']?.toString() ?? '';
-                                final grade = file['grade']?.toString() ?? '';
-                                final ts = file['createdAt'];
-                                final date =
-                                    ts is Timestamp
-                                        ? ts.toDate()
-                                        : DateTime.now();
-
-                                return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 160),
-                                  curve: Curves.easeOut,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.red.withValues(alpha: .15),
-                                    ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
-                                      colors: [
-                                        Colors.red.withValues(alpha: .06),
-                                        Colors.white,
-                                      ],
-                                    ),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    title: Text(
-                                      name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'Grade: $grade - ${date.toLocal()}',
-                                    ),
-                                    trailing:
-                                        _canDelete
-                                            ? IconButton(
-                                              icon: const Icon(
-                                                Icons.delete,
-                                                color: Colors.redAccent,
-                                              ),
-                                              onPressed:
-                                                  () => _deleteFile(file),
-                                            )
-                                            : null,
-                                  ),
-                                );
-                              },
-                            ),
-                        ],
+                        ),
                       ),
+                    ],
+                    if (_uploadProgress != null) ...[
+                      const SizedBox(height: 12),
+                      LinearProgressIndicator(value: _uploadProgress),
+                      Text(
+                        '${(_uploadProgress! * 100).toStringAsFixed(0)}% cargado',
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Documentos disponibles',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        if (_canDelete && _selectedFiles.isNotEmpty)
+                          FilledButton.tonalIcon(
+                            onPressed: _busy ? null : _deleteSelected,
+                            icon: const Icon(Icons.delete_outline),
+                            label: Text('Eliminar (${_selectedFiles.length})'),
+                          ),
+                      ],
                     ),
+                    const SizedBox(height: 8),
+                    if (_files.isEmpty)
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(
+                            child: Text('No hay archivos para este grupo.'),
+                          ),
+                        ),
+                      )
+                    else
+                      ..._files.map(
+                        (file) => Card(
+                          child: CheckboxListTile(
+                            value: _selectedFiles.contains(file.id),
+                            onChanged:
+                                _canDelete &&
+                                    (_user.role != 'Docente' ||
+                                        file.uploadedBy == _user.id)
+                                ? (selected) => setState(() {
+                                    if (selected == true) {
+                                      _selectedFiles.add(file.id);
+                                    } else {
+                                      _selectedFiles.remove(file.id);
+                                    }
+                                  })
+                                : null,
+                            secondary: Icon(
+                              Icons.description_outlined,
+                              color: colors.primary,
+                            ),
+                            title: Text(file.name),
+                            subtitle: Text(
+                              '${file.groupName} • ${_size(file.sizeBytes)} • '
+                              '${DateFormat('dd/MM/yyyy').format(file.createdAt.toDate())}',
+                            ),
+                            controlAffinity: ListTileControlAffinity.trailing,
+                          ),
+                        ),
+                      ),
+                    if (_files.isNotEmpty)
+                      ..._files.map(
+                        (file) => Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: _busy ? null : () => _download(file),
+                            icon: const Icon(Icons.download),
+                            label: Text('Descargar ${file.name}'),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 80),
                   ],
                 ),
-              ),
+                if (_busy)
+                  Positioned.fill(
+                    child: AbsorbPointer(
+                      child: ColoredBox(
+                        color: colors.scrim.withValues(alpha: .13),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _tenantSelectors() {
+    final campuses = _selectedInstitution?.campuses ?? const <String>[];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: _institutionId,
+              decoration: const InputDecoration(labelText: 'Institución'),
+              items: _institutions
+                  .map(
+                    (institution) => DropdownMenuItem(
+                      value: institution.id,
+                      child: Text(institution.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _busy
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      final institution = _institutions.firstWhere(
+                        (item) => item.id == value,
+                      );
+                      if (institution.campuses.isNotEmpty) {
+                        _changeTenant(value, institution.campuses.first);
+                      }
+                    },
             ),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              key: ValueKey('$_institutionId:$_campusId'),
+              initialValue: _campusId,
+              decoration: const InputDecoration(labelText: 'Sede'),
+              items: campuses
+                  .map(
+                    (campus) =>
+                        DropdownMenuItem(value: campus, child: Text(campus)),
+                  )
+                  .toList(),
+              onChanged: _busy
+                  ? null
+                  : (value) {
+                      if (value != null && _institutionId != null) {
+                        _changeTenant(_institutionId!, value);
+                      }
+                    },
+            ),
+          ),
+        ],
       ),
     );
   }

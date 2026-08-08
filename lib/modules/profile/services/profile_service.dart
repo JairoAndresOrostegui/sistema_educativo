@@ -23,9 +23,7 @@ class ProfileService {
     final ref = _storage.ref().child('fotos_perfil/${user.uid}/$nombreArchivo');
     final uploadTask = await ref.putData(
       bytes,
-      SettableMetadata(
-        contentType: esPng ? 'image/png' : 'image/jpeg',
-      ),
+      SettableMetadata(contentType: esPng ? 'image/png' : 'image/jpeg'),
     );
 
     final url = await uploadTask.ref.getDownloadURL();
@@ -55,9 +53,7 @@ class ProfileService {
 
     final url = await uploadTask.ref.getDownloadURL();
 
-    await _firestore.collection('users').doc(uid).update({
-      'photoUrl': url,
-    });
+    await _firestore.collection('users').doc(uid).update({'photoUrl': url});
 
     return url;
   }

@@ -47,12 +47,11 @@ class PermissionsSection extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                       value: funcionalidades.contains(perm.valor),
-                      onChanged:
-                          soloLectura
-                              ? null
-                              : (bool? newValue) {
-                                onFuncionalidadChanged(perm.valor, newValue);
-                              },
+                      onChanged: soloLectura
+                          ? null
+                          : (bool? newValue) {
+                              onFuncionalidadChanged(perm.valor, newValue);
+                            },
                     ),
                 ],
               ),

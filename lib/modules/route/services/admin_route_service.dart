@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../../models/route/route_model.dart';
 
 class RouteService {
@@ -50,9 +51,8 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
-    final data =
-        ruta.toMap()
-          ..addAll({'institution': institutionId, 'campus': campusId});
+    final data = ruta.toMap()
+      ..addAll({'institution': institutionId, 'campus': campusId});
 
     if (id == null) {
       final docRef = await _routes.add(data);
@@ -124,13 +124,12 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
-    final snapshot =
-        await _users
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Estudiante')
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final snapshot = await _users
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Estudiante')
+        .where('status', isEqualTo: 'activo')
+        .get();
     return snapshot.docs;
   }
 
@@ -139,13 +138,12 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
-    final snapshot =
-        await _users
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', whereIn: ['Docente', 'Administrador'])
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final snapshot = await _users
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', whereIn: ['Docente', 'Administrador'])
+        .where('status', isEqualTo: 'activo')
+        .get();
     return snapshot.docs;
   }
 
@@ -182,16 +180,17 @@ class RouteService {
     required String campusId,
     Map<String, dynamic>? cambios,
   }) async {
-    await FirebaseFirestore.instance.collection('routes_admin_history').add({
-      'routeId': ruta.id,
-      'routeName': ruta.name,
-      'action': _mapActionToEnglish(accion),
-      'performedBy': performedBy,
-      'adminName': adminName,
-      'institution': institutionId,
-      'campus': campusId,
-      'date': FieldValue.serverTimestamp(),
-      if (cambios != null) 'details': cambios,
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'registrarAuditoria',
+    );
+    await callable.call({
+      'type': 'route_history',
+      'payload': {
+        'routeId': ruta.id,
+        'routeName': ruta.name,
+        'action': _mapActionToEnglish(accion),
+        'changes': ?cambios,
+      },
     });
   }
 

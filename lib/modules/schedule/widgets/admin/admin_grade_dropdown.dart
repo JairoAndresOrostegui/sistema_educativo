@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
+
+import '../../../../models/academic/academic_group.dart';
 
 class AdminGradeDropdown extends StatelessWidget {
-  final String? selectedGrade;
+  final String? selectedGroupId;
   final ValueChanged<String?> onChanged;
-  final List<String> availableGrades;
+  final List<AcademicGroup> availableGroups;
 
   const AdminGradeDropdown({
     super.key,
-    required this.selectedGrade,
+    required this.selectedGroupId,
     required this.onChanged,
-    required this.availableGrades,
+    required this.availableGroups,
   });
 
   @override
@@ -18,15 +21,18 @@ class AdminGradeDropdown extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.red.withValues(alpha: .15)),
+        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .06), Colors.white],
+          colors: [
+            AppPalette.primary.withValues(alpha: .06),
+            AppPalette.surface,
+          ],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: AppPalette.onSurface.withValues(alpha: 0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -34,18 +40,17 @@ class AdminGradeDropdown extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: selectedGrade,
-          hint: const Text('Selecciona un grado'),
+          value: selectedGroupId,
+          hint: const Text('Selecciona un grupo'),
           isExpanded: true,
-          items:
-              availableGrades
-                  .map(
-                    (String grade) => DropdownMenuItem<String>(
-                      value: grade,
-                      child: Text(grade),
-                    ),
-                  )
-                  .toList(),
+          items: availableGroups
+              .map(
+                (group) => DropdownMenuItem<String>(
+                  value: group.id,
+                  child: Text(group.name),
+                ),
+              )
+              .toList(),
           onChanged: onChanged,
         ),
       ),

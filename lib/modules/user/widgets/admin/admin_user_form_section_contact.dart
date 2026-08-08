@@ -35,11 +35,9 @@ class ContactSection extends StatelessWidget {
           controller: direccion,
           decoration: const InputDecoration(labelText: 'Direccion'),
           readOnly: soloLectura,
-          validator:
-              (value) =>
-                  (value == null || value.isEmpty)
-                      ? 'Este campo es obligatorio'
-                      : null,
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'Este campo es obligatorio'
+              : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -48,11 +46,9 @@ class ContactSection extends StatelessWidget {
             labelText: 'Telefonos: si son varios se separan con ","',
           ),
           readOnly: soloLectura,
-          validator:
-              (value) =>
-                  (value == null || value.isEmpty)
-                      ? 'Este campo es obligatorio'
-                      : null,
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'Este campo es obligatorio'
+              : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -63,11 +59,9 @@ class ContactSection extends StatelessWidget {
           ),
           readOnly: true,
           onTap: soloLectura ? null : onPickDate,
-          validator:
-              (value) =>
-                  (value == null || value.isEmpty)
-                      ? 'La fecha de nacimiento es obligatoria'
-                      : null,
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'La fecha de nacimiento es obligatoria'
+              : null,
         ),
         const SizedBox(height: 8),
         TextFormField(

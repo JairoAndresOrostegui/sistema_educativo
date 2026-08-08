@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -28,7 +29,7 @@ Future<void> initializePush({
   );
   if (permission.authorizationStatus == AuthorizationStatus.denied) return;
 
-  const channel = AndroidNotificationChannel(
+  final channel = AndroidNotificationChannel(
     'high_importance_channel',
     'Notificaciones importantes',
     description: 'Canal para mensajes importantes del sistema educativo',
@@ -41,11 +42,11 @@ Future<void> initializePush({
       >()
       ?.createNotificationChannel(channel);
 
-  const initSettings = InitializationSettings(
+  final initSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     iOS: DarwinInitializationSettings(),
   );
-  await _fln.initialize(initSettings);
+  await _fln.initialize(settings: initSettings);
 
   if (!_pushListenersInitialized) {
     _pushListenersInitialized = true;
@@ -59,10 +60,10 @@ Future<void> initializePush({
       }
 
       await _fln.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        const NotificationDetails(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'high_importance_channel',
             'Notificaciones importantes',
@@ -125,25 +126,25 @@ Future<void> _showWebNotificationDialog({
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Cerrar notificacion',
-      barrierColor: Colors.black54,
+      barrierColor: AppPalette.onSurface.withValues(alpha: .54),
       pageBuilder: (context, _, _) {
         return SafeArea(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: BoxConstraints(maxWidth: 420),
               child: Material(
-                color: Colors.transparent,
+                color: AppPalette.transparent,
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                  margin: EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.fromLTRB(20, 18, 20, 16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppPalette.surface,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.18),
+                        color: AppPalette.onSurface.withValues(alpha: 0.18),
                         blurRadius: 24,
-                        offset: const Offset(0, 10),
+                        offset: Offset(0, 10),
                       ),
                     ],
                   ),
@@ -157,16 +158,16 @@ Future<void> _showWebNotificationDialog({
                             width: 42,
                             height: 42,
                             decoration: BoxDecoration(
-                              color: Colors.redAccent.withValues(alpha: 0.10),
+                              color: AppPalette.primary.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.notifications_active_outlined,
-                              color: Colors.redAccent,
+                              color: AppPalette.primary,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          const Expanded(
+                          SizedBox(width: 12),
+                          Expanded(
                             child: Text(
                               'Notificacion recibida',
                               style: TextStyle(
@@ -177,33 +178,33 @@ Future<void> _showWebNotificationDialog({
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         body,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           height: 1.4,
-                          color: Colors.black87,
+                          color: AppPalette.onSurface.withValues(alpha: .87),
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      SizedBox(height: 18),
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton(
                           style: FilledButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppPalette.primary,
+                            foregroundColor: AppPalette.surface,
                           ),
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Entendido'),
+                          child: Text('Entendido'),
                         ),
                       ),
                     ],

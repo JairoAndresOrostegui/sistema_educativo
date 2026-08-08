@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -45,7 +46,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F8),
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
         leading: IconButton(
           tooltip: 'Volver al constructor',
@@ -75,18 +76,16 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
           }
           final all = snapshot.data!;
           final query = _search.text.trim().toLowerCase();
-          final filtered =
-              all.where((item) {
-                final matchesFilter =
-                    _filter == 'all' ||
-                    (_filter == 'new' && item.status == 'new') ||
-                    (_filter == 'read' && item.status != 'new');
-                final haystack =
-                    '${item.name} ${item.email} ${item.phone} ${item.message} ${item.pageId}'
-                        .toLowerCase();
-                return matchesFilter &&
-                    (query.isEmpty || haystack.contains(query));
-              }).toList();
+          final filtered = all.where((item) {
+            final matchesFilter =
+                _filter == 'all' ||
+                (_filter == 'new' && item.status == 'new') ||
+                (_filter == 'read' && item.status != 'new');
+            final haystack =
+                '${item.name} ${item.email} ${item.phone} ${item.message} ${item.pageId}'
+                    .toLowerCase();
+            return matchesFilter && (query.isEmpty || haystack.contains(query));
+          }).toList();
           final selected = _selected(all);
           final unread = all.where((item) => item.status == 'new').length;
 
@@ -123,20 +122,20 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
 
   Widget _summary(int total, int unread) => Row(
     children: [
-      _metric('Total', total, Icons.inbox_outlined, Colors.blueGrey),
+      _metric('Total', total, Icons.inbox_outlined, AppPalette.info),
       const SizedBox(width: 12),
       _metric(
         'Sin leer',
         unread,
         Icons.mark_email_unread_outlined,
-        Colors.red.shade700,
+        AppPalette.error,
       ),
       const SizedBox(width: 12),
       _metric(
         'Leídos',
         total - unread,
         Icons.drafts_outlined,
-        Colors.green.shade700,
+        AppPalette.success,
       ),
     ],
   );
@@ -194,57 +193,56 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
               ButtonSegment(value: 'read', label: Text('Leídos')),
             ],
             selected: {_filter},
-            onSelectionChanged:
-                (value) => setState(() => _filter = value.first),
+            onSelectionChanged: (value) =>
+                setState(() => _filter = value.first),
           ),
         ),
         const Divider(height: 18),
         Expanded(
-          child:
-              submissions.isEmpty
-                  ? const Center(child: Text('No hay mensajes para mostrar.'))
-                  : ListView.separated(
-                    itemCount: submissions.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final item = submissions[index];
-                      final selected =
-                          (_selectedId ?? submissions.first.id) == item.id;
-                      return ListTile(
-                        selected: selected,
-                        selectedTileColor: Colors.red.withValues(alpha: 0.08),
-                        leading: Icon(
-                          item.status == 'new'
-                              ? Icons.mark_email_unread_outlined
-                              : Icons.drafts_outlined,
-                          color:
-                              item.status == 'new' ? Colors.red.shade700 : null,
+          child: submissions.isEmpty
+              ? const Center(child: Text('No hay mensajes para mostrar.'))
+              : ListView.separated(
+                  itemCount: submissions.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = submissions[index];
+                    final selected =
+                        (_selectedId ?? submissions.first.id) == item.id;
+                    return ListTile(
+                      selected: selected,
+                      selectedTileColor: AppPalette.error.withValues(
+                        alpha: 0.08,
+                      ),
+                      leading: Icon(
+                        item.status == 'new'
+                            ? Icons.mark_email_unread_outlined
+                            : Icons.drafts_outlined,
+                        color: item.status == 'new' ? AppPalette.error : null,
+                      ),
+                      title: Text(
+                        item.name.isEmpty ? 'Sin nombre' : item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: item.status == 'new'
+                              ? FontWeight.w800
+                              : FontWeight.w500,
                         ),
-                        title: Text(
-                          item.name.isEmpty ? 'Sin nombre' : item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight:
-                                item.status == 'new'
-                                    ? FontWeight.w800
-                                    : FontWeight.w500,
-                          ),
-                        ),
-                        subtitle: Text(
-                          item.message,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () {
-                          setState(() => _selectedId = item.id);
-                          if (item.status == 'new') {
-                            _service.markSubmissionRead(item.id);
-                          }
-                        },
-                      );
-                    },
-                  ),
+                      ),
+                      subtitle: Text(
+                        item.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () {
+                        setState(() => _selectedId = item.id);
+                        if (item.status == 'new') {
+                          _service.markSubmissionRead(item.id);
+                        }
+                      },
+                    );
+                  },
+                ),
         ),
       ],
     ),
@@ -252,89 +250,90 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
 
   Widget _detail(WebsiteSubmission? item) => Card(
     margin: EdgeInsets.zero,
-    child:
-        item == null
-            ? const Center(
-              child: Text('Selecciona un mensaje para ver sus detalles.'),
-            )
-            : Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.name.isEmpty ? 'Sin nombre' : item.name,
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                          ),
+    child: item == null
+        ? const Center(
+            child: Text('Selecciona un mensaje para ver sus detalles.'),
+          )
+        : Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name.isEmpty ? 'Sin nombre' : item.name,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
                         ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed:
-                            () =>
-                                item.status == 'new'
-                                    ? _service.markSubmissionRead(item.id)
-                                    : _service.markSubmissionUnread(item.id),
-                        icon: Icon(
-                          item.status == 'new'
-                              ? Icons.mark_email_read_outlined
-                              : Icons.mark_email_unread_outlined,
-                        ),
-                        label: Text(
-                          item.status == 'new'
-                              ? 'Marcar leído'
-                              : 'Marcar sin leer',
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton.filledTonal(
-                        tooltip: 'Eliminar mensaje',
-                        color: Colors.red.shade700,
-                        onPressed: () => _delete(item),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  _data(Icons.email_outlined, item.email),
-                  if (item.phone.isNotEmpty)
-                    _data(Icons.phone_outlined, item.phone),
-                  _data(Icons.description_outlined, 'Página: ${item.pageId}'),
-                  if (item.createdAt != null)
-                    _data(
-                      Icons.schedule,
-                      DateFormat(
-                        'dd/MM/yyyy, h:mm a',
-                      ).format(item.createdAt!.toLocal()),
-                    ),
-                  const Divider(height: 36),
-                  const Text(
-                    'Mensaje',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: SelectableText(
-                        item.message,
-                        style: const TextStyle(fontSize: 17, height: 1.5),
                       ),
                     ),
+                    OutlinedButton.icon(
+                      onPressed: () => item.status == 'new'
+                          ? _service.markSubmissionRead(item.id)
+                          : _service.markSubmissionUnread(item.id),
+                      icon: Icon(
+                        item.status == 'new'
+                            ? Icons.mark_email_read_outlined
+                            : Icons.mark_email_unread_outlined,
+                      ),
+                      label: Text(
+                        item.status == 'new'
+                            ? 'Marcar leído'
+                            : 'Marcar sin leer',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton.filledTonal(
+                      tooltip: 'Eliminar mensaje',
+                      color: AppPalette.error,
+                      onPressed: () => _delete(item),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _data(Icons.email_outlined, item.email),
+                if (item.phone.isNotEmpty)
+                  _data(Icons.phone_outlined, item.phone),
+                _data(Icons.description_outlined, 'Página: ${item.pageId}'),
+                if (item.createdAt != null)
+                  _data(
+                    Icons.schedule,
+                    DateFormat(
+                      'dd/MM/yyyy, h:mm a',
+                    ).format(item.createdAt!.toLocal()),
                   ),
-                ],
-              ),
+                const Divider(height: 36),
+                const Text(
+                  'Mensaje',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      item.message,
+                      style: const TextStyle(fontSize: 17, height: 1.5),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
   );
 
   Widget _data(IconData icon, String value) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
     child: Row(
       children: [
-        Icon(icon, size: 20, color: Colors.black54),
+        Icon(
+          icon,
+          size: 20,
+          color: AppPalette.onSurface.withValues(alpha: .54),
+        ),
         const SizedBox(width: 10),
         Expanded(child: SelectableText(value)),
       ],
@@ -344,23 +343,20 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
   Future<void> _delete(WebsiteSubmission item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Eliminar mensaje'),
-            content: const Text(
-              'Esta acción es permanente. ¿Deseas continuar?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Eliminar'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar mensaje'),
+        content: const Text('Esta acción es permanente. ¿Deseas continuar?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
           ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
     );
     if (confirmed != true) return;
     await _service.deleteSubmission(item.id);

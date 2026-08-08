@@ -24,7 +24,9 @@ class ParameterEntry {
       clave: (data['clave'] ?? '').toString(),
       etiqueta: (data['etiqueta'] ?? '').toString(),
       valor: (data['valor'] ?? '').toString(),
-      orden: data['orden'] is int ? data['orden'] as int : int.tryParse('${data['orden']}') ?? 0,
+      orden: data['orden'] is int
+          ? data['orden'] as int
+          : int.tryParse('${data['orden']}') ?? 0,
       activo: data['activo'] == true,
     );
   }

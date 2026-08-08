@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/messaging/message_models.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
-import '../../../utils/notification_tokens.dart';
 
 class MessagingService {
   MessagingService({FirebaseFirestore? firestore})
@@ -25,13 +24,14 @@ class MessagingService {
         .where('participantIds', arrayContains: userId)
         .snapshots()
         .map((snap) {
-          final items =
-              snap.docs
-                  .map((d) => MessageThreadSummary.fromMap(d.data(), d.id))
-                  .toList();
+          final items = snap.docs
+              .map((d) => MessageThreadSummary.fromMap(d.data(), d.id))
+              .toList();
           items.sort((a, b) {
-            final da = a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final db = b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final da =
+                a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final db =
+                b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0);
             return db.compareTo(da);
           });
           return items;
@@ -46,10 +46,9 @@ class MessagingService {
         .orderBy('createdAt')
         .snapshots()
         .map(
-          (snap) =>
-              snap.docs
-                  .map((d) => MessageItem.fromMap(d.data(), d.id))
-                  .toList(),
+          (snap) => snap.docs
+              .map((d) => MessageItem.fromMap(d.data(), d.id))
+              .toList(),
         );
   }
 
@@ -61,15 +60,14 @@ class MessagingService {
 
     final out = <MessagingChildContext>[];
     for (final chunk in _chunks(ids, 10)) {
-      final snap =
-          await _db
-              .collection('users')
-              .where(FieldPath.documentId, whereIn: chunk)
-              .where('institution', isEqualTo: family.institution)
-              .where('campus', isEqualTo: family.campus)
-              .where('role', isEqualTo: 'Estudiante')
-              .where('status', isEqualTo: 'activo')
-              .get();
+      final snap = await _db
+          .collection('user_directory')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .where('institution', isEqualTo: family.institution)
+          .where('campus', isEqualTo: family.campus)
+          .where('role', isEqualTo: 'Estudiante')
+          .where('status', isEqualTo: 'activo')
+          .get();
       for (final d in snap.docs) {
         final data = d.data();
         out.add(
@@ -78,7 +76,8 @@ class MessagingService {
             fullName:
                 '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                     .trim(),
-            grade: (data['grade'] ?? '').toString(),
+            groupId: (data['groupId'] ?? '').toString(),
+            groupName: (data['groupName'] ?? '').toString(),
           ),
         );
       }
@@ -104,23 +103,24 @@ class MessagingService {
         campusId: user.campus,
         studentId: user.id,
         studentName: '${user.firstName} ${user.lastName}'.trim(),
-        studentGrade: user.grade ?? '',
+        studentGroupId: user.groupId ?? '',
+        studentGroupName: user.groupName ?? '',
       );
     }
     if (role == 'Familiar') {
       final kids = await getFamilyChildren(user);
       if (kids.isEmpty) return [];
-      final selected =
-          kids
-              .where((e) => e.id == studentContextId)
-              .cast<MessagingChildContext?>()
-              .firstWhere((e) => e != null, orElse: () => kids.first)!;
+      final selected = kids
+          .where((e) => e.id == studentContextId)
+          .cast<MessagingChildContext?>()
+          .firstWhere((e) => e != null, orElse: () => kids.first)!;
       return _getContactsForStudentContext(
         institutionId: user.institution,
         campusId: user.campus,
         studentId: selected.id,
         studentName: selected.fullName,
-        studentGrade: selected.grade,
+        studentGroupId: selected.groupId,
+        studentGroupName: selected.groupName,
       );
     }
     return [];
@@ -133,7 +133,8 @@ class MessagingService {
     String? threadId,
     String? studentContextId,
     String? studentContextName,
-    String? studentContextGrade,
+    String? studentContextGroupId,
+    String? studentContextGroupName,
   }) async {
     final trimmed = body.trim();
     if (trimmed.isEmpty) {
@@ -149,10 +150,9 @@ class MessagingService {
       throw Exception('No se encontro el destinatario.');
     }
 
-    final existingThread =
-        threadId != null && threadId.trim().isNotEmpty
-            ? await _db.collection(_threadsCol).doc(threadId).get()
-            : null;
+    final existingThread = threadId != null && threadId.trim().isNotEmpty
+        ? await _db.collection(_threadsCol).doc(threadId).get()
+        : null;
 
     final canMessage = await _canSendMessage(
       sender: sender,
@@ -164,16 +164,16 @@ class MessagingService {
       throw Exception('No tienes permitido enviar mensajes a este usuario.');
     }
 
-    final resolvedThreadId =
-        threadId != null && threadId.trim().isNotEmpty
-            ? threadId
-            : await _ensureThread(
-              sender: sender,
-              recipient: recipient,
-              studentContextId: studentContextId,
-              studentContextName: studentContextName,
-              studentContextGrade: studentContextGrade,
-            );
+    final resolvedThreadId = threadId != null && threadId.trim().isNotEmpty
+        ? threadId
+        : await _ensureThread(
+            sender: sender,
+            recipient: recipient,
+            studentContextId: studentContextId,
+            studentContextName: studentContextName,
+            studentContextGroupId: studentContextGroupId,
+            studentContextGroupName: studentContextGroupName,
+          );
 
     final threadRef = _db.collection(_threadsCol).doc(resolvedThreadId);
     final msgRef = threadRef.collection('messages').doc();
@@ -197,7 +197,8 @@ class MessagingService {
           },
           'contextStudentId': studentContextId,
           'contextStudentName': studentContextName,
-          'contextStudentGrade': studentContextGrade,
+          'contextStudentGroupId': studentContextGroupId,
+          'contextStudentGroupName': studentContextGroupName,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -225,7 +226,8 @@ class MessagingService {
         },
         'contextStudentId': studentContextId,
         'contextStudentName': studentContextName,
-        'contextStudentGrade': studentContextGrade,
+        'contextStudentGroupId': studentContextGroupId,
+        'contextStudentGroupName': studentContextGroupName,
         'lastMessage': trimmed,
         'lastSenderId': sender.id,
         'lastSenderName': senderName,
@@ -243,19 +245,21 @@ class MessagingService {
     return resolvedThreadId;
   }
 
-  Future<int> sendMessageToGrade({
+  Future<int> sendMessageToAcademicGroup({
     required userModelv2 sender,
-    required String grade,
+    required String groupId,
+    required String groupName,
     required String body,
   }) async {
     final contact = MessageContact(
-      id: 'grade_group::$grade',
-      fullName: 'Todos los estudiantes de $grade',
+      id: 'academic_group::$groupId',
+      fullName: 'Todos los estudiantes de $groupName',
       role: 'Grupo',
       isGroup: true,
-      groupType: 'grade_students',
-      targetGrade: grade,
-      grade: grade,
+      groupType: 'academic_group_students',
+      targetGroupId: groupId,
+      groupId: groupId,
+      groupName: groupName,
     );
     return sendMessageToGroup(sender: sender, group: contact, body: body);
   }
@@ -269,7 +273,10 @@ class MessagingService {
       throw Exception('El destinatario seleccionado no es un grupo.');
     }
 
-    final recipients = await _resolveGroupRecipients(sender: sender, group: group);
+    final recipients = await _resolveGroupRecipients(
+      sender: sender,
+      group: group,
+    );
     if (recipients.isEmpty) {
       throw Exception('No hay destinatarios activos para este envio masivo.');
     }
@@ -279,13 +286,18 @@ class MessagingService {
         sender: sender,
         recipientId: recipient.id,
         body: body,
-        studentContextId: recipient.role.trim() == 'Estudiante' ? recipient.id : null,
-        studentContextName:
-            recipient.role.trim() == 'Estudiante'
-                ? '${recipient.firstName} ${recipient.lastName}'.trim()
-                : null,
-        studentContextGrade:
-            recipient.role.trim() == 'Estudiante' ? (recipient.grade ?? '') : null,
+        studentContextId: recipient.role.trim() == 'Estudiante'
+            ? recipient.id
+            : null,
+        studentContextName: recipient.role.trim() == 'Estudiante'
+            ? '${recipient.firstName} ${recipient.lastName}'.trim()
+            : null,
+        studentContextGroupId: recipient.role.trim() == 'Estudiante'
+            ? (recipient.groupId ?? '')
+            : null,
+        studentContextGroupName: recipient.role.trim() == 'Estudiante'
+            ? (recipient.groupName ?? '')
+            : null,
       );
     }
 
@@ -293,32 +305,33 @@ class MessagingService {
   }
 
   Future<List<MessageContact>> _getTeacherContacts(userModelv2 user) async {
-    final teachersFuture =
-        _db
-            .collection('users')
-            .where('institution', isEqualTo: user.institution)
-            .where('campus', isEqualTo: user.campus)
-            .where('role', isEqualTo: 'Docente')
-            .where('status', isEqualTo: 'activo')
-            .get();
-    final adminsFuture =
-        _db
-            .collection('users')
-            .where('institution', isEqualTo: user.institution)
-            .where('campus', isEqualTo: user.campus)
-            .where('role', isEqualTo: 'Administrador')
-            .where('status', isEqualTo: 'activo')
-            .get();
-    final studentsFuture =
-        _db
-            .collection('users')
-            .where('institution', isEqualTo: user.institution)
-            .where('campus', isEqualTo: user.campus)
-            .where('role', isEqualTo: 'Estudiante')
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final teachersFuture = _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: user.institution)
+        .where('campus', isEqualTo: user.campus)
+        .where('role', isEqualTo: 'Docente')
+        .where('status', isEqualTo: 'activo')
+        .get();
+    final adminsFuture = _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: user.institution)
+        .where('campus', isEqualTo: user.campus)
+        .where('role', isEqualTo: 'Administrador')
+        .where('status', isEqualTo: 'activo')
+        .get();
+    final studentsFuture = _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: user.institution)
+        .where('campus', isEqualTo: user.campus)
+        .where('role', isEqualTo: 'Estudiante')
+        .where('status', isEqualTo: 'activo')
+        .get();
 
-    final results = await Future.wait([teachersFuture, adminsFuture, studentsFuture]);
+    final results = await Future.wait([
+      teachersFuture,
+      adminsFuture,
+      studentsFuture,
+    ]);
     final out = <MessageContact>[];
 
     for (final d in results[0].docs) {
@@ -331,7 +344,8 @@ class MessagingService {
               '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                   .trim(),
           role: 'Docente',
-          grade: (data['grade'] ?? '').toString(),
+          groupId: (data['groupId'] ?? '').toString(),
+          groupName: (data['groupName'] ?? '').toString(),
         ),
       );
     }
@@ -346,7 +360,8 @@ class MessagingService {
               '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                   .trim(),
           role: 'Administrador',
-          grade: (data['grade'] ?? '').toString(),
+          groupId: (data['groupId'] ?? '').toString(),
+          groupName: (data['groupName'] ?? '').toString(),
         ),
       );
     }
@@ -360,34 +375,46 @@ class MessagingService {
               '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                   .trim(),
           role: 'Estudiante',
-          grade: (data['grade'] ?? '').toString(),
+          groupId: (data['groupId'] ?? '').toString(),
+          groupName: (data['groupName'] ?? '').toString(),
           studentContextId: d.id,
           studentContextName:
               '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                   .trim(),
-          studentContextGrade: (data['grade'] ?? '').toString(),
+          studentContextGroupId: (data['groupId'] ?? '').toString(),
+          studentContextGroupName: (data['groupName'] ?? '').toString(),
         ),
       );
     }
 
-    final grades =
+    final groups =
         results[2].docs
-            .map((d) => (d.data()['grade'] ?? '').toString().trim())
-            .where((g) => g.isNotEmpty)
-            .toSet()
+            .map(
+              (d) => (
+                id: (d.data()['groupId'] ?? '').toString().trim(),
+                name: (d.data()['groupName'] ?? '').toString().trim(),
+              ),
+            )
+            .where((group) => group.id.isNotEmpty)
+            .fold(<String, String>{}, (result, group) {
+              result[group.id] = group.name;
+              return result;
+            })
+            .entries
             .toList()
-          ..sort();
+          ..sort((a, b) => a.value.compareTo(b.value));
 
-    for (final grade in grades) {
+    for (final group in groups) {
       out.add(
         MessageContact(
-          id: 'grade_group::$grade',
-          fullName: 'Todos los estudiantes de $grade',
+          id: 'academic_group::${group.key}',
+          fullName: 'Todos los estudiantes de ${group.value}',
           role: 'Grupo',
           isGroup: true,
-          groupType: 'grade_students',
-          targetGrade: grade,
-          grade: grade,
+          groupType: 'academic_group_students',
+          targetGroupId: group.key,
+          groupId: group.key,
+          groupName: group.value,
         ),
       );
     }
@@ -401,23 +428,23 @@ class MessagingService {
   }
 
   Future<List<MessageContact>> _getAdminContacts(userModelv2 user) async {
-    final snap =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: user.institution)
-            .where('campus', isEqualTo: user.campus)
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final snap = await _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: user.institution)
+        .where('campus', isEqualTo: user.campus)
+        .where('status', isEqualTo: 'activo')
+        .get();
 
     final out = <MessageContact>[];
-    final grades = <String>{};
+    final groups = <String, String>{};
     for (final d in snap.docs) {
       if (d.id == user.id) continue;
       final data = d.data();
       final role = (data['role'] ?? '').toString();
-      final grade = (data['grade'] ?? '').toString();
-      if (role == 'Estudiante' && grade.trim().isNotEmpty) {
-        grades.add(grade.trim());
+      final groupId = (data['groupId'] ?? '').toString();
+      final groupName = (data['groupName'] ?? '').toString();
+      if (role == 'Estudiante' && groupId.trim().isNotEmpty) {
+        groups[groupId.trim()] = groupName.trim();
       }
       out.add(
         MessageContact(
@@ -426,29 +453,32 @@ class MessagingService {
               '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                   .trim(),
           role: role,
-          grade: grade,
+          groupId: groupId,
+          groupName: groupName,
           studentContextId: role == 'Estudiante' ? d.id : null,
-          studentContextName:
-              role == 'Estudiante'
-                  ? '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
-                      .trim()
-                  : null,
-          studentContextGrade: role == 'Estudiante' ? grade : null,
+          studentContextName: role == 'Estudiante'
+              ? '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
+                    .trim()
+              : null,
+          studentContextGroupId: role == 'Estudiante' ? groupId : null,
+          studentContextGroupName: role == 'Estudiante' ? groupName : null,
         ),
       );
     }
 
-    final sortedGrades = grades.toList()..sort();
-    for (final grade in sortedGrades) {
+    final sortedGroups = groups.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    for (final group in sortedGroups) {
       out.add(
         MessageContact(
-          id: 'grade_group::$grade',
-          fullName: 'Todos los estudiantes de $grade',
+          id: 'academic_group::${group.key}',
+          fullName: 'Todos los estudiantes de ${group.value}',
           role: 'Grupo',
           isGroup: true,
-          groupType: 'grade_students',
-          targetGrade: grade,
-          grade: grade,
+          groupType: 'academic_group_students',
+          targetGroupId: group.key,
+          groupId: group.key,
+          groupName: group.value,
         ),
       );
     }
@@ -492,18 +522,18 @@ class MessagingService {
     required String campusId,
     required String studentId,
     required String studentName,
-    required String studentGrade,
+    required String studentGroupId,
+    required String studentGroupName,
   }) async {
     final contacts = <String, MessageContact>{};
 
-    final teachers =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Docente')
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final teachers = await _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Docente')
+        .where('status', isEqualTo: 'activo')
+        .get();
     for (final d in teachers.docs) {
       final data = d.data();
       contacts[d.id] = MessageContact(
@@ -512,21 +542,22 @@ class MessagingService {
             '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                 .trim(),
         role: 'Docente',
-        grade: (data['grade'] ?? '').toString(),
+        groupId: (data['groupId'] ?? '').toString(),
+        groupName: (data['groupName'] ?? '').toString(),
         studentContextId: studentId,
         studentContextName: studentName,
-        studentContextGrade: studentGrade,
+        studentContextGroupId: studentGroupId,
+        studentContextGroupName: studentGroupName,
       );
     }
 
-    final admins =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Administrador')
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final admins = await _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Administrador')
+        .where('status', isEqualTo: 'activo')
+        .get();
     for (final d in admins.docs) {
       final data = d.data();
       contacts[d.id] = MessageContact(
@@ -537,20 +568,20 @@ class MessagingService {
         role: 'Administrador',
         studentContextId: studentId,
         studentContextName: studentName,
-        studentContextGrade: studentGrade,
+        studentContextGroupId: studentGroupId,
+        studentContextGroupName: studentGroupName,
       );
     }
 
-    if (studentGrade.trim().isNotEmpty) {
-      final classmates =
-          await _db
-              .collection('users')
-              .where('institution', isEqualTo: institutionId)
-              .where('campus', isEqualTo: campusId)
-              .where('role', isEqualTo: 'Estudiante')
-              .where('status', isEqualTo: 'activo')
-              .where('grade', isEqualTo: studentGrade)
-              .get();
+    if (studentGroupId.trim().isNotEmpty) {
+      final classmates = await _db
+          .collection('user_directory')
+          .where('institution', isEqualTo: institutionId)
+          .where('campus', isEqualTo: campusId)
+          .where('role', isEqualTo: 'Estudiante')
+          .where('status', isEqualTo: 'activo')
+          .where('groupId', isEqualTo: studentGroupId)
+          .get();
       for (final d in classmates.docs) {
         if (d.id == studentId) continue;
         final data = d.data();
@@ -560,10 +591,12 @@ class MessagingService {
               '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                   .trim(),
           role: 'Estudiante',
-          grade: (data['grade'] ?? '').toString(),
+          groupId: (data['groupId'] ?? '').toString(),
+          groupName: (data['groupName'] ?? '').toString(),
           studentContextId: studentId,
           studentContextName: studentName,
-          studentContextGrade: studentGrade,
+          studentContextGroupId: studentGroupId,
+          studentContextGroupName: studentGroupName,
         );
       }
     }
@@ -582,19 +615,21 @@ class MessagingService {
     required userModelv2 recipient,
     String? studentContextId,
     String? studentContextName,
-    String? studentContextGrade,
+    String? studentContextGroupId,
+    String? studentContextGroupName,
   }) async {
-    final snap =
-        await _db
-            .collection(_threadsCol)
-            .where('institutionId', isEqualTo: sender.institution)
-            .where('campusId', isEqualTo: sender.campus)
-            .where('participantIds', arrayContains: sender.id)
-            .get();
+    final snap = await _db
+        .collection(_threadsCol)
+        .where('institutionId', isEqualTo: sender.institution)
+        .where('campusId', isEqualTo: sender.campus)
+        .where('participantIds', arrayContains: sender.id)
+        .get();
 
     for (final d in snap.docs) {
       final data = d.data();
-      final participantIds = List<String>.from(data['participantIds'] ?? const []);
+      final participantIds = List<String>.from(
+        data['participantIds'] ?? const [],
+      );
       if (!participantIds.contains(recipient.id)) continue;
       final currentContext = (data['contextStudentId'] ?? '').toString();
       if (currentContext == (studentContextId ?? '')) {
@@ -609,17 +644,15 @@ class MessagingService {
       'institutionId': sender.institution,
       'campusId': sender.campus,
       'participantIds': [sender.id, recipient.id],
-      'participantNames': {
-        sender.id: senderName,
-        recipient.id: recipientName,
-      },
+      'participantNames': {sender.id: senderName, recipient.id: recipientName},
       'participantRoles': {
         sender.id: sender.role,
         recipient.id: recipient.role,
       },
       'contextStudentId': studentContextId,
       'contextStudentName': studentContextName,
-      'contextStudentGrade': studentContextGrade,
+      'contextStudentGroupId': studentContextGroupId,
+      'contextStudentGroupName': studentContextGroupName,
       'lastMessage': null,
       'lastSenderId': null,
       'lastSenderName': null,
@@ -664,9 +697,9 @@ class MessagingService {
         return true;
       }
       if (recipientRole == 'Estudiante') {
-        final senderGrade = (sender.grade ?? '').trim();
-        final recipientGrade = (recipient.grade ?? '').trim();
-        return senderGrade.isNotEmpty && senderGrade == recipientGrade;
+        final senderGroup = (sender.groupId ?? '').trim();
+        final recipientGroup = (recipient.groupId ?? '').trim();
+        return senderGroup.isNotEmpty && senderGroup == recipientGroup;
       }
       return false;
     }
@@ -686,9 +719,9 @@ class MessagingService {
           campusId: sender.campus,
         );
         if (contextStudent == null) return false;
-        final contextGrade = (contextStudent.grade ?? '').trim();
-        final recipientGrade = (recipient.grade ?? '').trim();
-        return contextGrade.isNotEmpty && contextGrade == recipientGrade;
+        final contextGroup = (contextStudent.groupId ?? '').trim();
+        final recipientGroup = (recipient.groupId ?? '').trim();
+        return contextGroup.isNotEmpty && contextGroup == recipientGroup;
       }
       return false;
     }
@@ -701,7 +734,7 @@ class MessagingService {
     required String institutionId,
     required String campusId,
   }) async {
-    final doc = await _db.collection('users').doc(userId).get();
+    final doc = await _db.collection('user_directory').doc(userId).get();
     if (!doc.exists) return null;
     final data = doc.data()!;
     if ((data['institution'] ?? '').toString() != institutionId) return null;
@@ -710,20 +743,19 @@ class MessagingService {
     return userModelv2.fromFirestore(data, doc.id);
   }
 
-  Future<List<userModelv2>> _getActiveStudentsByGrade({
+  Future<List<userModelv2>> _getActiveStudentsByGroup({
     required String institutionId,
     required String campusId,
-    required String grade,
+    required String groupId,
   }) async {
-    final snap =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Estudiante')
-            .where('status', isEqualTo: 'activo')
-            .where('grade', isEqualTo: grade)
-            .get();
+    final snap = await _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Estudiante')
+        .where('status', isEqualTo: 'activo')
+        .where('groupId', isEqualTo: groupId)
+        .get();
 
     final items =
         snap.docs.map((d) => userModelv2.fromFirestore(d.data(), d.id)).toList()
@@ -740,29 +772,31 @@ class MessagingService {
     required String campusId,
     required String role,
   }) async {
-    final snap =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: role)
-            .where('status', isEqualTo: 'activo')
-            .get();
-    return snap.docs.map((d) => userModelv2.fromFirestore(d.data(), d.id)).toList();
+    final snap = await _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: role)
+        .where('status', isEqualTo: 'activo')
+        .get();
+    return snap.docs
+        .map((d) => userModelv2.fromFirestore(d.data(), d.id))
+        .toList();
   }
 
   Future<List<userModelv2>> _getAllActiveUsers({
     required String institutionId,
     required String campusId,
   }) async {
-    final snap =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('status', isEqualTo: 'activo')
-            .get();
-    return snap.docs.map((d) => userModelv2.fromFirestore(d.data(), d.id)).toList();
+    final snap = await _db
+        .collection('user_directory')
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('status', isEqualTo: 'activo')
+        .get();
+    return snap.docs
+        .map((d) => userModelv2.fromFirestore(d.data(), d.id))
+        .toList();
   }
 
   Future<List<userModelv2>> _resolveGroupRecipients({
@@ -771,20 +805,20 @@ class MessagingService {
   }) async {
     final senderRole = sender.role.trim();
 
-    if (group.groupType == 'grade_students') {
+    if (group.groupType == 'academic_group_students') {
       if (senderRole != 'Docente' && senderRole != 'Administrador') {
         throw Exception(
-          'Solo docentes o administradores pueden enviar a grupos por grado.',
+          'Solo docentes o administradores pueden enviar a grupos acadÃ©micos.',
         );
       }
-      final grade = (group.targetGrade ?? '').trim();
-      if (grade.isEmpty) {
-        throw Exception('Debes seleccionar un grado valido.');
+      final groupId = (group.targetGroupId ?? '').trim();
+      if (groupId.isEmpty) {
+        throw Exception('Debes seleccionar un grupo acadÃ©mico vÃ¡lido.');
       }
-      return _getActiveStudentsByGrade(
+      return _getActiveStudentsByGroup(
         institutionId: sender.institution,
         campusId: sender.campus,
-        grade: grade,
+        groupId: groupId,
       );
     }
 
@@ -828,20 +862,10 @@ class MessagingService {
     required String body,
   }) async {
     try {
-      final tokens = <String>{};
-      for (final user in recipients) {
-        tokens.addAll(user.notificationTokens);
-
-        final doc = await _db.collection('users').doc(user.id).get();
-        final data = doc.data() ?? const <String, dynamic>{};
-        tokens.addAll(extractNotificationTokens(data));
-      }
-
-      if (tokens.isEmpty) return;
-
       final senderName = '${sender.firstName} ${sender.lastName}'.trim();
       await enviarNotificacion(
-        tokens: tokens.toList(),
+        notificationType: 'messaging',
+        userIds: recipients.map((user) => user.id).toList(),
         titulo: 'Nuevo mensaje de $senderName',
         cuerpo: body.length > 120 ? '${body.substring(0, 120)}...' : body,
       );

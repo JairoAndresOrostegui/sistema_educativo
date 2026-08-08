@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../services/file_history_service.dart';
 import '../export/utils/file_export_utils.dart';
 import '../../../providers/user_provider_v2.dart';
+import '../../../models/academic/academic_group.dart';
 
 class GestionDocumentosView extends StatefulWidget {
   const GestionDocumentosView({super.key});
@@ -24,7 +26,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
   String? _campusId;
 
   // Estado filtros
-  String? _gradeSelected;
+  String? _groupSelected;
   DateTimeRange? _rango; // filtro por rango de fechas
   bool _filtrosPendientes = false;
 
@@ -40,7 +42,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
   bool _hasNext = false;
 
   // Grados para el dropdown
-  List<String> _grados = [];
+  List<AcademicGroup> _groups = [];
 
   @override
   void initState() {
@@ -58,25 +60,25 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
         now.year,
         now.month,
         now.day,
-      ).subtract(const Duration(days: 29)),
+      ).subtract(Duration(days: 29)),
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
 
     // Si no hay usuario/tenant aún, no seguimos (evita consultar sin filtros obligatorios)
     if (_institutionId == null || _campusId == null) return;
 
-    _cargarGrados();
+    _cargarGrupos();
     _aplicarFiltros(recargar: true);
   }
 
-  Future<void> _cargarGrados() async {
+  Future<void> _cargarGrupos() async {
     if (_institutionId == null || _campusId == null) return;
-    final list = await _service.obtenerGrados(
+    final list = await _service.obtenerGrupos(
       institutionId: _institutionId!,
       campusId: _campusId!,
     );
     if (!mounted) return;
-    setState(() => _grados = list);
+    setState(() => _groups = list);
   }
 
   Future<void> _aplicarFiltros({bool recargar = false}) async {
@@ -94,7 +96,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
     final res = await _service.obtenerHistorialDocumentos(
       institutionId: _institutionId!,
       campusId: _campusId!,
-      grade: _gradeSelected,
+      groupId: _groupSelected,
       rango: _rango,
       limite: _porPagina,
       startAfter: _cursors[_pageIndex],
@@ -103,7 +105,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
     final total = await _service.contarTotalDocumentos(
       institutionId: _institutionId!,
       campusId: _campusId!,
-      grade: _gradeSelected,
+      groupId: _groupSelected,
       rango: _rango,
     );
 
@@ -151,7 +153,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
             now.year,
             now.month,
             now.day,
-          ).subtract(const Duration(days: 29)),
+          ).subtract(Duration(days: 29)),
           end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
         );
 
@@ -162,15 +164,14 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
       initialDateRange: initial,
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
-      builder:
-          (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: Theme.of(
-                ctx,
-              ).colorScheme.copyWith(primary: Colors.redAccent),
-            ),
-            child: child!,
-          ),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(
+            ctx,
+          ).colorScheme.copyWith(primary: AppPalette.primary),
+        ),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
@@ -216,42 +217,40 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la version web.')),
         ),
       );
     }
     final df = DateFormat('yyyy-MM-dd');
-    final rangoTexto =
-        _rango == null
-            ? ''
-            : '${df.format(_rango!.start)}  -  ${df.format(_rango!.end)}';
+    final rangoTexto = _rango == null
+        ? ''
+        : '${df.format(_rango!.start)}  -  ${df.format(_rango!.end)}';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Resumen
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: AppPalette.surface,
+                  border: Border.all(
+                    color: AppPalette.error.withValues(alpha: .15),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: AppPalette.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
@@ -260,7 +259,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                   child: Text('Total en rango: $_totalEnRango'),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Filtros
               Wrap(
@@ -270,27 +269,27 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                   SizedBox(
                     width: 260,
                     child: DropdownButtonFormField<String?>(
-                      initialValue: _gradeSelected,
+                      initialValue: _groupSelected,
                       items: [
-                        const DropdownMenuItem<String?>(
+                        DropdownMenuItem<String?>(
                           value: null,
-                          child: Text('Todos los grados'),
+                          child: Text('Todos los grupos'),
                         ),
-                        ..._grados.map(
-                          (g) => DropdownMenuItem<String?>(
-                            value: g,
-                            child: Text(g),
+                        ..._groups.map(
+                          (group) => DropdownMenuItem<String?>(
+                            value: group.id,
+                            child: Text(group.name),
                           ),
                         ),
                       ],
                       onChanged: (v) {
                         setState(() {
-                          _gradeSelected = v;
+                          _groupSelected = v;
                           _filtrosPendientes = true;
                         });
                       },
-                      decoration: const InputDecoration(
-                        labelText: 'Grado',
+                      decoration: InputDecoration(
+                        labelText: 'Grupo',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -299,7 +298,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                     width: 280,
                     child: TextFormField(
                       readOnly: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Rango de fechas',
                         border: OutlineInputBorder(),
                       ),
@@ -308,25 +307,25 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.filter_alt),
+                    icon: Icon(Icons.filter_alt),
                     onPressed: () => _aplicarFiltros(recargar: true),
-                    label: const Text('Filtrar'),
+                    label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.surface,
                     ),
                   ),
                   TextButton(
                     onPressed: () {
                       final now = DateTime.now();
                       setState(() {
-                        _gradeSelected = null;
+                        _groupSelected = null;
                         _rango = DateTimeRange(
                           start: DateTime(
                             now.year,
                             now.month,
                             now.day,
-                          ).subtract(const Duration(days: 29)),
+                          ).subtract(Duration(days: 29)),
                           end: DateTime(
                             now.year,
                             now.month,
@@ -341,11 +340,11 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                       });
                       _aplicarFiltros(recargar: true);
                     },
-                    child: const Text('Limpiar'),
+                    child: Text('Limpiar'),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Exportar (solo Web)
               if (kIsWeb && _documentos.isNotEmpty)
@@ -354,68 +353,66 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                   children: [
                     ElevatedButton.icon(
                       onPressed: _exportarExcel,
-                      icon: const Icon(Icons.table_view),
-                      label: const Text('Exportar Excel'),
+                      icon: Icon(Icons.table_view),
+                      label: Text('Exportar Excel'),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _exportarPDF,
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: const Text('Exportar PDF'),
+                      icon: Icon(Icons.picture_as_pdf),
+                      label: Text('Exportar PDF'),
                     ),
                   ],
                 ),
-              if (kIsWeb && _documentos.isNotEmpty) const SizedBox(height: 12),
+              if (kIsWeb && _documentos.isNotEmpty) SizedBox(height: 12),
 
               // Lista
               Expanded(
-                child:
-                    _cargando
-                        ? const Center(child: CircularProgressIndicator())
-                        : _documentos.isEmpty
-                        ? const Center(child: Text('No hay registros'))
-                        : ListView.builder(
-                          itemCount: _documentos.length,
-                          itemBuilder: (_, i) {
-                            final r = _documentos[i];
-                            final fecha = r['fechaSubida'] as DateTime?;
-                            final fechaTexto =
-                                fecha != null
-                                    ? DateFormat(
-                                      'yyyy-MM-dd HH:mm:ss',
-                                    ).format(fecha)
-                                    : '-';
-                            return Semantics(
-                              label: 'Registro de documento subido',
-                              child: Card(
-                                color: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  side: BorderSide(
-                                    color: Colors.red.withValues(alpha: .12),
+                child: _cargando
+                    ? Center(child: CircularProgressIndicator())
+                    : _documentos.isEmpty
+                    ? Center(child: Text('No hay registros'))
+                    : ListView.builder(
+                        itemCount: _documentos.length,
+                        itemBuilder: (_, i) {
+                          final r = _documentos[i];
+                          final fecha = r['fechaSubida'] as DateTime?;
+                          final fechaTexto = fecha != null
+                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                              : '-';
+                          return Semantics(
+                            label: 'Registro de documento subido',
+                            child: Card(
+                              color: AppPalette.surface,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: AppPalette.error.withValues(
+                                    alpha: .12,
                                   ),
-                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: ListTile(
-                                  title: Text('📄 ${r['nombre'] ?? ''}'),
-                                  subtitle: Text(
-                                    'Grado: ${r['grado'] ?? ''}\n'
-                                    'Subido por: ${r['subidoPor'] ?? ''}\n'
-                                    'Fecha: $fechaTexto',
-                                  ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              margin: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: ListTile(
+                                title: Text('📄 ${r['nombre'] ?? ''}'),
+                                subtitle: Text(
+                                  'Grupo: ${r['grupo'] ?? ''}\n'
+                                  'Subido por: ${r['subidoPor'] ?? ''}\n'
+                                  'Fecha: $fechaTexto',
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
+                      ),
               ),
 
               // Paginación
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -423,16 +420,16 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _pageIndex == 0 || _cargando
-                                ? null
-                                : _paginaAnterior,
+                        icon: Icon(Icons.chevron_left),
+                        onPressed: _pageIndex == 0 || _cargando
+                            ? null
+                            : _paginaAnterior,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed:
-                            !_hasNext || _cargando ? null : _siguientePagina,
+                        icon: Icon(Icons.chevron_right),
+                        onPressed: !_hasNext || _cargando
+                            ? null
+                            : _siguientePagina,
                       ),
                     ],
                   ),

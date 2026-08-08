@@ -34,7 +34,7 @@ class StudentDashboardGuard extends StatelessWidget {
         final stillFamiliar = current.role.trim().toLowerCase() == 'familiar';
         final needsActive =
             (current.activeStudentId == null ||
-                current.activeStudentId!.isEmpty);
+            current.activeStudentId!.isEmpty);
         final hasKids = current.studentIds?.isNotEmpty ?? false;
 
         if (stillFamiliar && needsActive && hasKids) {

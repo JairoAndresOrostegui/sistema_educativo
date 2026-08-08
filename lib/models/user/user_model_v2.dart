@@ -20,7 +20,8 @@ class userModelv2 {
   final String? residenceDepartment;
   final String? residenceCity;
   final String role;
-  final String? grade;
+  final String? groupId;
+  final String? groupName;
   final String institution;
   final String campus;
   final bool isSuperadmin;
@@ -53,7 +54,8 @@ class userModelv2 {
     this.residenceDepartment,
     this.residenceCity,
     required this.role,
-    this.grade,
+    this.groupId,
+    this.groupName,
     required this.institution,
     required this.campus,
     required this.isSuperadmin,
@@ -70,10 +72,9 @@ class userModelv2 {
   });
 
   factory userModelv2.fromFirestore(Map<String, dynamic> map, String id) {
-    final notificationTokens =
-        map['notificationTokens'] is Map<String, dynamic>
-            ? map['notificationTokens'] as Map<String, dynamic>
-            : <String, dynamic>{};
+    final notificationTokens = map['notificationTokens'] is Map<String, dynamic>
+        ? map['notificationTokens'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
     return userModelv2(
       id: id,
@@ -84,10 +85,9 @@ class userModelv2 {
       personalEmail: map['personalEmail'] ?? '',
       institutionalEmail: map['institutionalEmail'] ?? '',
       photoUrl: map['photoUrl'],
-      birthDate:
-          map['birthDate'] is Timestamp
-              ? (map['birthDate'] as Timestamp).toDate()
-              : null,
+      birthDate: map['birthDate'] is Timestamp
+          ? (map['birthDate'] as Timestamp).toDate()
+          : null,
       birthCountry: map['birthCountry'],
       birthDepartment: map['birthDepartment'],
       birthCity: map['birthCity'],
@@ -96,7 +96,8 @@ class userModelv2 {
       residenceDepartment: map['residenceDepartment'],
       residenceCity: map['residenceCity'],
       role: map['role'] ?? '',
-      grade: map['grade'],
+      groupId: map['groupId'],
+      groupName: map['groupName'],
       institution: map['institution'] ?? '',
       campus: map['campus'] ?? '',
       isSuperadmin: map['isSuperadmin'] ?? false,
@@ -106,10 +107,9 @@ class userModelv2 {
       webPushToken: notificationTokens['web']?.toString(),
       mobilePushToken: notificationTokens['mobile']?.toString(),
       familyRelation: map['familyRelation'],
-      studentIds:
-          map['studentIds'] != null
-              ? List<String>.from(map['studentIds'])
-              : null,
+      studentIds: map['studentIds'] != null
+          ? List<String>.from(map['studentIds'])
+          : null,
       activeStudentId: map['activeStudentId'],
       qrPayload: map['qrPayload'],
       qrEnabled: map['qrEnabled'] ?? false,
@@ -143,7 +143,8 @@ class userModelv2 {
       'residenceDepartment': residenceDepartment,
       'residenceCity': residenceCity,
       'role': role,
-      'grade': grade,
+      'groupId': groupId,
+      'groupName': groupName,
       'institution': institution,
       'campus': campus,
       'isSuperadmin': isSuperadmin,
@@ -189,7 +190,8 @@ class userModelv2 {
     String? residenceDepartment,
     String? residenceCity,
     String? role,
-    String? grade,
+    String? groupId,
+    String? groupName,
     String? institution,
     String? campus,
     bool? isSuperadmin,
@@ -222,7 +224,8 @@ class userModelv2 {
       residenceDepartment: residenceDepartment ?? this.residenceDepartment,
       residenceCity: residenceCity ?? this.residenceCity,
       role: role ?? this.role,
-      grade: grade ?? this.grade,
+      groupId: groupId ?? this.groupId,
+      groupName: groupName ?? this.groupName,
       institution: institution ?? this.institution,
       campus: campus ?? this.campus,
       isSuperadmin: isSuperadmin ?? this.isSuperadmin,

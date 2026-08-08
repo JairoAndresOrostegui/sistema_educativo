@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -125,7 +126,7 @@ class WebsitePreviewCanvas extends StatelessWidget {
     );
     if (!editorMode) {
       return Scaffold(
-        backgroundColor: const Color(0xFFFAF8F5),
+        backgroundColor: AppPalette.surface,
         body: SelectionArea(
           child: CustomScrollView(
             slivers: [
@@ -142,7 +143,7 @@ class WebsitePreviewCanvas extends StatelessWidget {
       );
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF8F5),
+      backgroundColor: AppPalette.surface,
       body: SelectionArea(
         child: Column(
           children: [
@@ -150,7 +151,7 @@ class WebsitePreviewCanvas extends StatelessWidget {
             Expanded(
               child: ReorderableListView(
                 buildDefaultDragHandles: true,
-                onReorder: onReorder!,
+                onReorderItem: onReorder!,
                 children: content,
               ),
             ),
@@ -184,7 +185,7 @@ class WebsiteHeader extends StatelessWidget {
     final navigation = config.navigation.where((item) => item.enabled).toList();
     return Material(
       elevation: 2,
-      color: Colors.white,
+      color: AppPalette.surface,
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 14 : 42,
@@ -231,14 +232,13 @@ class WebsiteHeader extends StatelessWidget {
                 tooltip: 'Navegación',
                 icon: const Icon(Icons.menu),
                 onSelected: (slug) => _go(context, '/$slug'),
-                itemBuilder:
-                    (context) => [
-                      for (final item in navigation)
-                        PopupMenuItem(
-                          value: item.resolvedSlug,
-                          child: Text(item.label),
-                        ),
-                    ],
+                itemBuilder: (context) => [
+                  for (final item in navigation)
+                    PopupMenuItem(
+                      value: item.resolvedSlug,
+                      child: Text(item.label),
+                    ),
+                ],
               )
             else
               for (final item in navigation)
@@ -281,7 +281,7 @@ class WebsiteBlockView extends StatelessWidget {
     final padding = (mobile ? block.mobilePadding : block.padding).toDouble();
     final background = websiteHexColor(
       block.backgroundColor,
-      fallback: const Color(0xFFFAF8F5),
+      fallback: AppPalette.surface,
     );
     final maxWidth = switch (block.contentWidth) {
       'narrow' => 720.0,
@@ -330,7 +330,7 @@ class WebsiteBlockView extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           WebsiteImage(asset: block.image, fit: _fit),
-          ColoredBox(color: Colors.black.withValues(alpha: .52)),
+          ColoredBox(color: AppPalette.onSurface.withValues(alpha: .52)),
           Align(
             alignment: _alignment,
             child: Padding(
@@ -362,25 +362,24 @@ class WebsiteBlockView extends StatelessWidget {
     final imageFirst = position != 'right';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
-      children:
-          imageFirst
-              ? [
-                Expanded(child: image),
-                const SizedBox(width: 34),
-                Expanded(child: copy),
-              ]
-              : [
-                Expanded(child: copy),
-                const SizedBox(width: 34),
-                Expanded(child: image),
-              ],
+      children: imageFirst
+          ? [
+              Expanded(child: image),
+              const SizedBox(width: 34),
+              Expanded(child: copy),
+            ]
+          : [
+              Expanded(child: copy),
+              const SizedBox(width: 34),
+              Expanded(child: image),
+            ],
     );
   }
 
   Widget _copy(BuildContext context, {bool hero = false}) {
     final color = websiteHexColor(
       block.textColor,
-      fallback: hero ? Colors.white : const Color(0xFF212121),
+      fallback: hero ? AppPalette.surface : AppPalette.onSurface,
     );
     final align = websiteTextAlign(block.textAlignment);
     final cross = websiteCrossAxisAlignment(block.textAlignment);
@@ -402,8 +401,8 @@ class WebsiteBlockView extends StatelessWidget {
             textAlign: align,
             style: websiteTextStyle(
               block.fontFamily,
-              fontSize:
-                  (mobile ? block.mobileTitleSize : block.titleSize).toDouble(),
+              fontSize: (mobile ? block.mobileTitleSize : block.titleSize)
+                  .toDouble(),
               height: 1.12,
               fontWeight: FontWeight.w800,
               color: color,
@@ -416,8 +415,8 @@ class WebsiteBlockView extends StatelessWidget {
             textAlign: align,
             style: websiteTextStyle(
               block.fontFamily,
-              fontSize:
-                  (mobile ? block.mobileBodySize : block.bodySize).toDouble(),
+              fontSize: (mobile ? block.mobileBodySize : block.bodySize)
+                  .toDouble(),
               height: 1.55,
               color: color.withValues(alpha: .92),
             ),
@@ -426,10 +425,9 @@ class WebsiteBlockView extends StatelessWidget {
         if (block.buttonLabel.isNotEmpty && block.buttonUrl.isNotEmpty) ...[
           const SizedBox(height: 22),
           FilledButton(
-            onPressed:
-                preview
-                    ? null
-                    : () => openWebsiteLink(context, block.buttonUrl),
+            onPressed: preview
+                ? null
+                : () => openWebsiteLink(context, block.buttonUrl),
             style: FilledButton.styleFrom(
               backgroundColor: websiteHexColor(block.accentColor),
             ),
@@ -453,10 +451,9 @@ class WebsiteBlockView extends StatelessWidget {
   Widget _button(BuildContext context) => Align(
     alignment: _alignment,
     child: FilledButton(
-      onPressed:
-          preview || block.buttonUrl.isEmpty
-              ? null
-              : () => openWebsiteLink(context, block.buttonUrl),
+      onPressed: preview || block.buttonUrl.isEmpty
+          ? null
+          : () => openWebsiteLink(context, block.buttonUrl),
       style: FilledButton.styleFrom(
         backgroundColor: websiteHexColor(block.accentColor),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
@@ -585,24 +582,21 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
             labelText: 'Mensaje',
             border: OutlineInputBorder(),
           ),
-          validator:
-              (value) =>
-                  value == null || value.trim().length < 5
-                      ? 'Escribe un mensaje.'
-                      : null,
+          validator: (value) => value == null || value.trim().length < 5
+              ? 'Escribe un mensaje.'
+              : null,
         ),
         Offstage(offstage: true, child: TextFormField(controller: _website)),
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: widget.preview || _sending ? null : _submit,
-          icon:
-              _sending
-                  ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Icon(Icons.send_outlined),
+          icon: _sending
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_outlined),
           label: const Text('Enviar mensaje'),
         ),
       ],
@@ -621,13 +615,11 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
         labelText: label,
         border: const OutlineInputBorder(),
       ),
-      validator:
-          required
-              ? (value) =>
-                  value == null || value.trim().isEmpty
-                      ? 'Campo obligatorio.'
-                      : null
-              : null,
+      validator: required
+          ? (value) => value == null || value.trim().isEmpty
+                ? 'Campo obligatorio.'
+                : null
+          : null,
     ),
   );
 }
@@ -676,14 +668,18 @@ class WebsiteFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final footer = config.footer;
-    final textColor = websiteHexColor(footer.textColor, fallback: Colors.white);
+    final textColor = websiteHexColor(
+      footer.textColor,
+      fallback: AppPalette.surface,
+    );
     final secondaryColor = websiteHexColor(
       footer.secondaryTextColor,
-      fallback: Colors.white70,
+      fallback: AppPalette.onPrimary.withValues(alpha: .70),
     );
     final accentColor = websiteHexColor(footer.accentColor);
-    final font =
-        footer.fontFamily.isEmpty ? config.fontFamily : footer.fontFamily;
+    final font = footer.fontFamily.isEmpty
+        ? config.fontFamily
+        : footer.fontFamily;
     final alignment = switch (footer.alignment) {
       'center' => CrossAxisAlignment.center,
       'right' => CrossAxisAlignment.end,
@@ -699,8 +695,9 @@ class WebsiteFooter extends StatelessWidget {
     final email = footer.useGlobalContact ? config.email : footer.email;
     final logo = footer.useSiteLogo ? config.logo : footer.logo;
     final title = footer.title.isEmpty ? config.schoolName : footer.title;
-    final description =
-        footer.description.isEmpty ? config.tagline : footer.description;
+    final description = footer.description.isEmpty
+        ? config.tagline
+        : footer.description;
     final navigation = config.navigation.where((item) => item.enabled).toList();
 
     Widget identity = SizedBox(
@@ -778,8 +775,9 @@ class WebsiteFooter extends StatelessWidget {
             _heading(footer.linksTitle, font, textColor, textAlign),
           for (final item in navigation)
             TextButton(
-              onPressed:
-                  preview ? null : () => context.go('/${item.resolvedSlug}'),
+              onPressed: preview
+                  ? null
+                  : () => context.go('/${item.resolvedSlug}'),
               style: TextButton.styleFrom(
                 foregroundColor: textColor,
                 padding: const EdgeInsets.symmetric(vertical: 5),
@@ -795,32 +793,30 @@ class WebsiteFooter extends StatelessWidget {
       if (footer.showContact) contact,
       if (footer.showNavigation) links,
     ];
-    final content =
-        footer.layout == 'centered'
-            ? Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                for (var i = 0; i < sections.length; i++) ...[
-                  sections[i],
-                  if (i < sections.length - 1) const SizedBox(height: 28),
-                ],
+    final content = footer.layout == 'centered'
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              for (var i = 0; i < sections.length; i++) ...[
+                sections[i],
+                if (i < sections.length - 1) const SizedBox(height: 28),
               ],
-            )
-            : Wrap(
-              spacing: 50,
-              runSpacing: 28,
-              alignment: WrapAlignment.spaceBetween,
-              children: sections,
-            );
+            ],
+          )
+        : Wrap(
+            spacing: 50,
+            runSpacing: 28,
+            alignment: WrapAlignment.spaceBetween,
+            children: sections,
+          );
 
-    final copyright =
-        footer.copyrightText.isEmpty
-            ? '© ${DateTime.now().year} ${config.schoolName}'
-            : footer.copyrightText;
+    final copyright = footer.copyrightText.isEmpty
+        ? '© ${DateTime.now().year} ${config.schoolName}'
+        : footer.copyrightText;
     return ColoredBox(
       color: websiteHexColor(
         footer.backgroundColor,
-        fallback: const Color(0xFF25090A),
+        fallback: AppPalette.primary,
       ),
       child: Center(
         child: ConstrainedBox(
@@ -938,9 +934,13 @@ class WebsiteImage extends StatelessWidget {
   Widget _placeholder() => Container(
     width: width,
     height: height,
-    color: const Color(0xFFE9E1DC),
-    child: const Center(
-      child: Icon(Icons.image_outlined, size: 48, color: Colors.black38),
+    color: AppPalette.surfaceContainer,
+    child: Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 48,
+        color: AppPalette.onSurface.withValues(alpha: .38),
+      ),
     ),
   );
 }
@@ -967,7 +967,7 @@ class _EditableBlockFrame extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? Colors.blue : Colors.transparent,
+            color: selected ? AppPalette.info : AppPalette.transparent,
             width: selected ? 3 : 1,
           ),
         ),
@@ -994,14 +994,13 @@ List<WebsiteBlock> _orderedVisibleBlocks(
   List<WebsiteBlock> blocks,
   bool mobile,
 ) {
-  final visible =
-      blocks
-          .where(
-            (block) =>
-                block.enabled &&
-                (mobile ? block.showOnMobile : block.showOnDesktop),
-          )
-          .toList();
+  final visible = blocks
+      .where(
+        (block) =>
+            block.enabled &&
+            (mobile ? block.showOnMobile : block.showOnDesktop),
+      )
+      .toList();
   if (mobile) visible.sort((a, b) => a.mobileOrder.compareTo(b.mobileOrder));
   return visible;
 }
@@ -1044,14 +1043,11 @@ TextStyle websiteTextStyle(
   );
 }
 
-Color websiteHexColor(
-  String value, {
-  Color fallback = const Color(0xFFB71C1C),
-}) {
+Color websiteHexColor(String value, {Color? fallback}) {
   final clean = value.replaceAll('#', '').trim();
   final parsed = int.tryParse(clean, radix: 16);
   return parsed == null || clean.length != 6
-      ? fallback
+      ? fallback ?? AppPalette.primary
       : Color(0xFF000000 | parsed);
 }
 

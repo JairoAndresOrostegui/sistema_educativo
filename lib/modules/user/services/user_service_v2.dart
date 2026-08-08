@@ -3,6 +3,50 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../models/user/user_model_v2.dart';
 
+class UserDeletionImpactItem {
+  final String key;
+  final String label;
+  final int count;
+  final String action;
+
+  const UserDeletionImpactItem({
+    required this.key,
+    required this.label,
+    required this.count,
+    required this.action,
+  });
+
+  factory UserDeletionImpactItem.fromMap(Map<String, dynamic> map) {
+    return UserDeletionImpactItem(
+      key: (map['key'] ?? '').toString(),
+      label: (map['label'] ?? '').toString(),
+      count: (map['count'] as num?)?.toInt() ?? 0,
+      action: (map['action'] ?? '').toString(),
+    );
+  }
+}
+
+class UserDeletionImpact {
+  final int linkedRecords;
+  final List<UserDeletionImpactItem> items;
+
+  const UserDeletionImpact({required this.linkedRecords, required this.items});
+
+  factory UserDeletionImpact.fromMap(Map<String, dynamic> map) {
+    final rawItems = map['impact'] as List<dynamic>? ?? const [];
+    return UserDeletionImpact(
+      linkedRecords: (map['linkedRecords'] as num?)?.toInt() ?? 0,
+      items: rawItems
+          .whereType<Map>()
+          .map(
+            (item) =>
+                UserDeletionImpactItem.fromMap(Map<String, dynamic>.from(item)),
+          )
+          .toList(),
+    );
+  }
+}
+
 class UserServiceV2 {
   final _db = FirebaseFirestore.instance;
 
@@ -10,13 +54,16 @@ class UserServiceV2 {
   Future<List<userModelv2>> obtenerTodos({
     required String institutionId,
     required String campusId,
+    bool isSuperadmin = false,
   }) async {
-    final snapshot =
-        await _db
-            .collection('users')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .get();
+    Query<Map<String, dynamic>> query = _db.collection('users');
+    if (!isSuperadmin) {
+      query = query
+          .where('institution', isEqualTo: institutionId)
+          .where('campus', isEqualTo: campusId)
+          .where('status', whereIn: const ['activo', 'inactivo']);
+    }
+    final snapshot = await query.get();
 
     return snapshot.docs
         .map((doc) => userModelv2.fromFirestore(doc.data(), doc.id))
@@ -29,14 +76,13 @@ class UserServiceV2 {
     required String institutionId,
     required String campusId,
   }) async {
-    final doc =
-        await _db
-            .collection('users')
-            .where(FieldPath.documentId, isEqualTo: uid)
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .limit(1)
-            .get();
+    final doc = await _db
+        .collection('users')
+        .where(FieldPath.documentId, isEqualTo: uid)
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .limit(1)
+        .get();
 
     if (doc.docs.isEmpty) return null;
     return userModelv2.fromFirestore(doc.docs.first.data(), doc.docs.first.id);
@@ -47,10 +93,16 @@ class UserServiceV2 {
     if (usuario.id.trim().isEmpty) {
       throw Exception('El ID del usuario no puede estar vacio');
     }
-    await _db
-        .collection('users')
-        .doc(usuario.id)
-        .set(usuario.toMap(), SetOptions(merge: true));
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'actualizarUsuarioDesdeAdmin',
+    );
+    final result = await callable.call({
+      'uid': usuario.id,
+      'profile': usuario.toMap(),
+    });
+    if (result.data['success'] != true) {
+      throw Exception('No se pudo actualizar el usuario');
+    }
   }
 
   /// Generar un nuevo UID local (no para Auth, solo ID de Firestore)
@@ -61,6 +113,7 @@ class UserServiceV2 {
 
   /// Crear usuario en Firebase Auth via Cloud Function
   Future<String> crearUsuarioDesdeAdmin({
+    required userModelv2 usuario,
     required String email,
     required String password,
     required String nombres,
@@ -78,6 +131,7 @@ class UserServiceV2 {
       'apellidos': apellidos,
       'rol': rol,
       'documento': documento,
+      'profile': usuario.toMap(),
     });
 
     if (result.data['exito'] != true) {
@@ -87,22 +141,47 @@ class UserServiceV2 {
     return result.data['uid'];
   }
 
-  /// Eliminar usuario de Firebase Auth via Cloud Function
-  Future<void> eliminarUsuarioAuth(String uid) async {
+  Future<UserDeletionImpact> obtenerImpactoEliminacion(String uid) async {
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'obtenerImpactoEliminacionUsuario',
+    );
+    final result = await callable.call({'uid': uid});
+    return UserDeletionImpact.fromMap(
+      Map<String, dynamic>.from(result.data as Map),
+    );
+  }
+
+  /// Desactiva, retira del listado o elimina definitivamente al usuario.
+  Future<void> eliminarUsuarioAuth(String uid, {required String mode}) async {
     final callable = FirebaseFunctions.instance.httpsCallable(
       'eliminarUsuarioAuth',
     );
-    final result = await callable.call({'uid': uid});
+    final result = await callable.call({
+      'uid': uid,
+      'mode': mode,
+      if (mode == 'permanent') 'confirmation': 'ELIMINAR $uid',
+    });
 
     if (result.data['success'] != true) {
       throw Exception('No se pudo eliminar el usuario en Auth');
     }
   }
 
-  /// Eliminar usuario completamente del sistema (Auth + Firestore)
-  Future<void> eliminar(userModelv2 usuario) async {
-    await eliminarUsuarioAuth(usuario.id);
-    await _db.collection('users').doc(usuario.id).delete();
+  Future<void> eliminar(userModelv2 usuario, {required String mode}) async {
+    await eliminarUsuarioAuth(usuario.id, mode: mode);
+  }
+
+  Future<void> actualizarEstado({
+    required String uid,
+    required String status,
+  }) async {
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'actualizarEstadoUsuario',
+    );
+    final result = await callable.call({'uid': uid, 'status': status});
+    if (result.data['success'] != true) {
+      throw Exception('No se pudo actualizar el estado del usuario');
+    }
   }
 
   Future<void> actualizarQr({
@@ -122,16 +201,12 @@ class UserServiceV2 {
     required String accion,
     required String realizadoPor,
   }) async {
-    await _db.collection('user_history').add({
-      'usuarioId': usuario.id,
-      'nombres': usuario.firstName,
-      'apellidos': usuario.lastName,
-      'rol': usuario.role,
-      'accion': accion,
-      'realizadoPor': realizadoPor,
-      'institution': usuario.institution,
-      'campus': usuario.campus,
-      'fecha': FieldValue.serverTimestamp(),
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'registrarAuditoria',
+    );
+    await callable.call({
+      'type': 'user_history',
+      'payload': {'userId': usuario.id, 'action': accion},
     });
   }
 
@@ -139,12 +214,11 @@ class UserServiceV2 {
 
   Future<bool> existeCorreoPersonal(String email, {String? excluirId}) async {
     final normalizedEmail = email.trim().toLowerCase();
-    final snap =
-        await _db
-            .collection('users')
-            .where('personalEmail', isEqualTo: normalizedEmail)
-            .limit(5)
-            .get();
+    final snap = await _db
+        .collection('users')
+        .where('personalEmail', isEqualTo: normalizedEmail)
+        .limit(5)
+        .get();
 
     if (snap.docs.isEmpty) return false;
     if (excluirId == null) return true;
@@ -156,12 +230,11 @@ class UserServiceV2 {
     String? excluirId,
   }) async {
     final normalizedEmail = email.trim().toLowerCase();
-    final snap =
-        await _db
-            .collection('users')
-            .where('institutionalEmail', isEqualTo: normalizedEmail)
-            .limit(5)
-            .get();
+    final snap = await _db
+        .collection('users')
+        .where('institutionalEmail', isEqualTo: normalizedEmail)
+        .limit(5)
+        .get();
 
     if (snap.docs.isEmpty) return false;
     if (excluirId == null) return true;
@@ -169,12 +242,11 @@ class UserServiceV2 {
   }
 
   Future<bool> existeDocumento(String documento, {String? excluirId}) async {
-    final snap =
-        await _db
-            .collection('users')
-            .where('document', isEqualTo: documento.trim())
-            .limit(5)
-            .get();
+    final snap = await _db
+        .collection('users')
+        .where('document', isEqualTo: documento.trim())
+        .limit(5)
+        .get();
 
     if (snap.docs.isEmpty) return false;
     if (excluirId == null) return true;

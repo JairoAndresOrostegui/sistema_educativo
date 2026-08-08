@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -35,8 +36,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
   bool get _hasMessagingPermission {
     final perms =
         _logged?.permissions.map((e) => e.trim().toLowerCase()).toSet() ?? {};
-    return (_logged?.isSuperadmin ?? false) ||
-        perms.contains('mensajeria.ver');
+    return (_logged?.isSuperadmin ?? false) || perms.contains('mensajeria.ver');
   }
 
   bool get _canUseModule {
@@ -145,11 +145,14 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
     if (picked == null) return;
 
-    final existing = threads.where((t) {
-      final peerId = t.peerIdFor(_logged!.id);
-      return peerId == picked.id &&
-          (t.contextStudentId ?? '') == (picked.studentContextId ?? '');
-    }).cast<MessageThreadSummary?>().firstWhere((e) => e != null, orElse: () => null);
+    final existing = threads
+        .where((t) {
+          final peerId = t.peerIdFor(_logged!.id);
+          return peerId == picked.id &&
+              (t.contextStudentId ?? '') == (picked.studentContextId ?? '');
+        })
+        .cast<MessageThreadSummary?>()
+        .firstWhere((e) => e != null, orElse: () => null);
 
     setState(() {
       _selectedThreadId = existing?.id;
@@ -200,11 +203,16 @@ class _MessagingScreenState extends State<MessagingScreen> {
         return;
       }
 
-      final threadContextId = activeThread?.contextStudentId ?? _draftContact?.studentContextId;
+      final threadContextId =
+          activeThread?.contextStudentId ?? _draftContact?.studentContextId;
       final threadContextName =
           activeThread?.contextStudentName ?? _draftContact?.studentContextName;
-      final threadContextGrade =
-          activeThread?.contextStudentGrade ?? _draftContact?.studentContextGrade;
+      final threadContextGroupId =
+          activeThread?.contextStudentGroupId ??
+          _draftContact?.studentContextGroupId;
+      final threadContextGroupName =
+          activeThread?.contextStudentGroupName ??
+          _draftContact?.studentContextGroupName;
 
       final newThreadId = await _svc.sendMessage(
         sender: user,
@@ -213,7 +221,8 @@ class _MessagingScreenState extends State<MessagingScreen> {
         body: text,
         studentContextId: threadContextId,
         studentContextName: threadContextName,
-        studentContextGrade: threadContextGrade,
+        studentContextGroupId: threadContextGroupId,
+        studentContextGroupName: threadContextGroupName,
       );
 
       _messageCtrl.clear();
@@ -239,23 +248,25 @@ class _MessagingScreenState extends State<MessagingScreen> {
     return DateFormat('yyyy-MM-dd HH:mm').format(value);
   }
 
-  MessageThreadSummary? _resolveActiveThread(List<MessageThreadSummary> threads) {
+  MessageThreadSummary? _resolveActiveThread(
+    List<MessageThreadSummary> threads,
+  ) {
     if (_selectedThreadId == null) return null;
-    return threads.where((t) => t.id == _selectedThreadId).cast<MessageThreadSummary?>().firstWhere(
-      (t) => t != null,
-      orElse: () => null,
-    );
+    return threads
+        .where((t) => t.id == _selectedThreadId)
+        .cast<MessageThreadSummary?>()
+        .firstWhere((t) => t != null, orElse: () => null);
   }
 
   String _subtitleForThread(MessageThreadSummary thread, String currentUserId) {
     final contextName = thread.contextStudentName;
-    final contextGrade = thread.contextStudentGrade;
+    final contextGroupName = thread.contextStudentGroupName;
     final peerRole = thread.peerRoleFor(currentUserId);
 
     if ((contextName ?? '').trim().isNotEmpty) {
-      final gradeText = (contextGrade ?? '').trim();
-      if (gradeText.isNotEmpty) {
-        return '$peerRole • $contextName • $gradeText';
+      final groupText = (contextGroupName ?? '').trim();
+      if (groupText.isNotEmpty) {
+        return '$peerRole • $contextName • $groupText';
       }
       return '$peerRole • $contextName';
     }
@@ -266,15 +277,17 @@ class _MessagingScreenState extends State<MessagingScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<UserProviderV2>().user;
     if (session == null) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(child: Center(child: Text('No hay sesión activa.'))),
       );
     }
 
     if (_loading) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
-          child: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
+          child: Center(
+            child: CircularProgressIndicator(color: AppPalette.primary),
+          ),
         ),
       );
     }
@@ -282,14 +295,14 @@ class _MessagingScreenState extends State<MessagingScreen> {
     if (!_canUseModule) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Mensajería'),
-          leading: const BackToDashboardButton(),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.redAccent,
+          title: Text('Mensajería'),
+          leading: BackToDashboardButton(),
+          backgroundColor: AppPalette.surface,
+          foregroundColor: AppPalette.primary,
           centerTitle: true,
         ),
-        backgroundColor: Colors.white,
-        body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
+        backgroundColor: AppPalette.surface,
+        body: SafeArea(child: Center(child: Text('Acceso denegado.'))),
       );
     }
 
@@ -300,32 +313,31 @@ class _MessagingScreenState extends State<MessagingScreen> {
         userId: session.id,
       ),
       builder: (context, snapshot) {
-        final threads = snapshot.data ?? const <MessageThreadSummary>[];
+        final threads = snapshot.data ?? <MessageThreadSummary>[];
         final activeThread = _resolveActiveThread(threads);
-        final currentTitle =
-            activeThread != null
-                ? activeThread.peerNameFor(session.id)
-                : _draftContact?.fullName ?? 'Selecciona una conversación';
+        final currentTitle = activeThread != null
+            ? activeThread.peerNameFor(session.id)
+            : _draftContact?.fullName ?? 'Selecciona una conversación';
 
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: AppPalette.surface,
           appBar: AppBar(
-            title: const Text('Mensajería'),
-            leading: const BackToDashboardButton(),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.redAccent,
+            title: Text('Mensajería'),
+            leading: BackToDashboardButton(),
+            backgroundColor: AppPalette.surface,
+            foregroundColor: AppPalette.primary,
             centerTitle: true,
             actions: [
               IconButton(
                 onPressed: () => _onNewMessage(threads),
-                icon: const Icon(Icons.edit_square),
+                icon: Icon(Icons.edit_square),
                 tooltip: 'Nuevo mensaje',
               ),
             ],
           ),
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: Column(
                 children: [
                   if (_isFamily && _children.isNotEmpty) ...[
@@ -334,20 +346,22 @@ class _MessagingScreenState extends State<MessagingScreen> {
                       activeStudentId: _activeStudentId,
                       onChanged: _onStudentChanged,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                   ],
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                      color: AppPalette.surface,
+                      border: Border.all(
+                        color: AppPalette.error.withValues(alpha: .15),
+                      ),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: .03),
+                          color: AppPalette.onSurface.withValues(alpha: .03),
                           blurRadius: 8,
-                          offset: const Offset(0, 2),
+                          offset: Offset(0, 2),
                         ),
                       ],
                     ),
@@ -361,7 +375,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                           ),
                         ),
                         if (_loadingContacts)
-                          const SizedBox(
+                          SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
@@ -369,7 +383,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -383,11 +397,12 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                   threads: threads,
                                   currentUserId: session.id,
                                   selectedThreadId: activeThread?.id,
-                                  subtitleBuilder: (t) => _subtitleForThread(t, session.id),
+                                  subtitleBuilder: (t) =>
+                                      _subtitleForThread(t, session.id),
                                   onTap: _onSelectThread,
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              SizedBox(width: 12),
                               Expanded(
                                 child: _ChatPane(
                                   thread: activeThread,
@@ -395,7 +410,9 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                   currentUserId: session.id,
                                   messageCtrl: _messageCtrl,
                                   sending: _sending,
-                                  stream: activeThread == null ? null : _svc.watchMessages(activeThread.id),
+                                  stream: activeThread == null
+                                      ? null
+                                      : _svc.watchMessages(activeThread.id),
                                   formatDate: _formatDate,
                                   onSend: () => _sendMessage(activeThread),
                                 ),
@@ -412,11 +429,12 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                 threads: threads,
                                 currentUserId: session.id,
                                 selectedThreadId: activeThread?.id,
-                                subtitleBuilder: (t) => _subtitleForThread(t, session.id),
+                                subtitleBuilder: (t) =>
+                                    _subtitleForThread(t, session.id),
                                 onTap: _onSelectThread,
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: 12),
                             Expanded(
                               child: _ChatPane(
                                 thread: activeThread,
@@ -424,7 +442,9 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                 currentUserId: session.id,
                                 messageCtrl: _messageCtrl,
                                 sending: _sending,
-                                stream: activeThread == null ? null : _svc.watchMessages(activeThread.id),
+                                stream: activeThread == null
+                                    ? null
+                                    : _svc.watchMessages(activeThread.id),
                                 formatDate: _formatDate,
                                 onSend: () => _sendMessage(activeThread),
                               ),
@@ -460,22 +480,25 @@ class _FamilyChildSelector extends StatelessWidget {
     return Align(
       alignment: Alignment.center,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: BoxConstraints(maxWidth: 520),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red.withValues(alpha: .15)),
+            border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [Colors.red.withValues(alpha: .06), Colors.white],
+              colors: [
+                AppPalette.error.withValues(alpha: .06),
+                AppPalette.surface,
+              ],
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
+                color: AppPalette.onSurface.withValues(alpha: 0.03),
                 blurRadius: 6,
-                offset: const Offset(0, 2),
+                offset: Offset(0, 2),
               ),
             ],
           ),
@@ -483,16 +506,15 @@ class _FamilyChildSelector extends StatelessWidget {
             child: DropdownButton<String>(
               value: activeStudentId,
               isExpanded: true,
-              hint: const Text('Estudiante'),
-              items:
-                  children
-                      .map(
-                        (e) => DropdownMenuItem<String>(
-                          value: e.id,
-                          child: Text('${e.fullName} • ${e.grade}'),
-                        ),
-                      )
-                      .toList(),
+              hint: Text('Estudiante'),
+              items: children
+                  .map(
+                    (e) => DropdownMenuItem<String>(
+                      value: e.id,
+                      child: Text('${e.fullName} • ${e.groupName}'),
+                    ),
+                  )
+                  .toList(),
               onChanged: (v) {
                 if (v != null) onChanged(v);
               },
@@ -524,57 +546,58 @@ class _ThreadsPane extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withValues(alpha: .12)),
+        border: Border.all(color: AppPalette.error.withValues(alpha: .12)),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .04), Colors.white],
+          colors: [AppPalette.error.withValues(alpha: .04), AppPalette.surface],
         ),
       ),
-      child:
-          threads.isEmpty
-              ? const Center(child: Text('No hay conversaciones'))
-              : ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: threads.length,
-                itemBuilder: (_, i) {
-                  final thread = threads[i];
-                  final selected = thread.id == selectedThreadId;
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color:
-                            selected
-                                ? Colors.redAccent
-                                : Colors.red.withValues(alpha: .10),
-                      ),
-                      color:
-                          selected
-                              ? Colors.red.withValues(alpha: .08)
-                              : Colors.transparent,
+      child: threads.isEmpty
+          ? Center(child: Text('No hay conversaciones'))
+          : ListView.builder(
+              padding: EdgeInsets.all(8),
+              itemCount: threads.length,
+              itemBuilder: (_, i) {
+                final thread = threads[i];
+                final selected = thread.id == selectedThreadId;
+                return Container(
+                  margin: EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: selected
+                          ? AppPalette.primary
+                          : AppPalette.error.withValues(alpha: .10),
                     ),
-                    child: ListTile(
-                      onTap: () => onTap(thread),
-                      leading: const Icon(Icons.chat_bubble_outline, color: Colors.redAccent),
-                      title: Text(
-                        thread.peerNameFor(currentUserId),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        [
-                          subtitleBuilder(thread),
-                          if ((thread.lastMessage ?? '').trim().isNotEmpty) thread.lastMessage!,
-                        ].where((e) => e.trim().isNotEmpty).join('\n'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    color: selected
+                        ? AppPalette.error.withValues(alpha: .08)
+                        : AppPalette.transparent,
+                  ),
+                  child: ListTile(
+                    onTap: () => onTap(thread),
+                    leading: Icon(
+                      Icons.chat_bubble_outline,
+                      color: AppPalette.primary,
                     ),
-                  );
-                },
-              ),
+                    title: Text(
+                      thread.peerNameFor(currentUserId),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      [
+                        subtitleBuilder(thread),
+                        if ((thread.lastMessage ?? '').trim().isNotEmpty)
+                          thread.lastMessage!,
+                      ].where((e) => e.trim().isNotEmpty).join('\n'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -604,31 +627,37 @@ class _ChatPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = thread?.peerNameFor(currentUserId) ?? draftContact?.fullName;
     final subtitle = [
-      if ((thread?.peerRoleFor(currentUserId) ?? draftContact?.role ?? '').trim().isNotEmpty)
+      if ((thread?.peerRoleFor(currentUserId) ?? draftContact?.role ?? '')
+          .trim()
+          .isNotEmpty)
         thread?.peerRoleFor(currentUserId) ?? draftContact!.role,
-      if ((thread?.contextStudentName ?? draftContact?.studentContextName ?? '').trim().isNotEmpty)
+      if ((thread?.contextStudentName ?? draftContact?.studentContextName ?? '')
+          .trim()
+          .isNotEmpty)
         'Contexto: ${thread?.contextStudentName ?? draftContact!.studentContextName}',
     ].join(' • ');
 
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withValues(alpha: .12)),
+        border: Border.all(color: AppPalette.error.withValues(alpha: .12)),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .04), Colors.white],
+          colors: [AppPalette.error.withValues(alpha: .04), AppPalette.surface],
         ),
       ),
       child: Column(
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               border: Border(
-                bottom: BorderSide(color: Colors.red.withValues(alpha: .10)),
+                bottom: BorderSide(
+                  color: AppPalette.error.withValues(alpha: .10),
+                ),
               ),
             ),
             child: Column(
@@ -636,106 +665,115 @@ class _ChatPane extends StatelessWidget {
               children: [
                 Text(
                   title ?? 'Sin conversación seleccionada',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 if (subtitle.trim().isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 4),
+                    padding: EdgeInsets.only(top: 4),
                     child: Text(
                       subtitle,
-                      style: TextStyle(color: Colors.black.withValues(alpha: .65)),
+                      style: TextStyle(
+                        color: AppPalette.onSurface.withValues(alpha: .65),
+                      ),
                     ),
                   ),
               ],
             ),
           ),
           Expanded(
-            child:
-                stream == null
-                    ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('Selecciona una conversación o crea una nueva.'),
+            child: stream == null
+                ? Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Selecciona una conversación o crea una nueva.',
                       ),
-                    )
-                    : StreamBuilder<List<MessageItem>>(
-                      stream: stream,
-                      builder: (context, snapshot) {
-                        final messages = snapshot.data ?? const <MessageItem>[];
-                        if (messages.isEmpty) {
-                          return const Center(child: Text('Aún no hay mensajes.'));
-                        }
-                        return ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: messages.length,
-                          itemBuilder: (_, i) {
-                            final msg = messages[i];
-                            final mine = msg.senderId == currentUserId;
-                            return Align(
-                              alignment:
-                                  mine ? Alignment.centerRight : Alignment.centerLeft,
-                              child: Container(
-                                constraints: const BoxConstraints(maxWidth: 420),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      mine
-                                          ? Colors.redAccent
-                                          : Colors.red.withValues(alpha: .08),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      mine
-                                          ? CrossAxisAlignment.end
-                                          : CrossAxisAlignment.start,
-                                  children: [
-                                    if (!mine)
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 4),
-                                        child: Text(
-                                          msg.senderName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
+                    ),
+                  )
+                : StreamBuilder<List<MessageItem>>(
+                    stream: stream,
+                    builder: (context, snapshot) {
+                      final messages = snapshot.data ?? <MessageItem>[];
+                      if (messages.isEmpty) {
+                        return Center(child: Text('Aún no hay mensajes.'));
+                      }
+                      return ListView.builder(
+                        padding: EdgeInsets.all(16),
+                        itemCount: messages.length,
+                        itemBuilder: (_, i) {
+                          final msg = messages[i];
+                          final mine = msg.senderId == currentUserId;
+                          return Align(
+                            alignment: mine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              constraints: BoxConstraints(maxWidth: 420),
+                              margin: EdgeInsets.symmetric(vertical: 4),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: mine
+                                    ? AppPalette.primary
+                                    : AppPalette.error.withValues(alpha: .08),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: mine
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (!mine)
+                                    Padding(
+                                      padding: EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        msg.senderName,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
                                         ),
                                       ),
-                                    Text(
-                                      msg.body,
-                                      style: TextStyle(
-                                        color: mine ? Colors.white : Colors.black87,
-                                      ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      formatDate(msg.createdAt),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color:
-                                            mine
-                                                ? Colors.white.withValues(alpha: .85)
-                                                : Colors.black.withValues(alpha: .55),
-                                      ),
+                                  Text(
+                                    msg.body,
+                                    style: TextStyle(
+                                      color: mine
+                                          ? AppPalette.surface
+                                          : AppPalette.onSurface.withValues(
+                                              alpha: .87,
+                                            ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    formatDate(msg.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: mine
+                                          ? AppPalette.surface.withValues(
+                                              alpha: .85,
+                                            )
+                                          : AppPalette.onSurface.withValues(
+                                              alpha: .55,
+                                            ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(color: Colors.red.withValues(alpha: .10)),
+                top: BorderSide(color: AppPalette.error.withValues(alpha: .10)),
               ),
             ),
             child: Row(
@@ -745,28 +783,29 @@ class _ChatPane extends StatelessWidget {
                     controller: messageCtrl,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Escribe un mensaje',
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (_) => onSend(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 FilledButton(
                   onPressed: sending ? null : onSend,
-                  style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-                  child:
-                      sending
-                          ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                          : const Icon(Icons.send),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppPalette.primary,
+                  ),
+                  child: sending
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppPalette.surface,
+                          ),
+                        )
+                      : Icon(Icons.send),
                 ),
               ],
             ),
@@ -786,7 +825,7 @@ class _ContactPickerDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Nuevo mensaje'),
+      title: Text('Nuevo mensaje'),
       content: SizedBox(
         width: 420,
         child: ListView.builder(
@@ -796,11 +835,12 @@ class _ContactPickerDialog extends StatelessWidget {
             final c = contacts[i];
             final meta = [
               c.role,
-              if ((c.grade ?? '').trim().isNotEmpty) c.grade!,
-              if ((c.studentContextName ?? '').trim().isNotEmpty) c.studentContextName!,
+              if ((c.groupName ?? '').trim().isNotEmpty) c.groupName!,
+              if ((c.studentContextName ?? '').trim().isNotEmpty)
+                c.studentContextName!,
             ].join(' • ');
             return ListTile(
-              leading: const Icon(Icons.person_outline, color: Colors.redAccent),
+              leading: Icon(Icons.person_outline, color: AppPalette.primary),
               title: Text(c.fullName),
               subtitle: Text(meta),
               onTap: () => Navigator.pop(context, c),
@@ -811,7 +851,7 @@ class _ContactPickerDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text('Cancelar'),
         ),
       ],
     );
@@ -851,8 +891,8 @@ class _SearchableContactPickerDialogState
         c.role,
         c.groupType ?? '',
         c.targetRole ?? '',
-        c.grade ?? '',
-        c.targetGrade ?? '',
+        c.groupName ?? '',
+        c.targetGroupId ?? '',
         c.studentContextName ?? '',
       ].join(' ').toLowerCase();
       return haystack.contains(query);
@@ -864,7 +904,7 @@ class _SearchableContactPickerDialogState
     final contacts = _visibleContacts;
 
     return AlertDialog(
-      title: const Text('Nuevo mensaje'),
+      title: Text('Nuevo mensaje'),
       content: SizedBox(
         width: 460,
         child: Column(
@@ -872,20 +912,18 @@ class _SearchableContactPickerDialogState
           children: [
             TextField(
               controller: _searchCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Buscar por grado o estudiante',
+              decoration: InputDecoration(
+                hintText: 'Buscar por grupo o estudiante',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
               onChanged: (value) => setState(() => _query = value),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Flexible(
               child: contacts.isEmpty
-                  ? const Center(
-                      child: Text('No se encontraron destinatarios.'),
-                    )
+                  ? Center(child: Text('No se encontraron destinatarios.'))
                   : ListView.builder(
                       shrinkWrap: true,
                       itemCount: contacts.length,
@@ -894,14 +932,15 @@ class _SearchableContactPickerDialogState
                         final meta = [
                           c.role,
                           if (c.isGroup &&
-                              (c.targetGrade ?? '').trim().isNotEmpty)
+                              (c.targetGroupId ?? '').trim().isNotEmpty)
                             'Envio masivo',
                           if (c.isGroup &&
                               (c.targetRole ?? '').trim().isNotEmpty)
                             'Rol: ${c.targetRole}',
                           if ((c.groupType ?? '').trim() == 'all_users')
                             'Envio masivo',
-                          if ((c.grade ?? '').trim().isNotEmpty) c.grade!,
+                          if ((c.groupName ?? '').trim().isNotEmpty)
+                            c.groupName!,
                           if ((c.studentContextName ?? '').trim().isNotEmpty)
                             c.studentContextName!,
                         ].join(' • ');
@@ -910,7 +949,7 @@ class _SearchableContactPickerDialogState
                             c.isGroup
                                 ? Icons.groups_outlined
                                 : Icons.person_outline,
-                            color: Colors.redAccent,
+                            color: AppPalette.primary,
                           ),
                           title: Text(c.fullName),
                           subtitle: Text(meta),
@@ -925,15 +964,17 @@ class _SearchableContactPickerDialogState
       actions: [
         if (_query.trim().isEmpty && widget.contacts.length > 5)
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: EdgeInsets.only(right: 8),
             child: Text(
               'Mostrando 5 de ${widget.contacts.length}',
-              style: TextStyle(color: Colors.black.withValues(alpha: .6)),
+              style: TextStyle(
+                color: AppPalette.onSurface.withValues(alpha: .6),
+              ),
             ),
           ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text('Cancelar'),
         ),
       ],
     );

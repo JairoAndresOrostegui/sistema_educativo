@@ -162,19 +162,17 @@ class WebsiteBlock {
       pageId: (map['pageId'] ?? 'about').toString(),
       title: (map['title'] ?? '').toString(),
       body: (map['body'] ?? '').toString(),
-      image:
-          rawImage is Map
-              ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawImage))
-              : WebsiteAsset.fromLegacyUrl((map['imageUrl'] ?? '').toString()),
+      image: rawImage is Map
+          ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawImage))
+          : WebsiteAsset.fromLegacyUrl((map['imageUrl'] ?? '').toString()),
       buttonLabel: (map['buttonLabel'] ?? '').toString(),
       buttonUrl: (map['buttonUrl'] ?? '').toString(),
       enabled: map['enabled'] != false,
       showOnDesktop: map['showOnDesktop'] != false,
       showOnMobile: map['showOnMobile'] != false,
-      mobileOrder:
-          map['mobileOrder'] is num
-              ? (map['mobileOrder'] as num).toInt()
-              : index,
+      mobileOrder: map['mobileOrder'] is num
+          ? (map['mobileOrder'] as num).toInt()
+          : index,
       textAlignment: (map['textAlignment'] ?? 'left').toString(),
       imagePosition: (map['imagePosition'] ?? 'left').toString(),
       mobileImagePosition: (map['mobileImagePosition'] ?? 'top').toString(),
@@ -182,8 +180,8 @@ class WebsiteBlock {
       contentWidth: (map['contentWidth'] ?? 'wide').toString(),
       backgroundColor: (map['backgroundColor'] ?? '#FAF8F5').toString(),
       textColor: (map['textColor'] ?? '#212121').toString(),
-      accentColor:
-          (map['accentColor'] ?? map['primaryColor'] ?? '#B71C1C').toString(),
+      accentColor: (map['accentColor'] ?? map['primaryColor'] ?? '#B71C1C')
+          .toString(),
       showAccent: map['showAccent'] == true,
       fontFamily: (map['fontFamily'] ?? 'Montserrat').toString(),
       titleSize: _int(map['titleSize'], 34),
@@ -320,20 +318,19 @@ class WebsitePage {
       enabled: map['enabled'] != false,
       showInNavigation: map['showInNavigation'] != false,
       sortOrder: WebsiteBlock._int(map['sortOrder'], 0),
-      blocks:
-          rawBlocks is List
-              ? rawBlocks
-                  .asMap()
-                  .entries
-                  .where((entry) => entry.value is Map)
-                  .map(
-                    (entry) => WebsiteBlock.fromMap(
-                      Map<String, dynamic>.from(entry.value as Map),
-                      index: entry.key,
-                    ),
-                  )
-                  .toList()
-              : const [],
+      blocks: rawBlocks is List
+          ? rawBlocks
+                .asMap()
+                .entries
+                .where((entry) => entry.value is Map)
+                .map(
+                  (entry) => WebsiteBlock.fromMap(
+                    Map<String, dynamic>.from(entry.value as Map),
+                    index: entry.key,
+                  ),
+                )
+                .toList()
+          : const [],
     );
   }
 
@@ -448,10 +445,9 @@ class WebsiteFooterConfig {
       contactTitle: (map['contactTitle'] ?? 'Contáctanos').toString(),
       linksTitle: (map['linksTitle'] ?? 'Enlaces').toString(),
       copyrightText: (map['copyrightText'] ?? '').toString(),
-      logo:
-          rawLogo is Map
-              ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawLogo))
-              : const WebsiteAsset(),
+      logo: rawLogo is Map
+          ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawLogo))
+          : const WebsiteAsset(),
       useSiteLogo: map['useSiteLogo'] != false,
       showLogo: map['showLogo'] == true,
       showDescription: map['showDescription'] != false,
@@ -605,10 +601,9 @@ class WebsiteSiteConfig {
     return WebsiteSiteConfig(
       schoolName: (map['schoolName'] ?? '').toString(),
       tagline: (map['tagline'] ?? '').toString(),
-      logo:
-          logo is Map
-              ? WebsiteAsset.fromMap(Map<String, dynamic>.from(logo))
-              : WebsiteAsset.fromLegacyUrl((map['logoUrl'] ?? '').toString()),
+      logo: logo is Map
+          ? WebsiteAsset.fromMap(Map<String, dynamic>.from(logo))
+          : WebsiteAsset.fromLegacyUrl((map['logoUrl'] ?? '').toString()),
       phone: (map['phone'] ?? '').toString(),
       email: (map['email'] ?? '').toString(),
       address: (map['address'] ?? '').toString(),
@@ -616,12 +611,11 @@ class WebsiteSiteConfig {
       fontFamily: (map['fontFamily'] ?? 'Montserrat').toString(),
       navigation: _maps(map['navigation'], WebsiteNavigationItem.fromMap),
       socialLinks: _maps(map['socialLinks'], WebsiteSocialLink.fromMap),
-      footer:
-          map['footer'] is Map
-              ? WebsiteFooterConfig.fromMap(
-                Map<String, dynamic>.from(map['footer'] as Map),
-              )
-              : const WebsiteFooterConfig(),
+      footer: map['footer'] is Map
+          ? WebsiteFooterConfig.fromMap(
+              Map<String, dynamic>.from(map['footer'] as Map),
+            )
+          : const WebsiteFooterConfig(),
     );
   }
 
@@ -668,11 +662,11 @@ class WebsiteSiteConfig {
 
   static List<T> _maps<T>(dynamic raw, T Function(Map<String, dynamic>) read) =>
       raw is List
-          ? raw
-              .whereType<Map>()
-              .map((item) => read(Map<String, dynamic>.from(item)))
-              .toList()
-          : <T>[];
+      ? raw
+            .whereType<Map>()
+            .map((item) => read(Map<String, dynamic>.from(item)))
+            .toList()
+      : <T>[];
 }
 
 class WebsiteBundle {
@@ -731,20 +725,19 @@ class WebsiteContent {
 
   factory WebsiteContent.fromMap(Map<String, dynamic> map) {
     final rawSections = map['sections'];
-    var sections =
-        rawSections is List
-            ? rawSections
-                .asMap()
-                .entries
-                .where((entry) => entry.value is Map)
-                .map(
-                  (entry) => WebsiteBlock.fromMap(
-                    Map<String, dynamic>.from(entry.value as Map),
-                    index: entry.key,
-                  ),
-                )
-                .toList()
-            : <WebsiteBlock>[];
+    var sections = rawSections is List
+        ? rawSections
+              .asMap()
+              .entries
+              .where((entry) => entry.value is Map)
+              .map(
+                (entry) => WebsiteBlock.fromMap(
+                  Map<String, dynamic>.from(entry.value as Map),
+                  index: entry.key,
+                ),
+              )
+              .toList()
+        : <WebsiteBlock>[];
     final defaults = WebsiteContent.defaults;
     final existingPages = <String>{
       for (final raw in rawSections is List ? rawSections : const [])
@@ -766,14 +759,14 @@ class WebsiteContent {
       primaryColor: (map['primaryColor'] ?? '#B71C1C').toString(),
       navigation:
           WebsiteSiteConfig._maps(
-                map['navigation'],
-                WebsiteNavigationItem.fromMap,
-              ).isEmpty
-              ? defaults.navigation
-              : WebsiteSiteConfig._maps(
-                map['navigation'],
-                WebsiteNavigationItem.fromMap,
-              ),
+            map['navigation'],
+            WebsiteNavigationItem.fromMap,
+          ).isEmpty
+          ? defaults.navigation
+          : WebsiteSiteConfig._maps(
+              map['navigation'],
+              WebsiteNavigationItem.fromMap,
+            ),
       sections: sections,
     );
   }

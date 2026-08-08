@@ -18,12 +18,11 @@ class MyRouteService {
     final start = DateTime(now.year, now.month, now.day);
     final end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
 
-    final byTenant =
-        await _firestore
-            .collection(_colDaily)
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .get();
+    final byTenant = await _firestore
+        .collection(_colDaily)
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .get();
 
     final todaysDocs = byTenant.docs.where((d) {
       final ts = d.data()['fecha'];
@@ -34,13 +33,12 @@ class MyRouteService {
     });
 
     for (final doc in todaysDocs) {
-      final exists =
-          await _firestore
-              .collection(_colDaily)
-              .doc(doc.id)
-              .collection(_subStudents)
-              .doc(studentId)
-              .get();
+      final exists = await _firestore
+          .collection(_colDaily)
+          .doc(doc.id)
+          .collection(_subStudents)
+          .doc(studentId)
+          .get();
 
       if (exists.exists) {
         return RutaDiaria.fromFirestore(doc);
@@ -71,13 +69,12 @@ class MyRouteService {
     String routeId,
     String studentId,
   ) async {
-    final doc =
-        await _firestore
-            .collection(_colDaily)
-            .doc(routeId)
-            .collection(_subStudents)
-            .doc(studentId)
-            .get();
+    final doc = await _firestore
+        .collection(_colDaily)
+        .doc(routeId)
+        .collection(_subStudents)
+        .doc(studentId)
+        .get();
     return doc.exists ? doc : null;
   }
 }

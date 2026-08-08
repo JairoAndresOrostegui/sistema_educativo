@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../../models/schedule/subject_model.dart';
 
@@ -26,11 +27,14 @@ class AdminSubjectItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withValues(alpha: .15)),
+        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .06), Colors.white],
+          colors: [
+            AppPalette.primary.withValues(alpha: .06),
+            AppPalette.surface,
+          ],
         ),
       ),
       child: ListTile(
@@ -47,12 +51,12 @@ class AdminSubjectItem extends StatelessWidget {
           children: [
             if (showEdit)
               IconButton(
-                icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                icon: Icon(Icons.edit, color: AppPalette.info),
                 onPressed: onEdit,
               ),
             if (showDelete)
               IconButton(
-                icon: const Icon(Icons.delete, color: Colors.redAccent),
+                icon: Icon(Icons.delete, color: AppPalette.primary),
                 onPressed: onDelete,
               ),
           ],

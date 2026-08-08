@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -36,9 +37,9 @@ class _AuthorizationTeacherScreenState
   bool _hasNext = false;
   final int _pageIndex = 0;
   final int _perPage = 20;
-  bool _noGradeNotified = false;
+  bool _noGroupNotified = false;
 
-  String? _activeGrade;
+  String? _activeGroupId;
 
   bool get _canView {
     if (_logged == null) return false;
@@ -66,38 +67,38 @@ class _AuthorizationTeacherScreenState
       return;
     }
 
-    final g = (u.grade ?? '').trim();
-    if (g.isEmpty) {
+    final groupId = (u.groupId ?? '').trim();
+    if (groupId.isEmpty) {
       setState(() {
-        _activeGrade = null;
+        _activeGroupId = null;
       });
-      if (!_noGradeNotified && mounted) {
-        _noGradeNotified = true;
+      if (!_noGroupNotified && mounted) {
+        _noGroupNotified = true;
         await DialogUtils.showError(
           context: context,
-          title: 'Sin grado asignado',
-          message: 'El docente no tiene grado asignado.',
+          title: 'Sin grupo asignado',
+          message: 'El docente no tiene grupo asignado.',
         );
       }
       return;
     } else {
-      _activeGrade = g;
+      _activeGroupId = groupId;
     }
 
     _subscribeToItems();
   }
 
   void _subscribeToItems() {
-    if (_activeGrade == null || _activeGrade!.isEmpty) {
+    if (_activeGroupId == null || _activeGroupId!.isEmpty) {
       setState(() => _loading = false);
       return;
     }
     _itemsSub?.cancel();
     _itemsSub = _svc
-        .watchForGrade(
+        .watchForGroup(
           institutionId: _institutionId,
           campusId: _campusId,
-          grade: _activeGrade!,
+          groupId: _activeGroupId!,
           limit: _perPage,
         )
         .listen(
@@ -151,13 +152,13 @@ class _AuthorizationTeacherScreenState
   Color _statusColor(AuthorizationStatus s) {
     switch (s) {
       case AuthorizationStatus.pending:
-        return Colors.orange;
+        return AppPalette.warning;
       case AuthorizationStatus.approved:
-        return Colors.green;
+        return AppPalette.success;
       case AuthorizationStatus.rejected:
-        return Colors.redAccent;
+        return AppPalette.primary;
       case AuthorizationStatus.finished:
-        return Colors.blueGrey;
+        return AppPalette.info;
     }
   }
 
@@ -187,22 +188,22 @@ class _AuthorizationTeacherScreenState
         appBar: AppBar(
           title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.redAccent,
+          backgroundColor: AppPalette.surface,
+          foregroundColor: AppPalette.primary,
           centerTitle: true,
         ),
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
-        backgroundColor: Colors.white,
+        backgroundColor: AppPalette.surface,
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
         title: const Text('Autorizaciones (Docente)'),
         leading: const BackToDashboardButton(),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
       ),
       body: SafeArea(
@@ -217,12 +218,14 @@ class _AuthorizationTeacherScreenState
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: AppPalette.surface,
+                  border: Border.all(
+                    color: AppPalette.primary.withValues(alpha: .15),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: AppPalette.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -232,9 +235,9 @@ class _AuthorizationTeacherScreenState
                   children: [
                     Expanded(
                       child: Text(
-                        _activeGrade == null || _activeGrade!.isEmpty
-                            ? 'Sin grado asignado'
-                            : 'Grado: $_activeGrade',
+                        _activeGroupId == null || _activeGroupId!.isEmpty
+                            ? 'Sin grupo asignado'
+                            : 'Grupo: ${_logged?.groupName ?? ''}',
                       ),
                     ),
                     Text('Total: ${_items.length}'),
@@ -243,108 +246,104 @@ class _AuthorizationTeacherScreenState
               ),
               const SizedBox(height: 12),
               Expanded(
-                child:
-                    _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _activeGrade == null || _activeGrade!.isEmpty
-                        ? const Center(
-                          child: Text('No hay grado asignado al docente.'),
-                        )
-                        : _items.isEmpty
-                        ? const Center(child: Text('No hay solicitudes'))
-                        : ListView.builder(
-                          itemCount: _items.length,
-                          itemBuilder: (_, i) {
-                            final r = _items[i];
-                            final sc = _statusColor(r.status);
-                            final chip = Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _activeGroupId == null || _activeGroupId!.isEmpty
+                    ? const Center(
+                        child: Text('No hay grupo asignado al docente.'),
+                      )
+                    : _items.isEmpty
+                    ? const Center(child: Text('No hay solicitudes'))
+                    : ListView.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (_, i) {
+                          final r = _items[i];
+                          final sc = _statusColor(r.status);
+                          final chip = Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: sc.withValues(alpha: .12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: sc.withValues(alpha: .25),
                               ),
-                              decoration: BoxDecoration(
-                                color: sc.withValues(alpha: .12),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: sc.withValues(alpha: .25),
-                                ),
+                            ),
+                            child: Text(
+                              _statusLabel(r.status),
+                              style: TextStyle(
+                                color: sc,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
                               ),
-                              child: Text(
-                                _statusLabel(r.status),
-                                style: TextStyle(
-                                  color: sc,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            );
-                            final dateLine =
-                                r.multiDay
-                                    ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
-                                    : _fmtD(r.dateFrom);
-                            final timeLine =
-                                r.allDay
-                                    ? 'Todo el día'
-                                    : r.endTime != null
-                                    ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
-                                    : _fmtT(r.startTime);
-                            final sub = [
-                              'Fecha: $dateLine',
-                              'Hora: $timeLine',
-                              if ((r.reason ?? '').toString().trim().isNotEmpty)
-                                'Motivo: ${_firstWords(r.reason!, 40)}',
-                            ].join('\n');
+                            ),
+                          );
+                          final dateLine = r.multiDay
+                              ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
+                              : _fmtD(r.dateFrom);
+                          final timeLine = r.allDay
+                              ? 'Todo el día'
+                              : r.endTime != null
+                              ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
+                              : _fmtT(r.startTime);
+                          final sub = [
+                            'Fecha: $dateLine',
+                            'Hora: $timeLine',
+                            if ((r.reason ?? '').toString().trim().isNotEmpty)
+                              'Motivo: ${_firstWords(r.reason!, 40)}',
+                          ].join('\n');
 
-                            return Container(
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.red.withValues(alpha: .12),
-                                ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    Colors.red.withValues(alpha: .06),
-                                    Colors.white,
-                                  ],
+                          return Container(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppPalette.primary.withValues(
+                                  alpha: .12,
                                 ),
                               ),
-                              child: ListTile(
-                                leading: const Icon(
-                                  Icons.assignment_turned_in,
-                                  color: Colors.redAccent,
-                                ),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        '${r.studentFullName} — ${r.grade}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  AppPalette.primary.withValues(alpha: .06),
+                                  AppPalette.surface,
+                                ],
+                              ),
+                            ),
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.assignment_turned_in,
+                                color: AppPalette.primary,
+                              ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${r.studentFullName} — ${r.groupName}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(width: 8),
-                                    chip,
-                                  ],
-                                ),
-                                subtitle: Text(sub),
-                                onTap:
-                                    () => showDialog(
-                                      context: context,
-                                      builder:
-                                          (_) => AuthorizationDetailsDialog(
-                                            request: r,
-                                          ),
-                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  chip,
+                                ],
                               ),
-                            );
-                          },
-                        ),
+                              subtitle: Text(sub),
+                              onTap: () => showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    AuthorizationDetailsDialog(request: r),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -355,8 +354,9 @@ class _AuthorizationTeacherScreenState
                     children: [
                       IconButton(
                         icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _pageIndex == 0 || _loading ? null : _prevPage,
+                        onPressed: _pageIndex == 0 || _loading
+                            ? null
+                            : _prevPage,
                       ),
                       IconButton(
                         icon: const Icon(Icons.chevron_right),

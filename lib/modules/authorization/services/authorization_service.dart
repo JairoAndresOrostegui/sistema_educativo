@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
 import '../../../models/user/user_model_v2.dart';
-import '../../../utils/notification_service.dart';
-import '../../../utils/notification_tokens.dart';
 
 class AuthorizationPage {
   final List<AuthorizationRequest> items;
@@ -19,16 +18,19 @@ class AuthorizationPage {
 class ChildRef {
   final String id;
   final String fullName;
-  final String grade;
+  final String groupId;
+  final String groupName;
   const ChildRef({
     required this.id,
     required this.fullName,
-    required this.grade,
+    required this.groupId,
+    required this.groupName,
   });
 }
 
 class AuthorizationService {
   final _db = FirebaseFirestore.instance;
+  final _functions = FirebaseFunctions.instance;
   static const _col = 'authorization_requests';
 
   Stream<List<AuthorizationRequest>> watchForStudent({
@@ -46,32 +48,36 @@ class AuthorizationService {
         .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
   }
 
-  Stream<List<AuthorizationRequest>> watchForGrade({
+  Stream<List<AuthorizationRequest>> watchForGroup({
     required String institutionId,
     required String campusId,
-    required String grade,
+    required String groupId,
     int limit = 20,
   }) {
     return _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
-        .where('grade', isEqualTo: grade)
+        .where('groupId', isEqualTo: groupId)
         .snapshots()
         .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
   }
 
   Stream<List<AuthorizationRequest>> watchForAdmin({
-    required String institutionId,
-    required String campusId,
+    String? institutionId,
+    String? campusId,
     int limit = 50,
   }) {
-    return _db
-        .collection(_col)
-        .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId)
-        .snapshots()
-        .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
+    Query<Map<String, dynamic>> query = _db.collection(_col);
+    if ((institutionId ?? '').isNotEmpty) {
+      query = query.where('institutionId', isEqualTo: institutionId);
+    }
+    if ((campusId ?? '').isNotEmpty) {
+      query = query.where('campusId', isEqualTo: campusId);
+    }
+    return query.snapshots().map(
+      (snap) => _sortedItemsFromSnapshot(snap, limit: limit),
+    );
   }
 
   Future<AuthorizationPage> listForStudent({
@@ -81,13 +87,12 @@ class AuthorizationService {
     required int limit,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    final snap =
-        await _db
-            .collection(_col)
-            .where('institutionId', isEqualTo: institutionId)
-            .where('campusId', isEqualTo: campusId)
-            .where('studentId', isEqualTo: studentId)
-            .get();
+    final snap = await _db
+        .collection(_col)
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId)
+        .where('studentId', isEqualTo: studentId)
+        .get();
 
     final items =
         snap.docs
@@ -110,19 +115,26 @@ class AuthorizationService {
     if (studentIds.isEmpty) return [];
     final out = <ChildRef>[];
     for (final chunk in _chunks(studentIds, 10)) {
-      final snap =
-          await _db
-              .collection('users')
-              .where(FieldPath.documentId, whereIn: chunk)
-              .where('institution', isEqualTo: institutionId)
-              .where('campus', isEqualTo: campusId)
-              .get();
+      final snap = await _db
+          .collection('user_directory')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .where('institution', isEqualTo: institutionId)
+          .where('campus', isEqualTo: campusId)
+          .get();
       for (final d in snap.docs) {
         final m = d.data();
         final fn = (m['firstName'] ?? '').toString();
         final ln = (m['lastName'] ?? '').toString();
-        final grade = (m['grade'] ?? '').toString();
-        out.add(ChildRef(id: d.id, fullName: '$fn $ln'.trim(), grade: grade));
+        final groupId = (m['groupId'] ?? '').toString();
+        final groupName = (m['groupName'] ?? '').toString();
+        out.add(
+          ChildRef(
+            id: d.id,
+            fullName: '$fn $ln'.trim(),
+            groupId: groupId,
+            groupName: groupName,
+          ),
+        );
       }
     }
     out.sort((a, b) => a.fullName.compareTo(b.fullName));
@@ -133,21 +145,11 @@ class AuthorizationService {
     required AuthorizationRequest request,
     required userModelv2 requester,
   }) async {
-    final data =
-        request.toMap()..addAll({
-          'status': AuthorizationStatus.pending.name,
-          'adminNote': null,
-          'evidence': null,
-          'requesterId': requester.id,
-          'requesterFullName':
-              '${requester.firstName} ${requester.lastName}'.trim(),
-          'requiresRequesterEdit': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-    final ref = await _db.collection(_col).add(data);
-    await _notifyOnCreate(request: request, requester: requester);
-    return ref.id;
+    final result = await _functions
+        .httpsCallable('crearAutorizacion')
+        .call(_callableData(request));
+    final response = Map<String, dynamic>.from(result.data as Map);
+    return response['id']?.toString() ?? '';
   }
 
   Future<void> resubmitRequest({
@@ -155,56 +157,26 @@ class AuthorizationService {
     required AuthorizationRequest updated,
     required userModelv2 requester,
   }) async {
-    final ref = _db.collection(_col).doc(id);
-    final snap = await ref.get();
-    if (!snap.exists) {
-      throw Exception('La autorizacion no existe.');
-    }
-
-    final current = AuthorizationRequest.fromMap(snap.data()!, id);
-    if (current.status != AuthorizationStatus.pending ||
-        !current.requiresRequesterEdit) {
-      throw Exception('Esta autorizacion no esta habilitada para correccion.');
-    }
-    if (current.requesterId != requester.id) {
-      throw Exception('Solo el solicitante puede corregir esta autorizacion.');
-    }
-
-    final upd = <String, dynamic>{
-      'studentId': updated.studentId,
-      'studentFullName': updated.studentFullName,
-      'grade': updated.grade,
-      'allDay': updated.allDay,
-      'multiDay': updated.multiDay,
-      'dateFrom': updated.dateFrom,
-      'dateTo': updated.dateTo,
-      'startTime': updated.startTime,
-      'endTime': updated.endTime,
-      'reason': updated.reason,
-      'status': AuthorizationStatus.pending.name,
-      'requiresRequesterEdit': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    await ref.update(upd);
-    final merged = AuthorizationRequest.fromMap({...snap.data()!, ...upd}, id);
-    await _notifyOnCreate(request: merged, requester: requester);
+    await _functions.httpsCallable('actualizarAutorizacion').call({
+      'id': id,
+      'action': 'resubmit',
+      ..._callableData(updated),
+    });
   }
 
-  Future<AuthorizationPage> listForGrade({
+  Future<AuthorizationPage> listForGroup({
     required String institutionId,
     required String campusId,
-    required String grade,
+    required String groupId,
     int limit = 20,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    final snap =
-        await _db
-            .collection(_col)
-            .where('institutionId', isEqualTo: institutionId)
-            .where('campusId', isEqualTo: campusId)
-            .where('grade', isEqualTo: grade)
-            .get();
+    final snap = await _db
+        .collection(_col)
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId)
+        .where('groupId', isEqualTo: groupId)
+        .get();
 
     final items =
         snap.docs
@@ -223,12 +195,11 @@ class AuthorizationService {
     required String institutionId,
     required String campusId,
   }) async {
-    final snap =
-        await _db
-            .collection(_col)
-            .where('institutionId', isEqualTo: institutionId)
-            .where('campusId', isEqualTo: campusId)
-            .get();
+    final snap = await _db
+        .collection(_col)
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId)
+        .get();
 
     final items =
         snap.docs
@@ -249,198 +220,67 @@ class AuthorizationService {
     String? adminNote,
     String? evidence,
     required userModelv2 admin,
+    bool superOverride = false,
   }) async {
-    final ref = _db.collection(_col).doc(id);
-    final snap = await ref.get();
-    if (!snap.exists) return;
-
-    final current = AuthorizationRequest.fromMap(snap.data()!, id);
-    if (current.status == AuthorizationStatus.rejected ||
-        current.status == AuthorizationStatus.finished) {
-      throw Exception('Esta autorizacion ya no puede modificarse.');
-    }
-    if (current.status == AuthorizationStatus.approved &&
-        newStatus != AuthorizationStatus.finished) {
-      throw Exception('Una autorizacion aprobada solo puede pasar a finalizada.');
-    }
-    if (newStatus == AuthorizationStatus.finished &&
-        current.status != AuthorizationStatus.approved) {
-      throw Exception('Solo una autorizacion aprobada puede finalizarse.');
-    }
-
-    final noteTrim = (adminNote ?? '').trim();
-    final evidenceTrim = (evidence ?? '').trim();
-    final upd = <String, dynamic>{
-      'status': newStatus.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    if (newStatus == AuthorizationStatus.pending) {
-      upd['adminNote'] = noteTrim.isEmpty ? null : noteTrim;
-      upd['evidence'] = null;
-      upd['requiresRequesterEdit'] = true;
-    } else if (newStatus == AuthorizationStatus.rejected) {
-      upd['adminNote'] = noteTrim.isEmpty ? null : noteTrim;
-      upd['evidence'] = null;
-      upd['requiresRequesterEdit'] = false;
-    } else if (newStatus == AuthorizationStatus.approved) {
-      upd['adminNote'] = null;
-      upd['evidence'] = null;
-      upd['requiresRequesterEdit'] = false;
-    } else if (newStatus == AuthorizationStatus.finished) {
-      upd['adminNote'] = current.adminNote;
-      upd['evidence'] = evidenceTrim.isEmpty ? null : evidenceTrim;
-      upd['requiresRequesterEdit'] = false;
-    }
-
-    await ref.update(upd);
-
-    final req = AuthorizationRequest.fromMap({...snap.data()!, ...upd}, id);
-    await _notifyOnStatusChange(req: req, note: upd['adminNote'] as String?, evidence: upd['evidence'] as String?);
+    final action = superOverride
+        ? 'super_override'
+        : switch (newStatus) {
+            AuthorizationStatus.pending => 'request_correction',
+            AuthorizationStatus.approved => 'approve',
+            AuthorizationStatus.rejected => 'reject',
+            AuthorizationStatus.finished => 'finish',
+          };
+    await _functions.httpsCallable('actualizarAutorizacion').call({
+      'id': id,
+      'action': action,
+      'targetStatus': newStatus.name,
+      'note': adminNote,
+      'evidence': evidence,
+    });
   }
 
   Stream<int> watchPendingCountForAdmin({
-    required String institutionId,
-    required String campusId,
+    String? institutionId,
+    String? campusId,
   }) {
-    return _db
-        .collection(_col)
-        .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId)
+    Query<Map<String, dynamic>> query = _db.collection(_col);
+    if ((institutionId ?? '').isNotEmpty) {
+      query = query.where('institutionId', isEqualTo: institutionId);
+    }
+    if ((campusId ?? '').isNotEmpty) {
+      query = query.where('campusId', isEqualTo: campusId);
+    }
+    return query
         .where('status', isEqualTo: AuthorizationStatus.pending.name)
         .snapshots()
         .map((snap) => snap.size);
   }
 
-  Stream<int> watchPendingCountForGrade({
+  Stream<int> watchPendingCountForGroup({
     required String institutionId,
     required String campusId,
-    required String grade,
+    required String groupId,
   }) {
     return _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
-        .where('grade', isEqualTo: grade)
+        .where('groupId', isEqualTo: groupId)
         .where('status', isEqualTo: AuthorizationStatus.pending.name)
         .snapshots()
         .map((snap) => snap.size);
   }
 
-  Future<void> _notifyOnCreate({
-    required AuthorizationRequest request,
-    required userModelv2 requester,
-  }) async {
-    try {
-      final adminSnap =
-          await _db
-              .collection('users')
-              .where('institution', isEqualTo: request.institutionId)
-              .where('campus', isEqualTo: request.campusId)
-              .where('role', isEqualTo: 'Administrador')
-              .where('status', isEqualTo: 'activo')
-              .get();
-      final teacherSnap =
-          await _db
-              .collection('users')
-              .where('institution', isEqualTo: request.institutionId)
-              .where('campus', isEqualTo: request.campusId)
-              .where('role', isEqualTo: 'Docente')
-              .where('status', isEqualTo: 'activo')
-              .where('grade', isEqualTo: request.grade)
-              .get();
-
-      final tokens = <String>{};
-      for (final d in adminSnap.docs) {
-        tokens.addAll(extractNotificationTokens(d.data()));
-      }
-      for (final d in teacherSnap.docs) {
-        tokens.addAll(extractNotificationTokens(d.data()));
-      }
-      if (tokens.isEmpty) return;
-
-      await enviarNotificacion(
-        tokens: tokens.toList(),
-        titulo: 'Nueva autorizacion pendiente',
-        cuerpo: '${request.studentFullName} - ${request.grade}',
-        grado: request.grade,
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _notifyOnStatusChange({
-    required AuthorizationRequest req,
-    String? note,
-    String? evidence,
-  }) async {
-    try {
-      String label(AuthorizationStatus s) {
-        switch (s) {
-          case AuthorizationStatus.pending:
-            return 'Pendiente para correccion';
-          case AuthorizationStatus.approved:
-            return 'Aprobada';
-          case AuthorizationStatus.rejected:
-            return 'Rechazada';
-          case AuthorizationStatus.finished:
-            return 'Finalizada';
-        }
-      }
-
-      String firstWords(String text, int n) {
-        final parts = text.trim().split(RegExp(r'\s+'));
-        if (parts.length <= n) return text.trim();
-        return '${parts.take(n).join(' ')}...';
-      }
-
-      final familySnap =
-          await _db
-              .collection('users')
-              .where('institution', isEqualTo: req.institutionId)
-              .where('campus', isEqualTo: req.campusId)
-              .where('role', isEqualTo: 'Familiar')
-              .where('status', isEqualTo: 'activo')
-              .where('studentIds', arrayContains: req.studentId)
-              .get();
-      final teacherSnap =
-          await _db
-              .collection('users')
-              .where('institution', isEqualTo: req.institutionId)
-              .where('campus', isEqualTo: req.campusId)
-              .where('role', isEqualTo: 'Docente')
-              .where('status', isEqualTo: 'activo')
-              .where('grade', isEqualTo: req.grade)
-              .get();
-
-      final tokens = <String>{};
-      for (final d in familySnap.docs) {
-        tokens.addAll(extractNotificationTokens(d.data()));
-      }
-      for (final d in teacherSnap.docs) {
-        tokens.addAll(extractNotificationTokens(d.data()));
-      }
-      if (tokens.isEmpty) return;
-
-      final lines = <String>[
-        '${req.studentFullName} - ${req.grade}',
-        'Estado: ${label(req.status)}',
-      ];
-      if ((note ?? '').trim().isNotEmpty) {
-        lines.add('Nota: ${note!.trim()}');
-      }
-      if (req.status == AuthorizationStatus.finished &&
-          (evidence ?? '').trim().isNotEmpty) {
-        lines.add('Observacion: ${firstWords(evidence!.trim(), 40)}');
-      }
-
-      await enviarNotificacion(
-        tokens: tokens.toList(),
-        titulo: 'Autorizacion actualizada',
-        cuerpo: lines.join(' - '),
-        grado: req.grade,
-      );
-    } catch (_) {}
-  }
+  Map<String, dynamic> _callableData(AuthorizationRequest request) => {
+    'studentId': request.studentId,
+    'allDay': request.allDay,
+    'multiDay': request.multiDay,
+    'dateFrom': request.dateFrom.millisecondsSinceEpoch,
+    'dateTo': request.dateTo?.millisecondsSinceEpoch,
+    'startTime': request.startTime?.millisecondsSinceEpoch,
+    'endTime': request.endTime?.millisecondsSinceEpoch,
+    'reason': request.reason,
+  };
 
   Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
     if (list.isEmpty) return;

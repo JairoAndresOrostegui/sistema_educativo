@@ -5,6 +5,16 @@ import 'package:sistema_educativo/models/user/user_model_v2.dart';
 import 'package:sistema_educativo/modules/user/controllers/admin_user_form_controller.dart';
 import 'package:sistema_educativo/utils/parameters_service.dart';
 import 'package:sistema_educativo/utils/validators.dart';
+import 'package:sistema_educativo/utils/academic_group_service.dart';
+
+typedef TeacherDocumentTypeLoader = Future<Map<String, String>> Function();
+typedef TeacherUniquenessCheck =
+    Future<String?> Function({
+      required String personalEmail,
+      required String institutionalEmail,
+      required String document,
+    });
+typedef TeacherCreateCallback = Future<void> Function(userModelv2 user);
 
 class TeacherBulkImportFailure {
   final int rowNumber;
@@ -33,18 +43,39 @@ class TeacherBulkImportResult {
 }
 
 class TeacherBulkImportService {
-  TeacherBulkImportService({
+  factory TeacherBulkImportService({
     AdminUserFormController? formController,
-  }) : _formController = formController ?? AdminUserFormController();
+    TeacherDocumentTypeLoader? documentTypeLoader,
+    TeacherUniquenessCheck? uniquenessCheck,
+    TeacherCreateCallback? createTeacher,
+  }) => TeacherBulkImportService._(
+    formController,
+    documentTypeLoader,
+    uniquenessCheck,
+    createTeacher,
+  );
 
-  final AdminUserFormController _formController;
+  TeacherBulkImportService._(
+    this._formController,
+    this._documentTypeLoader,
+    this._uniquenessCheck,
+    this._createTeacher,
+  );
+
+  AdminUserFormController? _formController;
+  final TeacherDocumentTypeLoader? _documentTypeLoader;
+  final TeacherUniquenessCheck? _uniquenessCheck;
+  final TeacherCreateCallback? _createTeacher;
+
+  AdminUserFormController get _controller =>
+      _formController ??= AdminUserFormController();
 
   static const List<String> requiredColumns = <String>[
     'nombres',
     'apellidos',
     'documento',
     'correo',
-    'grado',
+    'grupo',
   ];
 
   static const List<String> optionalColumns = <String>[
@@ -53,55 +84,63 @@ class TeacherBulkImportService {
     'estado',
   ];
 
-  static const Map<String, List<String>> _headerAliases = <String, List<String>>{
-    'firstName': <String>['nombres', 'nombre', 'first_name', 'firstname'],
-    'lastName': <String>['apellidos', 'apellido', 'last_name', 'lastname'],
-    'fullName': <String>[
-      'nombrecompleto',
-      'nombre_completo',
-      'fullname',
-      'full_name',
-      'docente',
-    ],
-    'document': <String>[
-      'documento',
-      'numerodedocumento',
-      'numero_documento',
-      'nrodocumento',
-      'cedula',
-      'identificacion',
-    ],
-    'documentType': <String>[
-      'tipodedocumento',
-      'tipo_documento',
-      'documenttype',
-      'document_type',
-    ],
-    'personalEmail': <String>[
-      'correo',
-      'correopersonal',
-      'correo_personal',
-      'email',
-      'personalemail',
-      'correoelectronico',
-    ],
-    'institutionalEmail': <String>[
-      'correoinstitucional',
-      'correo_institucional',
-      'institutionalemail',
-      'institutional_email',
-      'emailinstitucional',
-    ],
-    'grade': <String>['grado', 'grade', 'curso'],
-    'status': <String>['estado', 'status'],
-    'role': <String>['rol', 'role'],
-  };
+  static const Map<String, List<String>> _headerAliases =
+      <String, List<String>>{
+        'firstName': <String>['nombres', 'nombre', 'first_name', 'firstname'],
+        'lastName': <String>['apellidos', 'apellido', 'last_name', 'lastname'],
+        'fullName': <String>[
+          'nombrecompleto',
+          'nombre_completo',
+          'fullname',
+          'full_name',
+          'docente',
+        ],
+        'document': <String>[
+          'documento',
+          'numerodedocumento',
+          'numero_documento',
+          'nrodocumento',
+          'cedula',
+          'identificacion',
+        ],
+        'documentType': <String>[
+          'tipodedocumento',
+          'tipo_documento',
+          'documenttype',
+          'document_type',
+        ],
+        'personalEmail': <String>[
+          'correo',
+          'correopersonal',
+          'correo_personal',
+          'email',
+          'personalemail',
+          'correoelectronico',
+        ],
+        'institutionalEmail': <String>[
+          'correoinstitucional',
+          'correo_institucional',
+          'institutionalemail',
+          'institutional_email',
+          'emailinstitucional',
+        ],
+        'group': <String>['grupo', 'curso'],
+        'status': <String>['estado', 'status'],
+        'role': <String>['rol', 'role'],
+      };
 
   Future<TeacherBulkImportResult> importTeachersFromBytes({
     required Uint8List bytes,
     required userModelv2 usuarioLogueado,
   }) async {
-    final documentTypes = await _loadDocumentTypeMap();
+    final groups = _createTeacher == null
+        ? await AcademicGroupService().list(
+            institutionId: usuarioLogueado.institution,
+            campusId: usuarioLogueado.campus,
+          )
+        : const [];
+    final documentTypes =
+        await (_documentTypeLoader?.call() ?? _loadDocumentTypeMap());
     final excel = Excel.decodeBytes(bytes);
     if (excel.tables.isEmpty) {
       throw Exception('El archivo no contiene hojas para importar.');
@@ -126,15 +165,13 @@ class TeacherBulkImportService {
     }
 
     final missing = <String>[];
-    for (final key in <String>['document', 'personalEmail', 'grade']) {
+    for (final key in <String>['document', 'personalEmail', 'group']) {
       if (!headerMap.containsKey(key)) {
         missing.add(_requiredLabelForKey(key));
       }
     }
     if (missing.isNotEmpty) {
-      throw Exception(
-        'Faltan columnas obligatorias: ${missing.join(', ')}.',
-      );
+      throw Exception('Faltan columnas obligatorias: ${missing.join(', ')}.');
     }
 
     final failures = <TeacherBulkImportFailure>[];
@@ -157,9 +194,12 @@ class TeacherBulkImportService {
         final candidate = _buildCandidate(row, headerMap, documentTypes);
 
         final normalizedDocument = candidate.document.trim();
-        final normalizedPersonalEmail = candidate.personalEmail.trim().toLowerCase();
-        final normalizedInstitutionalEmail =
-            candidate.institutionalEmail.trim().toLowerCase();
+        final normalizedPersonalEmail = candidate.personalEmail
+            .trim()
+            .toLowerCase();
+        final normalizedInstitutionalEmail = candidate.institutionalEmail
+            .trim()
+            .toLowerCase();
 
         if (candidate.firstName.isEmpty || candidate.lastName.isEmpty) {
           throw Exception('Debes indicar nombres y apellidos.');
@@ -173,11 +213,29 @@ class TeacherBulkImportService {
         if (!Validators.isValidEmail(normalizedInstitutionalEmail)) {
           throw Exception('El correo institucional no es valido.');
         }
-        if (candidate.grade.isEmpty) {
-          throw Exception('El grado es obligatorio.');
+        if (candidate.groupName.isEmpty) {
+          throw Exception('El grupo es obligatorio.');
         }
+        final matchingGroups = groups
+            .where(
+              (group) =>
+                  group.name.trim().toLowerCase() ==
+                  candidate.groupName.trim().toLowerCase(),
+            )
+            .toList();
+        if (_createTeacher == null && matchingGroups.length != 1) {
+          throw Exception('El grupo no existe en la sede seleccionada.');
+        }
+        final groupId = matchingGroups.isEmpty
+            ? candidate.groupName
+            : matchingGroups.single.id;
+        final groupName = matchingGroups.isEmpty
+            ? candidate.groupName
+            : matchingGroups.single.name;
         if (candidate.role != 'Docente') {
-          throw Exception('Este importador solo crea usuarios con rol Docente.');
+          throw Exception(
+            'Este importador solo crea usuarios con rol Docente.',
+          );
         }
 
         if (!seenDocuments.add(normalizedDocument)) {
@@ -187,24 +245,31 @@ class TeacherBulkImportService {
           throw Exception('Correo duplicado dentro del archivo.');
         }
         if (!seenInstitutionalEmails.add(normalizedInstitutionalEmail)) {
-          throw Exception(
-            'Correo institucional duplicado dentro del archivo.',
-          );
+          throw Exception('Correo institucional duplicado dentro del archivo.');
         }
 
-        final uniqueOk = await _formController.validarCamposUnicos(
-          correoPersonal: normalizedPersonalEmail,
-          correoInstitucional: normalizedInstitutionalEmail,
-          documento: normalizedDocument,
-          excluirId: null,
-          onResetSaving: () {},
-          onError: (title, message) async {
-            throw Exception(message);
-          },
-        );
-
-        if (!uniqueOk) {
-          throw Exception('No fue posible validar la fila.');
+        final uniquenessCheck = _uniquenessCheck;
+        if (uniquenessCheck != null) {
+          final reason = await uniquenessCheck(
+            personalEmail: normalizedPersonalEmail,
+            institutionalEmail: normalizedInstitutionalEmail,
+            document: normalizedDocument,
+          );
+          if (reason != null) throw Exception(reason);
+        } else {
+          final uniqueOk = await _controller.validarCamposUnicos(
+            correoPersonal: normalizedPersonalEmail,
+            correoInstitucional: normalizedInstitutionalEmail,
+            documento: normalizedDocument,
+            excluirId: null,
+            onResetSaving: () {},
+            onError: (title, message) async {
+              throw Exception(message);
+            },
+          );
+          if (!uniqueOk) {
+            throw Exception('No fue posible validar la fila.');
+          }
         }
 
         final usuario = userModelv2(
@@ -216,7 +281,8 @@ class TeacherBulkImportService {
           personalEmail: normalizedPersonalEmail,
           institutionalEmail: normalizedInstitutionalEmail,
           role: 'Docente',
-          grade: candidate.grade,
+          groupId: groupId,
+          groupName: groupName,
           institution: usuarioLogueado.institution,
           campus: usuarioLogueado.campus,
           isSuperadmin: false,
@@ -236,12 +302,17 @@ class TeacherBulkImportService {
           familyRelation: '',
         );
 
-        await _formController.guardarNuevo(
-          usuario: usuario,
-          fotoBytes: null,
-          fotoNombre: null,
-          usuarioLogueado: usuarioLogueado,
-        );
+        final createTeacher = _createTeacher;
+        if (createTeacher != null) {
+          await createTeacher(usuario);
+        } else {
+          await _controller.guardarNuevo(
+            usuario: usuario,
+            fotoBytes: null,
+            fotoNombre: null,
+            usuarioLogueado: usuarioLogueado,
+          );
+        }
         createdCount++;
       } catch (e) {
         failures.add(
@@ -297,8 +368,8 @@ class TeacherBulkImportService {
     final personalEmail = _valueFromRow(row, headerMap, 'personalEmail');
     final institutionalEmail =
         _valueFromRow(row, headerMap, 'institutionalEmail').trim().isEmpty
-            ? personalEmail
-            : _valueFromRow(row, headerMap, 'institutionalEmail');
+        ? personalEmail
+        : _valueFromRow(row, headerMap, 'institutionalEmail');
     final roleValue = _valueFromRow(row, headerMap, 'role');
     final statusValue = _valueFromRow(row, headerMap, 'status');
 
@@ -312,7 +383,7 @@ class TeacherBulkImportService {
       ),
       personalEmail: personalEmail,
       institutionalEmail: institutionalEmail,
-      grade: _valueFromRow(row, headerMap, 'grade').trim(),
+      groupName: _valueFromRow(row, headerMap, 'group').trim(),
       role: roleValue.trim().isEmpty ? 'Docente' : _capitalizeWords(roleValue),
       status: _normalizeStatus(statusValue),
     );
@@ -333,7 +404,11 @@ class TeacherBulkImportService {
     return document.isEmpty ? 'Sin identificar' : 'Documento $document';
   }
 
-  String _valueFromRow(List<Data?> row, Map<String, int> headerMap, String key) {
+  String _valueFromRow(
+    List<Data?> row,
+    Map<String, int> headerMap,
+    String key,
+  ) {
     final index = headerMap[key];
     if (index == null || index >= row.length) {
       return '';
@@ -356,9 +431,9 @@ class TeacherBulkImportService {
   }
 
   String _normalizeHeader(String value) {
-    return _stripDiacritics(value)
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return _stripDiacritics(
+      value,
+    ).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
   }
 
   String _stripDiacritics(String value) {
@@ -385,12 +460,11 @@ class TeacherBulkImportService {
   }
 
   (String, String) _splitFullName(String fullName) {
-    final tokens =
-        fullName
-            .trim()
-            .split(RegExp(r'\s+'))
-            .where((token) => token.isNotEmpty)
-            .toList();
+    final tokens = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList();
 
     if (tokens.length < 2) {
       return (fullName.trim(), '');
@@ -401,10 +475,7 @@ class TeacherBulkImportService {
         tokens.sublist(tokens.length - 2).join(' '),
       );
     }
-    return (
-      tokens.sublist(0, tokens.length - 1).join(' '),
-      tokens.last,
-    );
+    return (tokens.sublist(0, tokens.length - 1).join(' '), tokens.last);
   }
 
   String _capitalizeWords(String value) {
@@ -441,7 +512,10 @@ class TeacherBulkImportService {
     }
   }
 
-  String _normalizeDocumentType(String value, Map<String, String> documentTypes) {
+  String _normalizeDocumentType(
+    String value,
+    Map<String, String> documentTypes,
+  ) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       return documentTypes[_normalizeLookupKey('CC')] ?? 'CC';
@@ -452,9 +526,9 @@ class TeacherBulkImportService {
   }
 
   String _normalizeLookupKey(String value) {
-    return _stripDiacritics(value)
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    return _stripDiacritics(
+      value,
+    ).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
   }
 
   String _normalizeStatus(String value) {
@@ -471,8 +545,8 @@ class TeacherBulkImportService {
         return 'documento';
       case 'personalEmail':
         return 'correo';
-      case 'grade':
-        return 'grado';
+      case 'group':
+        return 'grupo';
       default:
         return key;
     }
@@ -494,7 +568,7 @@ class _TeacherImportCandidate {
   final String documentType;
   final String personalEmail;
   final String institutionalEmail;
-  final String grade;
+  final String groupName;
   final String role;
   final String status;
 
@@ -505,7 +579,7 @@ class _TeacherImportCandidate {
     required this.documentType,
     required this.personalEmail,
     required this.institutionalEmail,
-    required this.grade,
+    required this.groupName,
     required this.role,
     required this.status,
   });

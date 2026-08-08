@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 import 'package:intl/intl.dart';
 
@@ -52,7 +53,9 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   bool get _canView {
     if (_logged == null) return false;
 
-    return _isSuperadmin || _perms.contains('autorizaciones.ver');
+    return _isSuperadmin ||
+        _perms.contains('autorizaciones.ver') ||
+        _perms.contains('autorizaciones.editar');
   }
 
   bool get _canEdit {
@@ -97,8 +100,8 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
     setState(() => _loading = true);
     _itemsSub = _svc
         .watchForAdmin(
-          institutionId: _institutionId,
-          campusId: _campusId,
+          institutionId: _isSuperadmin ? null : _institutionId,
+          campusId: _isSuperadmin ? null : _campusId,
         )
         .listen((items) {
           if (!mounted) return;
@@ -133,16 +136,16 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   Color _statusColor(AuthorizationStatus s) {
     switch (s) {
       case AuthorizationStatus.pending:
-        return Colors.orange;
+        return AppPalette.warning;
 
       case AuthorizationStatus.approved:
-        return Colors.green;
+        return AppPalette.success;
 
       case AuthorizationStatus.rejected:
-        return Colors.redAccent;
+        return AppPalette.primary;
 
       case AuthorizationStatus.finished:
-        return Colors.blueGrey;
+        return AppPalette.info;
     }
   }
 
@@ -159,11 +162,11 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
     final res = await showDialog<AdminActionResult>(
       context: context,
-      builder:
-          (_) => AdminAuthorizationActionDialog(
-            currentStatus: r.status,
-            requiresRequesterEdit: r.requiresRequesterEdit,
-          ),
+      builder: (_) => AdminAuthorizationActionDialog(
+        currentStatus: r.status,
+        requiresRequesterEdit: r.requiresRequesterEdit,
+        isSuperadmin: _isSuperadmin,
+      ),
     );
 
     if (res == null) return;
@@ -181,6 +184,9 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
         evidence: res.evidence,
 
         admin: _logged!,
+
+        superOverride:
+            _isSuperadmin && r.status == AuthorizationStatus.finished,
       );
 
       if (!mounted) return;
@@ -229,201 +235,193 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
           title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
 
-          backgroundColor: Colors.white,
+          backgroundColor: AppPalette.surface,
 
-          foregroundColor: Colors.redAccent,
+          foregroundColor: AppPalette.primary,
 
           centerTitle: true,
         ),
 
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
 
-        backgroundColor: Colors.white,
+        backgroundColor: AppPalette.surface,
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
 
       appBar: AppBar(
         title: const Text('Autorizaciones'),
         leading: const BackToDashboardButton(),
 
-        backgroundColor: Colors.white,
+        backgroundColor: AppPalette.surface,
 
-        foregroundColor: Colors.redAccent,
+        foregroundColor: AppPalette.primary,
 
         centerTitle: true,
       ),
 
       body: SafeArea(
-        child:
-            _loading
-                ? const Center(child: CircularProgressIndicator())
-                : Padding(
-                  padding: const EdgeInsets.all(16),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+                padding: const EdgeInsets.all(16),
 
-                  child:
-                      _items.isEmpty
-                          ? const Center(child: Text('No hay solicitudes'))
-                          : ListView.builder(
-                            itemCount: _items.length,
+                child: _items.isEmpty
+                    ? const Center(child: Text('No hay solicitudes'))
+                    : ListView.builder(
+                        itemCount: _items.length,
 
-                            itemBuilder: (_, i) {
-                              final r = _items[i];
+                        itemBuilder: (_, i) {
+                          final r = _items[i];
 
-                              final c = _statusColor(r.status);
+                          final c = _statusColor(r.status);
 
-                              final chip = Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
+                          final chip = Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
 
-                                  vertical: 6,
+                              vertical: 6,
+                            ),
+
+                            decoration: BoxDecoration(
+                              color: c.withValues(alpha: .12),
+
+                              borderRadius: BorderRadius.circular(10),
+
+                              border: Border.all(
+                                color: c.withValues(alpha: .25),
+                              ),
+                            ),
+
+                            child: Text(
+                              _statusLabel(r.status),
+
+                              style: TextStyle(
+                                color: c,
+
+                                fontWeight: FontWeight.w700,
+
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+
+                          final dateLine = r.multiDay
+                              ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
+                              : _fmtD(r.dateFrom);
+
+                          final timeLine = r.allDay
+                              ? 'Todo el día'
+                              : r.endTime != null
+                              ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
+                              : _fmtT(r.startTime);
+
+                          final sub = [
+                            'Estudiante: ${r.studentFullName} — ${r.groupName}',
+
+                            'Fecha: $dateLine',
+
+                            'Hora: $timeLine',
+
+                            if ((r.reason ?? '').toString().trim().isNotEmpty)
+                              'Motivo: ${_firstWords(r.reason!, 40)}',
+                          ].join('\n');
+
+                          return Container(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 4,
+
+                              vertical: 6,
+                            ),
+
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+
+                              border: Border.all(
+                                color: AppPalette.primary.withValues(
+                                  alpha: .12,
                                 ),
+                              ),
 
-                                decoration: BoxDecoration(
-                                  color: c.withValues(alpha: .12),
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
 
-                                  borderRadius: BorderRadius.circular(10),
+                                end: Alignment.centerRight,
 
-                                  border: Border.all(
-                                    color: c.withValues(alpha: .25),
-                                  ),
-                                ),
+                                colors: [
+                                  AppPalette.primary.withValues(alpha: .06),
 
-                                child: Text(
-                                  _statusLabel(r.status),
+                                  AppPalette.surface,
+                                ],
+                              ),
+                            ),
 
-                                  style: TextStyle(
-                                    color: c,
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.assignment_turned_in,
 
-                                    fontWeight: FontWeight.w700,
+                                color: AppPalette.primary,
+                              ),
 
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              );
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      r.requesterFullName.isNotEmpty
+                                          ? 'Solicitante: ${r.requesterFullName}'
+                                          : 'Solicitud',
 
-                              final dateLine =
-                                  r.multiDay
-                                      ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
-                                      : _fmtD(r.dateFrom);
+                                      maxLines: 1,
 
-                              final timeLine =
-                                  r.allDay
-                                      ? 'Todo el día'
-                                      : r.endTime != null
-                                      ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
-                                      : _fmtT(r.startTime);
-
-                              final sub = [
-                                'Estudiante: ${r.studentFullName} — ${r.grade}',
-
-                                'Fecha: $dateLine',
-
-                                'Hora: $timeLine',
-
-                                if ((r.reason ?? '')
-                                    .toString()
-                                    .trim()
-                                    .isNotEmpty)
-                                  'Motivo: ${_firstWords(r.reason!, 40)}',
-                              ].join('\n');
-
-                              return Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-
-                                  vertical: 6,
-                                ),
-
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-
-                                  border: Border.all(
-                                    color: Colors.red.withValues(alpha: .12),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
 
-                                  gradient: LinearGradient(
-                                    begin: Alignment.centerLeft,
+                                  const SizedBox(width: 8),
 
-                                    end: Alignment.centerRight,
+                                  chip,
+                                ],
+                              ),
 
-                                    colors: [
-                                      Colors.red.withValues(alpha: .06),
+                              subtitle: Text(sub),
 
-                                      Colors.white,
-                                    ],
-                                  ),
-                                ),
+                              onTap: () => showDialog(
+                                context: context,
 
-                                child: ListTile(
-                                  leading: const Icon(
-                                    Icons.assignment_turned_in,
+                                builder: (_) =>
+                                    AuthorizationDetailsDialog(request: r),
+                              ),
 
-                                    color: Colors.redAccent,
-                                  ),
-
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          r.requesterFullName.isNotEmpty
-                                              ? 'Solicitante: ${r.requesterFullName}'
-                                              : 'Solicitud',
-
-                                          maxLines: 1,
-
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                              trailing:
+                                  _canEdit &&
+                                      _updatingRequestId == null &&
+                                      (r.status !=
+                                              AuthorizationStatus.finished ||
+                                          _isSuperadmin) &&
+                                      r.status != AuthorizationStatus.rejected
+                                  ? IconButton(
+                                      icon: Icon(
+                                        Icons.manage_accounts,
+                                        color: AppPalette.primary,
                                       ),
-
-                                      const SizedBox(width: 8),
-
-                                      chip,
-                                    ],
-                                  ),
-
-                                  subtitle: Text(sub),
-
-                                  onTap:
-                                      () => showDialog(
-                                        context: context,
-
-                                        builder:
-                                            (_) => AuthorizationDetailsDialog(
-                                              request: r,
-                                            ),
+                                      onPressed: () => _manage(r),
+                                    )
+                                  : _updatingRequestId == r.id
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
                                       ),
-
-                                  trailing:
-                                      _canEdit &&
-                                              _updatingRequestId == null &&
-                                              r.status !=
-                                                  AuthorizationStatus.finished &&
-                                              r.status !=
-                                                  AuthorizationStatus.rejected
-                                          ? IconButton(
-                                            icon: const Icon(
-                                              Icons.manage_accounts,
-                                              color: Colors.redAccent,
-                                            ),
-                                            onPressed: () => _manage(r),
-                                          )
-                                          : _updatingRequestId == r.id
-                                          ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                          : null,
-                                ),
-                              );
-                            },
-                          ),
-                ),
+                                    )
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+              ),
       ),
     );
   }

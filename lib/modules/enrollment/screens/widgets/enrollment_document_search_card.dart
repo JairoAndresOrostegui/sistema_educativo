@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 class EnrollmentDocumentSearchCard extends StatelessWidget {
   final TextEditingController controller;
@@ -17,24 +18,22 @@ class EnrollmentDocumentSearchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Colors.redAccent.withValues(alpha: .03),
+      color: AppPalette.primary.withValues(alpha: .03),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.redAccent.withValues(alpha: .15),
-        ),
+        side: BorderSide(color: AppPalette.primary.withValues(alpha: .15)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Buscar estudiante',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Colors.redAccent,
+                color: AppPalette.primary,
               ),
             ),
             const SizedBox(height: 8),
@@ -54,8 +53,8 @@ class EnrollmentDocumentSearchCard extends StatelessWidget {
                   icon: const Icon(Icons.search),
                   label: const Text('Buscar y prellenar'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppPalette.primary,
+                    foregroundColor: AppPalette.surface,
                   ),
                 ),
                 const SizedBox(width: 12),

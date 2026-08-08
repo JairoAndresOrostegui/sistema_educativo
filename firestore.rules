@@ -36,6 +36,11 @@ service cloud.firestore {
          (me().permissions is list && me().permissions.hasAny([permission])));
     }
 
+    function canManageUsers() {
+      return admin() || hasPermission('usuarios.ver') ||
+        hasPermission('usuarios.editar');
+    }
+
     function sameTenant(data) {
       return active() &&
         (superadmin() ||
@@ -43,9 +48,43 @@ service cloud.firestore {
            (data.campus == me().campus || data.campusId == me().campus)));
     }
 
-    function validUserTenant(data) {
-      return data.institution is string && data.institution.size() > 0 &&
-        data.campus is string && data.campus.size() > 0;
+    function enrollmentGroupId(data) {
+      return data.data.groupId;
+    }
+
+    function canReadEnrollment(data) {
+      return active() && (
+        superadmin() ||
+        (me().role == 'Administrador' &&
+          (hasPermission('matricula.ver') || hasPermission('matricula.editar')) &&
+          sameTenant(data)) ||
+        (teacher() &&
+          (hasPermission('matricula.ver') || hasPermission('matricula.editar')) &&
+          sameTenant(data) &&
+          me().groupId is string &&
+          enrollmentGroupId(data) == me().groupId) ||
+        (family() &&
+          (data.createdByUserId == request.auth.uid ||
+            (me().studentIds is list &&
+              data.vinculaUsuarioId in me().studentIds)))
+      );
+    }
+
+    function familyCanReadGroupData(data, permission) {
+      let studentId = me().activeStudentId;
+      return family() && hasPermission(permission) &&
+        studentId is string && me().studentIds is list &&
+        studentId in me().studentIds &&
+        get(/databases/$(database)/documents/users/$(studentId)).data.role ==
+          'Estudiante' &&
+        get(/databases/$(database)/documents/users/$(studentId)).data.status ==
+          'activo' &&
+        get(/databases/$(database)/documents/users/$(studentId)).data
+          .institution == me().institution &&
+        get(/databases/$(database)/documents/users/$(studentId)).data.campus ==
+          me().campus &&
+        get(/databases/$(database)/documents/users/$(studentId)).data.groupId ==
+          data.groupId;
     }
 
     match /configuracion_colegios/{id} {
@@ -58,35 +97,37 @@ service cloud.firestore {
       allow write: if admin();
     }
 
+    match /academic_groups/{id} {
+      allow read: if resource.data.active == true;
+      allow create, update, delete: if false;
+    }
+
+    match /academic_group_history/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create, update, delete: if false;
+    }
+
     match /users/{userId} {
       allow read: if active() &&
         (request.auth.uid == userId || superadmin() ||
-         (resource.data.institution == me().institution &&
+         (family() && me().studentIds is list && userId in me().studentIds &&
+          resource.data.role == 'Estudiante' &&
+          resource.data.status == 'activo' &&
+          resource.data.institution == me().institution &&
+          resource.data.campus == me().campus) ||
+         (canManageUsers() &&
+          resource.data.status in ['activo', 'inactivo'] &&
+          resource.data.institution == me().institution &&
           resource.data.campus == me().campus));
 
-      allow create: if admin() && validUserTenant(request.resource.data) &&
-        (superadmin() ||
-         (request.resource.data.institution == me().institution &&
-          request.resource.data.campus == me().campus)) &&
-        request.resource.data.role in ['Administrador', 'Docente', 'Estudiante', 'Familiar'] &&
-        request.resource.data.isSuperadmin == false &&
-        (superadmin() ||
-         (request.resource.data.permissions is list &&
-          request.resource.data.permissions.size() == 0));
-
-      allow update: if admin() && validUserTenant(request.resource.data) &&
-        (superadmin() ||
-         (resource.data.institution == me().institution &&
-          resource.data.campus == me().campus &&
-          request.resource.data.institution == resource.data.institution &&
-          request.resource.data.campus == resource.data.campus)) &&
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isSuperadmin']) || superadmin()) &&
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['permissions']) || superadmin());
+      // La creacion y edicion administrativa pasa por Cloud Functions para
+      // validar Auth, unicidad, sede, permisos, vinculos y auditoria.
+      allow create: if false;
 
       allow update: if active() && request.auth.uid == userId &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'notificationTokens', 'fcmToken', 'fcmTokens', 'photoUrl',
-          'activeStudentId', 'qrPayload', 'qrEnabled', 'qrUpdatedAt'
+          'qrPayload', 'qrEnabled', 'qrUpdatedAt'
         ]);
 
       allow update: if teacher() &&
@@ -94,28 +135,49 @@ service cloud.firestore {
         resource.data.role == 'Estudiante' &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['routeAddress', 'direccionRuta']);
 
-      allow delete: if admin() && request.auth.uid != userId &&
-        (superadmin() ||
-         (resource.data.institution == me().institution && resource.data.campus == me().campus));
+      // Las bajas y eliminaciones pasan por Cloud Functions para coordinar
+      // Firebase Auth, dependencias, Storage y auditoria.
+      allow delete: if false;
+    }
+
+    // Directorio operativo sin documentos, correos, telefonos ni tokens push.
+    // Los modulos que necesitan nombres/roles deben consultar esta coleccion.
+    match /user_directory/{userId} {
+      allow read: if active() &&
+        (request.auth.uid == userId || superadmin() ||
+         (resource.data.status in ['activo', 'inactivo'] &&
+          resource.data.institution == me().institution &&
+          resource.data.campus == me().campus));
+      allow write: if false;
     }
 
     match /enrollments/{enrollmentId} {
-      allow create: if request.auth == null &&
-        request.resource.data.createdByRole == 'publico' &&
-        request.resource.data.estado == 'prematriculado' &&
-        request.resource.data.data is map &&
-        request.resource.data.data.numeroIdentidad is string &&
-        request.resource.data.data.numeroIdentidad.size() >= 5;
-      allow create: if active() &&
-        (admin() || (family() && request.resource.data.createdByUserId == request.auth.uid));
-      allow read: if admin() ||
-        (active() && resource.data.createdByUserId == request.auth.uid);
-      allow update: if admin() ||
-        (family() && resource.data.createdByUserId == request.auth.uid &&
-         resource.data.estado in ['prematriculado', 'pendiente_revision'] &&
-         request.resource.data.createdByUserId == resource.data.createdByUserId &&
-         request.resource.data.estado == resource.data.estado);
-      allow delete: if admin();
+      allow read: if canReadEnrollment(resource.data);
+      // Altas y transiciones pasan por Cloud Functions para validar sede,
+      // grado, parentesco, unicidad, estados, notificaciones y auditoria.
+      allow create, update, delete: if false;
+    }
+
+    match /enrollment_history/{historyId} {
+      allow read: if active() && (
+        superadmin() ||
+        (me().role == 'Administrador' &&
+          (hasPermission('matricula.ver') || hasPermission('matricula.editar')) &&
+          sameTenant(resource.data)) ||
+        (teacher() &&
+          (hasPermission('matricula.ver') || hasPermission('matricula.editar')) &&
+          sameTenant(resource.data) && resource.data.groupId == me().groupId)
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /enrollment_notification_events/{eventId} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /enrollment_rate_limits/{rateId} {
+      allow read, write: if false;
     }
 
     match /website/{documentId} {
@@ -134,6 +196,14 @@ service cloud.firestore {
     }
 
     match /website_form_rate_limits/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /student_login_rate_limits/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /notification_rate_limits/{documentId} {
       allow read, write: if false;
     }
 
@@ -165,31 +235,91 @@ service cloud.firestore {
     }
 
     match /authorization_requests/{id} {
-      allow read: if sameTenant(resource.data);
-      allow create: if sameTenant(request.resource.data) &&
-        request.resource.data.requesterId == request.auth.uid &&
-        request.resource.data.status == 'pending';
-      allow update: if admin() && sameTenant(resource.data);
-      allow update: if sameTenant(resource.data) &&
-        resource.data.requesterId == request.auth.uid &&
-        request.resource.data.requesterId == resource.data.requesterId &&
-        request.resource.data.status == 'pending';
-      allow delete: if admin() && sameTenant(resource.data);
+      allow read: if active() && (
+        superadmin() ||
+        (me().role == 'Administrador' &&
+          (hasPermission('autorizaciones.ver') ||
+            hasPermission('autorizaciones.editar')) &&
+          sameTenant(resource.data)) ||
+        (teacher() && hasPermission('autorizaciones.ver') &&
+          sameTenant(resource.data) &&
+          resource.data.groupId == me().groupId) ||
+        (family() && hasPermission('autorizaciones.ver') &&
+          sameTenant(resource.data) &&
+          me().studentIds is list &&
+          resource.data.studentId in me().studentIds)
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /authorization_history/{id} {
+      allow read: if active() && (
+        superadmin() ||
+        (me().role == 'Administrador' &&
+          (hasPermission('autorizaciones.ver') ||
+            hasPermission('autorizaciones.editar')) &&
+          sameTenant(resource.data)) ||
+        (teacher() && hasPermission('autorizaciones.ver') &&
+          sameTenant(resource.data) &&
+          resource.data.groupId == me().groupId)
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /authorization_notification_events/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /files/{id} {
-      allow read: if sameTenant(resource.data);
-      allow create: if (admin() || teacher()) && sameTenant(request.resource.data) &&
-        request.resource.data.uploadedBy == request.auth.uid;
-      allow update: if false;
-      allow delete: if sameTenant(resource.data) &&
-        (admin() || resource.data.uploadedBy == request.auth.uid);
+      allow read: if active() && (
+        (resource.data.status == 'uploading' &&
+          resource.data.uploadedBy == request.auth.uid) ||
+        (resource.data.status == 'active' && sameTenant(resource.data) && (
+          superadmin() ||
+          (me().role == 'Administrador' &&
+            (hasPermission('archivos.ver') ||
+              hasPermission('archivos.crear') ||
+              hasPermission('archivos.eliminar'))) ||
+          (teacher() && hasPermission('archivos.ver') &&
+            resource.data.groupId == me().groupId) ||
+          (me().role == 'Estudiante' && hasPermission('archivos.ver') &&
+            resource.data.groupId == me().groupId) ||
+          (family() && hasPermission('archivos.ver') &&
+            familyCanReadGroupData(resource.data, 'archivos.ver'))
+        ))
+      );
+      allow create, update, delete: if false;
+    }
+
+    match /file_storage_usage/{id} {
+      allow read: if active() &&
+        (superadmin() || resource.data.institutionId == me().institution) &&
+        (me().role == 'Administrador' || me().role == 'Docente');
+      allow create, update, delete: if false;
+    }
+
+    match /file_history/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /subjects/{id} {
-      allow read: if sameTenant(resource.data);
-      allow create: if admin() && sameTenant(request.resource.data);
-      allow update, delete: if admin() && sameTenant(resource.data);
+      allow read: if active() && sameTenant(resource.data) && (
+        superadmin() ||
+        (me().role == 'Administrador' &&
+          (hasPermission('horarios.ver') ||
+            hasPermission('horarios.crear') ||
+            hasPermission('horarios.editar') ||
+            hasPermission('horarios.eliminar'))) ||
+        (teacher() && hasPermission('horarios.ver') &&
+          (resource.data.teacherId == request.auth.uid ||
+            resource.data.groupId == me().groupId)) ||
+        (me().role == 'Estudiante' && hasPermission('horarios.ver') &&
+          resource.data.groupId == me().groupId) ||
+        familyCanReadGroupData(resource.data, 'horarios.ver')
+      );
+      allow create, update, delete: if false;
     }
 
     match /routes/{id} {
@@ -217,61 +347,32 @@ service cloud.firestore {
     }
 
     match /user_logs/{id} {
-      allow create: if sameTenant(request.resource.data) &&
-        request.resource.data.userId == request.auth.uid;
-      allow read: if admin() || (active() && resource.data.userId == request.auth.uid);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
+      allow read: if (admin() && sameTenant(resource.data)) ||
+        (active() && resource.data.userId == request.auth.uid);
     }
 
     match /user_history/{id} {
       allow read: if admin() && sameTenant(resource.data);
-      allow create: if sameTenant(request.resource.data);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /routes_admin_history/{id} {
       allow read: if admin() && sameTenant(resource.data);
-      allow create: if sameTenant(request.resource.data);
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /schedule_history/{id} {
-      allow read: if admin() && sameTenant(resource.data);
-      allow create: if sameTenant(request.resource.data);
-      allow update, delete: if false;
+      allow read: if admin() &&
+        (hasPermission('horarios.ver') || hasPermission('historial.ver')) &&
+        sameTenant(resource.data);
+      allow create, update, delete: if false;
     }
 
-    match /historial_usuarios/{id} {
+    match /schedule_notification_events/{id} {
       allow read: if admin() && sameTenant(resource.data);
-      allow create: if false;
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
-    match /historial_rutas_admin/{id} {
-      allow read: if admin() && sameTenant(resource.data);
-      allow create: if false;
-      allow update, delete: if false;
-    }
-
-    match /historial_horarios/{id} {
-      allow read: if admin() && sameTenant(resource.data);
-      allow create: if false;
-      allow update, delete: if false;
-    }
-
-    match /archivos/{id} {
-      allow read: if admin() && sameTenant(resource.data);
-      allow write: if false;
-    }
-
-    match /students/{id} {
-      allow read: if admin() && sameTenant(resource.data);
-      allow write: if false;
-    }
-
-    match /estudiantes/{id} {
-      allow read: if admin() && sameTenant(resource.data);
-      allow write: if false;
-    }
   }
 }

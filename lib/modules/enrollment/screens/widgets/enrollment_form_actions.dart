@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 class EnrollmentFormActions extends StatelessWidget {
   final bool isAdmin;
@@ -18,7 +19,7 @@ class EnrollmentFormActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryBlue = Color.fromARGB(255, 29, 49, 179);
+    final primaryBlue = AppPalette.info;
     if (isAdmin) {
       final isMatriculado = currentEstado == 'matriculado';
       if (isMatriculado) {
@@ -26,12 +27,12 @@ class EnrollmentFormActions extends StatelessWidget {
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: disabled ? null : onGuardarRevision,
-            icon: const Icon(Icons.save),
-            label: const Text('Guardar cambios'),
+            icon: Icon(Icons.save),
+            label: Text('Guardar cambios'),
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: AppPalette.surface,
+              padding: EdgeInsets.symmetric(vertical: 14),
             ),
           ),
         );
@@ -42,26 +43,26 @@ class EnrollmentFormActions extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: disabled ? null : onGuardarRevision,
-              icon: const Icon(Icons.pending_actions),
-              label: const Text('Guardar en revisi\u00f3n'),
+              icon: Icon(Icons.pending_actions),
+              label: Text('Guardar en revisi\u00f3n'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                foregroundColor: AppPalette.surface,
+                padding: EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: disabled ? null : onMatricular,
-              icon: const Icon(Icons.check_circle),
-              label: const Text('Matricular ahora'),
+              icon: Icon(Icons.check_circle),
+              label: Text('Matricular ahora'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                foregroundColor: AppPalette.surface,
+                padding: EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
@@ -73,12 +74,12 @@ class EnrollmentFormActions extends StatelessWidget {
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: disabled ? null : onGuardarRevision,
-        icon: const Icon(Icons.save),
-        label: const Text('Guardar solicitud'),
+        icon: Icon(Icons.save),
+        label: Text('Guardar solicitud'),
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          foregroundColor: AppPalette.surface,
+          padding: EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );

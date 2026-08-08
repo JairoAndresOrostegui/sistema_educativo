@@ -73,26 +73,24 @@ Future<List<String>> collectTokensForActors({
   final tokens = <String>{};
 
   for (final chunk in _chunks(studentIds, 10)) {
-    final snap =
-        await users
-            .where(FieldPath.documentId, whereIn: chunk)
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .get();
+    final snap = await users
+        .where(FieldPath.documentId, whereIn: chunk)
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .get();
     for (final d in snap.docs) {
       tokens.addAll(extractNotificationTokens(d.data()));
     }
   }
 
   for (final chunk in _chunks(studentIds, 10)) {
-    final famSnap =
-        await users
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Familiar')
-            .where('status', isEqualTo: 'activo')
-            .where('studentIds', arrayContainsAny: chunk)
-            .get();
+    final famSnap = await users
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Familiar')
+        .where('status', isEqualTo: 'activo')
+        .where('studentIds', arrayContainsAny: chunk)
+        .get();
     for (final d in famSnap.docs) {
       tokens.addAll(extractNotificationTokens(d.data()));
     }

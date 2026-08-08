@@ -10,9 +10,9 @@ class PublicLogoWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoUrl = ThemeProvider.config?.logoUrl;
+    final logoUrl = ThemeProvider.config.logoUrl;
 
-    if (logoUrl == null || logoUrl.isEmpty) {
+    if (logoUrl.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -33,12 +33,11 @@ class PublicLogoWidget extends StatelessWidget {
             height: targetHeight,
             width: targetHeight * 2,
             fit: BoxFit.contain,
-            placeholderBuilder:
-                (context) => SizedBox(
-                  height: targetHeight * 0.35,
-                  width: targetHeight * 0.35,
-                  child: const CircularProgressIndicator(),
-                ),
+            placeholderBuilder: (context) => SizedBox(
+              height: targetHeight * 0.35,
+              width: targetHeight * 0.35,
+              child: const CircularProgressIndicator(),
+            ),
             errorBuilder: (context, error, stackTrace) {
               return const SizedBox.shrink();
             },

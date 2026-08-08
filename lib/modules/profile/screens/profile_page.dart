@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -93,31 +94,33 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     if (userModel == null) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
+      return Scaffold(
+        backgroundColor: AppPalette.surface,
+        body: Center(
+          child: CircularProgressIndicator(color: AppPalette.primary),
+        ),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
         centerTitle: true,
-        title: const Text("My profile"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        title: Text("My profile"),
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: const BackToDashboardButton(),
+        surfaceTintColor: AppPalette.transparent,
+        leading: BackToDashboardButton(),
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
+            constraints: BoxConstraints(maxWidth: 600),
             child: ListView(
               children: [
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
 
                 // Foto con borde rojo y sombra
                 Center(
@@ -125,15 +128,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     label: 'Foto de perfil, pulsa para cambiarla',
                     button: true,
                     child: Container(
-                      padding: const EdgeInsets.all(3),
+                      padding: EdgeInsets.all(3),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.redAccent, width: 3),
+                        border: Border.all(color: AppPalette.primary, width: 3),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
+                            color: AppPalette.onSurface.withValues(alpha: 0.06),
                             blurRadius: 12,
-                            offset: const Offset(0, 6),
+                            offset: Offset(0, 6),
                           ),
                         ],
                       ),
@@ -155,7 +158,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 // Botón editar foto solo en mobile
                 if (!kIsWeb)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
+                    padding: EdgeInsets.only(top: 8),
                     child: Center(
                       child: Semantics(
                         label: 'Botón para cambiar la foto de perfil',
@@ -164,29 +167,29 @@ class _ProfilePageState extends State<ProfilePage> {
                         focusable: true,
                         child: TextButton.icon(
                           onPressed: _seleccionarImagenYSubir,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.edit,
                             size: 18,
-                            color: Colors.redAccent,
+                            color: AppPalette.primary,
                           ),
-                          label: const Text(
+                          label: Text(
                             "Editar foto",
-                            style: TextStyle(color: Colors.redAccent),
+                            style: TextStyle(color: AppPalette.primary),
                           ),
                         ),
                       ),
                     ),
                   ),
 
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
 
                 _ProfileHeaderCard(user: userModel!),
 
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
 
                 _ProfileDataCard(user: userModel!),
 
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
               ],
             ),
           ),
@@ -202,12 +205,12 @@ class _ProfileHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const TextAlign align = TextAlign.center;
+    TextAlign align = TextAlign.center;
 
     final fullName = '${user.firstName} ${user.lastName}'.trim();
     final meta = [
       if ((user.role).isNotEmpty) user.role,
-      if ((user.grade ?? '').isNotEmpty) 'Grado ${user.grade}',
+      if ((user.groupName ?? '').isNotEmpty) 'Grupo ${user.groupName}',
       if ((user.campus).isNotEmpty) 'Sede ${user.campus}',
     ].join(' | ');
 
@@ -216,20 +219,23 @@ class _ProfileHeaderCard extends StatelessWidget {
       container: true,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.withValues(alpha: .15)),
-          gradient: const LinearGradient(
+          border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
+          gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [Color.fromRGBO(244, 67, 54, 0.06), Colors.white],
+            colors: [
+              AppPalette.primary.withValues(alpha: .06),
+              AppPalette.surface,
+            ],
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppPalette.onSurface.withValues(alpha: 0.03),
               blurRadius: 8,
-              offset: const Offset(0, 2),
+              offset: Offset(0, 2),
             ),
           ],
         ),
@@ -239,30 +245,30 @@ class _ProfileHeaderCard extends StatelessWidget {
             Text(
               fullName.isEmpty ? '-' : fullName,
               textAlign: align,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: Colors.black87,
+                color: AppPalette.onSurface.withValues(alpha: .87),
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               meta.isEmpty ? '-' : meta,
               textAlign: align,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.redAccent.withValues(alpha: .9),
+                color: AppPalette.primary.withValues(alpha: .9),
               ),
             ),
             if ((user.institution).isNotEmpty) ...[
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
                 user.institution,
                 textAlign: align,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.black87,
+                  color: AppPalette.onSurface.withValues(alpha: .87),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -285,20 +291,23 @@ class _ProfileDataCard extends StatelessWidget {
       container: true,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.withValues(alpha: .15)),
-          gradient: const LinearGradient(
+          border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
+          gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
-            colors: [Color.fromRGBO(244, 67, 54, 0.06), Colors.white],
+            colors: [
+              AppPalette.primary.withValues(alpha: .06),
+              AppPalette.surface,
+            ],
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: AppPalette.onSurface.withValues(alpha: 0.03),
               blurRadius: 8,
-              offset: const Offset(0, 2),
+              offset: Offset(0, 2),
             ),
           ],
         ),
@@ -309,21 +318,24 @@ class _ProfileDataCard extends StatelessWidget {
               header: true,
               label: 'Información',
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: EdgeInsets.only(bottom: 8),
                 child: Center(
                   child: Text(
-                  'Información',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.redAccent,
+                    'Información',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppPalette.primary,
+                    ),
                   ),
-                ),
                 ),
               ),
             ),
-            Container(height: 1, color: Colors.red.withValues(alpha: .15)),
-            const SizedBox(height: 8),
+            Container(
+              height: 1,
+              color: AppPalette.error.withValues(alpha: .15),
+            ),
+            SizedBox(height: 8),
             ProfileField(title: "Nombres", value: user.firstName),
             ProfileField(title: "Apellidos", value: user.lastName),
             ProfileField(title: "Correo personal", value: user.personalEmail),
@@ -336,12 +348,11 @@ class _ProfileDataCard extends StatelessWidget {
             ProfileField(title: "Dirección", value: user.address ?? ''),
             ProfileField(
               title: "Fecha de nacimiento",
-              value:
-                  user.birthDate != null
-                      ? DateFormat('dd/MM/yyyy').format(user.birthDate!)
-                      : '',
+              value: user.birthDate != null
+                  ? DateFormat('dd/MM/yyyy').format(user.birthDate!)
+                  : '',
             ),
-            ProfileField(title: "Grado", value: user.grade ?? ''),
+            ProfileField(title: "Grupo", value: user.groupName ?? ''),
             ProfileField(title: "Rol", value: user.role),
             ProfileField(title: "Institución", value: user.institution),
             ProfileField(title: "Sede", value: user.campus),

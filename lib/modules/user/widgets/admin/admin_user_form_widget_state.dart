@@ -22,7 +22,6 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   late TextEditingController residenceDepartment;
   late TextEditingController residenceCity;
   late TextEditingController familyRelation;
-  late TextEditingController grado;
   late List<String> studentIds = [];
   String? activeStudentId;
   String rol = 'Docente';
@@ -33,14 +32,23 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   String? _pickedImageName;
   List<String> funcionalidades = [];
   List<Parameter> _roles = [];
-  List<Parameter> _grades = [];
-  String? _selectedGrade;
+  List<AcademicGroup> _groups = [];
+  String? _selectedGroupId;
   bool _isLoading = true;
   bool esSuperadminActual = false;
   List<Parameter> _allPermissions = [];
+  List<InstitutionOption> _institutions = [];
+  List<String> _campuses = [];
   List<userModelv2> _availableStudents = [];
   String _status = 'activo';
   bool _saving = false;
+
+  String? get _selectedGroupName {
+    for (final group in _groups) {
+      if (group.id == _selectedGroupId) return group.name;
+    }
+    return null;
+  }
 
   String _normalizeEmail(String value) {
     return value.trim().toLowerCase();
@@ -68,10 +76,11 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       await Future.wait([
         _loadDocumentTypes(),
         _loadRoles(),
-        _loadGrades(),
         _loadPermissions(),
         _loadAvailableStudents(),
+        _loadInstitutions(),
       ]);
+      await _loadGroups();
     } finally {
       if (mounted) {
         setState(() {
@@ -98,12 +107,10 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     direccion = TextEditingController(text: u?.address ?? '');
     telefonos = TextEditingController(text: u?.phones.join(', ') ?? '');
     fechaNacimiento = TextEditingController(
-      text:
-          u?.birthDate != null
-              ? '${u!.birthDate!.year}-${u.birthDate!.month.toString().padLeft(2, '0')}-${u.birthDate!.day.toString().padLeft(2, '0')}'
-              : '',
+      text: u?.birthDate != null
+          ? '${u!.birthDate!.year}-${u.birthDate!.month.toString().padLeft(2, '0')}-${u.birthDate!.day.toString().padLeft(2, '0')}'
+          : '',
     );
-    grado = TextEditingController(text: u?.grade ?? '');
     fotoUrl = u?.photoUrl;
     funcionalidades = List<String>.from(u?.permissions ?? []);
     birthCountry = TextEditingController(text: u?.birthCountry ?? '');
@@ -121,8 +128,9 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
 
     esSuperadminActual = userLogged.isSuperadmin;
     institucion = TextEditingController(
-      text:
-          esSuperadminActual ? (u?.institution ?? '') : userLogged.institution,
+      text: esSuperadminActual
+          ? (u?.institution ?? '')
+          : userLogged.institution,
     );
     sede = TextEditingController(
       text: esSuperadminActual ? (u?.campus ?? '') : userLogged.campus,
@@ -151,6 +159,14 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     try {
       final permissions = await ParametersService().getPermissions();
       final normalized = _normalizePermissions(permissions);
+      if (!esSuperadminActual) {
+        normalized.removeWhere(
+          (permission) =>
+              permission.valor.startsWith('usuarios.') ||
+              permission.valor == 'historial.ver' ||
+              permission.valor == 'sitio_web.editar',
+        );
+      }
       if (!normalized.any((p) => p.valor == 'sitio_web.ver')) {
         normalized.add(
           Parameter(etiqueta: 'Sitio web', valor: 'sitio_web.ver', orden: 900),
@@ -165,10 +181,17 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           ),
         );
       }
-      final normalizedFuncionalidades = _normalizeUserPermissions(
-        normalized,
-        widget.usuario?.permissions ?? [],
-      );
+      final normalizedFuncionalidades =
+          _normalizeUserPermissions(
+            normalized,
+            widget.usuario?.permissions ?? [],
+          )..removeWhere((permission) {
+            final targetRole = widget.usuario?.role ?? rol;
+            if (!permission.startsWith('autorizaciones.')) return false;
+            if (targetRole == 'Estudiante') return true;
+            return targetRole == 'Familiar' &&
+                permission != 'autorizaciones.ver';
+          });
       if (mounted) {
         setState(() {
           _allPermissions = normalized;
@@ -210,23 +233,22 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     }).toList();
   }
 
-  Future<void> _loadGrades() async {
+  Future<void> _loadGroups() async {
     try {
-      final grades = await ParametersService().getGrades();
-      final uniqueGrades = _uniqueByValor(grades);
+      if (institucion.text.isEmpty || sede.text.isEmpty) return;
+      final groups = await AcademicGroupService().list(
+        institutionId: institucion.text,
+        campusId: sede.text,
+      );
       if (mounted) {
         setState(() {
-          _grades = uniqueGrades;
+          _groups = groups;
           final esNuevo = widget.usuario == null;
-          final currentGrade = widget.usuario?.grade ?? '';
-          final selected =
-              currentGrade.isNotEmpty
-                  ? currentGrade
-                  : (esNuevo && uniqueGrades.isNotEmpty
-                      ? uniqueGrades.first.valor
-                      : null);
-          _selectedGrade = selected;
-          grado.text = selected ?? '';
+          final currentGroupId = widget.usuario?.groupId ?? '';
+          final selected = groups.any((group) => group.id == currentGroupId)
+              ? currentGroupId
+              : (esNuevo && groups.isNotEmpty ? groups.first.id : null);
+          _selectedGroupId = selected;
         });
       }
     } catch (_) {}
@@ -248,18 +270,20 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   Future<void> _loadRoles() async {
     try {
       final roles = await ParametersService().getRoles();
-      final uniqueRoles = _uniqueByValor(roles);
+      final uniqueRoles = _uniqueByValor(roles)
+        ..removeWhere(
+          (role) => !esSuperadminActual && role.valor == 'Administrador',
+        );
       if (mounted) {
         setState(() {
           _roles = uniqueRoles;
           final esNuevo = widget.usuario == null;
           final currentRole = widget.usuario?.role ?? '';
-          final selected =
-              currentRole.isNotEmpty
-                  ? currentRole
-                  : (esNuevo && uniqueRoles.isNotEmpty
-                      ? uniqueRoles.first.valor
-                      : 'Estudiante');
+          final selected = currentRole.isNotEmpty
+              ? currentRole
+              : (esNuevo && uniqueRoles.isNotEmpty
+                    ? uniqueRoles.first.valor
+                    : 'Estudiante');
           rol = selected;
         });
       }
@@ -282,6 +306,55 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     } catch (_) {}
   }
 
+  Future<void> _loadInstitutions() async {
+    final logged = context.read<UserProviderV2>().user!;
+    try {
+      var options = await ParametersService().getInstitutions();
+      if (!esSuperadminActual) {
+        options = options
+            .where((option) => option.id == logged.institution)
+            .toList();
+      }
+      if (options.isEmpty && logged.institution.trim().isNotEmpty) {
+        options = [
+          InstitutionOption(
+            id: logged.institution.trim(),
+            label: logged.institution.trim(),
+            campuses: [logged.campus.trim()],
+          ),
+        ];
+      }
+      if (!mounted) return;
+      setState(() {
+        _institutions = options;
+        var selectedInstitution = institucion.text.trim();
+        if (!options.any((option) => option.id == selectedInstitution)) {
+          selectedInstitution = options.isEmpty ? '' : options.first.id;
+          institucion.text = selectedInstitution;
+        }
+        final selected = options.where(
+          (option) => option.id == selectedInstitution,
+        );
+        _campuses = selected.isEmpty ? <String>[] : selected.first.campuses;
+        if (!_campuses.contains(sede.text.trim())) {
+          sede.text = _campuses.isEmpty ? '' : _campuses.first;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _institutions = [
+          InstitutionOption(
+            id: logged.institution,
+            label: logged.institution,
+            campuses: [logged.campus],
+          ),
+        ];
+        _campuses = [logged.campus];
+      });
+    }
+  }
+
   @override
   void dispose() {
     nombres.dispose();
@@ -300,7 +373,6 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     residenceDepartment.dispose();
     residenceCity.dispose();
     familyRelation.dispose();
-    grado.dispose();
     institucion.dispose();
     sede.dispose();
     super.dispose();
@@ -312,15 +384,14 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     final esNuevo = widget.usuario == null;
 
     return Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       insetPadding: const EdgeInsets.all(16),
       child: SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth:
-                isMobile
-                    ? double.infinity
-                    : MediaQuery.of(context).size.width * 0.55,
+            maxWidth: isMobile
+                ? double.infinity
+                : MediaQuery.of(context).size.width * 0.55,
           ),
           child: Stack(
             children: [
@@ -330,16 +401,19 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: Colors.red.withValues(alpha: .15),
+                      color: AppPalette.primary.withValues(alpha: .15),
                     ),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Colors.red.withValues(alpha: .06), Colors.white],
+                      colors: [
+                        AppPalette.primary.withValues(alpha: .06),
+                        AppPalette.surface,
+                      ],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
+                        color: AppPalette.onSurface.withValues(alpha: 0.06),
                         blurRadius: 12,
                         offset: const Offset(0, 6),
                       ),
@@ -380,19 +454,31 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                             onRolChanged: (newValue) {
                               setState(() {
                                 rol = newValue ?? 'Estudiante';
+                                if (rol == 'Estudiante') {
+                                  funcionalidades.removeWhere(
+                                    (item) =>
+                                        item.startsWith('autorizaciones.'),
+                                  );
+                                } else if (rol == 'Familiar') {
+                                  funcionalidades.removeWhere(
+                                    (item) =>
+                                        item.startsWith('autorizaciones.') &&
+                                        item != 'autorizaciones.ver',
+                                  );
+                                }
                               });
                             },
-                            grado: grado.text,
-                            grades: _grades,
-                            selectedGrade: _selectedGrade,
-                            onGradeChanged: (newValue) {
+                            groups: _groups,
+                            selectedGroupId: _selectedGroupId,
+                            onGroupChanged: (newValue) {
                               setState(() {
-                                _selectedGrade = newValue;
-                                grado.text = newValue ?? '';
+                                _selectedGroupId = newValue;
                               });
                             },
                             institucion: institucion,
                             sede: sede,
+                            institutions: _institutions,
+                            campuses: _campuses,
                             funcionalidades: funcionalidades,
                             allPermissions: _allPermissions,
                             birthCountry: birthCountry,
@@ -405,11 +491,25 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                             studentIds: studentIds,
                             activeStudentId: activeStudentId,
                             setRol: (val) => setState(() => rol = val ?? rol),
-                            setGrado:
-                                (val) => setState(() => grado.text = val ?? ''),
-                            setInstitucion:
-                                (val) => setState(() => institucion.text = val),
-                            setSede: (val) => setState(() => sede.text = val),
+                            setInstitucion: (val) {
+                              setState(() {
+                                institucion.text = val;
+                                final selected = _institutions.where(
+                                  (option) => option.id == val,
+                                );
+                                _campuses = selected.isEmpty
+                                    ? <String>[]
+                                    : selected.first.campuses;
+                                sede.text = _campuses.isEmpty
+                                    ? ''
+                                    : _campuses.first;
+                              });
+                              _loadGroups();
+                            },
+                            setSede: (val) {
+                              setState(() => sede.text = val);
+                              _loadGroups();
+                            },
                             onFuncionalidadChanged: (permiso, isChecked) {
                               setState(() {
                                 if (isChecked == true) {
@@ -463,9 +563,8 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                               });
                             },
                             status: _status,
-                            onStatusChanged:
-                                (val) =>
-                                    setState(() => _status = val ?? _status),
+                            onStatusChanged: (val) =>
+                                setState(() => _status = val ?? _status),
                           ),
                           if (!widget.soloLectura)
                             Semantics(
@@ -476,21 +575,19 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                               child: Align(
                                 alignment: Alignment.centerRight,
                                 child: ElevatedButton.icon(
-                                  onPressed:
-                                      (_isLoading || _saving)
-                                          ? null
-                                          : _guardarUsuario,
-                                  icon:
-                                      _saving
-                                          ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                          : const Icon(Icons.save),
+                                  onPressed: (_isLoading || _saving)
+                                      ? null
+                                      : _guardarUsuario,
+                                  icon: _saving
+                                      ? SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppPalette.surface,
+                                          ),
+                                        )
+                                      : const Icon(Icons.save),
                                   label: Text(
                                     _saving ? 'Guardando...' : 'Guardar',
                                   ),
@@ -507,7 +604,7 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                 Positioned.fill(
                   child: AbsorbPointer(
                     child: Container(
-                      color: Colors.redAccent.withValues(alpha: 0.08),
+                      color: AppPalette.primary.withValues(alpha: 0.08),
                     ),
                   ),
                 ),
@@ -563,20 +660,20 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       document: documento.text.trim(),
       documentType: _selectedDocumentType ?? 'TI',
       address: _capitalizeWords(direccion.text),
-      phones:
-          telefonos.text
-              .split(',')
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList(),
-      birthDate:
-          fechaNacimiento.text.trim().isEmpty
-              ? null
-              : DateTime.tryParse(fechaNacimiento.text.trim()),
+      phones: telefonos.text
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList(),
+      birthDate: fechaNacimiento.text.trim().isEmpty
+          ? null
+          : DateTime.tryParse(fechaNacimiento.text.trim()),
       role: rol,
-      grade: _selectedGrade ?? '',
-      institution:
-          esSuperadminActual ? institucion.text : usuarioLogueado.institution,
+      groupId: _selectedGroupId,
+      groupName: _selectedGroupName,
+      institution: esSuperadminActual
+          ? institucion.text
+          : usuarioLogueado.institution,
       campus: esSuperadminActual ? sede.text : usuarioLogueado.campus,
       permissions: funcionalidades,
       isSuperadmin: widget.usuario?.isSuperadmin ?? false,
@@ -606,6 +703,7 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       } else {
         await _controller.guardarExistente(
           usuario: nuevoUsuario,
+          estadoAnterior: widget.usuario!.status,
           fotoBytes: _pickedImageBytes,
           fotoNombre: _pickedImageName,
           usuarioLogueado: usuarioLogueado,

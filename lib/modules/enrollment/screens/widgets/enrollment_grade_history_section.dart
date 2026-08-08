@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 class EnrollmentGradeHistorySection extends StatelessWidget {
   final String label;
@@ -41,22 +42,33 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
               2: FlexColumnWidth(1.4),
               3: FixedColumnWidth(88),
             },
-            border: TableBorder.all(color: Colors.grey.shade300),
+            border: TableBorder.all(
+              color: AppPalette.outline.withValues(alpha: .35),
+            ),
             children: [
               TableRow(
-                decoration: BoxDecoration(color: Colors.grey.shade100),
+                decoration: BoxDecoration(color: AppPalette.surface),
                 children: const [
                   Padding(
                     padding: EdgeInsets.all(8),
-                    child: Text('Año', style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      'Año',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   Padding(
                     padding: EdgeInsets.all(8),
-                    child: Text('Institución', style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      'Institución',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   Padding(
                     padding: EdgeInsets.all(8),
-                    child: Text('Grado', style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      'Grado',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   SizedBox.shrink(),
                 ],
@@ -90,7 +102,10 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
                                     tooltip: 'Editar',
                                   ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  icon: Icon(
+                                    Icons.delete,
+                                    color: AppPalette.primary,
+                                  ),
                                   onPressed: () => onRemove(entry),
                                   tooltip: 'Eliminar',
                                 ),
@@ -109,9 +124,9 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: TextButton.icon(
               onPressed: onAdd,
-              icon: const Icon(Icons.add_circle, color: Colors.redAccent),
+              icon: Icon(Icons.add_circle, color: AppPalette.primary),
               label: const Text('Agregar'),
-              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              style: TextButton.styleFrom(foregroundColor: AppPalette.primary),
             ),
           ),
       ],
