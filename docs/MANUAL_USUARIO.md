@@ -90,7 +90,17 @@ Los contactos y envíos grupales usan el grupo académico exacto: Cuarto A no in
 
 ## Sitio web
 
-El sitio público administra páginas, bloques, navegación, imágenes, datos de contacto y pie de página. Su color principal y tipografía también alimentan el tema de los módulos internos. Solo usuarios con permisos del sitio pueden editarlo.
+El constructor del sitio público está dividido en tres áreas independientes:
+
+- **Header:** identidad institucional, logo, navegación, datos de contacto, redes, color principal y tipografía.
+- **Footer:** filas propias, información institucional, contacto, enlaces, redes y texto legal.
+- **Contenido de navegación:** una composición distinta para Inicio y para cada página publicada.
+
+Cada área se organiza en filas. Una fila admite entre una y cuatro columnas, con ancho relativo, fondo, separación, espacio interior y comportamiento adaptable a celular. Dentro de cada columna se agregan componentes: portada, texto, imagen, botón, tarjeta, carrusel, galería, video, preguntas desplegables, cifras, formulario, contacto, navegación, identidad, redes, separador o espacio.
+
+Las imágenes se eligen desde el equipo y se guardan en Storage. Los videos se administran mediante enlaces HTTPS de YouTube o Vimeo; se reproducen incrustados en la web y no ocupan Storage ni consumen la transferencia de Firebase. No se permite pegar HTML o `iframe` arbitrario.
+
+El selector de color muestra una paleta visual amplia y deja el hexadecimal como opción avanzada. El color principal y la tipografía también alimentan el tema de los módulos internos; los fondos y estilos propios de filas, columnas y componentes solo afectan el sitio público. Antes de publicar se puede alternar la vista previa entre escritorio y móvil. Solo usuarios con `sitio_web.editar` o el superadministrador pueden modificar y publicar.
 
 ## Historial y auditoría
 

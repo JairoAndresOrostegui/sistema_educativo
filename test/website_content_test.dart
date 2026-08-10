@@ -1,130 +1,144 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sistema_educativo/modules/website/models/website_content.dart';
+import 'package:sistema_educativo/modules/website/screens/public_website_screen.dart';
 
 void main() {
-  group('WebsiteContent', () {
-    test('incluye la navegación aprobada de Wix', () {
-      expect(WebsiteContent.defaults.navigation.map((item) => item.label), [
-        'About',
-        'Admissions',
-        'Learning',
-        'News & Events',
-        'Parents',
-      ]);
-    });
-
-    test('migra contenido anterior a las nuevas páginas', () {
-      final migrated = WebsiteContent.fromMap({
-        'version': 1,
-        'schoolName': 'Liceo',
-        'sections': [
-          {
-            'id': 'legacy',
-            'title': 'Contenido anterior',
-            'body': 'Se conserva durante la migración.',
-          },
-        ],
-      });
-
-      expect(
-        migrated.sections.any((section) => section.id == 'legacy'),
-        isTrue,
-      );
-      for (final page in ['admissions', 'learning', 'news', 'parents']) {
-        expect(
-          migrated.sections.any((section) => section.pageId == page),
-          isTrue,
-        );
-      }
-    });
-
-    test('conserva opciones avanzadas al serializar', () {
-      const section = WebsiteSection(
-        id: 'custom',
-        title: 'Título',
-        body: 'Contenido',
-        pageId: 'learning',
-        textAlignment: 'right',
-        imagePosition: 'background',
-        imageFit: 'contain',
-        contentWidth: 'narrow',
-        backgroundColor: '#112233',
-        textColor: '#FFFFFF',
-      );
-
-      final decoded = WebsiteSection.fromMap(section.toMap());
-      expect(decoded.pageId, 'learning');
-      expect(decoded.textAlignment, 'right');
-      expect(decoded.imagePosition, 'background');
-      expect(decoded.imageFit, 'contain');
-      expect(decoded.contentWidth, 'narrow');
-      expect(decoded.backgroundColor, '#112233');
-      expect(decoded.textColor, '#FFFFFF');
-    });
-
-    test('crea una pagina independiente para cada menu', () {
+  group('Website CMS v5', () {
+    test('defaults use rows, columns and components', () {
       final bundle = WebsiteBundle.defaults;
-      expect(bundle.pages.map((page) => page.slug), [
-        'home',
-        'about',
-        'admissions',
-        'learning',
-        'news-events',
-        'parents',
-      ]);
-      expect(bundle.pages.map((page) => page.id).toSet().length, 6);
-    });
-
-    test('conserva configuracion responsive y referencia de Storage', () {
-      const block = WebsiteBlock(
-        id: 'responsive',
-        mobileOrder: 4,
-        showOnDesktop: false,
-        mobileImagePosition: 'background',
-        mobileTitleSize: 27,
-        image: WebsiteAsset(
-          url: 'https://example.test/image.jpg',
-          storagePath: 'website/image.jpg',
-        ),
-      );
-      final decoded = WebsiteBlock.fromMap(block.toMap());
-      expect(decoded.mobileOrder, 4);
-      expect(decoded.showOnDesktop, isFalse);
-      expect(decoded.mobileImagePosition, 'background');
-      expect(decoded.mobileTitleSize, 27);
-      expect(decoded.image.storagePath, 'website/image.jpg');
-      expect(decoded.image.isManaged, isTrue);
-    });
-
-    test('serializa el footer independiente y su logo administrado', () {
-      const footer = WebsiteFooterConfig(
-        layout: 'centered',
-        alignment: 'center',
-        backgroundColor: '#101820',
-        textColor: '#F5F5F5',
-        showNavigation: true,
-        useSiteLogo: false,
-        showLogo: true,
-        logo: WebsiteAsset(
-          url: 'https://example.test/footer.png',
-          storagePath: 'website/footer.png',
-        ),
-      );
-      const config = WebsiteSiteConfig(
-        schoolName: 'Liceo',
-        tagline: '',
-        footer: footer,
-      );
-
-      final decoded = WebsiteSiteConfig.fromMap(config.toMap());
-      expect(decoded.footer.layout, 'centered');
-      expect(decoded.footer.alignment, 'center');
-      expect(decoded.footer.showNavigation, isTrue);
-      expect(decoded.footer.logo.isManaged, isTrue);
+      expect(bundle.config.header.rows, isNotEmpty);
+      expect(bundle.config.footer.rows, isNotEmpty);
       expect(
-        WebsiteBundle(config: decoded, pages: const []).managedAssetPaths,
-        contains('website/footer.png'),
+        bundle.pages.first.rows.first.columns.first.components,
+        isNotEmpty,
       );
+      expect(bundle.config.toMap()['version'], WebsiteSiteConfig.schemaVersion);
+    });
+
+    test('serializes and restores the complete layout', () {
+      const component = WebsiteComponent(
+        id: 'carousel_1',
+        type: 'carousel',
+        title: 'Vida escolar',
+        autoplay: false,
+        intervalSeconds: 8,
+        items: [
+          WebsiteComponentItem(
+            id: 'slide_1',
+            title: 'Ciencia',
+            image: WebsiteAsset(
+              url: 'https://example.com/ciencia.jpg',
+              storagePath: 'website/ciencia.jpg',
+            ),
+          ),
+        ],
+      );
+      const page = WebsitePage(
+        id: 'home',
+        label: 'Inicio',
+        slug: 'home',
+        rows: [
+          WebsiteRow(
+            id: 'row_1',
+            columns: [
+              WebsiteColumn(id: 'column_1', components: [component]),
+            ],
+          ),
+        ],
+      );
+      final restored = WebsitePage.fromMap(page.id, page.toMap());
+      final restoredComponent =
+          restored.rows.first.columns.first.components.first;
+      expect(restoredComponent.type, 'carousel');
+      expect(restoredComponent.autoplay, isFalse);
+      expect(restoredComponent.intervalSeconds, 8);
+      expect(restoredComponent.items.single.title, 'Ciencia');
+      expect(restoredComponent.items.single.image.isManaged, isTrue);
+    });
+
+    test('header and footer are independent layout areas', () {
+      final original = WebsiteBundle.defaults.config;
+      final restored = WebsiteSiteConfig.fromMap(original.toMap());
+      expect(restored.header.rows.first.id, 'header_main');
+      expect(restored.footer.rows.first.id, 'footer_main');
+      expect(restored.header.rows.first.columns.length, 2);
+      expect(restored.footer.rows.first.columns.length, 3);
+    });
+
+    test('rejects old schemas instead of keeping compatibility code', () {
+      expect(
+        () =>
+            WebsiteSiteConfig.fromMap({'version': 4, 'schoolName': 'Colegio'}),
+        throwsFormatException,
+      );
+    });
+
+    test('managed assets include nested item images', () {
+      const bundle = WebsiteBundle(
+        config: WebsiteSiteConfig(
+          schoolName: 'Colegio',
+          tagline: '',
+          logo: WebsiteAsset(storagePath: 'website/logo.png'),
+        ),
+        pages: [
+          WebsitePage(
+            id: 'home',
+            label: 'Inicio',
+            slug: 'home',
+            rows: [
+              WebsiteRow(
+                id: 'row',
+                columns: [
+                  WebsiteColumn(
+                    id: 'column',
+                    components: [
+                      WebsiteComponent(
+                        id: 'gallery',
+                        type: 'gallery',
+                        items: [
+                          WebsiteComponentItem(
+                            id: 'image',
+                            image: WebsiteAsset(
+                              storagePath: 'website/gallery.jpg',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      expect(bundle.managedAssetPaths, {
+        'website/logo.png',
+        'website/gallery.jpg',
+      });
+    });
+
+    testWidgets('renders the responsive public layout', (tester) async {
+      final bundle = WebsiteBundle.defaults;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WebsitePreviewCanvas(
+            config: bundle.config,
+            page: bundle.pages.first,
+            previewMobile: true,
+            editorMode: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text(bundle.config.schoolName), findsWidgets);
+      expect(
+        find.text('Formamos estudiantes con valores y pasión por aprender'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
     });
   });
 }

@@ -1,11 +1,14 @@
-import 'package:sistema_educativo/config/app_palette.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../config/app_palette.dart';
 import '../models/website_content.dart';
 import '../services/website_service.dart';
+import '../widgets/website_video_embed.dart';
 
 class PublicWebsiteScreen extends StatefulWidget {
   final String slug;
@@ -31,9 +34,7 @@ class _PublicWebsiteScreenState extends State<PublicWebsiteScreen> {
     if (oldWidget.slug != widget.slug) _load();
   }
 
-  void _load() {
-    _future = WebsiteService().getPublicPage(widget.slug);
-  }
+  void _load() => _future = WebsiteService().getPublicPage(widget.slug);
 
   @override
   Widget build(BuildContext context) =>
@@ -79,9 +80,8 @@ class WebsitePreviewCanvas extends StatelessWidget {
   final WebsitePage page;
   final bool previewMobile;
   final bool editorMode;
-  final String? selectedBlockId;
-  final ValueChanged<String>? onBlockSelected;
-  final void Function(int oldIndex, int newIndex)? onReorder;
+  final String? selectedId;
+  final ValueChanged<String>? onSelected;
 
   const WebsitePreviewCanvas({
     super.key,
@@ -89,361 +89,306 @@ class WebsitePreviewCanvas extends StatelessWidget {
     required this.page,
     required this.previewMobile,
     this.editorMode = false,
-    this.selectedBlockId,
-    this.onBlockSelected,
-    this.onReorder,
+    this.selectedId,
+    this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final blocks = _orderedVisibleBlocks(page.blocks, previewMobile);
-    final content = <Widget>[
-      for (final block in blocks)
-        _EditableBlockFrame(
-          key: ValueKey(block.id),
-          selected: selectedBlockId == block.id,
-          editorMode: editorMode,
-          onTap: () => onBlockSelected?.call(block.id),
-          child: WebsiteBlockView(
+    final header = config.header.enabled
+        ? WebsiteLayout(
+            rows: config.header.rows,
             config: config,
             pageId: page.id,
-            block: block,
             mobile: previewMobile,
             preview: editorMode,
-          ),
-        ),
-    ];
-
-    final header = WebsiteHeader(
+            selectedId: selectedId,
+            onSelected: onSelected,
+          )
+        : const SizedBox.shrink();
+    final content = WebsiteLayout(
+      rows: page.rows,
       config: config,
-      compact: previewMobile,
+      pageId: page.id,
+      mobile: previewMobile,
       preview: editorMode,
+      selectedId: selectedId,
+      onSelected: onSelected,
     );
-    final footer = WebsiteFooter(
-      config: config,
-      compact: previewMobile,
-      preview: editorMode,
-    );
-    if (!editorMode) {
-      return Scaffold(
-        backgroundColor: AppPalette.surface,
-        body: SelectionArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverList.list(children: [header, ...content]),
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Column(
-                  children: [const Spacer(), if (config.footer.enabled) footer],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    return Scaffold(
-      backgroundColor: AppPalette.surface,
-      body: SelectionArea(
-        child: Column(
-          children: [
-            header,
-            Expanded(
-              child: ReorderableListView(
-                buildDefaultDragHandles: true,
-                onReorderItem: onReorder!,
-                children: content,
-              ),
-            ),
-            if (config.footer.enabled) footer,
-          ],
-        ),
+    final footer = config.footer.enabled
+        ? WebsiteFooter(
+            config: config,
+            compact: previewMobile,
+            preview: editorMode,
+            selectedId: selectedId,
+            onSelected: onSelected,
+          )
+        : const SizedBox.shrink();
+    final scrollingContent = SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [content, footer],
       ),
     );
-  }
-}
-
-class WebsiteHeader extends StatelessWidget {
-  final WebsiteSiteConfig config;
-  final bool compact;
-  final bool preview;
-
-  const WebsiteHeader({
-    super.key,
-    required this.config,
-    required this.compact,
-    this.preview = false,
-  });
-
-  void _go(BuildContext context, String path) {
-    if (!preview) context.go(path);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = websiteHexColor(config.primaryColor);
-    final navigation = config.navigation.where((item) => item.enabled).toList();
-    return Material(
-      elevation: 2,
-      color: AppPalette.surface,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 14 : 42,
-          vertical: 12,
-        ),
-        child: Row(
-          children: [
-            InkWell(
-              onTap: () => _go(context, '/'),
-              child: WebsiteImage(
-                asset: config.logo,
-                width: compact ? 45 : 58,
-                height: compact ? 45 : 58,
-                fit: BoxFit.contain,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: websiteHexColor('#FFFFFF'),
+      body: SelectionArea(
+        child: config.header.enabled && config.header.sticky
+            ? Column(
                 children: [
-                  Text(
-                    config.schoolName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: websiteTextStyle(
-                      config.fontFamily,
-                      fontSize: compact ? 14 : 19,
-                      fontWeight: FontWeight.w800,
-                      color: primary,
-                    ),
-                  ),
-                  if (!compact)
-                    Text(
-                      config.tagline,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
-            ),
-            if (compact)
-              PopupMenuButton<String>(
-                tooltip: 'Navegación',
-                icon: const Icon(Icons.menu),
-                onSelected: (slug) => _go(context, '/$slug'),
-                itemBuilder: (context) => [
-                  for (final item in navigation)
-                    PopupMenuItem(
-                      value: item.resolvedSlug,
-                      child: Text(item.label),
-                    ),
+                  header,
+                  Expanded(child: scrollingContent),
                 ],
               )
-            else
-              for (final item in navigation)
-                TextButton(
-                  onPressed: () => _go(context, '/${item.resolvedSlug}'),
-                  child: Text(item.label),
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [header, content, footer],
                 ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: () => _go(context, '/login'),
-              style: FilledButton.styleFrom(backgroundColor: primary),
-              icon: const Icon(Icons.login, size: 18),
-              label: Text(compact ? 'Login' : 'Iniciar sesión'),
-            ),
-          ],
-        ),
+              ),
       ),
     );
   }
 }
 
-class WebsiteBlockView extends StatelessWidget {
+class WebsiteLayout extends StatelessWidget {
+  final List<WebsiteRow> rows;
   final WebsiteSiteConfig config;
   final String pageId;
-  final WebsiteBlock block;
+  final bool mobile;
+  final bool preview;
+  final String? selectedId;
+  final ValueChanged<String>? onSelected;
+
+  const WebsiteLayout({
+    super.key,
+    required this.rows,
+    required this.config,
+    required this.pageId,
+    required this.mobile,
+    this.preview = false,
+    this.selectedId,
+    this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (final row in rows.where((item) => item.enabled))
+        _selectable(
+          row.id,
+          ColoredBox(
+            color: websiteHexColor(row.backgroundColor),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: row.maxWidth.toDouble()),
+                child: Padding(
+                  padding: EdgeInsets.all(row.padding.toDouble()),
+                  child: _row(row),
+                ),
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  Widget _row(WebsiteRow row) {
+    final columns = row.columns;
+    if (mobile && row.stackOnMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < columns.length; i++) ...[
+            _column(columns[i]),
+            if (i < columns.length - 1) SizedBox(height: row.gap.toDouble()),
+          ],
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < columns.length; i++) ...[
+          Expanded(flex: columns[i].span, child: _column(columns[i])),
+          if (i < columns.length - 1) SizedBox(width: row.gap.toDouble()),
+        ],
+      ],
+    );
+  }
+
+  Widget _column(WebsiteColumn column) => _selectable(
+    column.id,
+    ColoredBox(
+      color: websiteHexColor(column.backgroundColor),
+      child: Padding(
+        padding: EdgeInsets.all(column.padding.toDouble()),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < column.components.length; i++) ...[
+              if (column.components[i].enabled)
+                _selectable(
+                  column.components[i].id,
+                  WebsiteComponentView(
+                    config: config,
+                    pageId: pageId,
+                    component: column.components[i],
+                    mobile: mobile,
+                    preview: preview,
+                  ),
+                ),
+              if (i < column.components.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _selectable(String id, Widget child) {
+    if (!preview) return child;
+    final selected = id == selectedId;
+    return InkWell(
+      onTap: () => onSelected?.call(id),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? AppPalette.info : Colors.transparent,
+            width: selected ? 3 : 1,
+          ),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class WebsiteComponentView extends StatelessWidget {
+  final WebsiteSiteConfig config;
+  final String pageId;
+  final WebsiteComponent component;
   final bool mobile;
   final bool preview;
 
-  const WebsiteBlockView({
+  const WebsiteComponentView({
     super.key,
     required this.config,
     required this.pageId,
-    required this.block,
+    required this.component,
     required this.mobile,
     this.preview = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final padding = (mobile ? block.mobilePadding : block.padding).toDouble();
-    final background = websiteHexColor(
-      block.backgroundColor,
-      fallback: AppPalette.surface,
-    );
-    final maxWidth = switch (block.contentWidth) {
-      'narrow' => 720.0,
-      'normal' => 960.0,
-      _ => 1280.0,
-    };
-    Widget child = switch (block.type) {
+    final child = switch (component.type) {
       'hero' => _hero(context),
-      'text' => _copy(context),
-      'image' => _image(height: mobile ? 290 : 520),
+      'image' => _image(),
       'button' => _button(context),
-      'divider' => _divider(),
-      'spacer' => SizedBox(height: mobile ? 34 : 64),
-      'contactForm' => WebsiteContactForm(
-        pageId: pageId,
-        block: block,
+      'card' => _card(context),
+      'carousel' => WebsiteCarousel(
+        component: component,
+        config: config,
         preview: preview,
       ),
+      'gallery' => _gallery(),
+      'video' => WebsiteVideoEmbed(url: component.url, preview: preview),
+      'accordion' => _accordion(),
+      'stats' => _stats(),
+      'divider' => Divider(
+        thickness: 3,
+        color: websiteHexColor(component.accentColor),
+      ),
+      'spacer' => SizedBox(height: component.padding.toDouble()),
       'socialLinks' => WebsiteSocialLinks(
         links: config.socialLinks,
-        color: websiteHexColor(block.textColor),
+        color: websiteHexColor(component.textColor),
         preview: preview,
       ),
-      _ => _imageText(context),
+      'contactInfo' => _contactInfo(),
+      'navigation' => _navigation(context),
+      'siteIdentity' => _identity(),
+      'contactForm' => WebsiteContactForm(
+        pageId: pageId,
+        component: component,
+        preview: preview,
+      ),
+      _ => _copy(),
     };
-    if (block.type == 'hero') return child;
+    if (component.type == 'hero') return child;
     return ColoredBox(
-      color: background,
+      color: websiteHexColor(component.backgroundColor),
       child: Padding(
-        padding: EdgeInsets.all(padding),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: child,
+        padding: EdgeInsets.all(component.padding.toDouble()),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _hero(BuildContext context) => SizedBox(
+    height: mobile ? 470 : 600,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        WebsiteImage(asset: component.image, fit: _fit),
+        ColoredBox(color: Colors.black.withValues(alpha: .48)),
+        Align(
+          alignment: _alignment,
+          child: Padding(
+            padding: EdgeInsets.all(component.padding.toDouble()),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 850),
+              child: _copy(),
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _hero(BuildContext context) {
-    final text = _copy(context, hero: true);
-    return SizedBox(
-      height: mobile ? 560 : 620,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          WebsiteImage(asset: block.image, fit: _fit),
-          ColoredBox(color: AppPalette.onSurface.withValues(alpha: .52)),
-          Align(
-            alignment: _alignment,
-            child: Padding(
-              padding: EdgeInsets.all(
-                (mobile ? block.mobilePadding : block.padding).toDouble(),
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 850),
-                child: text,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _imageText(BuildContext context) {
-    final image = _image(height: mobile ? 280 : 410);
-    final copy = _copy(context);
-    final position = mobile ? block.mobileImagePosition : block.imagePosition;
-    if (position == 'background') return _hero(context);
-    if (mobile || position == 'top') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [image, const SizedBox(height: 22), copy],
-      );
-    }
-    final imageFirst = position != 'right';
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: imageFirst
-          ? [
-              Expanded(child: image),
-              const SizedBox(width: 34),
-              Expanded(child: copy),
-            ]
-          : [
-              Expanded(child: copy),
-              const SizedBox(width: 34),
-              Expanded(child: image),
-            ],
-    );
-  }
-
-  Widget _copy(BuildContext context, {bool hero = false}) {
-    final color = websiteHexColor(
-      block.textColor,
-      fallback: hero ? AppPalette.surface : AppPalette.onSurface,
-    );
-    final align = websiteTextAlign(block.textAlignment);
-    final cross = websiteCrossAxisAlignment(block.textAlignment);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: cross,
-      children: [
-        if (block.showAccent) ...[
-          Container(
-            width: 58,
-            height: 5,
-            color: websiteHexColor(block.accentColor),
-          ),
-          const SizedBox(height: 18),
-        ],
-        if (block.title.isNotEmpty)
-          Text(
-            block.title,
-            textAlign: align,
-            style: websiteTextStyle(
-              block.fontFamily,
-              fontSize: (mobile ? block.mobileTitleSize : block.titleSize)
-                  .toDouble(),
-              height: 1.12,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        if (block.body.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text(
-            block.body,
-            textAlign: align,
-            style: websiteTextStyle(
-              block.fontFamily,
-              fontSize: (mobile ? block.mobileBodySize : block.bodySize)
-                  .toDouble(),
-              height: 1.55,
-              color: color.withValues(alpha: .92),
-            ),
-          ),
-        ],
-        if (block.buttonLabel.isNotEmpty && block.buttonUrl.isNotEmpty) ...[
-          const SizedBox(height: 22),
-          FilledButton(
-            onPressed: preview
-                ? null
-                : () => openWebsiteLink(context, block.buttonUrl),
-            style: FilledButton.styleFrom(
-              backgroundColor: websiteHexColor(block.accentColor),
-            ),
-            child: Text(block.buttonLabel),
-          ),
-        ],
       ],
-    );
-  }
+    ),
+  );
 
-  Widget _image({required double height}) => ClipRRect(
+  Widget _copy() => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: websiteCrossAxisAlignment(component.alignment),
+    children: [
+      if (component.title.isNotEmpty)
+        Text(
+          component.title,
+          textAlign: websiteTextAlign(component.alignment),
+          style: websiteTextStyle(
+            config.fontFamily,
+            color: websiteHexColor(component.textColor),
+            fontSize:
+                (mobile
+                        ? component.titleSize.clamp(20, 42)
+                        : component.titleSize)
+                    .toDouble(),
+            fontWeight: FontWeight.w800,
+            height: 1.12,
+          ),
+        ),
+      if (component.body.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Text(
+          component.body,
+          textAlign: websiteTextAlign(component.alignment),
+          style: websiteTextStyle(
+            config.fontFamily,
+            color: websiteHexColor(component.textColor),
+            fontSize: component.bodySize.toDouble(),
+            height: 1.55,
+          ),
+        ),
+      ],
+    ],
+  );
+
+  Widget _image() => ClipRRect(
     borderRadius: BorderRadius.circular(12),
     child: WebsiteImage(
-      asset: block.image,
-      width: double.infinity,
-      height: height,
+      asset: component.image,
+      height: mobile ? 260 : 400,
       fit: _fit,
     ),
   );
@@ -451,45 +396,364 @@ class WebsiteBlockView extends StatelessWidget {
   Widget _button(BuildContext context) => Align(
     alignment: _alignment,
     child: FilledButton(
-      onPressed: preview || block.buttonUrl.isEmpty
+      onPressed: preview || component.url.isEmpty
           ? null
-          : () => openWebsiteLink(context, block.buttonUrl),
+          : () => openWebsiteLink(context, component.url),
       style: FilledButton.styleFrom(
-        backgroundColor: websiteHexColor(block.accentColor),
+        backgroundColor: websiteHexColor(component.accentColor),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
       ),
-      child: Text(block.buttonLabel.isEmpty ? 'Botón' : block.buttonLabel),
+      child: Text(
+        component.buttonLabel.isEmpty
+            ? 'Más información'
+            : component.buttonLabel,
+      ),
     ),
   );
 
-  Widget _divider() => Align(
-    alignment: _alignment,
-    child: Container(
-      width: block.contentWidth == 'wide' ? double.infinity : 180,
-      height: 4,
-      color: websiteHexColor(block.accentColor),
+  Widget _card(BuildContext context) => Card(
+    elevation: 2,
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (component.image.url.isNotEmpty)
+          WebsiteImage(asset: component.image, height: 220, fit: _fit),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: websiteCrossAxisAlignment(component.alignment),
+            children: [
+              _copy(),
+              if (component.url.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                TextButton(
+                  onPressed: preview
+                      ? null
+                      : () => openWebsiteLink(context, component.url),
+                  child: Text(
+                    component.buttonLabel.isEmpty
+                        ? 'Conocer más'
+                        : component.buttonLabel,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     ),
+  );
+
+  Widget _gallery() => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = mobile
+          ? constraints.maxWidth
+          : (constraints.maxWidth - 24) / 3;
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final item in component.items)
+            SizedBox(
+              width: width,
+              child: AspectRatio(
+                aspectRatio: 4 / 3,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: WebsiteImage(asset: item.image, fit: BoxFit.cover),
+                ),
+              ),
+            ),
+        ],
+      );
+    },
+  );
+
+  Widget _accordion() => Column(
+    children: [
+      if (component.title.isNotEmpty) _copy(),
+      for (final item in component.items)
+        ExpansionTile(
+          title: Text(item.title),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(item.text),
+              ),
+            ),
+          ],
+        ),
+    ],
+  );
+
+  Widget _stats() => Wrap(
+    spacing: 28,
+    runSpacing: 20,
+    alignment: WrapAlignment.center,
+    children: [
+      for (final item in component.items)
+        SizedBox(
+          width: 180,
+          child: Column(
+            children: [
+              Text(
+                item.title,
+                textAlign: TextAlign.center,
+                style: websiteTextStyle(
+                  config.fontFamily,
+                  color: websiteHexColor(component.accentColor),
+                  fontSize: component.titleSize.toDouble(),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(item.text, textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+    ],
+  );
+
+  Widget _contactInfo() => Column(
+    crossAxisAlignment: websiteCrossAxisAlignment(component.alignment),
+    children: [
+      if (component.title.isNotEmpty) _copy(),
+      if (config.address.isNotEmpty)
+        _contact(Icons.location_on_outlined, config.address),
+      if (config.phone.isNotEmpty) _contact(Icons.phone_outlined, config.phone),
+      if (config.email.isNotEmpty) _contact(Icons.email_outlined, config.email),
+    ],
+  );
+
+  Widget _contact(IconData icon, String value) => Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: websiteHexColor(component.accentColor)),
+        const SizedBox(width: 9),
+        Flexible(
+          child: Text(
+            value,
+            style: TextStyle(color: websiteHexColor(component.textColor)),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _navigation(BuildContext context) => Wrap(
+    alignment: switch (component.alignment) {
+      'center' => WrapAlignment.center,
+      'right' => WrapAlignment.end,
+      _ => WrapAlignment.start,
+    },
+    spacing: 6,
+    runSpacing: 4,
+    children: [
+      for (final item in config.navigation.where((item) => item.enabled))
+        TextButton(
+          onPressed: preview ? null : () => context.go('/${item.slug}'),
+          style: TextButton.styleFrom(
+            foregroundColor: websiteHexColor(component.textColor),
+          ),
+          child: Text(item.label),
+        ),
+      FilledButton.tonalIcon(
+        onPressed: preview ? null : () => context.go('/login'),
+        icon: const Icon(Icons.login, size: 18),
+        label: const Text('Ingresar'),
+      ),
+    ],
+  );
+
+  Widget _identity() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (config.logo.url.isNotEmpty)
+        WebsiteImage(
+          asset: config.logo,
+          width: 58,
+          height: 58,
+          fit: BoxFit.contain,
+        ),
+      if (config.logo.url.isNotEmpty) const SizedBox(width: 12),
+      Flexible(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              config.schoolName,
+              style: websiteTextStyle(
+                config.fontFamily,
+                color: websiteHexColor(component.textColor),
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+            if (config.tagline.isNotEmpty)
+              Text(
+                config.tagline,
+                style: TextStyle(color: websiteHexColor(component.textColor)),
+              ),
+          ],
+        ),
+      ),
+    ],
   );
 
   BoxFit get _fit =>
-      block.imageFit == 'contain' ? BoxFit.contain : BoxFit.cover;
-
-  Alignment get _alignment => switch (block.textAlignment) {
+      component.imageFit == 'contain' ? BoxFit.contain : BoxFit.cover;
+  Alignment get _alignment => switch (component.alignment) {
     'center' => Alignment.center,
     'right' => Alignment.centerRight,
     _ => Alignment.centerLeft,
   };
 }
 
+class WebsiteCarousel extends StatefulWidget {
+  final WebsiteComponent component;
+  final WebsiteSiteConfig config;
+  final bool preview;
+
+  const WebsiteCarousel({
+    super.key,
+    required this.component,
+    required this.config,
+    required this.preview,
+  });
+
+  @override
+  State<WebsiteCarousel> createState() => _WebsiteCarouselState();
+}
+
+class _WebsiteCarouselState extends State<WebsiteCarousel> {
+  final _controller = PageController();
+  Timer? _timer;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  void _start() {
+    if (!widget.component.autoplay || widget.component.items.length < 2) return;
+    _timer = Timer.periodic(
+      Duration(seconds: widget.component.intervalSeconds),
+      (_) {
+        if (!mounted || !_controller.hasClients) return;
+        final next = (_index + 1) % widget.component.items.length;
+        _controller.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.component.items.isEmpty) {
+      return const AspectRatio(
+        aspectRatio: 16 / 7,
+        child: Center(child: Text('Agrega imágenes al carrusel')),
+      );
+    }
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 7,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: widget.component.items.length,
+            onPageChanged: (value) => setState(() => _index = value),
+            itemBuilder: (context, index) {
+              final item = widget.component.items[index];
+              final slide = Stack(
+                fit: StackFit.expand,
+                children: [
+                  WebsiteImage(asset: item.image, fit: BoxFit.cover),
+                  if (item.title.isNotEmpty || item.text.isNotEmpty)
+                    ColoredBox(color: Colors.black.withValues(alpha: .35)),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (item.text.isNotEmpty)
+                            Text(
+                              item.text,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+              if (item.url.isEmpty) return slide;
+              return InkWell(
+                onTap: widget.preview
+                    ? null
+                    : () => openWebsiteLink(context, item.url),
+                child: slide,
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < widget.component.items.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: CircleAvatar(
+                  radius: i == _index ? 5 : 3,
+                  backgroundColor: i == _index
+                      ? websiteHexColor(widget.component.accentColor)
+                      : Colors.grey,
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class WebsiteContactForm extends StatefulWidget {
   final String pageId;
-  final WebsiteBlock block;
+  final WebsiteComponent component;
   final bool preview;
 
   const WebsiteContactForm({
     super.key,
     required this.pageId,
-    required this.block,
+    required this.component,
     required this.preview,
   });
 
@@ -520,7 +784,7 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
     try {
       await WebsiteService().submitContactForm(
         pageId: widget.pageId,
-        blockId: widget.block.id,
+        blockId: widget.component.id,
         name: _name.text,
         email: _email.text,
         phone: _phone.text,
@@ -530,7 +794,7 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
       if (!mounted) return;
       _key.currentState?.reset();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tu mensaje fue enviado correctamente.')),
+        const SnackBar(content: Text('Mensaje enviado correctamente.')),
       );
     } catch (_) {
       if (mounted) {
@@ -547,81 +811,50 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
   Widget build(BuildContext context) => Form(
     key: _key,
     child: Column(
-      crossAxisAlignment: websiteCrossAxisAlignment(widget.block.textAlignment),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.block.title.isNotEmpty)
+        if (widget.component.title.isNotEmpty)
           Text(
-            widget.block.title,
-            style: websiteTextStyle(
-              widget.block.fontFamily,
-              fontSize: widget.block.titleSize.toDouble(),
-              fontWeight: FontWeight.w800,
-              color: websiteHexColor(widget.block.textColor),
-            ),
+            widget.component.title,
+            style: Theme.of(context).textTheme.headlineMedium,
           ),
-        if (widget.block.body.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(widget.block.body),
-        ],
-        const SizedBox(height: 22),
-        Wrap(
-          spacing: 14,
-          runSpacing: 14,
-          children: [
-            _field(_name, 'Nombre', required: true),
-            _field(_email, 'Correo', required: true),
-            _field(_phone, 'Teléfono'),
-          ],
+        if (widget.component.body.isNotEmpty) Text(widget.component.body),
+        const SizedBox(height: 18),
+        TextFormField(
+          controller: _name,
+          decoration: const InputDecoration(labelText: 'Nombre'),
+          validator: _required,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _email,
+          decoration: const InputDecoration(labelText: 'Correo'),
+          validator: _required,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _phone,
+          decoration: const InputDecoration(labelText: 'Teléfono'),
+        ),
+        const SizedBox(height: 12),
         TextFormField(
           controller: _message,
-          minLines: 4,
-          maxLines: 8,
-          decoration: const InputDecoration(
-            labelText: 'Mensaje',
-            border: OutlineInputBorder(),
-          ),
-          validator: (value) => value == null || value.trim().length < 5
-              ? 'Escribe un mensaje.'
-              : null,
+          maxLines: 5,
+          decoration: const InputDecoration(labelText: 'Mensaje'),
+          validator: _required,
         ),
         Offstage(offstage: true, child: TextFormField(controller: _website)),
         const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: widget.preview || _sending ? null : _submit,
-          icon: _sending
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.send_outlined),
-          label: const Text('Enviar mensaje'),
+        FilledButton(
+          onPressed: _sending || widget.preview ? null : _submit,
+          child: Text(_sending ? 'Enviando...' : 'Enviar mensaje'),
         ),
       ],
     ),
   );
 
-  Widget _field(
-    TextEditingController controller,
-    String label, {
-    bool required = false,
-  }) => SizedBox(
-    width: 300,
-    child: TextFormField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      validator: required
-          ? (value) => value == null || value.trim().isEmpty
-                ? 'Campo obligatorio.'
-                : null
-          : null,
-    ),
-  );
+  String? _required(String? value) =>
+      (value ?? '').trim().isEmpty ? 'Campo obligatorio.' : null;
 }
 
 class WebsiteSocialLinks extends StatelessWidget {
@@ -638,7 +871,7 @@ class WebsiteSocialLinks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-    spacing: 10,
+    spacing: 8,
     children: [
       for (final link in links.where(
         (item) => item.enabled && item.url.isNotEmpty,
@@ -657,238 +890,50 @@ class WebsiteFooter extends StatelessWidget {
   final WebsiteSiteConfig config;
   final bool compact;
   final bool preview;
+  final String? selectedId;
+  final ValueChanged<String>? onSelected;
 
   const WebsiteFooter({
     super.key,
     required this.config,
     required this.compact,
     this.preview = false,
+    this.selectedId,
+    this.onSelected,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final footer = config.footer;
-    final textColor = websiteHexColor(
-      footer.textColor,
-      fallback: AppPalette.surface,
-    );
-    final secondaryColor = websiteHexColor(
-      footer.secondaryTextColor,
-      fallback: AppPalette.onPrimary.withValues(alpha: .70),
-    );
-    final accentColor = websiteHexColor(footer.accentColor);
-    final font = footer.fontFamily.isEmpty
-        ? config.fontFamily
-        : footer.fontFamily;
-    final alignment = switch (footer.alignment) {
-      'center' => CrossAxisAlignment.center,
-      'right' => CrossAxisAlignment.end,
-      _ => CrossAxisAlignment.start,
-    };
-    final textAlign = switch (footer.alignment) {
-      'center' => TextAlign.center,
-      'right' => TextAlign.right,
-      _ => TextAlign.left,
-    };
-    final address = footer.useGlobalContact ? config.address : footer.address;
-    final phone = footer.useGlobalContact ? config.phone : footer.phone;
-    final email = footer.useGlobalContact ? config.email : footer.email;
-    final logo = footer.useSiteLogo ? config.logo : footer.logo;
-    final title = footer.title.isEmpty ? config.schoolName : footer.title;
-    final description = footer.description.isEmpty
-        ? config.tagline
-        : footer.description;
-    final navigation = config.navigation.where((item) => item.enabled).toList();
-
-    Widget identity = SizedBox(
-      width: compact ? double.infinity : 390,
-      child: Column(
-        crossAxisAlignment: alignment,
-        children: [
-          if (footer.showLogo && logo.url.isNotEmpty) ...[
-            WebsiteImage(
-              asset: logo,
-              width: footer.logoSize.toDouble(),
-              height: footer.logoSize.toDouble(),
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 14),
-          ],
-          if (title.isNotEmpty)
-            Text(
-              title,
-              textAlign: textAlign,
-              style: websiteTextStyle(
-                font,
-                color: textColor,
-                fontSize: footer.titleSize.toDouble(),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          if (footer.showDescription && description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: textAlign,
-              style: websiteTextStyle(
-                font,
-                color: secondaryColor,
-                fontSize: footer.bodySize.toDouble(),
-              ),
-            ),
-          ],
-          if (footer.showSocialLinks) ...[
-            const SizedBox(height: 16),
-            WebsiteSocialLinks(
-              links: config.socialLinks,
-              color: accentColor,
-              preview: preview,
-            ),
-          ],
-        ],
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      WebsiteLayout(
+        rows: config.footer.rows,
+        config: config,
+        pageId: 'footer',
+        mobile: compact,
+        preview: preview,
+        selectedId: selectedId,
+        onSelected: onSelected,
       ),
-    );
-
-    Widget contact = SizedBox(
-      width: compact ? double.infinity : 310,
-      child: Column(
-        crossAxisAlignment: alignment,
-        children: [
-          if (footer.contactTitle.isNotEmpty)
-            _heading(footer.contactTitle, font, textColor, textAlign),
-          if (address.isNotEmpty)
-            _contact(Icons.location_on_outlined, address, textColor, font),
-          if (phone.isNotEmpty)
-            _contact(Icons.phone_outlined, phone, textColor, font),
-          if (email.isNotEmpty)
-            _contact(Icons.email_outlined, email, textColor, font),
-        ],
-      ),
-    );
-
-    Widget links = SizedBox(
-      width: compact ? double.infinity : 230,
-      child: Column(
-        crossAxisAlignment: alignment,
-        children: [
-          if (footer.linksTitle.isNotEmpty)
-            _heading(footer.linksTitle, font, textColor, textAlign),
-          for (final item in navigation)
-            TextButton(
-              onPressed: preview
-                  ? null
-                  : () => context.go('/${item.resolvedSlug}'),
-              style: TextButton.styleFrom(
-                foregroundColor: textColor,
-                padding: const EdgeInsets.symmetric(vertical: 5),
-              ),
-              child: Text(item.label, textAlign: textAlign),
-            ),
-        ],
-      ),
-    );
-
-    final sections = <Widget>[
-      identity,
-      if (footer.showContact) contact,
-      if (footer.showNavigation) links,
-    ];
-    final content = footer.layout == 'centered'
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              for (var i = 0; i < sections.length; i++) ...[
-                sections[i],
-                if (i < sections.length - 1) const SizedBox(height: 28),
-              ],
-            ],
-          )
-        : Wrap(
-            spacing: 50,
-            runSpacing: 28,
-            alignment: WrapAlignment.spaceBetween,
-            children: sections,
-          );
-
-    final copyright = footer.copyrightText.isEmpty
-        ? '© ${DateTime.now().year} ${config.schoolName}'
-        : footer.copyrightText;
-    return ColoredBox(
-      color: websiteHexColor(
-        footer.backgroundColor,
-        fallback: AppPalette.primary,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: footer.maxWidth.toDouble()),
-          child: Padding(
-            padding: EdgeInsets.all(
-              (compact ? footer.mobilePadding : footer.padding).toDouble(),
-            ),
-            child: Column(
-              children: [
-                content,
-                if (footer.showCopyright && copyright.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  Divider(color: secondaryColor.withValues(alpha: 0.35)),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: switch (footer.alignment) {
-                      'center' => Alignment.center,
-                      'right' => Alignment.centerRight,
-                      _ => Alignment.centerLeft,
-                    },
-                    child: Text(
-                      copyright,
-                      textAlign: textAlign,
-                      style: websiteTextStyle(
-                        font,
-                        color: secondaryColor,
-                        fontSize: footer.bodySize.toDouble(),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+      ColoredBox(
+        color: websiteHexColor(
+          config.footer.rows.isEmpty
+              ? '#2B1718'
+              : config.footer.rows.last.backgroundColor,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            config.footer.copyrightText.isEmpty
+                ? '© ${DateTime.now().year} ${config.schoolName}'
+                : config.footer.copyrightText,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _heading(String text, String font, Color color, TextAlign textAlign) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          text,
-          textAlign: textAlign,
-          style: websiteTextStyle(
-            font,
-            color: color,
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      );
-
-  Widget _contact(IconData icon, String text, Color color, String font) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 11),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                text,
-                style: websiteTextStyle(font, color: color, fontSize: 15),
-              ),
-            ),
-          ],
-        ),
-      );
+    ],
+  );
 }
 
 class WebsiteImage extends StatelessWidget {
@@ -909,7 +954,7 @@ class WebsiteImage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (asset.url.startsWith('asset:')) {
       return Image.asset(
-        asset.url.substring('asset:'.length),
+        asset.url.substring(6),
         width: width,
         height: height,
         fit: fit,
@@ -925,84 +970,17 @@ class WebsiteImage extends StatelessWidget {
         errorBuilder: _error,
       );
     }
-    return _placeholder();
+    return _placeholder(context);
   }
 
   Widget _error(BuildContext context, Object error, StackTrace? stack) =>
-      _placeholder();
-
-  Widget _placeholder() => Container(
+      _placeholder(context);
+  Widget _placeholder(BuildContext context) => Container(
     width: width,
     height: height,
-    color: AppPalette.surfaceContainer,
-    child: Center(
-      child: Icon(
-        Icons.image_outlined,
-        size: 48,
-        color: AppPalette.onSurface.withValues(alpha: .38),
-      ),
-    ),
+    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+    child: const Center(child: Icon(Icons.image_outlined, size: 44)),
   );
-}
-
-class _EditableBlockFrame extends StatelessWidget {
-  final Widget child;
-  final bool editorMode;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _EditableBlockFrame({
-    super.key,
-    required this.child,
-    required this.editorMode,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!editorMode) return child;
-    return InkWell(
-      onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: selected ? AppPalette.info : AppPalette.transparent,
-            width: selected ? 3 : 1,
-          ),
-        ),
-        child: Stack(
-          children: [
-            child,
-            if (selected)
-              const Positioned(
-                top: 6,
-                left: 6,
-                child: Chip(
-                  avatar: Icon(Icons.drag_indicator, size: 17),
-                  label: Text('Arrastra para ordenar'),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-List<WebsiteBlock> _orderedVisibleBlocks(
-  List<WebsiteBlock> blocks,
-  bool mobile,
-) {
-  final visible = blocks
-      .where(
-        (block) =>
-            block.enabled &&
-            (mobile ? block.showOnMobile : block.showOnDesktop),
-      )
-      .toList();
-  if (mobile) visible.sort((a, b) => a.mobileOrder.compareTo(b.mobileOrder));
-  return visible;
 }
 
 Future<void> openWebsiteLink(BuildContext context, String value) async {
@@ -1011,10 +989,7 @@ Future<void> openWebsiteLink(BuildContext context, String value) async {
     return;
   }
   final uri = Uri.tryParse(value);
-  if (uri != null &&
-      (uri.scheme == 'https' ||
-          uri.scheme == 'http' ||
-          uri.scheme == 'mailto')) {
+  if (uri != null && {'https', 'http', 'mailto', 'tel'}.contains(uri.scheme)) {
     await launchUrl(uri, mode: LaunchMode.platformDefault);
   }
 }
@@ -1033,9 +1008,8 @@ TextStyle websiteTextStyle(
     'Poppins',
     'Playfair Display',
   };
-  final selected = supported.contains(family) ? family : 'Montserrat';
   return GoogleFonts.getFont(
-    selected,
+    supported.contains(family) ? family : 'Montserrat',
     fontSize: fontSize,
     height: height,
     fontWeight: fontWeight,

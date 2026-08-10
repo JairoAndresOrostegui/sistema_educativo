@@ -18,6 +18,7 @@ Aplicación Flutter para la gestión multiinstitución y multisede de preescolar
 - Escrituras sensibles: Cloud Functions, validación backend y auditoría.
 - Archivos: 1 GiB por institución, 25 MiB por documento y limpieza exclusiva del superadministrador después de 60 días.
 - Tema: color y tipografía obtenidos de `website/config`; no se agregan colores de marca dentro de pantallas.
+- Sitio público: constructor visual v5 con Header, Footer y páginas independientes, organizados en filas, columnas y componentes dinámicos.
 - El proyecto Firebase actual funciona como QA. Producción tendrá infraestructura separada.
 
 ## Preparación local
@@ -68,6 +69,18 @@ node scripts/migrate_academic_groups.js --apply
 La migración crea una sección A para los niveles actuales de cada sede, cambia las referencias a `groupId/groupName`, reorganiza objetos de Archivos, recalcula cuota y elimina los parámetros antiguos de grado. Nuevas secciones se administran como grupos independientes.
 
 ## Despliegue QA
+
+Antes del primer despliegue del constructor web v5, simule, aplique y verifique la migración del sitio:
+
+```powershell
+Set-Location functions
+node scripts/migrate_website_builder_v5.js --firebase-cli-auth
+node scripts/migrate_website_builder_v5.js --firebase-cli-auth --apply
+node scripts/migrate_website_builder_v5.js --firebase-cli-auth --verify
+Set-Location ..
+```
+
+La ejecución real conserva un respaldo en `migration_backups` y reemplaza atómicamente los bloques anteriores por filas, columnas y componentes.
 
 ```powershell
 flutter build web

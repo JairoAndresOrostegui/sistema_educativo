@@ -73,9 +73,6 @@ class WebsiteService {
   DocumentReference<Map<String, dynamic>> get _configDocument =>
       _db.collection('website').doc('config');
 
-  DocumentReference<Map<String, dynamic>> get _legacyDocument =>
-      _db.collection('website').doc('main');
-
   CollectionReference<Map<String, dynamic>> get _pages =>
       _db.collection('website_pages');
 
@@ -86,23 +83,17 @@ class WebsiteService {
     ]);
     final configSnapshot = results[0] as DocumentSnapshot<Map<String, dynamic>>;
     final pageSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
-    if (configSnapshot.exists && configSnapshot.data() != null) {
-      final config = WebsiteSiteConfig.fromMap(configSnapshot.data()!);
-      final pages = pageSnapshot.docs
-          .map((doc) => WebsitePage.fromMap(doc.id, doc.data()))
-          .toList();
-      return WebsiteBundle(
-        config: config,
-        pages: pages.isEmpty ? WebsiteBundle.defaults.pages : pages,
-      );
-    }
-
-    final legacySnapshot = await _legacyDocument.get();
-    if (!legacySnapshot.exists || legacySnapshot.data() == null) {
+    if (!configSnapshot.exists || configSnapshot.data() == null) {
       return WebsiteBundle.defaults;
     }
-    final legacy = WebsiteContent.fromMap(legacySnapshot.data()!);
-    return legacy.toBundle(legacy.sectionsByPage);
+    final config = WebsiteSiteConfig.fromMap(configSnapshot.data()!);
+    final pages = pageSnapshot.docs
+        .map((doc) => WebsitePage.fromMap(doc.id, doc.data()))
+        .toList();
+    return WebsiteBundle(
+      config: config,
+      pages: pages.isEmpty ? WebsiteBundle.defaults.pages : pages,
+    );
   }
 
   Future<({WebsiteSiteConfig config, WebsitePage page})?> getPublicPage(

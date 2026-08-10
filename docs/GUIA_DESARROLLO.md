@@ -74,9 +74,19 @@ Reglas:
 - usar en todos los módulos revisados o nuevos la misma cabecera de Perfil: superficie sólida, título centrado, color primario y regreso visible al tablero;
 - evitar degradados en módulos internos y preferir superficies sólidas del `ColorScheme`;
 
+## Constructor del sitio público
+
+El esquema canónico es la versión 5. `website/config` contiene identidad, tema, navegación, redes, `header.rows` y `footer.rows`; cada documento de `website_pages` contiene `rows`. La jerarquía es `WebsiteRow -> WebsiteColumn -> WebsiteComponent`. No volver a introducir `blocks`, `sections` ni lectura dual del esquema anterior.
+
+Una fila admite máximo cuatro columnas. Las columnas usan `span` relativo y en móvil se apilan cuando `stackOnMobile` está activo. Los componentes disponibles se centralizan en el modelo y el editor; cualquier tipo nuevo debe implementar serialización, edición, render adaptable y prueba.
+
+Los videos aceptan exclusivamente URL HTTPS reconocida de YouTube o Vimeo. El render web transforma la URL a un `iframe` seguro y sin HTML suministrado por el administrador. No se suben videos a Storage. Las imágenes continúan bajo `website/`, con tamaño y MIME protegidos por reglas.
+
+`primaryColor` y `fontFamily` son globales y pueden afectar los módulos internos. Los colores de filas, columnas y componentes pertenecen solo al sitio público. El administrador elige colores mediante una paleta visual; el hexadecimal es una opción avanzada, no el control principal.
+
 ## Migraciones
 
-No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y `functions/scripts/migrate_file_audiences.js` migra las audiencias y rutas de Archivos. Ambas son secas por defecto, reales con `--apply` y verificables con `--verify`. Antes de aplicar se debe validar el proyecto Firebase y conservar un respaldo administrado.
+No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos, `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio de bloques a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`. La migración web guarda `website/config` y cada página anterior en `migration_backups` antes de reemplazarlos mediante un lote atómico.
 
 ## Validación y despliegue
 

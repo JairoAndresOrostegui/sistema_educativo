@@ -4,9 +4,6 @@ class WebsiteAsset {
 
   const WebsiteAsset({this.url = '', this.storagePath = ''});
 
-  factory WebsiteAsset.fromLegacyUrl(String url) =>
-      WebsiteAsset(url: url, storagePath: _storagePathFromDownloadUrl(url));
-
   factory WebsiteAsset.fromMap(Map<String, dynamic>? map) => WebsiteAsset(
     url: (map?['url'] ?? '').toString(),
     storagePath: (map?['storagePath'] ?? '').toString(),
@@ -60,24 +57,22 @@ class WebsiteNavigationItem {
   const WebsiteNavigationItem({
     required this.id,
     required this.label,
-    this.slug = '',
+    required this.slug,
     this.enabled = true,
   });
-
-  String get resolvedSlug => slug.isEmpty ? id : slug;
 
   factory WebsiteNavigationItem.fromMap(Map<String, dynamic> map) =>
       WebsiteNavigationItem(
         id: (map['id'] ?? '').toString(),
         label: (map['label'] ?? '').toString(),
-        slug: (map['slug'] ?? map['id'] ?? '').toString(),
+        slug: (map['slug'] ?? '').toString(),
         enabled: map['enabled'] != false,
       );
 
   Map<String, dynamic> toMap() => {
     'id': id,
     'label': label.trim(),
-    'slug': resolvedSlug,
+    'slug': slug.trim(),
     'enabled': enabled,
   };
 
@@ -93,202 +88,381 @@ class WebsiteNavigationItem {
   );
 }
 
-class WebsiteBlock {
+class WebsiteComponentItem {
+  final String id;
+  final String title;
+  final String text;
+  final String url;
+  final String icon;
+  final WebsiteAsset image;
+
+  const WebsiteComponentItem({
+    required this.id,
+    this.title = '',
+    this.text = '',
+    this.url = '',
+    this.icon = 'star',
+    this.image = const WebsiteAsset(),
+  });
+
+  factory WebsiteComponentItem.fromMap(Map<String, dynamic> map, int index) =>
+      WebsiteComponentItem(
+        id: (map['id'] ?? 'item_$index').toString(),
+        title: (map['title'] ?? '').toString(),
+        text: (map['text'] ?? '').toString(),
+        url: (map['url'] ?? '').toString(),
+        icon: (map['icon'] ?? 'star').toString(),
+        image: WebsiteAsset.fromMap(_map(map['image'])),
+      );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title.trim(),
+    'text': text.trim(),
+    'url': url.trim(),
+    'icon': icon,
+    'image': image.toMap(),
+  };
+
+  WebsiteComponentItem copyWith({
+    String? title,
+    String? text,
+    String? url,
+    String? icon,
+    WebsiteAsset? image,
+  }) => WebsiteComponentItem(
+    id: id,
+    title: title ?? this.title,
+    text: text ?? this.text,
+    url: url ?? this.url,
+    icon: icon ?? this.icon,
+    image: image ?? this.image,
+  );
+}
+
+/// A reusable content unit. Type-specific data lives in [items], while visual
+/// fields are shared so the editor stays predictable for non-technical users.
+class WebsiteComponent {
   final String id;
   final String type;
-  final String pageId;
   final String title;
   final String body;
-  final WebsiteAsset image;
+  final String url;
   final String buttonLabel;
-  final String buttonUrl;
+  final WebsiteAsset image;
+  final List<WebsiteComponentItem> items;
   final bool enabled;
-  final bool showOnDesktop;
-  final bool showOnMobile;
-  final int mobileOrder;
-  final String textAlignment;
-  final String imagePosition;
-  final String mobileImagePosition;
+  final String alignment;
   final String imageFit;
-  final String contentWidth;
   final String backgroundColor;
   final String textColor;
   final String accentColor;
-  final bool showAccent;
-  final String fontFamily;
   final int titleSize;
-  final int mobileTitleSize;
   final int bodySize;
-  final int mobileBodySize;
   final int padding;
-  final int mobilePadding;
+  final bool autoplay;
+  final int intervalSeconds;
 
-  const WebsiteBlock({
+  const WebsiteComponent({
     required this.id,
-    this.type = 'imageText',
-    this.pageId = 'about',
+    required this.type,
     this.title = '',
     this.body = '',
-    this.image = const WebsiteAsset(),
+    this.url = '',
     this.buttonLabel = '',
-    this.buttonUrl = '',
+    this.image = const WebsiteAsset(),
+    this.items = const [],
     this.enabled = true,
-    this.showOnDesktop = true,
-    this.showOnMobile = true,
-    this.mobileOrder = 0,
-    this.textAlignment = 'left',
-    this.imagePosition = 'left',
-    this.mobileImagePosition = 'top',
+    this.alignment = 'left',
     this.imageFit = 'cover',
-    this.contentWidth = 'wide',
-    this.backgroundColor = '#FAF8F5',
-    this.textColor = '#212121',
-    this.accentColor = '#B71C1C',
-    this.showAccent = false,
-    this.fontFamily = 'Montserrat',
+    this.backgroundColor = '#FFFFFF',
+    this.textColor = '#292323',
+    this.accentColor = '#A63D40',
     this.titleSize = 34,
-    this.mobileTitleSize = 30,
-    this.bodySize = 17,
-    this.mobileBodySize = 16,
-    this.padding = 38,
-    this.mobilePadding = 22,
+    this.bodySize = 16,
+    this.padding = 20,
+    this.autoplay = true,
+    this.intervalSeconds = 5,
   });
 
-  factory WebsiteBlock.fromMap(Map<String, dynamic> map, {int index = 0}) {
-    final rawImage = map['image'];
-    return WebsiteBlock(
-      id: (map['id'] ?? 'block_$index').toString(),
-      type: (map['type'] ?? 'imageText').toString(),
-      pageId: (map['pageId'] ?? 'about').toString(),
-      title: (map['title'] ?? '').toString(),
-      body: (map['body'] ?? '').toString(),
-      image: rawImage is Map
-          ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawImage))
-          : WebsiteAsset.fromLegacyUrl((map['imageUrl'] ?? '').toString()),
-      buttonLabel: (map['buttonLabel'] ?? '').toString(),
-      buttonUrl: (map['buttonUrl'] ?? '').toString(),
-      enabled: map['enabled'] != false,
-      showOnDesktop: map['showOnDesktop'] != false,
-      showOnMobile: map['showOnMobile'] != false,
-      mobileOrder: map['mobileOrder'] is num
-          ? (map['mobileOrder'] as num).toInt()
-          : index,
-      textAlignment: (map['textAlignment'] ?? 'left').toString(),
-      imagePosition: (map['imagePosition'] ?? 'left').toString(),
-      mobileImagePosition: (map['mobileImagePosition'] ?? 'top').toString(),
-      imageFit: (map['imageFit'] ?? 'cover').toString(),
-      contentWidth: (map['contentWidth'] ?? 'wide').toString(),
-      backgroundColor: (map['backgroundColor'] ?? '#FAF8F5').toString(),
-      textColor: (map['textColor'] ?? '#212121').toString(),
-      accentColor: (map['accentColor'] ?? map['primaryColor'] ?? '#B71C1C')
-          .toString(),
-      showAccent: map['showAccent'] == true,
-      fontFamily: (map['fontFamily'] ?? 'Montserrat').toString(),
-      titleSize: _int(map['titleSize'], 34),
-      mobileTitleSize: _int(map['mobileTitleSize'], 30),
-      bodySize: _int(map['bodySize'], 17),
-      mobileBodySize: _int(map['mobileBodySize'], 16),
-      padding: _int(map['padding'], 38),
-      mobilePadding: _int(map['mobilePadding'], 22),
-    );
-  }
+  factory WebsiteComponent.fromMap(Map<String, dynamic> map, int index) =>
+      WebsiteComponent(
+        id: (map['id'] ?? 'component_$index').toString(),
+        type: (map['type'] ?? 'text').toString(),
+        title: (map['title'] ?? '').toString(),
+        body: (map['body'] ?? '').toString(),
+        url: (map['url'] ?? '').toString(),
+        buttonLabel: (map['buttonLabel'] ?? '').toString(),
+        image: WebsiteAsset.fromMap(_map(map['image'])),
+        items: _list(map['items'])
+            .asMap()
+            .entries
+            .map(
+              (entry) => WebsiteComponentItem.fromMap(entry.value, entry.key),
+            )
+            .toList(),
+        enabled: map['enabled'] != false,
+        alignment: (map['alignment'] ?? 'left').toString(),
+        imageFit: (map['imageFit'] ?? 'cover').toString(),
+        backgroundColor: (map['backgroundColor'] ?? '#FFFFFF').toString(),
+        textColor: (map['textColor'] ?? '#292323').toString(),
+        accentColor: (map['accentColor'] ?? '#A63D40').toString(),
+        titleSize: _int(map['titleSize'], 34),
+        bodySize: _int(map['bodySize'], 16),
+        padding: _int(map['padding'], 20),
+        autoplay: map['autoplay'] != false,
+        intervalSeconds: _int(map['intervalSeconds'], 5).clamp(2, 15),
+      );
 
   Map<String, dynamic> toMap() => {
     'id': id,
     'type': type,
-    'pageId': pageId,
     'title': title.trim(),
     'body': body.trim(),
-    'image': image.toMap(),
+    'url': url.trim(),
     'buttonLabel': buttonLabel.trim(),
-    'buttonUrl': buttonUrl.trim(),
+    'image': image.toMap(),
+    'items': items.map((item) => item.toMap()).toList(),
     'enabled': enabled,
-    'showOnDesktop': showOnDesktop,
-    'showOnMobile': showOnMobile,
-    'mobileOrder': mobileOrder,
-    'textAlignment': textAlignment,
-    'imagePosition': imagePosition,
-    'mobileImagePosition': mobileImagePosition,
+    'alignment': alignment,
     'imageFit': imageFit,
-    'contentWidth': contentWidth,
     'backgroundColor': backgroundColor,
     'textColor': textColor,
     'accentColor': accentColor,
-    'showAccent': showAccent,
-    'fontFamily': fontFamily,
     'titleSize': titleSize,
-    'mobileTitleSize': mobileTitleSize,
     'bodySize': bodySize,
-    'mobileBodySize': mobileBodySize,
     'padding': padding,
-    'mobilePadding': mobilePadding,
+    'autoplay': autoplay,
+    'intervalSeconds': intervalSeconds,
   };
 
-  WebsiteBlock copyWith({
-    String? id,
-    String? type,
-    String? pageId,
+  WebsiteComponent copyWith({
     String? title,
     String? body,
-    WebsiteAsset? image,
+    String? url,
     String? buttonLabel,
-    String? buttonUrl,
+    WebsiteAsset? image,
+    List<WebsiteComponentItem>? items,
     bool? enabled,
-    bool? showOnDesktop,
-    bool? showOnMobile,
-    int? mobileOrder,
-    String? textAlignment,
-    String? imagePosition,
-    String? mobileImagePosition,
+    String? alignment,
     String? imageFit,
-    String? contentWidth,
     String? backgroundColor,
     String? textColor,
     String? accentColor,
-    bool? showAccent,
-    String? fontFamily,
     int? titleSize,
-    int? mobileTitleSize,
     int? bodySize,
-    int? mobileBodySize,
     int? padding,
-    int? mobilePadding,
-  }) => WebsiteBlock(
-    id: id ?? this.id,
-    type: type ?? this.type,
-    pageId: pageId ?? this.pageId,
+    bool? autoplay,
+    int? intervalSeconds,
+  }) => WebsiteComponent(
+    id: id,
+    type: type,
     title: title ?? this.title,
     body: body ?? this.body,
-    image: image ?? this.image,
+    url: url ?? this.url,
     buttonLabel: buttonLabel ?? this.buttonLabel,
-    buttonUrl: buttonUrl ?? this.buttonUrl,
+    image: image ?? this.image,
+    items: items ?? this.items,
     enabled: enabled ?? this.enabled,
-    showOnDesktop: showOnDesktop ?? this.showOnDesktop,
-    showOnMobile: showOnMobile ?? this.showOnMobile,
-    mobileOrder: mobileOrder ?? this.mobileOrder,
-    textAlignment: textAlignment ?? this.textAlignment,
-    imagePosition: imagePosition ?? this.imagePosition,
-    mobileImagePosition: mobileImagePosition ?? this.mobileImagePosition,
+    alignment: alignment ?? this.alignment,
     imageFit: imageFit ?? this.imageFit,
-    contentWidth: contentWidth ?? this.contentWidth,
     backgroundColor: backgroundColor ?? this.backgroundColor,
     textColor: textColor ?? this.textColor,
     accentColor: accentColor ?? this.accentColor,
-    showAccent: showAccent ?? this.showAccent,
-    fontFamily: fontFamily ?? this.fontFamily,
     titleSize: titleSize ?? this.titleSize,
-    mobileTitleSize: mobileTitleSize ?? this.mobileTitleSize,
     bodySize: bodySize ?? this.bodySize,
-    mobileBodySize: mobileBodySize ?? this.mobileBodySize,
     padding: padding ?? this.padding,
-    mobilePadding: mobilePadding ?? this.mobilePadding,
+    autoplay: autoplay ?? this.autoplay,
+    intervalSeconds: intervalSeconds ?? this.intervalSeconds,
   );
-
-  static int _int(dynamic value, int fallback) =>
-      value is num ? value.toInt() : fallback;
 }
 
-typedef WebsiteSection = WebsiteBlock;
+class WebsiteColumn {
+  final String id;
+  final int span;
+  final String backgroundColor;
+  final int padding;
+  final List<WebsiteComponent> components;
+
+  const WebsiteColumn({
+    required this.id,
+    this.span = 1,
+    this.backgroundColor = '#FFFFFF',
+    this.padding = 8,
+    this.components = const [],
+  });
+
+  factory WebsiteColumn.fromMap(Map<String, dynamic> map, int index) =>
+      WebsiteColumn(
+        id: (map['id'] ?? 'column_$index').toString(),
+        span: _int(map['span'], 1).clamp(1, 4),
+        backgroundColor: (map['backgroundColor'] ?? '#FFFFFF').toString(),
+        padding: _int(map['padding'], 8),
+        components: _list(map['components'])
+            .asMap()
+            .entries
+            .map((entry) => WebsiteComponent.fromMap(entry.value, entry.key))
+            .toList(),
+      );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'span': span,
+    'backgroundColor': backgroundColor,
+    'padding': padding,
+    'components': components.map((item) => item.toMap()).toList(),
+  };
+
+  WebsiteColumn copyWith({
+    int? span,
+    String? backgroundColor,
+    int? padding,
+    List<WebsiteComponent>? components,
+  }) => WebsiteColumn(
+    id: id,
+    span: span ?? this.span,
+    backgroundColor: backgroundColor ?? this.backgroundColor,
+    padding: padding ?? this.padding,
+    components: components ?? this.components,
+  );
+}
+
+class WebsiteRow {
+  final String id;
+  final bool enabled;
+  final String backgroundColor;
+  final int padding;
+  final int gap;
+  final int maxWidth;
+  final bool stackOnMobile;
+  final List<WebsiteColumn> columns;
+
+  const WebsiteRow({
+    required this.id,
+    this.enabled = true,
+    this.backgroundColor = '#FFFFFF',
+    this.padding = 24,
+    this.gap = 20,
+    this.maxWidth = 1280,
+    this.stackOnMobile = true,
+    this.columns = const [],
+  });
+
+  factory WebsiteRow.fromMap(Map<String, dynamic> map, int index) => WebsiteRow(
+    id: (map['id'] ?? 'row_$index').toString(),
+    enabled: map['enabled'] != false,
+    backgroundColor: (map['backgroundColor'] ?? '#FFFFFF').toString(),
+    padding: _int(map['padding'], 24),
+    gap: _int(map['gap'], 20),
+    maxWidth: _int(map['maxWidth'], 1280),
+    stackOnMobile: map['stackOnMobile'] != false,
+    columns: _list(map['columns'])
+        .asMap()
+        .entries
+        .map((entry) => WebsiteColumn.fromMap(entry.value, entry.key))
+        .toList(),
+  );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'enabled': enabled,
+    'backgroundColor': backgroundColor,
+    'padding': padding,
+    'gap': gap,
+    'maxWidth': maxWidth,
+    'stackOnMobile': stackOnMobile,
+    'columns': columns.map((item) => item.toMap()).toList(),
+  };
+
+  WebsiteRow copyWith({
+    bool? enabled,
+    String? backgroundColor,
+    int? padding,
+    int? gap,
+    int? maxWidth,
+    bool? stackOnMobile,
+    List<WebsiteColumn>? columns,
+  }) => WebsiteRow(
+    id: id,
+    enabled: enabled ?? this.enabled,
+    backgroundColor: backgroundColor ?? this.backgroundColor,
+    padding: padding ?? this.padding,
+    gap: gap ?? this.gap,
+    maxWidth: maxWidth ?? this.maxWidth,
+    stackOnMobile: stackOnMobile ?? this.stackOnMobile,
+    columns: columns ?? this.columns,
+  );
+}
+
+class WebsiteHeaderConfig {
+  final bool enabled;
+  final bool sticky;
+  final List<WebsiteRow> rows;
+
+  const WebsiteHeaderConfig({
+    this.enabled = true,
+    this.sticky = true,
+    this.rows = const [],
+  });
+
+  factory WebsiteHeaderConfig.fromMap(Map<String, dynamic>? map) =>
+      WebsiteHeaderConfig(
+        enabled: map?['enabled'] != false,
+        sticky: map?['sticky'] != false,
+        rows: _rows(map?['rows']),
+      );
+
+  Map<String, dynamic> toMap() => {
+    'enabled': enabled,
+    'sticky': sticky,
+    'rows': rows.map((row) => row.toMap()).toList(),
+  };
+
+  WebsiteHeaderConfig copyWith({
+    bool? enabled,
+    bool? sticky,
+    List<WebsiteRow>? rows,
+  }) => WebsiteHeaderConfig(
+    enabled: enabled ?? this.enabled,
+    sticky: sticky ?? this.sticky,
+    rows: rows ?? this.rows,
+  );
+}
+
+class WebsiteFooterConfig {
+  final bool enabled;
+  final String copyrightText;
+  final List<WebsiteRow> rows;
+
+  const WebsiteFooterConfig({
+    this.enabled = true,
+    this.copyrightText = '',
+    this.rows = const [],
+  });
+
+  factory WebsiteFooterConfig.fromMap(Map<String, dynamic>? map) =>
+      WebsiteFooterConfig(
+        enabled: map?['enabled'] != false,
+        copyrightText: (map?['copyrightText'] ?? '').toString(),
+        rows: _rows(map?['rows']),
+      );
+
+  Map<String, dynamic> toMap() => {
+    'enabled': enabled,
+    'copyrightText': copyrightText.trim(),
+    'rows': rows.map((row) => row.toMap()).toList(),
+  };
+
+  WebsiteFooterConfig copyWith({
+    bool? enabled,
+    String? copyrightText,
+    List<WebsiteRow>? rows,
+  }) => WebsiteFooterConfig(
+    enabled: enabled ?? this.enabled,
+    copyrightText: copyrightText ?? this.copyrightText,
+    rows: rows ?? this.rows,
+  );
+}
 
 class WebsitePage {
   final String id;
@@ -297,7 +471,7 @@ class WebsitePage {
   final bool enabled;
   final bool showInNavigation;
   final int sortOrder;
-  final List<WebsiteBlock> blocks;
+  final List<WebsiteRow> rows;
 
   const WebsitePage({
     required this.id,
@@ -306,33 +480,19 @@ class WebsitePage {
     this.enabled = true,
     this.showInNavigation = true,
     this.sortOrder = 0,
-    this.blocks = const [],
+    this.rows = const [],
   });
 
-  factory WebsitePage.fromMap(String id, Map<String, dynamic> map) {
-    final rawBlocks = map['blocks'];
-    return WebsitePage(
-      id: id,
-      label: (map['label'] ?? id).toString(),
-      slug: (map['slug'] ?? id).toString(),
-      enabled: map['enabled'] != false,
-      showInNavigation: map['showInNavigation'] != false,
-      sortOrder: WebsiteBlock._int(map['sortOrder'], 0),
-      blocks: rawBlocks is List
-          ? rawBlocks
-                .asMap()
-                .entries
-                .where((entry) => entry.value is Map)
-                .map(
-                  (entry) => WebsiteBlock.fromMap(
-                    Map<String, dynamic>.from(entry.value as Map),
-                    index: entry.key,
-                  ),
-                )
-                .toList()
-          : const [],
-    );
-  }
+  factory WebsitePage.fromMap(String id, Map<String, dynamic> map) =>
+      WebsitePage(
+        id: id,
+        label: (map['label'] ?? id).toString(),
+        slug: (map['slug'] ?? id).toString(),
+        enabled: map['enabled'] != false,
+        showInNavigation: map['showInNavigation'] != false,
+        sortOrder: _int(map['sortOrder'], 0),
+        rows: _rows(map['rows']),
+      );
 
   Map<String, dynamic> toMap() => {
     'label': label.trim(),
@@ -340,7 +500,7 @@ class WebsitePage {
     'enabled': enabled,
     'showInNavigation': showInNavigation,
     'sortOrder': sortOrder,
-    'blocks': blocks.map((block) => block.toMap()).toList(),
+    'rows': rows.map((row) => row.toMap()).toList(),
   };
 
   WebsitePage copyWith({
@@ -349,7 +509,7 @@ class WebsitePage {
     bool? enabled,
     bool? showInNavigation,
     int? sortOrder,
-    List<WebsiteBlock>? blocks,
+    List<WebsiteRow>? rows,
   }) => WebsitePage(
     id: id,
     label: label ?? this.label,
@@ -357,219 +517,13 @@ class WebsitePage {
     enabled: enabled ?? this.enabled,
     showInNavigation: showInNavigation ?? this.showInNavigation,
     sortOrder: sortOrder ?? this.sortOrder,
-    blocks: blocks ?? this.blocks,
-  );
-}
-
-class WebsiteFooterConfig {
-  final bool enabled;
-  final String layout;
-  final String alignment;
-  final String backgroundColor;
-  final String textColor;
-  final String secondaryTextColor;
-  final String accentColor;
-  final String fontFamily;
-  final String title;
-  final String description;
-  final String contactTitle;
-  final String linksTitle;
-  final String copyrightText;
-  final WebsiteAsset logo;
-  final bool useSiteLogo;
-  final bool showLogo;
-  final bool showDescription;
-  final bool showContact;
-  final bool showSocialLinks;
-  final bool showNavigation;
-  final bool showCopyright;
-  final bool useGlobalContact;
-  final String address;
-  final String phone;
-  final String email;
-  final int titleSize;
-  final int bodySize;
-  final int padding;
-  final int mobilePadding;
-  final int logoSize;
-  final int maxWidth;
-
-  const WebsiteFooterConfig({
-    this.enabled = true,
-    this.layout = 'columns',
-    this.alignment = 'left',
-    this.backgroundColor = '#25090A',
-    this.textColor = '#FFFFFF',
-    this.secondaryTextColor = '#D7C6C6',
-    this.accentColor = '#B71C1C',
-    this.fontFamily = '',
-    this.title = '',
-    this.description = '',
-    this.contactTitle = 'Contáctanos',
-    this.linksTitle = 'Enlaces',
-    this.copyrightText = '',
-    this.logo = const WebsiteAsset(),
-    this.useSiteLogo = true,
-    this.showLogo = false,
-    this.showDescription = true,
-    this.showContact = true,
-    this.showSocialLinks = true,
-    this.showNavigation = false,
-    this.showCopyright = true,
-    this.useGlobalContact = true,
-    this.address = '',
-    this.phone = '',
-    this.email = '',
-    this.titleSize = 23,
-    this.bodySize = 15,
-    this.padding = 42,
-    this.mobilePadding = 24,
-    this.logoSize = 72,
-    this.maxWidth = 1280,
-  });
-
-  factory WebsiteFooterConfig.fromMap(Map<String, dynamic>? map) {
-    if (map == null) return const WebsiteFooterConfig();
-    final rawLogo = map['logo'];
-    return WebsiteFooterConfig(
-      enabled: map['enabled'] != false,
-      layout: (map['layout'] ?? 'columns').toString(),
-      alignment: (map['alignment'] ?? 'left').toString(),
-      backgroundColor: (map['backgroundColor'] ?? '#25090A').toString(),
-      textColor: (map['textColor'] ?? '#FFFFFF').toString(),
-      secondaryTextColor: (map['secondaryTextColor'] ?? '#D7C6C6').toString(),
-      accentColor: (map['accentColor'] ?? '#B71C1C').toString(),
-      fontFamily: (map['fontFamily'] ?? '').toString(),
-      title: (map['title'] ?? '').toString(),
-      description: (map['description'] ?? '').toString(),
-      contactTitle: (map['contactTitle'] ?? 'Contáctanos').toString(),
-      linksTitle: (map['linksTitle'] ?? 'Enlaces').toString(),
-      copyrightText: (map['copyrightText'] ?? '').toString(),
-      logo: rawLogo is Map
-          ? WebsiteAsset.fromMap(Map<String, dynamic>.from(rawLogo))
-          : const WebsiteAsset(),
-      useSiteLogo: map['useSiteLogo'] != false,
-      showLogo: map['showLogo'] == true,
-      showDescription: map['showDescription'] != false,
-      showContact: map['showContact'] != false,
-      showSocialLinks: map['showSocialLinks'] != false,
-      showNavigation: map['showNavigation'] == true,
-      showCopyright: map['showCopyright'] != false,
-      useGlobalContact: map['useGlobalContact'] != false,
-      address: (map['address'] ?? '').toString(),
-      phone: (map['phone'] ?? '').toString(),
-      email: (map['email'] ?? '').toString(),
-      titleSize: WebsiteBlock._int(map['titleSize'], 23),
-      bodySize: WebsiteBlock._int(map['bodySize'], 15),
-      padding: WebsiteBlock._int(map['padding'], 42),
-      mobilePadding: WebsiteBlock._int(map['mobilePadding'], 24),
-      logoSize: WebsiteBlock._int(map['logoSize'], 72),
-      maxWidth: WebsiteBlock._int(map['maxWidth'], 1280),
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-    'enabled': enabled,
-    'layout': layout,
-    'alignment': alignment,
-    'backgroundColor': backgroundColor.trim(),
-    'textColor': textColor.trim(),
-    'secondaryTextColor': secondaryTextColor.trim(),
-    'accentColor': accentColor.trim(),
-    'fontFamily': fontFamily,
-    'title': title.trim(),
-    'description': description.trim(),
-    'contactTitle': contactTitle.trim(),
-    'linksTitle': linksTitle.trim(),
-    'copyrightText': copyrightText.trim(),
-    'logo': logo.toMap(),
-    'useSiteLogo': useSiteLogo,
-    'showLogo': showLogo,
-    'showDescription': showDescription,
-    'showContact': showContact,
-    'showSocialLinks': showSocialLinks,
-    'showNavigation': showNavigation,
-    'showCopyright': showCopyright,
-    'useGlobalContact': useGlobalContact,
-    'address': address.trim(),
-    'phone': phone.trim(),
-    'email': email.trim(),
-    'titleSize': titleSize,
-    'bodySize': bodySize,
-    'padding': padding,
-    'mobilePadding': mobilePadding,
-    'logoSize': logoSize,
-    'maxWidth': maxWidth,
-  };
-
-  WebsiteFooterConfig copyWith({
-    bool? enabled,
-    String? layout,
-    String? alignment,
-    String? backgroundColor,
-    String? textColor,
-    String? secondaryTextColor,
-    String? accentColor,
-    String? fontFamily,
-    String? title,
-    String? description,
-    String? contactTitle,
-    String? linksTitle,
-    String? copyrightText,
-    WebsiteAsset? logo,
-    bool? useSiteLogo,
-    bool? showLogo,
-    bool? showDescription,
-    bool? showContact,
-    bool? showSocialLinks,
-    bool? showNavigation,
-    bool? showCopyright,
-    bool? useGlobalContact,
-    String? address,
-    String? phone,
-    String? email,
-    int? titleSize,
-    int? bodySize,
-    int? padding,
-    int? mobilePadding,
-    int? logoSize,
-    int? maxWidth,
-  }) => WebsiteFooterConfig(
-    enabled: enabled ?? this.enabled,
-    layout: layout ?? this.layout,
-    alignment: alignment ?? this.alignment,
-    backgroundColor: backgroundColor ?? this.backgroundColor,
-    textColor: textColor ?? this.textColor,
-    secondaryTextColor: secondaryTextColor ?? this.secondaryTextColor,
-    accentColor: accentColor ?? this.accentColor,
-    fontFamily: fontFamily ?? this.fontFamily,
-    title: title ?? this.title,
-    description: description ?? this.description,
-    contactTitle: contactTitle ?? this.contactTitle,
-    linksTitle: linksTitle ?? this.linksTitle,
-    copyrightText: copyrightText ?? this.copyrightText,
-    logo: logo ?? this.logo,
-    useSiteLogo: useSiteLogo ?? this.useSiteLogo,
-    showLogo: showLogo ?? this.showLogo,
-    showDescription: showDescription ?? this.showDescription,
-    showContact: showContact ?? this.showContact,
-    showSocialLinks: showSocialLinks ?? this.showSocialLinks,
-    showNavigation: showNavigation ?? this.showNavigation,
-    showCopyright: showCopyright ?? this.showCopyright,
-    useGlobalContact: useGlobalContact ?? this.useGlobalContact,
-    address: address ?? this.address,
-    phone: phone ?? this.phone,
-    email: email ?? this.email,
-    titleSize: titleSize ?? this.titleSize,
-    bodySize: bodySize ?? this.bodySize,
-    padding: padding ?? this.padding,
-    mobilePadding: mobilePadding ?? this.mobilePadding,
-    logoSize: logoSize ?? this.logoSize,
-    maxWidth: maxWidth ?? this.maxWidth,
+    rows: rows ?? this.rows,
   );
 }
 
 class WebsiteSiteConfig {
+  static const schemaVersion = 5;
+
   final String schoolName;
   final String tagline;
   final WebsiteAsset logo;
@@ -580,6 +534,7 @@ class WebsiteSiteConfig {
   final String fontFamily;
   final List<WebsiteNavigationItem> navigation;
   final List<WebsiteSocialLink> socialLinks;
+  final WebsiteHeaderConfig header;
   final WebsiteFooterConfig footer;
 
   const WebsiteSiteConfig({
@@ -589,49 +544,54 @@ class WebsiteSiteConfig {
     this.phone = '',
     this.email = '',
     this.address = '',
-    this.primaryColor = '#B71C1C',
+    this.primaryColor = '#A63D40',
     this.fontFamily = 'Montserrat',
     this.navigation = const [],
     this.socialLinks = const [],
+    this.header = const WebsiteHeaderConfig(),
     this.footer = const WebsiteFooterConfig(),
   });
 
   factory WebsiteSiteConfig.fromMap(Map<String, dynamic> map) {
-    final logo = map['logo'];
+    if (_int(map['version'], 0) != schemaVersion) {
+      throw const FormatException(
+        'El contenido del sitio requiere ejecutar la migración a la versión 5.',
+      );
+    }
     return WebsiteSiteConfig(
       schoolName: (map['schoolName'] ?? '').toString(),
       tagline: (map['tagline'] ?? '').toString(),
-      logo: logo is Map
-          ? WebsiteAsset.fromMap(Map<String, dynamic>.from(logo))
-          : WebsiteAsset.fromLegacyUrl((map['logoUrl'] ?? '').toString()),
+      logo: WebsiteAsset.fromMap(_map(map['logo'])),
       phone: (map['phone'] ?? '').toString(),
       email: (map['email'] ?? '').toString(),
       address: (map['address'] ?? '').toString(),
-      primaryColor: (map['primaryColor'] ?? '#B71C1C').toString(),
+      primaryColor: (map['primaryColor'] ?? '#A63D40').toString(),
       fontFamily: (map['fontFamily'] ?? 'Montserrat').toString(),
-      navigation: _maps(map['navigation'], WebsiteNavigationItem.fromMap),
-      socialLinks: _maps(map['socialLinks'], WebsiteSocialLink.fromMap),
-      footer: map['footer'] is Map
-          ? WebsiteFooterConfig.fromMap(
-              Map<String, dynamic>.from(map['footer'] as Map),
-            )
-          : const WebsiteFooterConfig(),
+      navigation: _list(
+        map['navigation'],
+      ).map(WebsiteNavigationItem.fromMap).toList(),
+      socialLinks: _list(
+        map['socialLinks'],
+      ).map(WebsiteSocialLink.fromMap).toList(),
+      header: WebsiteHeaderConfig.fromMap(_map(map['header'])),
+      footer: WebsiteFooterConfig.fromMap(_map(map['footer'])),
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'version': schemaVersion,
     'schoolName': schoolName.trim(),
     'tagline': tagline.trim(),
     'logo': logo.toMap(),
     'phone': phone.trim(),
     'email': email.trim(),
     'address': address.trim(),
-    'primaryColor': primaryColor.trim(),
+    'primaryColor': primaryColor,
     'fontFamily': fontFamily,
     'navigation': navigation.map((item) => item.toMap()).toList(),
     'socialLinks': socialLinks.map((item) => item.toMap()).toList(),
+    'header': header.toMap(),
     'footer': footer.toMap(),
-    'version': 4,
   };
 
   WebsiteSiteConfig copyWith({
@@ -645,6 +605,7 @@ class WebsiteSiteConfig {
     String? fontFamily,
     List<WebsiteNavigationItem>? navigation,
     List<WebsiteSocialLink>? socialLinks,
+    WebsiteHeaderConfig? header,
     WebsiteFooterConfig? footer,
   }) => WebsiteSiteConfig(
     schoolName: schoolName ?? this.schoolName,
@@ -657,16 +618,9 @@ class WebsiteSiteConfig {
     fontFamily: fontFamily ?? this.fontFamily,
     navigation: navigation ?? this.navigation,
     socialLinks: socialLinks ?? this.socialLinks,
+    header: header ?? this.header,
     footer: footer ?? this.footer,
   );
-
-  static List<T> _maps<T>(dynamic raw, T Function(Map<String, dynamic>) read) =>
-      raw is List
-      ? raw
-            .whereType<Map>()
-            .map((item) => read(Map<String, dynamic>.from(item)))
-            .toList()
-      : <T>[];
 }
 
 class WebsiteBundle {
@@ -684,279 +638,213 @@ class WebsiteBundle {
 
   Set<String> get managedAssetPaths => {
     if (config.logo.isManaged) config.logo.storagePath,
-    if (config.footer.logo.isManaged) config.footer.logo.storagePath,
-    for (final page in pages)
-      for (final block in page.blocks)
-        if (block.image.isManaged) block.image.storagePath,
+    for (final row in [
+      ...config.header.rows,
+      ...config.footer.rows,
+      for (final page in pages) ...page.rows,
+    ])
+      for (final column in row.columns)
+        for (final component in column.components) ...[
+          if (component.image.isManaged) component.image.storagePath,
+          for (final item in component.items)
+            if (item.image.isManaged) item.image.storagePath,
+        ],
   };
 
   static final defaults = _defaultBundle();
 }
 
-// Modelo v2 conservado exclusivamente para migrar contenido ya publicado.
-class WebsiteContent {
-  final String schoolName;
-  final String tagline;
-  final String heroTitle;
-  final String heroBody;
-  final String heroImageUrl;
-  final String logoUrl;
-  final String phone;
-  final String email;
-  final String address;
-  final String primaryColor;
-  final List<WebsiteNavigationItem> navigation;
-  final List<WebsiteBlock> sections;
-
-  const WebsiteContent({
-    required this.schoolName,
-    required this.tagline,
-    required this.heroTitle,
-    required this.heroBody,
-    required this.heroImageUrl,
-    required this.logoUrl,
-    required this.phone,
-    required this.email,
-    required this.address,
-    required this.primaryColor,
-    required this.navigation,
-    required this.sections,
-  });
-
-  factory WebsiteContent.fromMap(Map<String, dynamic> map) {
-    final rawSections = map['sections'];
-    var sections = rawSections is List
-        ? rawSections
-              .asMap()
-              .entries
-              .where((entry) => entry.value is Map)
-              .map(
-                (entry) => WebsiteBlock.fromMap(
-                  Map<String, dynamic>.from(entry.value as Map),
-                  index: entry.key,
-                ),
-              )
-              .toList()
-        : <WebsiteBlock>[];
-    final defaults = WebsiteContent.defaults;
-    final existingPages = <String>{
-      for (final raw in rawSections is List ? rawSections : const [])
-        if (raw is Map) (raw['pageId'] ?? 'about').toString(),
-    };
-    for (final item in defaults.sectionsByPage.entries) {
-      if (!existingPages.contains(item.key)) sections.addAll(item.value);
-    }
-    return WebsiteContent(
-      schoolName: (map['schoolName'] ?? defaults.schoolName).toString(),
-      tagline: (map['tagline'] ?? defaults.tagline).toString(),
-      heroTitle: (map['heroTitle'] ?? defaults.heroTitle).toString(),
-      heroBody: (map['heroBody'] ?? defaults.heroBody).toString(),
-      heroImageUrl: (map['heroImageUrl'] ?? defaults.heroImageUrl).toString(),
-      logoUrl: (map['logoUrl'] ?? defaults.logoUrl).toString(),
-      phone: (map['phone'] ?? '').toString(),
-      email: (map['email'] ?? '').toString(),
-      address: (map['address'] ?? '').toString(),
-      primaryColor: (map['primaryColor'] ?? '#B71C1C').toString(),
-      navigation:
-          WebsiteSiteConfig._maps(
-            map['navigation'],
-            WebsiteNavigationItem.fromMap,
-          ).isEmpty
-          ? defaults.navigation
-          : WebsiteSiteConfig._maps(
-              map['navigation'],
-              WebsiteNavigationItem.fromMap,
-            ),
-      sections: sections,
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-    'schoolName': schoolName,
-    'tagline': tagline,
-    'heroTitle': heroTitle,
-    'heroBody': heroBody,
-    'heroImageUrl': heroImageUrl,
-    'logoUrl': logoUrl,
-    'phone': phone,
-    'email': email,
-    'address': address,
-    'primaryColor': primaryColor,
-    'navigation': navigation.map((item) => item.toMap()).toList(),
-    'sections': sections.map((item) => item.toMap()).toList(),
-  };
-
-  Map<String, List<WebsiteBlock>> get sectionsByPage {
-    final result = <String, List<WebsiteBlock>>{};
-    for (final section in sections) {
-      result.putIfAbsent(section.pageId, () => []).add(section);
-    }
-    return result;
-  }
-
-  WebsiteBundle toBundle(Map<String, List<WebsiteBlock>> grouped) {
-    final config = WebsiteSiteConfig(
-      schoolName: schoolName,
-      tagline: tagline,
-      logo: WebsiteAsset.fromLegacyUrl(logoUrl),
-      phone: phone,
-      email: email,
-      address: address,
-      primaryColor: primaryColor,
-      navigation: navigation,
-      socialLinks: WebsiteBundle.defaults.config.socialLinks,
-    );
-    final pages = <WebsitePage>[
-      WebsitePage(
-        id: 'home',
-        label: 'Inicio',
-        slug: 'home',
-        showInNavigation: false,
-        sortOrder: -1,
-        blocks: [
-          WebsiteBlock(
-            id: 'home_hero',
-            type: 'hero',
-            title: heroTitle,
-            body: heroBody,
-            image: WebsiteAsset.fromLegacyUrl(heroImageUrl),
-            textColor: '#FFFFFF',
-            backgroundColor: '#25090A',
-            titleSize: 62,
-            mobileTitleSize: 39,
+WebsiteBundle _defaultBundle() {
+  const navigation = [
+    WebsiteNavigationItem(id: 'about', label: 'Nosotros', slug: 'nosotros'),
+    WebsiteNavigationItem(
+      id: 'admissions',
+      label: 'Admisiones',
+      slug: 'admisiones',
+    ),
+    WebsiteNavigationItem(
+      id: 'learning',
+      label: 'Propuesta académica',
+      slug: 'propuesta-academica',
+    ),
+    WebsiteNavigationItem(id: 'news', label: 'Noticias', slug: 'noticias'),
+  ];
+  final header = WebsiteHeaderConfig(
+    rows: [
+      WebsiteRow(
+        id: 'header_main',
+        padding: 12,
+        columns: [
+          WebsiteColumn(
+            id: 'header_brand',
+            components: [
+              WebsiteComponent(id: 'site_identity', type: 'siteIdentity'),
+            ],
+          ),
+          WebsiteColumn(
+            id: 'header_navigation',
+            span: 2,
+            components: [
+              WebsiteComponent(
+                id: 'site_navigation',
+                type: 'navigation',
+                alignment: 'right',
+              ),
+            ],
           ),
         ],
       ),
-      for (var index = 0; index < navigation.length; index++)
-        WebsitePage(
-          id: navigation[index].id,
-          label: navigation[index].label,
-          slug: navigation[index].resolvedSlug,
-          enabled: navigation[index].enabled,
-          sortOrder: index,
-          blocks: grouped[navigation[index].id] ?? const [],
-        ),
-    ];
-    return WebsiteBundle(config: config, pages: pages);
-  }
-
-  static final defaults = _legacyDefaults();
-}
-
-WebsiteBundle _defaultBundle() {
-  const navigation = [
-    WebsiteNavigationItem(id: 'about', label: 'About', slug: 'about'),
-    WebsiteNavigationItem(
-      id: 'admissions',
-      label: 'Admissions',
-      slug: 'admissions',
-    ),
-    WebsiteNavigationItem(id: 'learning', label: 'Learning', slug: 'learning'),
-    WebsiteNavigationItem(
-      id: 'news',
-      label: 'News & Events',
-      slug: 'news-events',
-    ),
-    WebsiteNavigationItem(id: 'parents', label: 'Parents', slug: 'parents'),
-  ];
-  const config = WebsiteSiteConfig(
-    schoolName: 'Liceo Bilingüe Rodolfo Llinás',
-    tagline: 'Educamos hoy para liderar mañana',
-    logo: WebsiteAsset(url: 'asset:assets/logo_fondo.png'),
-    primaryColor: '#B71C1C',
-    fontFamily: 'Montserrat',
-    navigation: navigation,
-    socialLinks: [
-      WebsiteSocialLink(platform: 'facebook'),
-      WebsiteSocialLink(platform: 'instagram'),
-      WebsiteSocialLink(platform: 'youtube'),
-      WebsiteSocialLink(platform: 'tiktok'),
     ],
   );
-  final pages = <WebsitePage>[
+  final footer = WebsiteFooterConfig(
+    rows: [
+      WebsiteRow(
+        id: 'footer_main',
+        backgroundColor: '#2B1718',
+        padding: 34,
+        columns: [
+          WebsiteColumn(
+            id: 'footer_identity',
+            backgroundColor: '#2B1718',
+            components: [
+              WebsiteComponent(
+                id: 'footer_brand',
+                type: 'siteIdentity',
+                backgroundColor: '#2B1718',
+                textColor: '#FFFFFF',
+              ),
+              WebsiteComponent(
+                id: 'footer_social',
+                type: 'socialLinks',
+                backgroundColor: '#2B1718',
+                textColor: '#FFFFFF',
+              ),
+            ],
+          ),
+          WebsiteColumn(
+            id: 'footer_contact',
+            backgroundColor: '#2B1718',
+            components: [
+              WebsiteComponent(
+                id: 'footer_contact_component',
+                type: 'contactInfo',
+                title: 'Contáctanos',
+                backgroundColor: '#2B1718',
+                textColor: '#FFFFFF',
+              ),
+            ],
+          ),
+          WebsiteColumn(
+            id: 'footer_links',
+            backgroundColor: '#2B1718',
+            components: [
+              WebsiteComponent(
+                id: 'footer_navigation',
+                type: 'navigation',
+                title: 'Enlaces',
+                backgroundColor: '#2B1718',
+                textColor: '#FFFFFF',
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+  const hero = WebsiteComponent(
+    id: 'home_hero',
+    type: 'hero',
+    title: 'Formamos estudiantes con valores y pasión por aprender',
+    body: 'Educación bilingüe integral en un ambiente seguro e inclusivo.',
+    image: WebsiteAsset(
+      url:
+          'asset:assets/pagina_inicio/WhatsApp Image 2026-06-26 at 12.16.23 PM.jpeg',
+    ),
+    textColor: '#FFFFFF',
+    backgroundColor: '#2B1718',
+    accentColor: '#A63D40',
+    titleSize: 56,
+    padding: 48,
+  );
+  final pages = [
     const WebsitePage(
       id: 'home',
       label: 'Inicio',
       slug: 'home',
       showInNavigation: false,
       sortOrder: -1,
-      blocks: [
-        WebsiteBlock(
-          id: 'home_hero',
-          type: 'hero',
-          title: 'Formamos estudiantes con valores y pasión por aprender',
-          body:
-              'Educación bilingüe integral en un ambiente seguro e inclusivo.',
-          image: WebsiteAsset(
-            url:
-                'asset:assets/pagina_inicio/WhatsApp Image 2026-06-26 at 12.16.23 PM.jpeg',
-          ),
-          textColor: '#FFFFFF',
-          titleSize: 62,
-          mobileTitleSize: 39,
+      rows: [
+        WebsiteRow(
+          id: 'home_row',
+          padding: 0,
+          maxWidth: 1920,
+          columns: [
+            WebsiteColumn(id: 'home_column', padding: 0, components: [hero]),
+          ],
         ),
       ],
     ),
-    for (var index = 0; index < navigation.length; index++)
+    for (var i = 0; i < navigation.length; i++)
       WebsitePage(
-        id: navigation[index].id,
-        label: navigation[index].label,
-        slug: navigation[index].resolvedSlug,
-        sortOrder: index,
-        blocks: [
-          WebsiteBlock(
-            id: '${navigation[index].id}_intro',
-            type: 'imageText',
-            pageId: navigation[index].id,
-            title: navigation[index].label,
-            body: _defaultBody(navigation[index].id),
-            image: WebsiteAsset(
-              url:
-                  'asset:assets/pagina_inicio/WhatsApp Image 2026-06-26 at 12.16.20 PM (${index + 1}).jpeg',
-            ),
-            mobileOrder: 0,
+        id: navigation[i].id,
+        label: navigation[i].label,
+        slug: navigation[i].slug,
+        sortOrder: i,
+        rows: [
+          WebsiteRow(
+            id: '${navigation[i].id}_row',
+            columns: [
+              WebsiteColumn(
+                id: '${navigation[i].id}_column',
+                components: [
+                  WebsiteComponent(
+                    id: '${navigation[i].id}_intro',
+                    type: 'text',
+                    title: navigation[i].label,
+                    body:
+                        'Edita este contenido desde el constructor del sitio.',
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
   ];
-  return WebsiteBundle(config: config, pages: pages);
-}
-
-WebsiteContent _legacyDefaults() {
-  final bundle = WebsiteBundle.defaults;
-  return WebsiteContent(
-    schoolName: bundle.config.schoolName,
-    tagline: bundle.config.tagline,
-    heroTitle: bundle.pages.first.blocks.first.title,
-    heroBody: bundle.pages.first.blocks.first.body,
-    heroImageUrl: bundle.pages.first.blocks.first.image.url,
-    logoUrl: bundle.config.logo.url,
-    phone: '',
-    email: '',
-    address: '',
-    primaryColor: bundle.config.primaryColor,
-    navigation: bundle.config.navigation,
-    sections: [for (final page in bundle.pages.skip(1)) ...page.blocks],
+  return WebsiteBundle(
+    config: WebsiteSiteConfig(
+      schoolName: 'Liceo Bilingüe Rodolfo Llinás',
+      tagline: 'Educamos hoy para liderar mañana',
+      logo: const WebsiteAsset(url: 'asset:assets/logo_fondo.png'),
+      navigation: navigation,
+      socialLinks: const [
+        WebsiteSocialLink(platform: 'facebook'),
+        WebsiteSocialLink(platform: 'instagram'),
+        WebsiteSocialLink(platform: 'youtube'),
+        WebsiteSocialLink(platform: 'tiktok'),
+      ],
+      header: header,
+      footer: footer,
+    ),
+    pages: pages,
   );
 }
 
-String _defaultBody(String id) => switch (id) {
-  'about' => 'Conoce nuestra historia, filosofía y comunidad educativa.',
-  'admissions' => 'Encuentra el proceso de admisiones y solicita información.',
-  'learning' => 'Explora nuestra propuesta académica y formación bilingüe.',
-  'news' => 'Consulta las noticias, actividades y próximos eventos.',
-  _ => 'Accede a información y recursos importantes para las familias.',
-};
+Map<String, dynamic>? _map(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : null;
 
-String _storagePathFromDownloadUrl(String value) {
-  final uri = Uri.tryParse(value);
-  if (uri == null || !uri.host.contains('firebasestorage.googleapis.com')) {
-    return '';
-  }
-  final marker = '/o/';
-  final markerIndex = uri.path.indexOf(marker);
-  if (markerIndex < 0) return '';
-  final encoded = uri.path.substring(markerIndex + marker.length);
-  final decoded = Uri.decodeComponent(encoded);
-  return decoded.startsWith('website/') ? decoded : '';
-}
+List<Map<String, dynamic>> _list(dynamic value) => value is List
+    ? value
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
+    : <Map<String, dynamic>>[];
+
+List<WebsiteRow> _rows(dynamic value) => _list(value)
+    .asMap()
+    .entries
+    .map((entry) => WebsiteRow.fromMap(entry.value, entry.key))
+    .toList();
+
+int _int(dynamic value, int fallback) =>
+    value is num ? value.toInt() : fallback;
