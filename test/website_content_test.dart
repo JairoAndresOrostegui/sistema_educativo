@@ -168,6 +168,36 @@ void main() {
       expect(button.onPressed, isNotNull);
     });
 
+    testWidgets('carousel exposes accessible previous and next controls', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: WebsiteCarousel(
+              config: WebsiteBundle.defaults.config,
+              preview: false,
+              component: const WebsiteComponent(
+                id: 'carousel',
+                type: 'carousel',
+                autoplay: false,
+                items: [
+                  WebsiteComponentItem(id: 'one', title: 'Primera'),
+                  WebsiteComponentItem(id: 'two', title: 'Segunda'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byTooltip('Imagen anterior'), findsOneWidget);
+      expect(find.byTooltip('Imagen siguiente'), findsOneWidget);
+      await tester.tap(find.byTooltip('Imagen siguiente'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('editor outlines the grid and highlights the selection', (
       tester,
     ) async {

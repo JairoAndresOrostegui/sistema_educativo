@@ -361,6 +361,32 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     }
   }
 
+  void _runListAction(String action, Enrollment enrollment) {
+    switch (action) {
+      case 'view':
+        _ver(enrollment);
+        return;
+      case 'edit':
+        _editar(enrollment);
+        return;
+      case 'approve':
+        _aprobar(enrollment);
+        return;
+      case 'reject':
+        _rechazar(enrollment);
+        return;
+      case 'withdraw':
+        _desmatricular(enrollment);
+        return;
+      case 'observe':
+        _accionDocente(enrollment, 'observe');
+        return;
+      case 'correction':
+        _accionDocente(enrollment, 'request_correction');
+        return;
+    }
+  }
+
   @override
   void dispose() {
     _pendingSub?.cancel();
@@ -377,6 +403,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         .toSet();
     final canEdit =
         user.isSuperadmin || permissions.contains('matricula.editar');
+    final compactList = MediaQuery.sizeOf(context).width < 720;
     return Scaffold(
       appBar: AppBar(
         leading: const BackToDashboardButton(),
@@ -453,79 +480,140 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                             title: Text(nombre.isEmpty ? 'Sin nombre' : nombre),
                             subtitle: Text(
                               'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'}  Estado: $estadoLabel',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            trailing: Wrap(
-                              spacing: 8,
-                              children: [
-                                IconButton(
-                                  onPressed: () => _ver(e),
-                                  icon: const Icon(Icons.visibility),
-                                  tooltip: 'Ver detalle',
-                                ),
-                                if (!isTeacher &&
-                                    canEdit &&
-                                    (e.estado == 'prematriculado' ||
-                                        e.estado == 'pendiente_revision' ||
-                                        e.estado == 'matriculado'))
-                                  IconButton(
-                                    onPressed: () => _editar(e),
-                                    icon: const Icon(Icons.edit),
-                                    tooltip: 'Editar',
+                            trailing: compactList
+                                ? PopupMenuButton<String>(
+                                    tooltip: 'Acciones de matrícula',
+                                    onSelected: (action) =>
+                                        _runListAction(action, e),
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'view',
+                                        child: Text('Ver detalle'),
+                                      ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado ==
+                                                  'pendiente_revision' ||
+                                              e.estado == 'matriculado'))
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text('Editar'),
+                                        ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado ==
+                                                  'pendiente_revision')) ...[
+                                        const PopupMenuItem(
+                                          value: 'approve',
+                                          child: Text('Aprobar'),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'reject',
+                                          child: Text('Rechazar'),
+                                        ),
+                                      ],
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          e.estado == 'matriculado')
+                                        const PopupMenuItem(
+                                          value: 'withdraw',
+                                          child: Text('Retirar'),
+                                        ),
+                                      if (isTeacher && canEdit)
+                                        const PopupMenuItem(
+                                          value: 'observe',
+                                          child: Text('Agregar observación'),
+                                        ),
+                                      if (isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado == 'pendiente_revision'))
+                                        const PopupMenuItem(
+                                          value: 'correction',
+                                          child: Text('Solicitar corrección'),
+                                        ),
+                                    ],
+                                  )
+                                : Wrap(
+                                    spacing: 8,
+                                    children: [
+                                      IconButton(
+                                        onPressed: () => _ver(e),
+                                        icon: const Icon(Icons.visibility),
+                                        tooltip: 'Ver detalle',
+                                      ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado ==
+                                                  'pendiente_revision' ||
+                                              e.estado == 'matriculado'))
+                                        IconButton(
+                                          onPressed: () => _editar(e),
+                                          icon: const Icon(Icons.edit),
+                                          tooltip: 'Editar',
+                                        ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado == 'pendiente_revision'))
+                                        IconButton(
+                                          onPressed: () => _aprobar(e),
+                                          icon: Icon(
+                                            Icons.check_circle,
+                                            color: AppPalette.success,
+                                          ),
+                                          tooltip: 'Aprobar',
+                                        ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado == 'pendiente_revision'))
+                                        IconButton(
+                                          onPressed: () => _rechazar(e),
+                                          icon: Icon(
+                                            Icons.cancel,
+                                            color: AppPalette.primary,
+                                          ),
+                                          tooltip: 'Rechazar',
+                                        ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          e.estado == 'matriculado')
+                                        IconButton(
+                                          onPressed: () => _desmatricular(e),
+                                          icon: Icon(
+                                            Icons.undo,
+                                            color: AppPalette.warning,
+                                          ),
+                                          tooltip: 'Retirar',
+                                        ),
+                                      if (isTeacher && canEdit)
+                                        IconButton(
+                                          onPressed: () =>
+                                              _accionDocente(e, 'observe'),
+                                          icon: const Icon(Icons.comment),
+                                          tooltip: 'Agregar observación',
+                                        ),
+                                      if (isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado == 'pendiente_revision'))
+                                        IconButton(
+                                          onPressed: () => _accionDocente(
+                                            e,
+                                            'request_correction',
+                                          ),
+                                          icon: const Icon(Icons.rule),
+                                          tooltip: 'Solicitar corrección',
+                                        ),
+                                    ],
                                   ),
-                                if (!isTeacher &&
-                                    canEdit &&
-                                    (e.estado == 'prematriculado' ||
-                                        e.estado == 'pendiente_revision'))
-                                  IconButton(
-                                    onPressed: () => _aprobar(e),
-                                    icon: Icon(
-                                      Icons.check_circle,
-                                      color: AppPalette.success,
-                                    ),
-                                    tooltip: 'Aprobar',
-                                  ),
-                                if (!isTeacher &&
-                                    canEdit &&
-                                    (e.estado == 'prematriculado' ||
-                                        e.estado == 'pendiente_revision'))
-                                  IconButton(
-                                    onPressed: () => _rechazar(e),
-                                    icon: Icon(
-                                      Icons.cancel,
-                                      color: AppPalette.primary,
-                                    ),
-                                    tooltip: 'Rechazar',
-                                  ),
-                                if (!isTeacher &&
-                                    canEdit &&
-                                    e.estado == 'matriculado')
-                                  IconButton(
-                                    onPressed: () => _desmatricular(e),
-                                    icon: Icon(
-                                      Icons.undo,
-                                      color: AppPalette.warning,
-                                    ),
-                                    tooltip: 'Retirar',
-                                  ),
-                                if (isTeacher && canEdit)
-                                  IconButton(
-                                    onPressed: () =>
-                                        _accionDocente(e, 'observe'),
-                                    icon: const Icon(Icons.comment),
-                                    tooltip: 'Agregar observación',
-                                  ),
-                                if (isTeacher &&
-                                    canEdit &&
-                                    (e.estado == 'prematriculado' ||
-                                        e.estado == 'pendiente_revision'))
-                                  IconButton(
-                                    onPressed: () =>
-                                        _accionDocente(e, 'request_correction'),
-                                    icon: const Icon(Icons.rule),
-                                    tooltip: 'Solicitar corrección',
-                                  ),
-                              ],
-                            ),
                           ),
                         );
                       },

@@ -220,12 +220,43 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                     ),
                                     title: Text(
                                       '${user.firstName} ${user.lastName}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     subtitle: Text(
                                       '${user.personalEmail} - ${user.status.toUpperCase()}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     trailing: isMobile
-                                        ? null
+                                        ? (puedeEditar || puedeEliminarEste
+                                              ? PopupMenuButton<String>(
+                                                  tooltip:
+                                                      'Acciones del usuario',
+                                                  onSelected: (action) {
+                                                    if (action == 'edit') {
+                                                      _mostrarFormulario(
+                                                        usuario: user,
+                                                      );
+                                                    } else if (action ==
+                                                        'delete') {
+                                                      _eliminarUsuario(user);
+                                                    }
+                                                  },
+                                                  itemBuilder: (context) => [
+                                                    if (puedeEditar)
+                                                      const PopupMenuItem(
+                                                        value: 'edit',
+                                                        child: Text('Editar'),
+                                                      ),
+                                                    if (puedeEliminarEste)
+                                                      const PopupMenuItem(
+                                                        value: 'delete',
+                                                        child: Text('Eliminar'),
+                                                      ),
+                                                  ],
+                                                )
+                                              : null)
                                         : Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
@@ -295,8 +326,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           title: Text(
             esSuperadminActual ? 'Eliminacion definitiva' : 'Retirar usuario',
           ),
-          content: SizedBox(
-            width: 520,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

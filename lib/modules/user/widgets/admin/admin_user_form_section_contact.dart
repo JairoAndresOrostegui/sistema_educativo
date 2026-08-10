@@ -33,7 +33,7 @@ class ContactSection extends StatelessWidget {
       children: [
         TextFormField(
           controller: direccion,
-          decoration: const InputDecoration(labelText: 'Direccion'),
+          decoration: const InputDecoration(labelText: 'Dirección'),
           readOnly: soloLectura,
           validator: (value) => (value == null || value.isEmpty)
               ? 'Este campo es obligatorio'
@@ -43,8 +43,10 @@ class ContactSection extends StatelessWidget {
         TextFormField(
           controller: telefonos,
           decoration: const InputDecoration(
-            labelText: 'Telefonos: si son varios se separan con ","',
+            labelText: 'Teléfonos',
+            helperText: 'Si son varios, sepáralos con comas.',
           ),
+          keyboardType: TextInputType.phone,
           readOnly: soloLectura,
           validator: (value) => (value == null || value.isEmpty)
               ? 'Este campo es obligatorio'
@@ -66,41 +68,41 @@ class ContactSection extends StatelessWidget {
         const SizedBox(height: 8),
         TextFormField(
           controller: birthCountry,
-          decoration: const InputDecoration(labelText: 'Pais de Nacimiento'),
+          decoration: const InputDecoration(labelText: 'País de nacimiento'),
           readOnly: soloLectura,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: birthDepartment,
           decoration: const InputDecoration(
-            labelText: 'Departamento de Nacimiento',
+            labelText: 'Departamento de nacimiento',
           ),
           readOnly: soloLectura,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: birthCity,
-          decoration: const InputDecoration(labelText: 'Ciudad de Nacimiento'),
+          decoration: const InputDecoration(labelText: 'Ciudad de nacimiento'),
           readOnly: soloLectura,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: residenceCountry,
-          decoration: const InputDecoration(labelText: 'Pais de Residencia'),
+          decoration: const InputDecoration(labelText: 'País de residencia'),
           readOnly: soloLectura,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: residenceDepartment,
           decoration: const InputDecoration(
-            labelText: 'Departamento de Residencia',
+            labelText: 'Departamento de residencia',
           ),
           readOnly: soloLectura,
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: residenceCity,
-          decoration: const InputDecoration(labelText: 'Ciudad de Residencia'),
+          decoration: const InputDecoration(labelText: 'Ciudad de residencia'),
           readOnly: soloLectura,
         ),
         const SizedBox(height: 8),

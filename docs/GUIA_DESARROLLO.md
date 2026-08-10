@@ -73,12 +73,18 @@ Reglas:
 - mantener la página pública y los módulos autenticados visualmente coherentes.
 - usar en todos los módulos revisados o nuevos la misma cabecera de Perfil: superficie sólida, título centrado, color primario y regreso visible al tablero;
 - evitar degradados en módulos internos y preferir superficies sólidas del `ColorScheme`;
+- diseñar formularios desde 320 px: los desplegables usan `isExpanded`, los textos largos envuelven o muestran elipsis y las acciones pasan a `Wrap` o menú contextual antes de desbordarse;
+- todo diálogo largo debe tener alto acotado, desplazamiento vertical, margen para el teclado y controles táctiles de al menos 48 px;
+- una tabla operativa debe transformarse en tarjetas o admitir desplazamiento horizontal explícito en móvil; nunca reducir texto hasta volverlo ilegible;
+- añadir una prueba de widget con viewport móvil para cada maquetación nueva que combine formularios, tablas o acciones múltiples;
 
 ## Constructor del sitio público
 
 El esquema canónico es la versión 5. `website/config` contiene identidad, tema, navegación, redes, `header.rows` y `footer.rows`; cada documento de `website_pages` contiene `rows`. La jerarquía es `WebsiteRow -> WebsiteColumn -> WebsiteComponent`. No volver a introducir `blocks`, `sections` ni lectura dual del esquema anterior.
 
 Una fila admite máximo cuatro columnas. Las columnas usan `span` relativo y en móvil se apilan cuando `stackOnMobile` está activo. Cada componente separa `widthPercent` y `componentAlignment` —posición del bloque dentro de la columna— de `alignment`, que solo alinea su contenido. Los componentes disponibles se centralizan en el modelo y el editor; cualquier tipo nuevo debe implementar serialización, edición, render adaptable y prueba.
+
+Los componentes deslizantes deben ofrecer controles manuales accesibles además de reproducción automática o gestos. El carrusel usa flechas anterior/siguiente, indicadores y conserva el gesto táctil. En vista móvil se limitan espacios interiores excesivos y el texto superpuesto se trunca de manera legible para no cubrir los controles.
 
 Los videos aceptan exclusivamente URL HTTPS reconocida de YouTube o Vimeo. El render web transforma la URL a un `iframe` seguro y sin HTML suministrado por el administrador. No se suben videos a Storage. Las imágenes continúan bajo `website/`, con tamaño y MIME protegidos por reglas.
 

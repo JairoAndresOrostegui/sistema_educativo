@@ -55,12 +55,12 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
         ),
         title: const Text('Mensajes del sitio web'),
         actions: [
-          TextButton.icon(
+          IconButton(
+            tooltip: 'Abrir constructor del sitio',
             onPressed: () => context.go('/website_admin'),
             icon: const Icon(Icons.web_outlined),
-            label: const Text('Constructor del sitio'),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 4),
         ],
       ),
       body: StreamBuilder<List<WebsiteSubmission>>(
@@ -86,84 +86,130 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
                     .toLowerCase();
             return matchesFilter && (query.isEmpty || haystack.contains(query));
           }).toList();
-          final selected = _selected(all);
           final unread = all.where((item) => item.status == 'new').length;
 
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                _summary(all.length, unread),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Row(
-                    children: [
-                      SizedBox(width: 430, child: _inbox(filtered)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _detail(selected)),
-                    ],
-                  ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 900;
+              final selected = _selected(all, fallbackToFirst: !narrow);
+              final showDetail = narrow && _selectedId != null;
+              return Padding(
+                padding: EdgeInsets.all(narrow ? 12 : 20),
+                child: Column(
+                  children: [
+                    if (!showDetail) _summary(all.length, unread, narrow),
+                    if (!showDetail) SizedBox(height: narrow ? 12 : 16),
+                    Expanded(
+                      child: narrow
+                          ? (showDetail
+                                ? _detail(selected, showBack: true)
+                                : _inbox(filtered))
+                          : Row(
+                              children: [
+                                SizedBox(width: 430, child: _inbox(filtered)),
+                                const SizedBox(width: 16),
+                                Expanded(child: _detail(selected)),
+                              ],
+                            ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
 
-  WebsiteSubmission? _selected(List<WebsiteSubmission> items) {
+  WebsiteSubmission? _selected(
+    List<WebsiteSubmission> items, {
+    required bool fallbackToFirst,
+  }) {
     if (items.isEmpty) return null;
     for (final item in items) {
       if (item.id == _selectedId) return item;
     }
-    return items.first;
+    return fallbackToFirst ? items.first : null;
   }
 
-  Widget _summary(int total, int unread) => Row(
+  Widget _summary(int total, int unread, bool compact) => Row(
     children: [
-      _metric('Total', total, Icons.inbox_outlined, AppPalette.info),
-      const SizedBox(width: 12),
+      _metric('Total', total, Icons.inbox_outlined, AppPalette.info, compact),
+      SizedBox(width: compact ? 6 : 12),
       _metric(
         'Sin leer',
         unread,
         Icons.mark_email_unread_outlined,
         AppPalette.error,
+        compact,
       ),
-      const SizedBox(width: 12),
+      SizedBox(width: compact ? 6 : 12),
       _metric(
         'Leídos',
         total - unread,
         Icons.drafts_outlined,
         AppPalette.success,
+        compact,
       ),
     ],
   );
 
-  Widget _metric(String label, int value, IconData icon, Color color) =>
-      Expanded(
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, color: color),
-                const SizedBox(width: 12),
-                Text(
-                  '$value',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(label),
-              ],
-            ),
-          ),
+  Widget _metric(
+    String label,
+    int value,
+    IconData icon,
+    Color color,
+    bool compact,
+  ) => Expanded(
+    child: Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 6 : 18,
+          vertical: compact ? 10 : 14,
         ),
-      );
+        child: compact
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, color: color, size: 20),
+                  Text(
+                    '$value',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  Icon(icon, color: color),
+                  const SizedBox(width: 12),
+                  Text(
+                    '$value',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    ),
+  );
 
   Widget _inbox(List<WebsiteSubmission> submissions) => Card(
     margin: EdgeInsets.zero,
@@ -183,7 +229,8 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
             ),
           ),
         ),
-        Padding(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: SegmentedButton<String>(
             showSelectedIcon: false,
@@ -248,7 +295,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
     ),
   );
 
-  Widget _detail(WebsiteSubmission? item) => Card(
+  Widget _detail(WebsiteSubmission? item, {bool showBack = false}) => Card(
     margin: EdgeInsets.zero,
     child: item == null
         ? const Center(
@@ -259,13 +306,24 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                if (showBack)
+                  TextButton.icon(
+                    onPressed: () => setState(() => _selectedId = null),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Volver a mensajes'),
+                  ),
+                if (showBack) const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Expanded(
+                    SizedBox(
+                      width: showBack ? double.infinity : 300,
                       child: Text(
                         item.name.isEmpty ? 'Sin nombre' : item.name,
                         style: const TextStyle(
-                          fontSize: 26,
+                          fontSize: 24,
                           fontWeight: FontWeight.w800,
                         ),
                       ),

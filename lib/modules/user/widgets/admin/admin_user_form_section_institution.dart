@@ -27,14 +27,21 @@ class InstitutionSection extends StatelessWidget {
     return Column(
       children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           key: ValueKey('institution-${institucion.text}'),
           initialValue: institutions.any((item) => item.id == institucion.text)
               ? institucion.text
               : null,
           items: institutions
               .map(
-                (item) =>
-                    DropdownMenuItem(value: item.id, child: Text(item.label)),
+                (item) => DropdownMenuItem(
+                  value: item.id,
+                  child: Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               )
               .toList(),
           onChanged: soloLectura || !esSuperadminActual
@@ -43,7 +50,7 @@ class InstitutionSection extends StatelessWidget {
                   if (value != null) onInstitutionChanged(value);
                 },
           decoration: const InputDecoration(
-            labelText: 'Institucion',
+            labelText: 'Institución',
             border: OutlineInputBorder(),
           ),
           validator: (value) => (value == null || value.isEmpty)
@@ -52,12 +59,19 @@ class InstitutionSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           key: ValueKey('campus-${institucion.text}-${sede.text}'),
           initialValue: campuses.contains(sede.text) ? sede.text : null,
           items: campuses
               .map(
-                (campus) =>
-                    DropdownMenuItem(value: campus, child: Text(campus)),
+                (campus) => DropdownMenuItem(
+                  value: campus,
+                  child: Text(
+                    campus,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               )
               .toList(),
           onChanged: soloLectura || !esSuperadminActual

@@ -84,7 +84,7 @@ class EnrollmentFieldInput extends StatelessWidget {
                               ),
                               SizedBox(width: 8),
                               Text(
-                                'Si',
+                                'Sí',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 16,
@@ -216,7 +216,7 @@ class EnrollmentFieldInput extends StatelessWidget {
                               ),
                               SizedBox(width: 8),
                               Text(
-                                'Si',
+                                'Sí',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 16,
@@ -473,13 +473,18 @@ class EnrollmentFieldInput extends StatelessWidget {
             ? null
             : raw;
         return DropdownButtonFormField<String>(
+          isExpanded: true,
           decoration: _decoration(field.label, required),
           initialValue: current,
           items: distinctOptions
               .map(
                 (o) => DropdownMenuItem<String>(
                   value: o,
-                  child: Text(labelForValue(o)),
+                  child: Text(
+                    labelForValue(o),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               )
               .toList(),

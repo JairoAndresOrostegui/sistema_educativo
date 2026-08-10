@@ -187,7 +187,12 @@ class WebsiteLayout extends StatelessWidget {
                   maxWidth: entry.value.maxWidth.toDouble(),
                 ),
                 child: Padding(
-                  padding: EdgeInsets.all(entry.value.padding.toDouble()),
+                  padding: EdgeInsets.all(
+                    (mobile
+                            ? entry.value.padding.clamp(0, 24)
+                            : entry.value.padding)
+                        .toDouble(),
+                  ),
                   child: _row(entry.value),
                 ),
               ),
@@ -229,7 +234,9 @@ class WebsiteLayout extends StatelessWidget {
     ColoredBox(
       color: websiteHexColor(column.backgroundColor),
       child: Padding(
-        padding: EdgeInsets.all(column.padding.toDouble()),
+        padding: EdgeInsets.all(
+          (mobile ? column.padding.clamp(0, 20) : column.padding).toDouble(),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -379,7 +386,10 @@ class WebsiteComponentView extends StatelessWidget {
     return ColoredBox(
       color: websiteHexColor(component.backgroundColor),
       child: Padding(
-        padding: EdgeInsets.all(component.padding.toDouble()),
+        padding: EdgeInsets.all(
+          (mobile ? component.padding.clamp(0, 24) : component.padding)
+              .toDouble(),
+        ),
         child: child,
       ),
     );
@@ -744,6 +754,24 @@ class _WebsiteCarouselState extends State<WebsiteCarousel> {
     );
   }
 
+  void _restartAutoplay() {
+    _timer?.cancel();
+    _timer = null;
+    _start();
+  }
+
+  void _goTo(int index) {
+    if (!_controller.hasClients || widget.component.items.length < 2) return;
+    final count = widget.component.items.length;
+    final target = (index + count) % count;
+    _controller.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+    _restartAutoplay();
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -763,82 +791,162 @@ class _WebsiteCarouselState extends State<WebsiteCarousel> {
       children: [
         AspectRatio(
           aspectRatio: 16 / 7,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: widget.component.items.length,
-            onPageChanged: (value) => setState(() => _index = value),
-            itemBuilder: (context, index) {
-              final item = widget.component.items[index];
-              final slide = Stack(
-                fit: StackFit.expand,
-                children: [
-                  WebsiteImage(asset: item.image, fit: BoxFit.cover),
-                  if (item.title.isNotEmpty || item.text.isNotEmpty)
-                    ColoredBox(color: Colors.black.withValues(alpha: .35)),
-                  Align(
-                    alignment: Alignment.bottomLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.title,
-                            style: TextStyle(
-                              color: websiteHexColor(
-                                widget.component.textColor,
-                                fallback: Colors.white,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: PageView.builder(
+                  controller: _controller,
+                  itemCount: widget.component.items.length,
+                  onPageChanged: (value) => setState(() => _index = value),
+                  itemBuilder: (context, index) {
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        final item = widget.component.items[index];
+                        final compact = constraints.maxWidth < 600;
+                        final slide = Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            WebsiteImage(asset: item.image, fit: BoxFit.cover),
+                            if (item.title.isNotEmpty || item.text.isNotEmpty)
+                              ColoredBox(
+                                color: Colors.black.withValues(alpha: .35),
                               ),
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (item.text.isNotEmpty)
-                            Text(
-                              item.text,
-                              style: TextStyle(
-                                color: websiteHexColor(
-                                  widget.component.textColor,
-                                  fallback: Colors.white,
+                            Align(
+                              alignment: Alignment.bottomLeft,
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  compact ? 58 : 28,
+                                  compact ? 14 : 28,
+                                  compact ? 58 : 28,
+                                  compact ? 14 : 28,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      style: TextStyle(
+                                        color: websiteHexColor(
+                                          widget.component.textColor,
+                                          fallback: Colors.white,
+                                        ),
+                                        fontSize: compact ? 20 : 28,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (item.text.isNotEmpty)
+                                      Text(
+                                        item.text,
+                                        style: TextStyle(
+                                          color: websiteHexColor(
+                                            widget.component.textColor,
+                                            fallback: Colors.white,
+                                          ),
+                                        ),
+                                        maxLines: compact ? 2 : 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
-                        ],
-                      ),
+                          ],
+                        );
+                        if (item.url.isEmpty) return slide;
+                        return InkWell(
+                          onTap: widget.preview
+                              ? null
+                              : () => openWebsiteLink(context, item.url),
+                          child: slide,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              if (widget.component.items.length > 1) ...[
+                Positioned(
+                  left: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _CarouselArrow(
+                      key: const ValueKey('carousel-previous'),
+                      tooltip: 'Imagen anterior',
+                      icon: Icons.chevron_left,
+                      onPressed: () => _goTo(_index - 1),
                     ),
                   ),
-                ],
-              );
-              if (item.url.isEmpty) return slide;
-              return InkWell(
-                onTap: widget.preview
-                    ? null
-                    : () => openWebsiteLink(context, item.url),
-                child: slide,
-              );
-            },
+                ),
+                Positioned(
+                  right: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _CarouselArrow(
+                      key: const ValueKey('carousel-next'),
+                      tooltip: 'Imagen siguiente',
+                      icon: Icons.chevron_right,
+                      onPressed: () => _goTo(_index + 1),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < widget.component.items.length; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: CircleAvatar(
-                  radius: i == _index ? 5 : 3,
-                  backgroundColor: i == _index
-                      ? websiteHexColor(widget.component.accentColor)
-                      : Colors.grey,
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < widget.component.items.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: CircleAvatar(
+                    radius: i == _index ? 5 : 3,
+                    backgroundColor: i == _index
+                        ? websiteHexColor(widget.component.accentColor)
+                        : Colors.grey,
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
+}
+
+class _CarouselArrow extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  const _CarouselArrow({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.black.withValues(alpha: .58),
+    shape: const CircleBorder(),
+    child: IconButton(
+      tooltip: tooltip,
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      onPressed: onPressed,
+      color: Colors.white,
+      iconSize: 30,
+      icon: Icon(icon),
+    ),
+  );
 }
 
 class WebsiteContactForm extends StatefulWidget {

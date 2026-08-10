@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:sistema_educativo/utils/parameters_service.dart';
 import 'package:sistema_educativo/utils/validators.dart';
-import 'admin_user_form_section_shared.dart';
 
 class PersonalSection extends StatelessWidget {
   final TextEditingController nombres;
@@ -101,9 +100,8 @@ class PersonalSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          decoration: InputDecoration(
-            label: const ShrinkOneLine('Tipo de Documento'),
-          ),
+          isExpanded: true,
+          decoration: InputDecoration(labelText: 'Tipo de documento'),
           initialValue: safeDocType,
           items: [
             const DropdownMenuItem(
@@ -113,7 +111,11 @@ class PersonalSection extends StatelessWidget {
             ...documentTypes.map(
               (type) => DropdownMenuItem<String>(
                 value: type.valor,
-                child: Text('${type.etiqueta} - ${type.valor}'),
+                child: Text(
+                  '${type.etiqueta} - ${type.valor}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ],

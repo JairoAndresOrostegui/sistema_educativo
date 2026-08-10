@@ -100,11 +100,18 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final media = MediaQuery.of(context);
 
     return Dialog(
-      insetPadding: const EdgeInsets.all(16),
+      insetPadding: EdgeInsets.fromLTRB(8, 8, 8, 8 + media.viewInsets.bottom),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760, maxHeight: 720),
+        constraints: BoxConstraints(
+          maxWidth: 760,
+          maxHeight: (media.size.height - media.viewInsets.bottom - 16).clamp(
+            280.0,
+            720.0,
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -248,39 +255,47 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
       ],
     ];
 
-    return Table(
-      border: TableBorder.all(color: AppPalette.outline.withValues(alpha: .20)),
-      columnWidths: const <int, TableColumnWidth>{
-        0: IntrinsicColumnWidth(),
-        1: IntrinsicColumnWidth(),
-        2: IntrinsicColumnWidth(),
-        3: FlexColumnWidth(),
-        4: IntrinsicColumnWidth(),
-        5: IntrinsicColumnWidth(),
-        6: FlexColumnWidth(),
-        7: IntrinsicColumnWidth(),
-      },
-      children: rows.map((row) {
-        final isHeader = row == rows.first;
-        return TableRow(
-          decoration: BoxDecoration(
-            color: isHeader
-                ? AppPalette.onSurface.withValues(alpha: .04)
-                : null,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: 1100,
+        child: Table(
+          border: TableBorder.all(
+            color: AppPalette.outline.withValues(alpha: .20),
           ),
-          children: row.map((cell) {
-            return Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(
-                cell,
-                style: TextStyle(
-                  fontWeight: isHeader ? FontWeight.w700 : FontWeight.w400,
-                ),
+          columnWidths: const <int, TableColumnWidth>{
+            0: IntrinsicColumnWidth(),
+            1: IntrinsicColumnWidth(),
+            2: IntrinsicColumnWidth(),
+            3: FlexColumnWidth(),
+            4: IntrinsicColumnWidth(),
+            5: IntrinsicColumnWidth(),
+            6: FlexColumnWidth(),
+            7: IntrinsicColumnWidth(),
+          },
+          children: rows.map((row) {
+            final isHeader = row == rows.first;
+            return TableRow(
+              decoration: BoxDecoration(
+                color: isHeader
+                    ? AppPalette.onSurface.withValues(alpha: .04)
+                    : null,
               ),
+              children: row.map((cell) {
+                return Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    cell,
+                    style: TextStyle(
+                      fontWeight: isHeader ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                );
+              }).toList(),
             );
           }).toList(),
-        );
-      }).toList(),
+        ),
+      ),
     );
   }
 

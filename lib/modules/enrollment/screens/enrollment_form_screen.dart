@@ -141,6 +141,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
         return StatefulBuilder(
           builder: (ctx, setState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.all(12),
+              scrollable: true,
               title: const Text('Agregar grado cursado'),
               content: Form(
                 key: formKey,
@@ -179,6 +181,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Grado',
                         border: OutlineInputBorder(),
@@ -188,7 +191,11 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                           .map(
                             (g) => DropdownMenuItem<String>(
                               value: g,
-                              child: Text(g),
+                              child: Text(
+                                g,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -256,6 +263,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
         return StatefulBuilder(
           builder: (ctx, setState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.all(12),
+              scrollable: true,
               title: const Text('Editar grado cursado'),
               content: Form(
                 key: formKey,
@@ -294,6 +303,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Grado',
                         border: OutlineInputBorder(),
@@ -303,7 +313,11 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                           .map(
                             (g) => DropdownMenuItem<String>(
                               value: g,
-                              child: Text(g),
+                              child: Text(
+                                g,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -546,7 +560,10 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                   ),
                   const SizedBox(height: 16),
                   if (!isLast || index > 0)
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         if (!isLast)
                           ElevatedButton(
@@ -568,7 +585,6 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                             ),
                             child: const Text('Siguiente'),
                           ),
-                        if (!isLast) const SizedBox(width: 8),
                         if (index > 0)
                           TextButton(
                             onPressed: _controller.decrementStep,
@@ -865,15 +881,19 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
               actions: [
                 if (isAdmin)
                   Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Chip(
-                      label: Text('Pendientes: $_pendingCount'),
-                      backgroundColor: AppPalette.primary.withValues(
-                        alpha: .08,
-                      ),
-                      labelStyle: TextStyle(
-                        color: AppPalette.primary,
-                        fontWeight: FontWeight.w700,
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Tooltip(
+                      message: 'Matrículas pendientes: $_pendingCount',
+                      child: Chip(
+                        avatar: const Icon(Icons.pending_actions, size: 18),
+                        label: Text('$_pendingCount'),
+                        backgroundColor: AppPalette.primary.withValues(
+                          alpha: .08,
+                        ),
+                        labelStyle: TextStyle(
+                          color: AppPalette.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),

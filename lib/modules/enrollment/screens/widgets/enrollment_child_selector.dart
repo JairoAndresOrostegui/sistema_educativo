@@ -29,6 +29,7 @@ class EnrollmentChildSelector extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           key: ValueKey(selectedChildId ?? 'none'),
           initialValue: selectedChildId,
           decoration: const InputDecoration(

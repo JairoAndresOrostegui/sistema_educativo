@@ -33,6 +33,7 @@ class RoleSection extends StatelessWidget {
     return Column(
       children: [
         DropdownButtonFormField<String>(
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Rol'),
           initialValue: safeRole,
           items: [
@@ -43,7 +44,11 @@ class RoleSection extends StatelessWidget {
             ...roles.map(
               (r) => DropdownMenuItem<String>(
                 value: r.valor,
-                child: Text(r.etiqueta),
+                child: Text(
+                  r.etiqueta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ],
@@ -52,6 +57,7 @@ class RoleSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Estado'),
           initialValue: status,
           items: const [
@@ -65,6 +71,7 @@ class RoleSection extends StatelessWidget {
         const SizedBox(height: 8),
         if (rol == 'Estudiante' || rol == 'Docente')
           DropdownButtonFormField<String>(
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Grupo'),
             initialValue: safeGroupId,
             items: [
@@ -73,8 +80,14 @@ class RoleSection extends StatelessWidget {
                 child: Text('Seleccione un grupo'),
               ),
               ...groups.map(
-                (g) =>
-                    DropdownMenuItem<String>(value: g.id, child: Text(g.name)),
+                (g) => DropdownMenuItem<String>(
+                  value: g.id,
+                  child: Text(
+                    g.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ],
             onChanged: soloLectura ? null : onGroupChanged,

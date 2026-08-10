@@ -102,6 +102,8 @@ Las imágenes se eligen desde el equipo y se guardan en Storage. Los videos se a
 
 El selector de color muestra una paleta visual amplia y deja el hexadecimal como opción avanzada. El color principal y la tipografía también alimentan el tema de los módulos internos; los fondos y estilos propios de filas, columnas y componentes solo afectan el sitio público. Antes de publicar se puede alternar la vista previa entre escritorio y móvil. Solo usuarios con `sitio_web.editar` o el superadministrador pueden modificar y publicar.
 
+Los carruseles publicados pueden recorrerse con las flechas, los indicadores inferiores o el gesto de arrastre. En pantallas estrechas, la bandeja de mensajes muestra primero el listado y abre el detalle en una vista independiente con botón para regresar; así ninguna acción ni texto queda oculto.
+
 Eliminar una fila, columna, componente, elemento o página modifica primero el borrador. Al publicar se retiran sus referencias del documento de Firestore y se eliminan de Storage las imágenes que ya no utiliza ninguna parte del sitio. Si Storage falla, las rutas quedan en `pendingAssetCleanup` y se reintentan en la siguiente publicación; no se considera una limpieza terminada silenciosamente.
 
 ## Historial y auditoría

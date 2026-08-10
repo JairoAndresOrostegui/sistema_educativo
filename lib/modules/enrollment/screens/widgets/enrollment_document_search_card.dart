@@ -46,7 +46,10 @@ class EnrollmentDocumentSearchCard extends StatelessWidget {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 ElevatedButton.icon(
                   onPressed: loading ? null : onSearch,
@@ -57,7 +60,6 @@ class EnrollmentDocumentSearchCard extends StatelessWidget {
                     foregroundColor: AppPalette.surface,
                   ),
                 ),
-                const SizedBox(width: 12),
                 if (loading)
                   const SizedBox(
                     width: 20,
@@ -65,12 +67,9 @@ class EnrollmentDocumentSearchCard extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 if (selectedDocument != null && selectedDocument!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: Text(
-                      'Documento seleccionado: $selectedDocument',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                  Text(
+                    'Documento seleccionado: $selectedDocument',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
               ],
             ),

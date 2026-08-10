@@ -3,6 +3,7 @@ part of 'admin_user_form_widget.dart';
 class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   final _formKey = GlobalKey<FormState>();
   final AdminUserFormController _controller = AdminUserFormController();
+  final ScrollController _formScrollController = ScrollController();
 
   late TextEditingController nombres;
   late TextEditingController apellidos;
@@ -357,6 +358,7 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
 
   @override
   void dispose() {
+    _formScrollController.dispose();
     nombres.dispose();
     apellidos.dispose();
     correo.dispose();
@@ -380,214 +382,229 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final media = MediaQuery.of(context);
+    final isMobile = media.size.width < 600;
     final esNuevo = widget.usuario == null;
+    final horizontalInset = isMobile ? 8.0 : 24.0;
+    final availableHeight =
+        media.size.height - media.viewInsets.bottom - (horizontalInset * 2);
 
     return Dialog(
       backgroundColor: AppPalette.surface,
-      insetPadding: const EdgeInsets.all(16),
+      insetPadding: EdgeInsets.fromLTRB(
+        horizontalInset,
+        horizontalInset,
+        horizontalInset,
+        horizontalInset + media.viewInsets.bottom,
+      ),
       child: SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: isMobile
-                ? double.infinity
-                : MediaQuery.of(context).size.width * 0.55,
+            maxWidth: isMobile ? double.infinity : 760,
+            maxHeight: availableHeight.clamp(280.0, 900.0),
           ),
           child: Stack(
             children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: AppPalette.primary.withValues(alpha: .15),
-                    ),
-                    color: AppPalette.surfaceContainer,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppPalette.onSurface.withValues(alpha: 0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+              Scrollbar(
+                controller: _formScrollController,
+                thumbVisibility: !isMobile,
+                child: SingleChildScrollView(
+                  controller: _formScrollController,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.all(isMobile ? 12 : 24),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppPalette.primary.withValues(alpha: .15),
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AdminUserFormBody(
-                            usuario: widget.usuario,
-                            soloLectura: widget.soloLectura,
-                            esSuperadminActual: esSuperadminActual,
-                            fotoUrl: fotoUrl,
-                            nombres: nombres,
-                            apellidos: apellidos,
-                            correo: correo,
-                            correoInstitucional: correoInstitucional,
-                            documento: documento,
-                            tipoDocumento: tipoDocumento,
-                            documentTypes: _documentTypes,
-                            selectedDocumentType: _selectedDocumentType,
-                            onDocumentTypeChanged: (newValue) {
-                              setState(() {
-                                _selectedDocumentType = newValue;
-                                tipoDocumento.text = newValue ?? '';
-                              });
-                            },
-                            direccion: direccion,
-                            telefonos: telefonos,
-                            fechaNacimiento: fechaNacimiento,
-                            onPickDate: _selectDate,
-                            rol: rol,
-                            roles: _roles,
-                            onRolChanged: (newValue) {
-                              setState(() {
-                                rol = newValue ?? 'Estudiante';
-                                if (rol == 'Estudiante') {
-                                  funcionalidades.removeWhere(
-                                    (item) =>
-                                        item.startsWith('autorizaciones.'),
-                                  );
-                                } else if (rol == 'Familiar') {
-                                  funcionalidades.removeWhere(
-                                    (item) =>
-                                        item.startsWith('autorizaciones.') &&
-                                        item != 'autorizaciones.ver',
-                                  );
-                                }
-                              });
-                            },
-                            groups: _groups,
-                            selectedGroupId: _selectedGroupId,
-                            onGroupChanged: (newValue) {
-                              setState(() {
-                                _selectedGroupId = newValue;
-                              });
-                            },
-                            institucion: institucion,
-                            sede: sede,
-                            institutions: _institutions,
-                            campuses: _campuses,
-                            funcionalidades: funcionalidades,
-                            allPermissions: _allPermissions,
-                            birthCountry: birthCountry,
-                            birthDepartment: birthDepartment,
-                            birthCity: birthCity,
-                            residenceCountry: residenceCountry,
-                            residenceDepartment: residenceDepartment,
-                            residenceCity: residenceCity,
-                            familyRelation: familyRelation,
-                            studentIds: studentIds,
-                            activeStudentId: activeStudentId,
-                            setRol: (val) => setState(() => rol = val ?? rol),
-                            setInstitucion: (val) {
-                              setState(() {
-                                institucion.text = val;
-                                final selected = _institutions.where(
-                                  (option) => option.id == val,
-                                );
-                                _campuses = selected.isEmpty
-                                    ? <String>[]
-                                    : selected.first.campuses;
-                                sede.text = _campuses.isEmpty
-                                    ? ''
-                                    : _campuses.first;
-                              });
-                              _loadGroups();
-                            },
-                            setSede: (val) {
-                              setState(() => sede.text = val);
-                              _loadGroups();
-                            },
-                            onFuncionalidadChanged: (permiso, isChecked) {
-                              setState(() {
-                                if (isChecked == true) {
-                                  if (!funcionalidades.contains(permiso)) {
-                                    funcionalidades.add(permiso);
+                      color: AppPalette.surfaceContainer,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppPalette.onSurface.withValues(alpha: 0.06),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(isMobile ? 12 : 16),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AdminUserFormBody(
+                              usuario: widget.usuario,
+                              soloLectura: widget.soloLectura,
+                              esSuperadminActual: esSuperadminActual,
+                              fotoUrl: fotoUrl,
+                              nombres: nombres,
+                              apellidos: apellidos,
+                              correo: correo,
+                              correoInstitucional: correoInstitucional,
+                              documento: documento,
+                              tipoDocumento: tipoDocumento,
+                              documentTypes: _documentTypes,
+                              selectedDocumentType: _selectedDocumentType,
+                              onDocumentTypeChanged: (newValue) {
+                                setState(() {
+                                  _selectedDocumentType = newValue;
+                                  tipoDocumento.text = newValue ?? '';
+                                });
+                              },
+                              direccion: direccion,
+                              telefonos: telefonos,
+                              fechaNacimiento: fechaNacimiento,
+                              onPickDate: _selectDate,
+                              rol: rol,
+                              roles: _roles,
+                              onRolChanged: (newValue) {
+                                setState(() {
+                                  rol = newValue ?? 'Estudiante';
+                                  if (rol == 'Estudiante') {
+                                    funcionalidades.removeWhere(
+                                      (item) =>
+                                          item.startsWith('autorizaciones.'),
+                                    );
+                                  } else if (rol == 'Familiar') {
+                                    funcionalidades.removeWhere(
+                                      (item) =>
+                                          item.startsWith('autorizaciones.') &&
+                                          item != 'autorizaciones.ver',
+                                    );
                                   }
-                                } else {
-                                  funcionalidades.remove(permiso);
-                                }
-                              });
-                            },
-                            onPickPhoto: () async {
-                              final ctx = context;
-                              final picker = ImagePicker();
-                              final picked = await picker.pickImage(
-                                source: ImageSource.gallery,
-                              );
-                              if (!mounted) return;
-                              if (picked == null) return;
-
-                              final lowerName = picked.name.toLowerCase();
-                              final extensionValida =
-                                  lowerName.endsWith('.jpg') ||
-                                  lowerName.endsWith('.jpeg') ||
-                                  lowerName.endsWith('.png');
-
-                              if (!extensionValida) {
-                                if (!mounted) return;
-                                DialogUtils.showError(
-                                  // ignore: use_build_context_synchronously
-                                  context: ctx,
-                                  title: 'Formato no válido',
-                                  message:
-                                      'Solo se permiten imágenes JPG o PNG.',
+                                });
+                              },
+                              groups: _groups,
+                              selectedGroupId: _selectedGroupId,
+                              onGroupChanged: (newValue) {
+                                setState(() {
+                                  _selectedGroupId = newValue;
+                                });
+                              },
+                              institucion: institucion,
+                              sede: sede,
+                              institutions: _institutions,
+                              campuses: _campuses,
+                              funcionalidades: funcionalidades,
+                              allPermissions: _allPermissions,
+                              birthCountry: birthCountry,
+                              birthDepartment: birthDepartment,
+                              birthCity: birthCity,
+                              residenceCountry: residenceCountry,
+                              residenceDepartment: residenceDepartment,
+                              residenceCity: residenceCity,
+                              familyRelation: familyRelation,
+                              studentIds: studentIds,
+                              activeStudentId: activeStudentId,
+                              setRol: (val) => setState(() => rol = val ?? rol),
+                              setInstitucion: (val) {
+                                setState(() {
+                                  institucion.text = val;
+                                  final selected = _institutions.where(
+                                    (option) => option.id == val,
+                                  );
+                                  _campuses = selected.isEmpty
+                                      ? <String>[]
+                                      : selected.first.campuses;
+                                  sede.text = _campuses.isEmpty
+                                      ? ''
+                                      : _campuses.first;
+                                });
+                                _loadGroups();
+                              },
+                              setSede: (val) {
+                                setState(() => sede.text = val);
+                                _loadGroups();
+                              },
+                              onFuncionalidadChanged: (permiso, isChecked) {
+                                setState(() {
+                                  if (isChecked == true) {
+                                    if (!funcionalidades.contains(permiso)) {
+                                      funcionalidades.add(permiso);
+                                    }
+                                  } else {
+                                    funcionalidades.remove(permiso);
+                                  }
+                                });
+                              },
+                              onPickPhoto: () async {
+                                final ctx = context;
+                                final picker = ImagePicker();
+                                final picked = await picker.pickImage(
+                                  source: ImageSource.gallery,
                                 );
-                                return;
-                              }
+                                if (!mounted) return;
+                                if (picked == null) return;
 
-                              final bytes = await picked.readAsBytes();
-                              setState(() {
-                                _pickedImageBytes = bytes;
-                                _pickedImageName = picked.name;
-                                fotoUrl = null;
-                              });
-                            },
-                            esNuevo: esNuevo,
-                            availableStudents: _availableStudents,
-                            onStudentIdsChanged: (newStudentIds) {
-                              setState(() {
-                                studentIds = newStudentIds;
-                              });
-                            },
-                            status: _status,
-                            onStatusChanged: (val) =>
-                                setState(() => _status = val ?? _status),
-                          ),
-                          if (!widget.soloLectura)
-                            Semantics(
-                              label: 'Boton para guardar usuario',
-                              enabled: true,
-                              focusable: true,
-                              button: true,
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: ElevatedButton.icon(
-                                  onPressed: (_isLoading || _saving)
-                                      ? null
-                                      : _guardarUsuario,
-                                  icon: _saving
-                                      ? SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppPalette.surface,
-                                          ),
-                                        )
-                                      : const Icon(Icons.save),
-                                  label: Text(
-                                    _saving ? 'Guardando...' : 'Guardar',
+                                final lowerName = picked.name.toLowerCase();
+                                final extensionValida =
+                                    lowerName.endsWith('.jpg') ||
+                                    lowerName.endsWith('.jpeg') ||
+                                    lowerName.endsWith('.png');
+
+                                if (!extensionValida) {
+                                  if (!mounted) return;
+                                  DialogUtils.showError(
+                                    // ignore: use_build_context_synchronously
+                                    context: ctx,
+                                    title: 'Formato no válido',
+                                    message:
+                                        'Solo se permiten imágenes JPG o PNG.',
+                                  );
+                                  return;
+                                }
+
+                                final bytes = await picked.readAsBytes();
+                                setState(() {
+                                  _pickedImageBytes = bytes;
+                                  _pickedImageName = picked.name;
+                                  fotoUrl = null;
+                                });
+                              },
+                              esNuevo: esNuevo,
+                              availableStudents: _availableStudents,
+                              onStudentIdsChanged: (newStudentIds) {
+                                setState(() {
+                                  studentIds = newStudentIds;
+                                });
+                              },
+                              status: _status,
+                              onStatusChanged: (val) =>
+                                  setState(() => _status = val ?? _status),
+                            ),
+                            if (!widget.soloLectura)
+                              Semantics(
+                                label: 'Boton para guardar usuario',
+                                enabled: true,
+                                focusable: true,
+                                button: true,
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: ElevatedButton.icon(
+                                    onPressed: (_isLoading || _saving)
+                                        ? null
+                                        : _guardarUsuario,
+                                    icon: _saving
+                                        ? SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppPalette.surface,
+                                            ),
+                                          )
+                                        : const Icon(Icons.save),
+                                    label: Text(
+                                      _saving ? 'Guardando...' : 'Guardar',
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

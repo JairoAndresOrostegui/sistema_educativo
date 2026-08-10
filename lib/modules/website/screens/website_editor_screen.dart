@@ -1549,6 +1549,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     Map<String, String> values,
     ValueChanged<String> changed,
   ) => DropdownButtonFormField<String>(
+    isExpanded: true,
     initialValue: values.containsKey(value) ? value : values.keys.first,
     decoration: InputDecoration(
       labelText: label,
@@ -1556,7 +1557,14 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     ),
     items: [
       for (final entry in values.entries)
-        DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+        DropdownMenuItem(
+          value: entry.key,
+          child: Text(
+            entry.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
     ],
     onChanged: (value) {
       if (value != null) changed(value);
@@ -1611,7 +1619,13 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Text(value.toUpperCase()),
+              Expanded(
+                child: Text(
+                  value.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),

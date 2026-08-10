@@ -42,8 +42,12 @@ class PermissionsSection extends StatelessWidget {
                 children: [
                   for (final perm in permissionsInGroup)
                     CheckboxListTile(
-                      title: ShrinkOneLine(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
                         perm.valor,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                       value: funcionalidades.contains(perm.valor),

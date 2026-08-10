@@ -23,7 +23,7 @@ class FamilySection extends StatelessWidget {
       children: [
         TextFormField(
           controller: familyRelation,
-          decoration: const InputDecoration(labelText: 'Relacion Familiar'),
+          decoration: const InputDecoration(labelText: 'Relación familiar'),
           readOnly: soloLectura,
           validator: (value) => (value == null || value.isEmpty)
               ? 'Este campo es obligatorio'
@@ -80,6 +80,7 @@ class FamilySection extends StatelessWidget {
         const SizedBox(height: 8),
         Wrap(
           spacing: 8.0,
+          runSpacing: 8.0,
           children: [
             for (final id in studentIds)
               _buildChip(
