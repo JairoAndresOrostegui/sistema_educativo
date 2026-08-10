@@ -27,7 +27,7 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 
 ## Archivos y costos
 
-- Archivos tiene cuota de 300 MiB por institución, máximo 25 MiB por documento y retención operativa de 60 días.
+- Archivos tiene cuota de 1 GiB por institución, máximo 25 MiB por documento y retención operativa de 60 días.
 - La carga usa reserva de cuota, ruta autorizada, metadatos verificados y confirmación backend.
 - Solo el superadministrador ejecuta la limpieza global por antigüedad; las eliminaciones manuales respetan permisos y siempre quedan auditadas.
 - Borrar primero el objeto de Storage y después sus metadatos/contador. Si Storage falla, conservar un estado reintentable.
@@ -35,6 +35,8 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 ## Interfaz y calidad
 
 - Los colores, tipografía, nombre y logo globales se obtienen de la configuración del sitio en Firestore y se aplican mediante `ThemeData`/`ColorScheme`.
+- Todo módulo revisado o nuevo usa una cabecera uniforme como Perfil: fondo de superficie, título centrado, contraste primario y botón visible para volver al tablero.
+- Los módulos internos usan superficies sólidas, sin degradados. El rojo de marca debe ser sobrio y provenir exclusivamente del tema central.
 - No introducir colores de marca con `Colors.*` o `Color(0x...)` dentro de módulos. Usar `Theme.of(context).colorScheme` y tokens semánticos centralizados.
 - No agregar compatibilidad permanente con esquemas antiguos. Los cambios de modelo incluyen migración única de datos, índices, reglas y pruebas.
 - Mantener textos en UTF-8 y nombres visibles en español correcto.

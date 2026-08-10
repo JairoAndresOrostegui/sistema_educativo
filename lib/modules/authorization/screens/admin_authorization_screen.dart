@@ -345,17 +345,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
                                 ),
                               ),
 
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-
-                                end: Alignment.centerRight,
-
-                                colors: [
-                                  AppPalette.primary.withValues(alpha: .06),
-
-                                  AppPalette.surface,
-                                ],
-                              ),
+                              color: AppPalette.surfaceContainer,
                             ),
 
                             child: ListTile(

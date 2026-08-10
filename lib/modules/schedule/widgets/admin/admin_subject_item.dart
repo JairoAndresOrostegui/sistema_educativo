@@ -28,14 +28,7 @@ class AdminSubjectItem extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            AppPalette.primary.withValues(alpha: .06),
-            AppPalette.surface,
-          ],
-        ),
+        color: AppPalette.surfaceContainer,
       ),
       child: ListTile(
         title: Text(

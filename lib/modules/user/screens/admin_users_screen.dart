@@ -88,7 +88,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     return Scaffold(
       backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        title: const Text('Users management'),
+        title: const Text('Gestión de usuarios'),
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.primary,
         centerTitle: true,
@@ -125,14 +125,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                         border: Border.all(
                           color: AppPalette.primary.withValues(alpha: .15),
                         ),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            AppPalette.primary.withValues(alpha: .06),
-                            AppPalette.surface,
-                          ],
-                        ),
+                        color: AppPalette.surfaceContainer,
                       ),
                       child: TextField(
                         controller: _busquedaController,
@@ -211,16 +204,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                         alpha: .15,
                                       ),
                                     ),
-                                    gradient: LinearGradient(
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
-                                      colors: [
-                                        AppPalette.primary.withValues(
-                                          alpha: .06,
-                                        ),
-                                        AppPalette.surface,
-                                      ],
-                                    ),
+                                    color: AppPalette.surfaceContainer,
                                   ),
                                   child: ListTile(
                                     leading: Semantics(

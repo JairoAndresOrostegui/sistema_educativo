@@ -16,7 +16,7 @@ Aplicación Flutter para la gestión multiinstitución y multisede de preescolar
 - Familiar: selector de hijo activo en todo módulo relacionado con estudiantes.
 - Estudiante: correo ficticio sin verificación y sin acceso a Autorizaciones.
 - Escrituras sensibles: Cloud Functions, validación backend y auditoría.
-- Archivos: 300 MiB por institución, 25 MiB por documento y limpieza exclusiva del superadministrador después de 60 días.
+- Archivos: 1 GiB por institución, 25 MiB por documento y limpieza exclusiva del superadministrador después de 60 días.
 - Tema: color y tipografía obtenidos de `website/config`; no se agregan colores de marca dentro de pantallas.
 - El proyecto Firebase actual funciona como QA. Producción tendrá infraestructura separada.
 

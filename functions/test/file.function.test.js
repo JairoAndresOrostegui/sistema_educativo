@@ -128,7 +128,7 @@ describe("archivos seguros", () => {
     const result = await callFunction(
         "solicitarCargaArchivo", reservation(), token,
     );
-    assert.equal(result.body.result.moduleLimitBytes, 300 * 1024 * 1024);
+    assert.equal(result.body.result.moduleLimitBytes, 1024 * 1024 * 1024);
     const file = (await db.collection("files")
         .doc(result.body.result.id).get()).data();
     assert.equal(file.status, "uploading");

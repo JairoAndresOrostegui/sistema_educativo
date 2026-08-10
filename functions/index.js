@@ -54,7 +54,7 @@ const RESTRICTED_DELEGATED_PERMISSIONS = new Set([
   "historial.ver",
   "sitio_web.editar",
 ]);
-const FILE_MODULE_LIMIT_BYTES = 300 * 1024 * 1024;
+const FILE_MODULE_LIMIT_BYTES = 1024 * 1024 * 1024;
 const FILE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024;
 const FILE_RETENTION_DAYS = 60;
 const FILE_MIME_TYPES = new Set([
@@ -2386,7 +2386,7 @@ exports.solicitarCargaArchivo = onCall(async (request) => {
     if (usedBytes + reservedBytes + expectedSize > FILE_MODULE_LIMIT_BYTES) {
       throw new HttpsError(
           "resource-exhausted",
-          "La cuota de 300 MiB de Archivos no tiene espacio suficiente.",
+          "La cuota de 1 GiB de Archivos no tiene espacio suficiente.",
       );
     }
     transaction.set(usageRef, {

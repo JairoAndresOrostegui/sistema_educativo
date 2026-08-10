@@ -42,6 +42,7 @@ const db = getFirestore();
 const bucket = getStorage().bucket();
 const apply = process.argv.includes("--apply");
 const verify = process.argv.includes("--verify");
+const fileModuleLimitBytes = 1024 * 1024 * 1024;
 
 const slug = (value) => value.toString().normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -187,6 +188,15 @@ async function verifyMigration() {
     }
   }
 
+  const usageSnapshot = await db.collection("file_storage_usage").get();
+  for (const document of usageSnapshot.docs) {
+    if (Number(document.data().limitBytes || 0) !== fileModuleLimitBytes) {
+      violations.push(
+          `file_storage_usage/${document.id}: limite institucional invalido`,
+      );
+    }
+  }
+
   const gradeParameters = await db.collection("parameters")
       .where("clave", "==", "grade").get();
   if (!gradeParameters.empty) {
@@ -221,6 +231,8 @@ async function verifyMigration() {
     enrollments: enrollments.size,
     files: files.size,
     activeFileBytes,
+    fileStorageUsageDocuments: usageSnapshot.size,
+    fileModuleLimitBytes,
     legacyCounts,
     violations,
   }, null, 2));
@@ -402,7 +414,7 @@ async function main() {
         usedBytes: (usage.get(id)?.usedBytes || 0) +
           Number(data.sizeBytes || 0),
         reservedBytes: 0,
-        limitBytes: 300 * 1024 * 1024,
+        limitBytes: fileModuleLimitBytes,
         updatedAt: FieldValue.serverTimestamp(),
       });
     }

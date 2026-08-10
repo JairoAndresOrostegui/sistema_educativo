@@ -418,8 +418,11 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: _tabs.map((t) => Tab(text: t.label)).toList(),
           labelColor: AppPalette.primary,
+          unselectedLabelColor: AppPalette.muted,
           indicatorColor: AppPalette.primary,
         ),
       ),

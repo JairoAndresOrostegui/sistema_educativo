@@ -47,14 +47,14 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 ## Archivos y Storage
 
 - Ruta: `files/{groupId}/{fileId}/{safeName}`.
-- Cuota: 300 MiB por institución.
+- Cuota: 1 GiB por institución.
 - Archivo individual: máximo 25 MiB.
 - Tipos: PDF, Word y Excel aprobados.
 - Retención: el superadministrador puede eliminar todo documento con más de 60 días.
 - También puede seleccionar y eliminar manualmente sin importar fecha.
 - La cuota reserva bytes antes de subir; confirmar mueve la reserva a bytes usados; cancelar o rechazar libera la reserva.
 
-300 MiB es deliberadamente conservador: equivale a cerca del 6 % de una cuota sin costo de 5 GB y deja espacio para perfiles, contenido web y futuros recursos. La aplicación no promete costo cero: el proyecto debe estar en Blaze para Cloud Storage y el consumo real se vigila en Firebase/Google Cloud.
+1 GiB permite atender la carga documental de ambas sedes y equivale a cerca del 20 % de una cuota sin costo de 5 GB. Todavía deja espacio para perfiles, contenido web y futuros recursos. La aplicación no promete costo cero: el proyecto debe estar en Blaze para Cloud Storage y el consumo real se vigila en Firebase/Google Cloud.
 
 ## Tema visual
 
@@ -67,6 +67,8 @@ Reglas:
 - no declarar colores de marca en cada pantalla;
 - si se necesita un token nuevo, agregarlo centralmente y documentarlo;
 - mantener la página pública y los módulos autenticados visualmente coherentes.
+- usar en todos los módulos revisados o nuevos la misma cabecera de Perfil: superficie sólida, título centrado, color primario y regreso visible al tablero;
+- evitar degradados en módulos internos y preferir superficies sólidas del `ColorScheme`;
 
 ## Migraciones
 

@@ -22,14 +22,7 @@ class AdminGradeDropdown extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            AppPalette.primary.withValues(alpha: .06),
-            AppPalette.surface,
-          ],
-        ),
+        color: AppPalette.surfaceContainer,
         boxShadow: [
           BoxShadow(
             color: AppPalette.onSurface.withValues(alpha: 0.03),

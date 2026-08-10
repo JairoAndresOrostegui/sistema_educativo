@@ -2,7 +2,7 @@
 
 ## Acceso y perfiles
 
-El ingreso acepta correo o documento y contraseña. Estudiantes usan correo ficticio institucional y no deben verificarlo. Administradores, docentes y familiares sí validan su correo real o institucional. Una cuenta inactiva, retirada o eliminándose no puede iniciar sesión.
+Administradores, docentes y familiares ingresan con correo. Los estudiantes ingresan con su documento; internamente el sistema resuelve su correo ficticio de Firebase y nunca les exige verificarlo. Una cuenta inactiva, retirada o eliminándose no puede iniciar sesión.
 
 Cada persona consulta y edita únicamente los campos seguros de su propio perfil. La administración de otras personas se realiza en Usuarios, nunca desde Perfil.
 
@@ -71,7 +71,7 @@ Archivos distribuye documentos PDF, Word o Excel por grupo.
 
 - Personal con `archivos.crear` publica un documento de hasta 25 MiB.
 - La barra de carga muestra el avance del archivo.
-- La tarjeta de almacenamiento muestra consumo frente al límite institucional de 300 MiB.
+- La tarjeta de almacenamiento muestra consumo frente al límite institucional de 1 GiB.
 - Estudiante, docente y familiar solo descargan archivos del grupo permitido; el familiar usa el hijo activo.
 - Personal con `archivos.eliminar` selecciona manualmente documentos dentro de su alcance.
 - El superadministrador puede eliminar cualquier selección y ejecutar la limpieza de todos los documentos con más de 60 días.

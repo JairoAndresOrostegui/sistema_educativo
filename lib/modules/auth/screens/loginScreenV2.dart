@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../config/app_palette.dart';
 import '../../../config/theme_config.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/validators.dart';
@@ -103,14 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     offset: const Offset(0, 6),
                                   ),
                                 ],
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    colors.primary.withValues(alpha: .06),
-                                    colors.surfaceContainerLowest,
-                                  ],
-                                ),
+                                color: AppPalette.surfaceContainer,
                               ),
                               child: Material(
                                 color: colors.surface.withValues(alpha: 0),
@@ -121,10 +115,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        // Correo o documento
+                                        // Adultos usan correo; estudiantes, documento.
                                         Semantics(
                                           label:
-                                              'Campo para correo institucional o documento',
+                                              'Campo para correo o documento del estudiante',
                                           hint:
                                               'Ingrese su correo institucional o, si es estudiante, su documento',
                                           textField: true,
@@ -133,7 +127,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                           child: TextFormField(
                                             controller: _identifierController,
                                             decoration: InputDecoration(
-                                              labelText: 'Correo o documento',
+                                              labelText:
+                                                  'Correo o documento estudiantil',
                                               labelStyle: TextStyle(
                                                 color: labelColor,
                                                 fontFamily: fontGeneral,
@@ -166,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 r'^[0-9]{6,}$',
                                               ).hasMatch(trimmed);
                                               if (!isEmail && !isDocument) {
-                                                return 'Ingrese un correo valido o un documento numerico';
+                                                return 'Ingrese un correo válido o el documento numérico del estudiante';
                                               }
                                               return null;
                                             },

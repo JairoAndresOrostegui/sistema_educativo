@@ -97,14 +97,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              AppPalette.primary.withValues(alpha: .06),
-              AppPalette.surface,
-            ],
-          ),
+          color: AppPalette.surfaceContainer,
           boxShadow: [
             BoxShadow(
               color: AppPalette.onSurface.withValues(alpha: 0.03),
@@ -217,16 +210,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                           alpha: .15,
                                         ),
                                       ),
-                                      gradient: LinearGradient(
-                                        begin: Alignment.centerLeft,
-                                        end: Alignment.centerRight,
-                                        colors: [
-                                          AppPalette.primary.withValues(
-                                            alpha: .06,
-                                          ),
-                                          AppPalette.surface,
-                                        ],
-                                      ),
+                                      color: AppPalette.surfaceContainer,
                                       boxShadow: isHovered
                                           ? [
                                               BoxShadow(
@@ -362,14 +346,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                     alpha: .15,
                                   ),
                                 ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    AppPalette.primary.withValues(alpha: .06),
-                                    AppPalette.surface,
-                                  ],
-                                ),
+                                color: AppPalette.surfaceContainer,
                                 boxShadow: hoveringPrivacy
                                     ? [
                                         BoxShadow(
@@ -468,14 +445,7 @@ class _DashboardLayoutState extends State<DashboardLayout> {
                                     alpha: .15,
                                   ),
                                 ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    AppPalette.primary.withValues(alpha: .06),
-                                    AppPalette.surface,
-                                  ],
-                                ),
+                                color: AppPalette.surfaceContainer,
                                 boxShadow: hoveringCerrarSesion
                                     ? [
                                         BoxShadow(

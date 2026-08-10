@@ -486,7 +486,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     return Scaffold(
       backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        title: const Text('Schedule management'),
+        title: const Text('Gestión de horarios'),
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.primary,
         centerTitle: true,

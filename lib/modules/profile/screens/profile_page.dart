@@ -106,7 +106,7 @@ class _ProfilePageState extends State<ProfilePage> {
       backgroundColor: AppPalette.surface,
       appBar: AppBar(
         centerTitle: true,
-        title: Text("My profile"),
+        title: Text('Mi perfil'),
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.primary,
         elevation: 0,
@@ -223,14 +223,7 @@ class _ProfileHeaderCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              AppPalette.primary.withValues(alpha: .06),
-              AppPalette.surface,
-            ],
-          ),
+          color: AppPalette.surfaceContainer,
           boxShadow: [
             BoxShadow(
               color: AppPalette.onSurface.withValues(alpha: 0.03),
@@ -295,14 +288,7 @@ class _ProfileDataCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              AppPalette.primary.withValues(alpha: .06),
-              AppPalette.surface,
-            ],
-          ),
+          color: AppPalette.surfaceContainer,
           boxShadow: [
             BoxShadow(
               color: AppPalette.onSurface.withValues(alpha: 0.03),

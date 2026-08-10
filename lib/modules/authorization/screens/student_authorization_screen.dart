@@ -410,7 +410,7 @@ class _AuthorizationStudentScreenState
     if (!_canView) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Authorizations'),
+          title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
           backgroundColor: AppPalette.surface,
           foregroundColor: AppPalette.primary,
@@ -456,14 +456,7 @@ class _AuthorizationStudentScreenState
                         border: Border.all(
                           color: AppPalette.primary.withValues(alpha: .15),
                         ),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            AppPalette.primary.withValues(alpha: .06),
-                            AppPalette.surface,
-                          ],
-                        ),
+                        color: AppPalette.surfaceContainer,
                         boxShadow: [
                           BoxShadow(
                             color: AppPalette.onSurface.withValues(alpha: 0.03),
@@ -588,14 +581,7 @@ class _AuthorizationStudentScreenState
                                     alpha: .12,
                                   ),
                                 ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                  colors: [
-                                    AppPalette.primary.withValues(alpha: .06),
-                                    AppPalette.surface,
-                                  ],
-                                ),
+                                color: AppPalette.surfaceContainer,
                               ),
                               child: ListTile(
                                 leading: Icon(

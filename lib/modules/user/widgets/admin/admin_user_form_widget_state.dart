@@ -403,14 +403,7 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                     border: Border.all(
                       color: AppPalette.primary.withValues(alpha: .15),
                     ),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppPalette.primary.withValues(alpha: .06),
-                        AppPalette.surface,
-                      ],
-                    ),
+                    color: AppPalette.surfaceContainer,
                     boxShadow: [
                       BoxShadow(
                         color: AppPalette.onSurface.withValues(alpha: 0.06),

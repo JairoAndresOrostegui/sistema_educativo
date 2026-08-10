@@ -28,7 +28,7 @@ class ThemeConfig {
       nombre: (school['nombre'] ?? website['schoolName'] ?? 'Sistema Educativo')
           .toString(),
       logoUrl: (school['logoUrl'] ?? website['logoUrl'] ?? '').toString(),
-      primaryColor: (website['primaryColor'] ?? '#B71C1C').toString(),
+      primaryColor: (website['primaryColor'] ?? '#A64548').toString(),
       footerColor: (footer['backgroundColor'] ?? '#25090A').toString(),
       fontFamily: (website['fontFamily'] ?? 'Montserrat').toString(),
     );
@@ -63,11 +63,11 @@ class ThemeProvider {
   static ThemeData get themeData => _cachedTheme ??= _buildTheme();
 
   static ThemeData _buildTheme() {
-    final seed = _parseHex(config.primaryColor) ?? const Color(0xFFB71C1C);
+    final seed = _parseHex(config.primaryColor) ?? const Color(0xFFA64548);
     final scheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: Brightness.light,
-      surface: const Color(0xFFFFFBFF),
+      surface: const Color(0xFFFFF8F8),
     );
     final base = ThemeData(useMaterial3: true, colorScheme: scheme);
     TextTheme textTheme;
@@ -80,9 +80,18 @@ class ThemeProvider {
       scaffoldBackgroundColor: scheme.surface,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.primary,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: true,
         elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: scheme.primary,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        indicatorColor: scheme.primary,
+        dividerColor: scheme.outlineVariant,
       ),
       cardTheme: CardThemeData(
         color: scheme.surfaceContainerLow,
