@@ -132,10 +132,24 @@ class WebsiteService {
     WebsiteBundle? previous,
   }) async {
     final oldBundle = previous ?? await getBundle();
-    final existingPages = await _pages.get();
+    final results = await Future.wait([_pages.get(), _configDocument.get()]);
+    final existingPages = results[0] as QuerySnapshot<Map<String, dynamic>>;
+    final currentConfig = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+    final previouslyPending = <String>{
+      for (final value
+          in currentConfig.data()?['pendingAssetCleanup'] as List? ?? const [])
+        if (value is String && value.startsWith('website/')) value,
+    };
+    final obsolete = oldBundle.managedAssetPaths.difference(
+      bundle.managedAssetPaths,
+    );
+    final cleanupCandidates = previouslyPending
+        .union(obsolete)
+        .difference(bundle.managedAssetPaths);
     final batch = _db.batch();
     batch.set(_configDocument, {
       ...bundle.config.toMap(),
+      'pendingAssetCleanup': cleanupCandidates.toList()..sort(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     final newIds = bundle.pages.map((page) => page.id).toSet();
@@ -150,20 +164,27 @@ class WebsiteService {
     }
     await batch.commit();
 
-    final obsolete = oldBundle.managedAssetPaths.difference(
-      bundle.managedAssetPaths,
-    );
     var deleted = 0;
     final warnings = <String>[];
-    for (final path in obsolete) {
+    final stillPending = <String>[];
+    for (final path in cleanupCandidates) {
       try {
         await _storage.ref(path).delete();
         deleted++;
       } on FirebaseException catch (error) {
         if (error.code != 'object-not-found') {
           warnings.add('$path: ${error.code}');
+          stillPending.add(path);
         }
       }
+    }
+    try {
+      await _configDocument.update({
+        'pendingAssetCleanup': stillPending,
+        'cleanupUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (error) {
+      warnings.add('No se pudo actualizar la cola de limpieza: ${error.code}');
     }
     return WebsitePublishResult(
       deletedAssets: deleted,

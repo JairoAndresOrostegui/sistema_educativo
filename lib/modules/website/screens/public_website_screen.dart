@@ -235,17 +235,7 @@ class WebsiteLayout extends StatelessWidget {
           children: [
             for (var i = 0; i < column.components.length; i++) ...[
               if (column.components[i].enabled)
-                _selectable(
-                  column.components[i].id,
-                  WebsiteComponentView(
-                    config: config,
-                    pageId: pageId,
-                    component: column.components[i],
-                    mobile: mobile,
-                    preview: preview,
-                  ),
-                  outlined: false,
-                ),
+                _componentFrame(column.components[i]),
               if (i < column.components.length - 1) const SizedBox(height: 12),
             ],
           ],
@@ -255,6 +245,28 @@ class WebsiteLayout extends StatelessWidget {
     label: 'Columna ${columnIndex + 1}',
     outlined: true,
     labelOnRight: true,
+  );
+
+  Widget _componentFrame(WebsiteComponent component) => Align(
+    alignment: switch (component.componentAlignment) {
+      'center' => Alignment.topCenter,
+      'right' => Alignment.topRight,
+      _ => Alignment.topLeft,
+    },
+    child: FractionallySizedBox(
+      widthFactor: component.widthPercent / 100,
+      child: _selectable(
+        component.id,
+        WebsiteComponentView(
+          config: config,
+          pageId: pageId,
+          component: component,
+          mobile: mobile,
+          preview: preview,
+        ),
+        outlined: false,
+      ),
+    ),
   );
 
   Widget _selectable(

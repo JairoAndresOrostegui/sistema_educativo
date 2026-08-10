@@ -152,6 +152,8 @@ class WebsiteComponent {
   final WebsiteAsset image;
   final List<WebsiteComponentItem> items;
   final bool enabled;
+  final int widthPercent;
+  final String componentAlignment;
   final String alignment;
   final String imageFit;
   final String backgroundColor;
@@ -173,6 +175,8 @@ class WebsiteComponent {
     this.image = const WebsiteAsset(),
     this.items = const [],
     this.enabled = true,
+    this.widthPercent = 100,
+    this.componentAlignment = 'left',
     this.alignment = 'left',
     this.imageFit = 'cover',
     this.backgroundColor = '#FFFFFF',
@@ -202,6 +206,8 @@ class WebsiteComponent {
             )
             .toList(),
         enabled: map['enabled'] != false,
+        widthPercent: _int(map['widthPercent'], 100).clamp(25, 100),
+        componentAlignment: (map['componentAlignment'] ?? 'left').toString(),
         alignment: (map['alignment'] ?? 'left').toString(),
         imageFit: (map['imageFit'] ?? 'cover').toString(),
         backgroundColor: (map['backgroundColor'] ?? '#FFFFFF').toString(),
@@ -224,6 +230,8 @@ class WebsiteComponent {
     'image': image.toMap(),
     'items': items.map((item) => item.toMap()).toList(),
     'enabled': enabled,
+    'widthPercent': widthPercent,
+    'componentAlignment': componentAlignment,
     'alignment': alignment,
     'imageFit': imageFit,
     'backgroundColor': backgroundColor,
@@ -244,6 +252,8 @@ class WebsiteComponent {
     WebsiteAsset? image,
     List<WebsiteComponentItem>? items,
     bool? enabled,
+    int? widthPercent,
+    String? componentAlignment,
     String? alignment,
     String? imageFit,
     String? backgroundColor,
@@ -264,6 +274,8 @@ class WebsiteComponent {
     image: image ?? this.image,
     items: items ?? this.items,
     enabled: enabled ?? this.enabled,
+    widthPercent: widthPercent ?? this.widthPercent,
+    componentAlignment: componentAlignment ?? this.componentAlignment,
     alignment: alignment ?? this.alignment,
     imageFit: imageFit ?? this.imageFit,
     backgroundColor: backgroundColor ?? this.backgroundColor,

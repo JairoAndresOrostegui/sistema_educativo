@@ -63,6 +63,8 @@ function component(block, index) {
     image: asset(block.image || block.imageUrl),
     items: [],
     enabled: block.enabled !== false,
+    widthPercent: 100,
+    componentAlignment: "left",
     alignment: String(block.textAlignment || "left"),
     imageFit: String(block.imageFit || "cover"),
     backgroundColor: String(block.backgroundColor || "#FFFFFF"),
@@ -104,7 +106,8 @@ function rowForBlock(block, index) {
 function structuralComponent(id, type, values = {}) {
   return {
     id, type, title: "", body: "", url: "", buttonLabel: "",
-    image: asset(null), items: [], enabled: true, alignment: "left",
+    image: asset(null), items: [], enabled: true, widthPercent: 100,
+    componentAlignment: "left", alignment: "left",
     imageFit: "cover", backgroundColor: "#FFFFFF", textColor: "#292323",
     accentColor: "#A63D40", titleSize: 34, bodySize: 16, padding: 12,
     autoplay: true, intervalSeconds: 5, ...values,

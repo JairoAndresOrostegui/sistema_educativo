@@ -78,9 +78,11 @@ Reglas:
 
 El esquema canónico es la versión 5. `website/config` contiene identidad, tema, navegación, redes, `header.rows` y `footer.rows`; cada documento de `website_pages` contiene `rows`. La jerarquía es `WebsiteRow -> WebsiteColumn -> WebsiteComponent`. No volver a introducir `blocks`, `sections` ni lectura dual del esquema anterior.
 
-Una fila admite máximo cuatro columnas. Las columnas usan `span` relativo y en móvil se apilan cuando `stackOnMobile` está activo. Los componentes disponibles se centralizan en el modelo y el editor; cualquier tipo nuevo debe implementar serialización, edición, render adaptable y prueba.
+Una fila admite máximo cuatro columnas. Las columnas usan `span` relativo y en móvil se apilan cuando `stackOnMobile` está activo. Cada componente separa `widthPercent` y `componentAlignment` —posición del bloque dentro de la columna— de `alignment`, que solo alinea su contenido. Los componentes disponibles se centralizan en el modelo y el editor; cualquier tipo nuevo debe implementar serialización, edición, render adaptable y prueba.
 
 Los videos aceptan exclusivamente URL HTTPS reconocida de YouTube o Vimeo. El render web transforma la URL a un `iframe` seguro y sin HTML suministrado por el administrador. No se suben videos a Storage. Las imágenes continúan bajo `website/`, con tamaño y MIME protegidos por reglas.
+
+Al publicar, las rutas de imágenes obsoletas y los reintentos anteriores se guardan primero en `website/config.pendingAssetCleanup` dentro del mismo lote que actualiza las páginas. Storage se limpia después; solo las rutas fallidas permanecen en la cola. Si falla la actualización final, la cola completa se conserva y el siguiente intento tolera `object-not-found`. Las cargas nuevas descartadas en el editor se eliminan de inmediato o vuelven a intentarse al cerrar.
 
 `primaryColor` y `fontFamily` son globales y pueden afectar los módulos internos. Los colores de filas, columnas y componentes pertenecen solo al sitio público. El administrador elige colores mediante una paleta visual; el hexadecimal es una opción avanzada, no el control principal.
 

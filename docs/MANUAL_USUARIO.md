@@ -96,11 +96,13 @@ El constructor del sitio público está dividido en tres áreas independientes:
 - **Footer:** filas propias, información institucional, contacto, enlaces, redes y texto legal.
 - **Contenido de navegación:** una composición distinta para Inicio y para cada página publicada.
 
-Cada área se organiza en filas. Una fila admite entre una y cuatro columnas, con ancho relativo, fondo, separación, espacio interior y comportamiento adaptable a celular. Dentro de cada columna se agregan componentes: portada, texto, imagen, botón, tarjeta, carrusel, galería, video, preguntas desplegables, cifras, formulario, contacto, navegación, identidad, redes, separador o espacio.
+Cada área se organiza en filas. Una fila admite entre una y cuatro columnas, con ancho relativo, fondo, separación, espacio interior y comportamiento adaptable a celular. Dentro de cada columna se agregan componentes: portada, texto, imagen, botón, tarjeta, carrusel, galería, video, preguntas desplegables, cifras, formulario, contacto, navegación, identidad, redes, separador o espacio. El ancho y la posición del componente se configuran por separado de la alineación de su texto: por ejemplo, un bloque puede ocupar el 50 %, estar centrado en la columna y conservar el texto alineado a la izquierda.
 
 Las imágenes se eligen desde el equipo y se guardan en Storage. Los videos se administran mediante enlaces HTTPS de YouTube o Vimeo; se reproducen incrustados en la web y no ocupan Storage ni consumen la transferencia de Firebase. No se permite pegar HTML o `iframe` arbitrario.
 
 El selector de color muestra una paleta visual amplia y deja el hexadecimal como opción avanzada. El color principal y la tipografía también alimentan el tema de los módulos internos; los fondos y estilos propios de filas, columnas y componentes solo afectan el sitio público. Antes de publicar se puede alternar la vista previa entre escritorio y móvil. Solo usuarios con `sitio_web.editar` o el superadministrador pueden modificar y publicar.
+
+Eliminar una fila, columna, componente, elemento o página modifica primero el borrador. Al publicar se retiran sus referencias del documento de Firestore y se eliminan de Storage las imágenes que ya no utiliza ninguna parte del sitio. Si Storage falla, las rutas quedan en `pendingAssetCleanup` y se reintentan en la siguiente publicación; no se considera una limpieza terminada silenciosamente.
 
 ## Historial y auditoría
 

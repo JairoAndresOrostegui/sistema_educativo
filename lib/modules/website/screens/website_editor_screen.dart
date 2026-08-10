@@ -224,6 +224,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
       if (!mounted) return;
       setState(() => _publishedBundle = bundle);
       _sessionUploads.removeAll(bundle.managedAssetPaths);
+      final abandonedUploads = [..._sessionUploads];
+      _sessionUploads.clear();
+      for (final path in abandonedUploads) {
+        unawaited(_deleteDiscardedAsset(WebsiteAsset(storagePath: path)));
+      }
       _message(
         result.deletedAssets == 0
             ? 'Sitio publicado correctamente.'
@@ -420,6 +425,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     );
     if (accepted != true) return;
     final deletedId = _page.id;
+    _discardComponents(
+      _page.rows
+          .expand((row) => row.columns)
+          .expand((column) => column.components),
+    );
     setState(() {
       final pages = _bundle!.pages
           .where((page) => page.id != deletedId)
@@ -524,16 +534,17 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     final id = _selectedId;
     if (id == null) return;
     final component = _selectedComponent;
-    if (component != null) {
-      for (final asset in [
-        component.image,
-        ...component.items.map((item) => item.image),
-      ]) {
-        if (asset.isManaged && _sessionUploads.remove(asset.storagePath)) {
-          unawaited(_service.deleteAsset(asset));
-        }
-      }
-    }
+    final column = _selectedColumn;
+    final row = _selectedRow;
+    _discardComponents(
+      component != null
+          ? [component]
+          : column != null
+          ? column.components
+          : row != null
+          ? row.columns.expand((item) => item.components)
+          : const <WebsiteComponent>[],
+    );
     _replaceRows([
       for (final row in _rows)
         if (row.id != id)
@@ -550,6 +561,28 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           ),
     ]);
     setState(() => _selectedId = null);
+  }
+
+  void _discardComponents(Iterable<WebsiteComponent> components) {
+    for (final component in components) {
+      for (final asset in [
+        component.image,
+        ...component.items.map((item) => item.image),
+      ]) {
+        if (asset.isManaged && _sessionUploads.remove(asset.storagePath)) {
+          unawaited(_deleteDiscardedAsset(asset));
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteDiscardedAsset(WebsiteAsset asset) async {
+    try {
+      await _service.deleteAsset(asset);
+    } catch (_) {
+      // Conserva la carga de la sesión para reintentar al cerrar el editor.
+      _sessionUploads.add(asset.storagePath);
+    }
   }
 
   void _moveRow(int oldIndex, int newIndex) {
@@ -1204,6 +1237,27 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         onChanged: (value) =>
             _replaceComponent(component.copyWith(enabled: value)),
       ),
+      _dropdown(
+        'Ancho del componente',
+        component.widthPercent.toString(),
+        const {
+          '100': 'Ancho completo (100 %)',
+          '75': 'Tres cuartos (75 %)',
+          '50': 'Mitad (50 %)',
+          '33': 'Un tercio (33 %)',
+          '25': 'Un cuarto (25 %)',
+        },
+        (value) => _replaceComponent(
+          component.copyWith(widthPercent: int.parse(value)),
+        ),
+      ),
+      _dropdown(
+        'Posición del componente',
+        component.componentAlignment,
+        const {'left': 'Izquierda', 'center': 'Centro', 'right': 'Derecha'},
+        (value) =>
+            _replaceComponent(component.copyWith(componentAlignment: value)),
+      ),
       if (usesCopy) ...[
         _text(
           'Título',
@@ -1282,7 +1336,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         'spacer',
       }.contains(component.type))
         _dropdown(
-          'Alineación',
+          'Alineación del contenido',
           component.alignment,
           const {'left': 'Izquierda', 'center': 'Centro', 'right': 'Derecha'},
           (value) => _replaceComponent(component.copyWith(alignment: value)),
@@ -1369,6 +1423,10 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
                 IconButton(
                   tooltip: 'Eliminar',
                   onPressed: () {
+                    if (item.image.isManaged &&
+                        _sessionUploads.remove(item.image.storagePath)) {
+                      unawaited(_deleteDiscardedAsset(item.image));
+                    }
                     final items = [...component.items]..removeAt(index);
                     _replaceComponent(component.copyWith(items: items));
                   },

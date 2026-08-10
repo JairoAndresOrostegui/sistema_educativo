@@ -22,6 +22,8 @@ void main() {
         id: 'carousel_1',
         type: 'carousel',
         title: 'Vida escolar',
+        widthPercent: 50,
+        componentAlignment: 'center',
         autoplay: false,
         intervalSeconds: 8,
         items: [
@@ -52,6 +54,8 @@ void main() {
       final restoredComponent =
           restored.rows.first.columns.first.components.first;
       expect(restoredComponent.type, 'carousel');
+      expect(restoredComponent.widthPercent, 50);
+      expect(restoredComponent.componentAlignment, 'center');
       expect(restoredComponent.autoplay, isFalse);
       expect(restoredComponent.intervalSeconds, 8);
       expect(restoredComponent.items.single.title, 'Ciencia');
@@ -219,6 +223,51 @@ void main() {
 
       expect(find.text('Enlaces'), findsOneWidget);
       expect(find.text('Ingresar'), findsNothing);
+    });
+
+    testWidgets('component width and position are independent from text', (
+      tester,
+    ) async {
+      const component = WebsiteComponent(
+        id: 'narrow_text',
+        type: 'text',
+        title: 'Texto angosto',
+        widthPercent: 50,
+        componentAlignment: 'right',
+        alignment: 'center',
+      );
+      final config = WebsiteBundle.defaults.config.copyWith(
+        header: const WebsiteHeaderConfig(enabled: false),
+        footer: const WebsiteFooterConfig(enabled: false),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WebsitePreviewCanvas(
+            config: config,
+            page: const WebsitePage(
+              id: 'test',
+              label: 'Prueba',
+              slug: 'test',
+              rows: [
+                WebsiteRow(
+                  id: 'row',
+                  columns: [
+                    WebsiteColumn(id: 'column', components: [component]),
+                  ],
+                ),
+              ],
+            ),
+            previewMobile: false,
+            editorMode: true,
+          ),
+        ),
+      );
+
+      final sizing = tester
+          .widgetList<FractionallySizedBox>(find.byType(FractionallySizedBox))
+          .firstWhere((widget) => widget.widthFactor == .5);
+      expect(sizing.widthFactor, .5);
+      expect(find.text('Texto angosto'), findsOneWidget);
     });
 
     test('selects readable contrast for footer backgrounds', () {
