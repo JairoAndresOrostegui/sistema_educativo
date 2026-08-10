@@ -175,21 +175,27 @@ class WebsiteLayout extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      for (final row in rows.where((item) => item.enabled))
+      for (final entry
+          in rows.where((item) => item.enabled).toList().asMap().entries)
         _selectable(
-          row.id,
+          entry.value.id,
           ColoredBox(
-            color: websiteHexColor(row.backgroundColor),
+            color: websiteHexColor(entry.value.backgroundColor),
             child: Center(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: row.maxWidth.toDouble()),
+                constraints: BoxConstraints(
+                  maxWidth: entry.value.maxWidth.toDouble(),
+                ),
                 child: Padding(
-                  padding: EdgeInsets.all(row.padding.toDouble()),
-                  child: _row(row),
+                  padding: EdgeInsets.all(entry.value.padding.toDouble()),
+                  child: _row(entry.value),
                 ),
               ),
             ),
           ),
+          label: 'Fila ${entry.key + 1}',
+          outlined: true,
+          labelOnRight: false,
         ),
     ],
   );
@@ -201,7 +207,7 @@ class WebsiteLayout extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < columns.length; i++) ...[
-            _column(columns[i]),
+            _column(columns[i], i),
             if (i < columns.length - 1) SizedBox(height: row.gap.toDouble()),
           ],
         ],
@@ -211,14 +217,14 @@ class WebsiteLayout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < columns.length; i++) ...[
-          Expanded(flex: columns[i].span, child: _column(columns[i])),
+          Expanded(flex: columns[i].span, child: _column(columns[i], i)),
           if (i < columns.length - 1) SizedBox(width: row.gap.toDouble()),
         ],
       ],
     );
   }
 
-  Widget _column(WebsiteColumn column) => _selectable(
+  Widget _column(WebsiteColumn column, int columnIndex) => _selectable(
     column.id,
     ColoredBox(
       color: websiteHexColor(column.backgroundColor),
@@ -238,6 +244,7 @@ class WebsiteLayout extends StatelessWidget {
                     mobile: mobile,
                     preview: preview,
                   ),
+                  outlined: false,
                 ),
               if (i < column.components.length - 1) const SizedBox(height: 12),
             ],
@@ -245,21 +252,60 @@ class WebsiteLayout extends StatelessWidget {
         ),
       ),
     ),
+    label: 'Columna ${columnIndex + 1}',
+    outlined: true,
+    labelOnRight: true,
   );
 
-  Widget _selectable(String id, Widget child) {
+  Widget _selectable(
+    String id,
+    Widget child, {
+    String? label,
+    required bool outlined,
+    bool labelOnRight = false,
+  }) {
     if (!preview) return child;
     final selected = id == selectedId;
+    final color = selected
+        ? AppPalette.info
+        : AppPalette.error.withValues(alpha: .82);
     return InkWell(
       onTap: () => onSelected?.call(id),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: selected ? AppPalette.info : Colors.transparent,
-            width: selected ? 3 : 1,
+      child: Stack(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: selected || outlined ? color : Colors.transparent,
+                width: selected ? 3 : (outlined ? 1.5 : 1),
+              ),
+            ),
+            child: child,
           ),
-        ),
-        child: child,
+          if (label != null && (outlined || selected))
+            Positioned(
+              top: 0,
+              left: labelOnRight ? null : 0,
+              right: labelOnRight ? 0 : null,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  color: color,
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -396,9 +442,11 @@ class WebsiteComponentView extends StatelessWidget {
   Widget _button(BuildContext context) => Align(
     alignment: _alignment,
     child: FilledButton(
-      onPressed: preview || component.url.isEmpty
+      onPressed: component.url.isEmpty
           ? null
-          : () => openWebsiteLink(context, component.url),
+          : () {
+              if (!preview) openWebsiteLink(context, component.url);
+            },
       style: FilledButton.styleFrom(
         backgroundColor: websiteHexColor(component.accentColor),
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
@@ -428,9 +476,9 @@ class WebsiteComponentView extends StatelessWidget {
               if (component.url.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 TextButton(
-                  onPressed: preview
-                      ? null
-                      : () => openWebsiteLink(context, component.url),
+                  onPressed: () {
+                    if (!preview) openWebsiteLink(context, component.url);
+                  },
                   child: Text(
                     component.buttonLabel.isEmpty
                         ? 'Conocer más'
@@ -475,13 +523,21 @@ class WebsiteComponentView extends StatelessWidget {
       if (component.title.isNotEmpty) _copy(),
       for (final item in component.items)
         ExpansionTile(
-          title: Text(item.title),
+          iconColor: websiteHexColor(component.accentColor),
+          collapsedIconColor: websiteHexColor(component.accentColor),
+          title: Text(
+            item.title,
+            style: TextStyle(color: websiteHexColor(component.textColor)),
+          ),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(item.text),
+                child: Text(
+                  item.text,
+                  style: TextStyle(color: websiteHexColor(component.textColor)),
+                ),
               ),
             ),
           ],
@@ -509,7 +565,11 @@ class WebsiteComponentView extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              Text(item.text, textAlign: TextAlign.center),
+              Text(
+                item.text,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: websiteHexColor(component.textColor)),
+              ),
             ],
           ),
         ),
@@ -544,27 +604,43 @@ class WebsiteComponentView extends StatelessWidget {
     ),
   );
 
-  Widget _navigation(BuildContext context) => Wrap(
-    alignment: switch (component.alignment) {
-      'center' => WrapAlignment.center,
-      'right' => WrapAlignment.end,
-      _ => WrapAlignment.start,
-    },
-    spacing: 6,
-    runSpacing: 4,
+  Widget _navigation(BuildContext context) => Column(
+    crossAxisAlignment: websiteCrossAxisAlignment(component.alignment),
     children: [
-      for (final item in config.navigation.where((item) => item.enabled))
-        TextButton(
-          onPressed: preview ? null : () => context.go('/${item.slug}'),
-          style: TextButton.styleFrom(
-            foregroundColor: websiteHexColor(component.textColor),
-          ),
-          child: Text(item.label),
-        ),
-      FilledButton.tonalIcon(
-        onPressed: preview ? null : () => context.go('/login'),
-        icon: const Icon(Icons.login, size: 18),
-        label: const Text('Ingresar'),
+      if (component.title.isNotEmpty) ...[_copy(), const SizedBox(height: 10)],
+      Wrap(
+        alignment: switch (component.alignment) {
+          'center' => WrapAlignment.center,
+          'right' => WrapAlignment.end,
+          _ => WrapAlignment.start,
+        },
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          for (final item in config.navigation.where((item) => item.enabled))
+            TextButton(
+              onPressed: () {
+                if (!preview) context.go('/${item.slug}');
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: websiteHexColor(component.textColor),
+              ),
+              child: Text(item.label),
+            ),
+          if (component.id == 'site_navigation' ||
+              component.buttonLabel.isNotEmpty)
+            FilledButton.tonalIcon(
+              onPressed: () {
+                if (!preview) context.go('/login');
+              },
+              icon: const Icon(Icons.login, size: 18),
+              label: Text(
+                component.buttonLabel.isEmpty
+                    ? 'Ingresar'
+                    : component.buttonLabel,
+              ),
+            ),
+        ],
       ),
     ],
   );
@@ -697,8 +773,11 @@ class _WebsiteCarouselState extends State<WebsiteCarousel> {
                         children: [
                           Text(
                             item.title,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: websiteHexColor(
+                                widget.component.textColor,
+                                fallback: Colors.white,
+                              ),
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
                             ),
@@ -706,7 +785,12 @@ class _WebsiteCarouselState extends State<WebsiteCarousel> {
                           if (item.text.isNotEmpty)
                             Text(
                               item.text,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(
+                                color: websiteHexColor(
+                                  widget.component.textColor,
+                                  fallback: Colors.white,
+                                ),
+                              ),
                             ),
                         ],
                       ),
@@ -816,37 +900,54 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
         if (widget.component.title.isNotEmpty)
           Text(
             widget.component.title,
-            style: Theme.of(context).textTheme.headlineMedium,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: websiteHexColor(widget.component.textColor),
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        if (widget.component.body.isNotEmpty) Text(widget.component.body),
+        if (widget.component.body.isNotEmpty)
+          Text(
+            widget.component.body,
+            style: TextStyle(
+              color: websiteHexColor(widget.component.textColor),
+            ),
+          ),
         const SizedBox(height: 18),
         TextFormField(
           controller: _name,
-          decoration: const InputDecoration(labelText: 'Nombre'),
+          style: TextStyle(color: websiteHexColor(widget.component.textColor)),
+          decoration: _decoration('Nombre'),
           validator: _required,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _email,
-          decoration: const InputDecoration(labelText: 'Correo'),
+          style: TextStyle(color: websiteHexColor(widget.component.textColor)),
+          decoration: _decoration('Correo'),
           validator: _required,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _phone,
-          decoration: const InputDecoration(labelText: 'Teléfono'),
+          style: TextStyle(color: websiteHexColor(widget.component.textColor)),
+          decoration: _decoration('Teléfono'),
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _message,
           maxLines: 5,
-          decoration: const InputDecoration(labelText: 'Mensaje'),
+          style: TextStyle(color: websiteHexColor(widget.component.textColor)),
+          decoration: _decoration('Mensaje'),
           validator: _required,
         ),
         Offstage(offstage: true, child: TextFormField(controller: _website)),
         const SizedBox(height: 16),
         FilledButton(
-          onPressed: _sending || widget.preview ? null : _submit,
+          onPressed: _sending
+              ? null
+              : () {
+                  if (!widget.preview) _submit();
+                },
           child: Text(_sending ? 'Enviando...' : 'Enviar mensaje'),
         ),
       ],
@@ -855,6 +956,22 @@ class _WebsiteContactFormState extends State<WebsiteContactForm> {
 
   String? _required(String? value) =>
       (value ?? '').trim().isEmpty ? 'Campo obligatorio.' : null;
+
+  InputDecoration _decoration(String label) {
+    final color = websiteHexColor(widget.component.textColor);
+    final accent = websiteHexColor(widget.component.accentColor);
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: color.withValues(alpha: .78)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: color.withValues(alpha: .55)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: accent, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(borderSide: BorderSide(color: accent)),
+    );
+  }
 }
 
 class WebsiteSocialLinks extends StatelessWidget {
@@ -879,7 +996,9 @@ class WebsiteSocialLinks extends StatelessWidget {
         IconButton.filledTonal(
           tooltip: link.platform,
           color: color,
-          onPressed: preview ? null : () => openWebsiteLink(context, link.url),
+          onPressed: () {
+            if (!preview) openWebsiteLink(context, link.url);
+          },
           icon: Icon(_socialIcon(link.platform)),
         ),
     ],
@@ -928,7 +1047,13 @@ class WebsiteFooter extends StatelessWidget {
                 ? '© ${DateTime.now().year} ${config.schoolName}'
                 : config.footer.copyrightText,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70),
+            style: TextStyle(
+              color: websiteContrastColor(
+                config.footer.rows.isEmpty
+                    ? '#2B1718'
+                    : config.footer.rows.last.backgroundColor,
+              ).withValues(alpha: .76),
+            ),
           ),
         ),
       ),
@@ -1024,6 +1149,11 @@ Color websiteHexColor(String value, {Color? fallback}) {
       ? fallback ?? AppPalette.primary
       : Color(0xFF000000 | parsed);
 }
+
+Color websiteContrastColor(String background) =>
+    websiteHexColor(background).computeLuminance() > .45
+    ? Colors.black
+    : Colors.white;
 
 TextAlign websiteTextAlign(String value) => switch (value) {
   'center' => TextAlign.center,

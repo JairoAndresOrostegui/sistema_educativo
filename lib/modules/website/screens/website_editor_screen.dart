@@ -982,33 +982,6 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           config.copyWith(header: config.header.copyWith(sticky: value)),
         ),
       ),
-      const Divider(),
-      _subtitle('Datos de contacto'),
-      _text(
-        'Dirección',
-        config.address,
-        (value) => _replaceConfig(config.copyWith(address: value)),
-      ),
-      _text(
-        'Teléfono',
-        config.phone,
-        (value) => _replaceConfig(config.copyWith(phone: value)),
-      ),
-      _text(
-        'Correo',
-        config.email,
-        (value) => _replaceConfig(config.copyWith(email: value)),
-      ),
-      const Divider(),
-      _subtitle('Redes sociales'),
-      for (var i = 0; i < config.socialLinks.length; i++)
-        _text(config.socialLinks[i].platform, config.socialLinks[i].url, (
-          value,
-        ) {
-          final links = [...config.socialLinks];
-          links[i] = links[i].copyWith(url: value);
-          _replaceConfig(config.copyWith(socialLinks: links));
-        }),
     ]);
   }
 
@@ -1025,6 +998,24 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           config.copyWith(footer: config.footer.copyWith(enabled: value)),
         ),
       ),
+      const Divider(),
+      _subtitle('Datos de contacto del Footer'),
+      const Text('El componente “Datos de contacto” usa esta información.'),
+      _text(
+        'Dirección',
+        config.address,
+        (value) => _replaceConfig(config.copyWith(address: value)),
+      ),
+      _text(
+        'Teléfono',
+        config.phone,
+        (value) => _replaceConfig(config.copyWith(phone: value)),
+      ),
+      _text(
+        'Correo',
+        config.email,
+        (value) => _replaceConfig(config.copyWith(email: value)),
+      ),
       _text(
         'Texto legal / copyright',
         config.footer.copyrightText,
@@ -1033,6 +1024,42 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         ),
         maxLines: 2,
       ),
+      const Divider(),
+      _subtitle('Redes sociales del Footer'),
+      const Text(
+        'Estos enlaces aparecen donde agregues el componente “Redes sociales”, '
+        'normalmente dentro del Footer.',
+      ),
+      for (var i = 0; i < config.socialLinks.length; i++)
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(_socialLabel(config.socialLinks[i].platform)),
+                  value: config.socialLinks[i].enabled,
+                  onChanged: (value) {
+                    final links = [...config.socialLinks];
+                    links[i] = links[i].copyWith(enabled: value);
+                    _replaceConfig(config.copyWith(socialLinks: links));
+                  },
+                ),
+                _text(
+                  'Enlace de ${_socialLabel(config.socialLinks[i].platform)}',
+                  config.socialLinks[i].url,
+                  (value) {
+                    final links = [...config.socialLinks];
+                    links[i] = links[i].copyWith(url: value);
+                    _replaceConfig(config.copyWith(socialLinks: links));
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
     ]);
   }
 
@@ -1224,6 +1251,12 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
           (value) => _replaceComponent(component.copyWith(url: value)),
         ),
       ],
+      if (component.type == 'navigation')
+        _text(
+          'Botón de acceso (vacío para ocultar)',
+          component.buttonLabel,
+          (value) => _replaceComponent(component.copyWith(buttonLabel: value)),
+        ),
       if (component.type == 'carousel') ...[
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -1799,6 +1832,15 @@ IconData _componentIcon(String type) => switch (type) {
   'divider' => Icons.horizontal_rule,
   'spacer' => Icons.height,
   _ => Icons.widgets_outlined,
+};
+
+String _socialLabel(String platform) => switch (platform.toLowerCase()) {
+  'facebook' => 'Facebook',
+  'instagram' => 'Instagram',
+  'youtube' => 'YouTube',
+  'tiktok' => 'TikTok',
+  'linkedin' => 'LinkedIn',
+  _ => platform,
 };
 
 Iterable<WebsiteComponent> _allComponents(WebsiteBundle bundle) sync* {
