@@ -47,21 +47,6 @@ service firebase.storage {
       ).data;
     }
 
-    function familyCanReadFile(file) {
-      let studentId = me().activeStudentId;
-      return me().role == 'Familiar' && hasPermission('archivos.ver') &&
-        studentId is string && me().studentIds is list &&
-        studentId in me().studentIds &&
-        firestore.get(/databases/(default)/documents/users/$(studentId))
-          .data.status == 'activo' &&
-        firestore.get(/databases/(default)/documents/users/$(studentId))
-          .data.institution == me().institution &&
-        firestore.get(/databases/(default)/documents/users/$(studentId))
-          .data.campus == me().campus &&
-        firestore.get(/databases/(default)/documents/users/$(studentId))
-          .data.groupId == file.groupId;
-    }
-
     function canReadFile(file) {
       return active() && file.status == 'active' &&
         (me().isSuperadmin == true ||
@@ -71,11 +56,15 @@ service firebase.storage {
             (hasPermission('archivos.ver') ||
              hasPermission('archivos.crear') ||
              hasPermission('archivos.eliminar'))) ||
-           (me().role == 'Docente' && hasPermission('archivos.ver') &&
-            me().groupId == file.groupId) ||
-           (me().role == 'Estudiante' && hasPermission('archivos.ver') &&
-            me().groupId == file.groupId) ||
-           familyCanReadFile(file))));
+           (file.recipientUserIds is list &&
+            request.auth.uid in file.recipientUserIds &&
+            ((me().role == 'Docente' && hasPermission('archivos.ver')) ||
+             (me().role == 'Estudiante' && hasPermission('archivos.ver')) ||
+             (me().role == 'Familiar' && hasPermission('archivos.ver') &&
+              me().activeStudentId is string && me().studentIds is list &&
+              me().activeStudentId in me().studentIds &&
+              file.targetStudentIds is list &&
+              me().activeStudentId in file.targetStudentIds))))));
     }
 
     match /fotos_perfil/{userId}/{fileName} {
@@ -88,16 +77,14 @@ service firebase.storage {
         (admin() && sameTenantUser(userId));
     }
 
-    match /files/{groupId}/{fileId}/{fileName} {
+    match /files/{fileId}/{fileName} {
       allow read: if canReadFile(fileRecord(fileId));
       allow create: if active() && request.resource.metadata.fileId == fileId &&
-        request.resource.metadata.groupId == groupId &&
         request.resource.metadata.uploadedBy == request.auth.uid &&
         fileRecord(fileId).status == 'uploading' &&
         fileRecord(fileId).uploadedBy == request.auth.uid &&
-        fileRecord(fileId).groupId == groupId &&
         fileRecord(fileId).storagePath ==
-          'files/' + groupId + '/' + fileId + '/' + fileName &&
+          'files/' + fileId + '/' + fileName &&
         request.resource.size == fileRecord(fileId).expectedSize &&
         request.resource.contentType == fileRecord(fileId).contentType &&
         safeUpload(25 * 1024 * 1024);

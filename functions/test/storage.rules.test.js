@@ -51,7 +51,11 @@ describe("Reglas Storage del sitio web", () => {
       await setDoc(doc(db, "users/admin"), activeUser());
       await setDoc(doc(db, "users/teacher"), activeUser({
         role: "Docente",
-        groupId: "group-5a",
+        audienceType: "groups",
+        targetGroupIds: ["group-5a"],
+        targetStudentIds: ["student"],
+        recipientUserIds: ["teacher", "student", "family"],
+        recipientContextKeys: ["family:student"],
         permissions: ["archivos.ver", "archivos.crear"],
       }));
       await setDoc(doc(db, "users/student"), activeUser({
@@ -109,24 +113,23 @@ describe("Reglas Storage del sitio web", () => {
         uploadedBy: "teacher",
         expectedSize: bytes.length,
         contentType: "application/pdf",
-        storagePath: "files/group-5a/file-1/guia.pdf",
+        storagePath: "files/file-1/guia.pdf",
       });
     });
     const storage = env.authenticatedContext("teacher").storage(
         `gs://${projectId}.firebasestorage.app`,
     );
-    await assertSucceeds(storage.ref("files/group-5a/file-1/guia.pdf").put(
+    await assertSucceeds(storage.ref("files/file-1/guia.pdf").put(
         bytes,
         {
           contentType: "application/pdf",
           customMetadata: {
             fileId: "file-1",
-            groupId: "group-5a",
             uploadedBy: "teacher",
           },
         },
     ));
-    await assertFails(storage.ref("files/group-5a/file-1/otro.pdf").put(
+    await assertFails(storage.ref("files/file-1/otro.pdf").put(
         bytes,
         {contentType: "application/pdf"},
     ));
@@ -138,23 +141,26 @@ describe("Reglas Storage del sitio web", () => {
       await setDoc(doc(context.firestore(), "files/file-2"), {
         institutionId: "inst-1",
         campusId: "campus-1",
-        groupId: "group-5a",
+        audienceType: "groups",
+        targetGroupIds: ["group-5a"],
+        targetStudentIds: ["student"],
+        recipientUserIds: ["teacher", "student", "family"],
+        recipientContextKeys: ["family:student"],
         status: "uploading",
         uploadedBy: "teacher",
         expectedSize: bytes.length,
         contentType: "application/pdf",
-        storagePath: "files/group-5a/file-2/guia.pdf",
+        storagePath: "files/file-2/guia.pdf",
       });
     });
     const teacherStorage = env.authenticatedContext("teacher").storage(
         `gs://${projectId}.firebasestorage.app`,
     );
-    const reference = teacherStorage.ref("files/group-5a/file-2/guia.pdf");
+    const reference = teacherStorage.ref("files/file-2/guia.pdf");
     await reference.put(bytes, {
       contentType: "application/pdf",
       customMetadata: {
         fileId: "file-2",
-        groupId: "group-5a",
         uploadedBy: "teacher",
       },
     });

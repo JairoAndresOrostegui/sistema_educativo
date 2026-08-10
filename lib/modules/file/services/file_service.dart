@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -39,32 +38,55 @@ class FileUploadProgress {
 }
 
 class FileService {
-  final FirebaseFirestore _db;
   final FirebaseStorage _storage;
   final FirebaseFunctions _functions;
 
-  FileService({
-    FirebaseFirestore? db,
-    FirebaseStorage? storage,
-    FirebaseFunctions? functions,
-  }) : _db = db ?? FirebaseFirestore.instance,
-       _storage = storage ?? FirebaseStorage.instance,
-       _functions = functions ?? FirebaseFunctions.instance;
+  FileService({FirebaseStorage? storage, FirebaseFunctions? functions})
+    : _storage = storage ?? FirebaseStorage.instance,
+      _functions = functions ?? FirebaseFunctions.instance;
+
+  Future<FileAudienceOptions> audienceOptions({
+    required String institutionId,
+    required String campusId,
+  }) async {
+    final result = await _functions
+        .httpsCallable('obtenerOpcionesAudienciaArchivos')
+        .call({'institutionId': institutionId, 'campusId': campusId});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return FileAudienceOptions(
+      groups: (data['groups'] as List? ?? const [])
+          .map(
+            (item) => FileAudienceGroup.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+      students: (data['students'] as List? ?? const [])
+          .map(
+            (item) => FileAudienceStudent.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
 
   Future<List<FileModel>> list({
     required String institutionId,
     required String campusId,
-    required String groupId,
+    String? activeStudentId,
   }) async {
-    final snapshot = await _db
-        .collection('files')
-        .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId)
-        .where('groupId', isEqualTo: groupId)
-        .where('status', isEqualTo: 'active')
-        .get();
-    final files = snapshot.docs.map(FileModel.fromFirestore).toList();
-    files.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final result = await _functions.httpsCallable('listarArchivos').call({
+      'institutionId': institutionId,
+      'campusId': campusId,
+      'activeStudentId': activeStudentId,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final files = (data['files'] as List? ?? const []).map((item) {
+      final map = Map<String, dynamic>.from(item as Map);
+      return FileModel.fromMap(map, id: map['id'].toString());
+    }).toList();
+    files.sort((a, b) => b.sentAt.compareTo(a.sentAt));
     return files;
   }
 
@@ -74,7 +96,10 @@ class FileService {
     required String contentType,
     required String institutionId,
     required String campusId,
-    required String groupId,
+    required FileAudienceType audienceType,
+    required List<String> targetGroupIds,
+    required List<String> targetStudentIds,
+    required String message,
     void Function(FileUploadProgress progress)? onProgress,
   }) async {
     final reservationResult = await _functions
@@ -85,7 +110,10 @@ class FileService {
           'sizeBytes': bytes.length,
           'institutionId': institutionId,
           'campusId': campusId,
-          'groupId': groupId,
+          'audienceType': audienceType.value,
+          'targetGroupIds': targetGroupIds,
+          'targetStudentIds': targetStudentIds,
+          'message': message,
         });
     final reservation = Map<String, dynamic>.from(
       reservationResult.data as Map,
@@ -101,7 +129,6 @@ class FileService {
               contentType: contentType,
               customMetadata: {
                 'fileId': id,
-                'groupId': groupId,
                 'uploadedBy': FirebaseAuth.instance.currentUser!.uid,
               },
             ),

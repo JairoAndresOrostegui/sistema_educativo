@@ -8,11 +8,23 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
+function firebaseToolsModule(relativePath) {
+  const roots = [
+    process.env.APPDATA ?
+      path.join(process.env.APPDATA, "npm", "node_modules") : "",
+    ...require("module").globalPaths,
+  ].filter(Boolean);
+  const root = roots.find((item) =>
+    fs.existsSync(path.join(item, "firebase-tools")));
+  if (!root) throw new Error("No se encontro Firebase CLI.");
+  return require(path.join(root, "firebase-tools", relativePath));
+}
+
 let credential;
 let temporaryCredentialDirectory;
 if (process.argv.includes("--firebase-cli-auth")) {
-  const firebaseAuth = require("firebase-tools/lib/auth");
-  const firebaseApi = require("firebase-tools/lib/api");
+  const firebaseAuth = firebaseToolsModule("lib/auth");
+  const firebaseApi = firebaseToolsModule("lib/api");
   const account = firebaseAuth.getGlobalDefaultAccount();
   if (!account?.tokens?.refresh_token) {
     throw new Error("Firebase CLI no tiene una sesion activa.");
@@ -73,20 +85,6 @@ function tenant(data) {
 function oldLevel(data) {
   return (data.grade || data.grado || data.gradoAspirado || "")
       .toString().trim();
-}
-
-function existingStoragePath(data) {
-  const direct = (data.storagePath || "").toString().trim();
-  if (direct) return direct;
-  const downloadUrl = (data.url || data.downloadUrl || "").toString().trim();
-  if (!downloadUrl) return "";
-  try {
-    const parsed = new URL(downloadUrl);
-    const match = parsed.pathname.match(/\/o\/([^/]+)$/);
-    return match ? decodeURIComponent(match[1]) : "";
-  } catch {
-    return "";
-  }
 }
 
 function groupPatch(data, nested = false) {
@@ -169,13 +167,17 @@ async function verifyMigration() {
   const files = await db.collection("files").get();
   for (const document of files.docs) {
     const data = document.data();
-    if (Object.hasOwn(data, "grade") || !data.groupId ||
-        !groupIds.has(data.groupId)) {
-      violations.push(`files/${document.id}: grupo invalido o esquema antiguo`);
+    if (Object.hasOwn(data, "grade") || Object.hasOwn(data, "groupId") ||
+        !Array.isArray(data.targetGroupIds) ||
+        data.targetGroupIds.some((id) => !groupIds.has(id)) ||
+        !Array.isArray(data.targetStudentIds) ||
+        !Array.isArray(data.recipientUserIds) ||
+        !Array.isArray(data.recipientContextKeys)) {
+      violations.push(`files/${document.id}: audiencia invalida`);
     }
     if (data.status === "active") {
       const storagePath = (data.storagePath || "").toString();
-      const expectedPrefix = `files/${data.groupId}/${document.id}/`;
+      const expectedPrefix = `files/${document.id}/`;
       if (!storagePath.startsWith(expectedPrefix)) {
         violations.push(`files/${document.id}: ruta de Storage invalida`);
       } else {
@@ -359,48 +361,9 @@ async function main() {
     return Object.keys(update).length ? update : null;
   });
 
-  let missingFilePaths = 0;
-  await migrateCollection("files", async (data, document) => {
-    const patch = groupPatch(data);
-    if (!patch) return null;
-    const oldPath = existingStoragePath(data);
-    if (!oldPath) {
-      missingFilePaths++;
-      if (apply) {
-        throw new Error(`Archivo ${document.id} no tiene ruta recuperable.`);
-      }
-    }
-    const fileName = (data.name || document.id).toString()
-        .replace(/[\\/#?]/g, "_");
-    const newPath = `files/${patch.groupId}/${document.id}/${fileName}`;
-    let sizeBytes = Number(data.sizeBytes || 0);
-    let contentType = (data.contentType || "application/pdf").toString();
-    if (apply && oldPath && oldPath !== newPath) {
-      const oldObject = bucket.file(oldPath);
-      const [exists] = await oldObject.exists();
-      if (exists) {
-        const [metadata] = await oldObject.getMetadata();
-        sizeBytes = Number(metadata.size || sizeBytes);
-        contentType = metadata.contentType || contentType;
-        await oldObject.copy(bucket.file(newPath));
-        await oldObject.delete({ignoreNotFound: true});
-      }
-    }
-    return {
-      ...patch,
-      storagePath: newPath,
-      sizeBytes,
-      contentType,
-      status: "active",
-      url: FieldValue.delete(),
-      grade: FieldValue.delete(),
-    };
-  });
-  if (missingFilePaths) {
-    console.warn(
-        `ATENCION: ${missingFilePaths} archivos no tienen ruta recuperable.`,
-    );
-  }
+  console.log(
+      "Archivos usa su migracion dedicada migrate_file_audiences.js.",
+  );
 
   if (apply) {
     const files = await db.collection("files")

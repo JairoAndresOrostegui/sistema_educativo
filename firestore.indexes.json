@@ -113,7 +113,26 @@
       "fields": [
         { "fieldPath": "institutionId", "order": "ASCENDING" },
         { "fieldPath": "campusId", "order": "ASCENDING" },
-        { "fieldPath": "groupId", "order": "ASCENDING" },
+        { "fieldPath": "recipientUserIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "files",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "institutionId", "order": "ASCENDING" },
+        { "fieldPath": "campusId", "order": "ASCENDING" },
+        { "fieldPath": "recipientContextKeys", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "files",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "institutionId", "order": "ASCENDING" },
+        { "fieldPath": "campusId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
@@ -133,7 +152,7 @@
       "fields": [
         { "fieldPath": "institutionId", "order": "ASCENDING" },
         { "fieldPath": "campusId", "order": "ASCENDING" },
-        { "fieldPath": "groupId", "order": "ASCENDING" },
+        { "fieldPath": "audienceType", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]

@@ -67,13 +67,18 @@ Administrador selecciona grupo de su sede y crea asignaturas con docente, día y
 
 ## Archivos
 
-Archivos distribuye documentos PDF, Word o Excel por grupo.
+Archivos distribuye publicaciones compuestas por un documento PDF, Word o Excel y un mensaje o enlace opcional.
 
 - Personal con `archivos.crear` publica un documento de hasta 25 MiB.
 - La barra de carga muestra el avance del archivo.
 - La tarjeta de almacenamiento muestra consumo frente al límite institucional de 1 GiB.
-- Estudiante, docente y familiar solo descargan archivos del grupo permitido; el familiar usa el hijo activo.
-- Personal con `archivos.eliminar` selecciona manualmente documentos dentro de su alcance.
+- El administrador elige entre todos los estudiantes, uno o más grupos, o uno o más estudiantes mediante buscador.
+- El docente elige uno o más de los grupos donde dicta clase o estudiantes activos de esos grupos. No puede enviar a toda la sede.
+- Cada publicación muestra audiencia, remitente y fecha/hora de envío.
+- Estudiante, docente y familiar solo consultan las publicaciones donde fueron incluidos; el familiar usa el hijo activo para filtrar la información.
+- Estudiantes y familiares reciben notificación. Si publica un administrador, también la reciben los docentes que dictan en los grupos involucrados.
+- Solo administradores con permiso y el superadministrador seleccionan y eliminan documentos dentro de su alcance.
+- El docente nunca puede borrar ni ocultar una publicación, incluso si se alterara su matriz de permisos.
 - El superadministrador puede eliminar cualquier selección y ejecutar la limpieza de todos los documentos con más de 60 días.
 - Toda carga, descarga o eliminación relevante queda registrada.
 

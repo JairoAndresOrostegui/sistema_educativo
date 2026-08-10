@@ -57,6 +57,7 @@ describe("Reglas Firestore", () => {
           "matricula.ver", "matricula.editar",
           "autorizaciones.ver", "autorizaciones.editar",
           "horarios.ver", "horarios.crear", "horarios.editar",
+          "archivos.ver", "archivos.eliminar",
         ],
       }));
       await setDoc(doc(db, "users/superadmin"), activeUser("Administrador", {
@@ -71,13 +72,14 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "users/student"), activeUser("Estudiante", {
         groupId: "group-5a",
         groupName: "Quinto A",
-        permissions: ["horarios.ver"],
+        permissions: ["horarios.ver", "archivos.ver"],
       }));
       await setDoc(doc(db, "users/teacher"), activeUser("Docente", {
         groupId: "group-5a",
         groupName: "Quinto A",
         permissions: [
           "matricula.ver", "autorizaciones.ver", "horarios.ver",
+          "archivos.ver",
         ],
       }));
       await setDoc(doc(db, "users/teacher-other"), activeUser("Docente", {
@@ -90,6 +92,7 @@ describe("Reglas Firestore", () => {
         activeStudentId: "student",
         permissions: [
           "matricula.ver", "autorizaciones.ver", "horarios.ver",
+          "archivos.ver",
         ],
       }));
       await setDoc(doc(db, "users/peer"), activeUser("Estudiante"));
@@ -152,6 +155,16 @@ describe("Reglas Firestore", () => {
         campus: "campus-2",
         userId: "other",
       });
+      await setDoc(doc(db, "files/publication"), {
+        institutionId: "inst-1",
+        campusId: "campus-1",
+        status: "active",
+        audienceType: "groups",
+        targetGroupIds: ["group-5a"],
+        targetStudentIds: ["student"],
+        recipientUserIds: ["teacher", "student", "family"],
+        recipientContextKeys: ["family:student"],
+      });
     });
   });
 
@@ -204,6 +217,25 @@ describe("Reglas Firestore", () => {
     const superDb = env.authenticatedContext("superadmin").firestore();
     await assertFails(deleteDoc(doc(adminDb, "users/peer")));
     await assertFails(deleteDoc(doc(superDb, "users/peer")));
+  });
+
+  it("protege archivos y obliga a listar mediante Functions", async () => {
+    const familyDb = env.authenticatedContext("family").firestore();
+    const teacherDb = env.authenticatedContext("teacher").firestore();
+    const otherDb = env.authenticatedContext("teacher-other").firestore();
+    await assertFails(getDocs(query(
+        collection(familyDb, "files"),
+        where("institutionId", "==", "inst-1"),
+        where("campusId", "==", "campus-1"),
+        where("recipientContextKeys", "array-contains", "family:student"),
+        where("status", "==", "active"),
+    )));
+    await assertSucceeds(getDoc(doc(familyDb, "files/publication")));
+    await assertSucceeds(getDoc(doc(teacherDb, "files/publication")));
+    await assertFails(getDoc(doc(otherDb, "files/publication")));
+    await assertFails(deleteDoc(doc(
+        teacherDb, "files/publication",
+    )));
   });
 
   it("obliga a crear usuarios mediante Cloud Functions", async () => {

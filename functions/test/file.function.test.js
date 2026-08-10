@@ -85,7 +85,10 @@ function reservation(sizeBytes = 12) {
     sizeBytes,
     institutionId: "inst-1",
     campusId: "campus-1",
-    groupId: "group-5a",
+    audienceType: "groups",
+    targetGroupIds: ["group-5a"],
+    targetStudentIds: [],
+    message: "Revisar antes del viernes",
   };
 }
 
@@ -116,13 +119,26 @@ describe("archivos seguros", () => {
       institutionId: "inst-1", campusId: "campus-1", level: "Sexto",
       section: "A", name: "Sexto A", order: 6, active: true,
     });
+    await db.collection("subjects").doc("subject-5a").set({
+      institutionId: "inst-1", campusId: "campus-1",
+      groupId: "group-5a", teacherId: "teacher",
+    });
+    await seedUser("student-5a", "Estudiante", ["archivos.ver"], {
+      groupId: "group-5a", groupName: "Quinto A",
+    });
+    await seedUser("student-6a", "Estudiante", ["archivos.ver"], {
+      groupId: "group-6a", groupName: "Sexto A",
+    });
+    await seedUser("family-5a", "Familiar", ["archivos.ver"], {
+      studentIds: ["student-5a"], activeStudentId: "student-5a",
+    });
   });
 
   after(async () => deleteApp(app));
 
   it("reserva cuota solo para personal autorizado y su grupo", async () => {
     const token = await signIn(await seedUser(
-        "teacher", "Docente", ["archivos.crear"],
+        "teacher", "Docente", ["archivos.crear", "archivos.ver"],
         {groupId: "group-5a", groupName: "Quinto A"},
     ));
     const result = await callFunction(
@@ -132,7 +148,16 @@ describe("archivos seguros", () => {
     const file = (await db.collection("files")
         .doc(result.body.result.id).get()).data();
     assert.equal(file.status, "uploading");
-    assert.equal(file.groupId, "group-5a");
+    assert.deepEqual(file.targetGroupIds, ["group-5a"]);
+    assert.deepEqual(file.targetStudentIds, ["student-5a"]);
+    assert.ok(file.recipientUserIds.includes("family-5a"));
+    assert.ok(file.recipientContextKeys.includes("family-5a:student-5a"));
+    assert.equal(file.message, "Revisar antes del viernes");
+
+    const listed = await callFunction(
+        "listarArchivos", {}, token,
+    );
+    assert.equal(listed.body.result.files.length, 0);
 
     assertError(await callFunction(
         "solicitarCargaArchivo",
@@ -140,14 +165,14 @@ describe("archivos seguros", () => {
     ), "INVALID_ARGUMENT");
     assertError(await callFunction(
         "solicitarCargaArchivo",
-        {...reservation(), groupId: "group-6a"}, token,
+        {...reservation(), targetGroupIds: ["group-6a"]}, token,
     ), "PERMISSION_DENIED");
   });
 
   it("confirma, contabiliza y elimina sin huerfanos", async () => {
     const bytes = Buffer.from("guia semanal");
     const teacherToken = await signIn(await seedUser(
-        "teacher", "Docente", ["archivos.crear"],
+        "teacher", "Docente", ["archivos.crear", "archivos.ver"],
         {groupId: "group-5a", groupName: "Quinto A"},
     ));
     const adminToken = await signIn(await seedUser(
@@ -160,7 +185,7 @@ describe("archivos seguros", () => {
     await bucket.file(storagePath).save(bytes, {
       contentType: "application/pdf",
       metadata: {metadata: {
-        fileId: id, groupId: "group-5a", uploadedBy: "teacher",
+        fileId: id, uploadedBy: "teacher",
       }},
     });
     const confirmed = await callFunction(
@@ -169,6 +194,17 @@ describe("archivos seguros", () => {
     assert.equal(confirmed.body.result.sizeBytes, bytes.length);
     assert.equal((await db.collection("files").doc(id).get()).data().status,
         "active");
+    const listed = await callFunction("listarArchivos", {}, teacherToken);
+    assert.equal(listed.body.result.files.length, 1);
+    assert.equal(listed.body.result.files[0].id, id);
+    const familyToken = await signIn("family-5a@colegio.test");
+    const familyFiles = await callFunction(
+        "listarArchivos", {activeStudentId: "student-5a"}, familyToken,
+    );
+    assert.equal(familyFiles.body.result.files.length, 1);
+    assertError(await callFunction(
+        "listarArchivos", {activeStudentId: "student-6a"}, familyToken,
+    ), "PERMISSION_DENIED");
 
     const deleted = await callFunction(
         "eliminarArchivos", {ids: [id]}, adminToken,
@@ -180,6 +216,16 @@ describe("archivos seguros", () => {
         .where("fileId", "==", id).get()).size, 2);
   });
 
+  it("rechaza el borrado docente aunque manipule el permiso", async () => {
+    const token = await signIn(await seedUser(
+        "teacher", "Docente", ["archivos.eliminar"],
+        {groupId: "group-5a"},
+    ));
+    assertError(await callFunction(
+        "eliminarArchivos", {ids: ["cualquiera"]}, token,
+    ), "PERMISSION_DENIED");
+  });
+
   it("solo superadmin limpia archivos de mas de 60 dias", async () => {
     const adminToken = await signIn(await seedUser(
         "admin", "Administrador", ["archivos.eliminar"],
@@ -187,7 +233,7 @@ describe("archivos seguros", () => {
     const superToken = await signIn(await seedUser(
         "super", "Administrador", [], {isSuperadmin: true},
     ));
-    const path = "files/group-5a/old-file/antiguo.pdf";
+    const path = "files/old-file/antiguo.pdf";
     await bucket.file(path).save(Buffer.from("antiguo"), {
       contentType: "application/pdf",
     });
@@ -195,8 +241,11 @@ describe("archivos seguros", () => {
       name: "antiguo.pdf",
       institutionId: "inst-1",
       campusId: "campus-1",
-      groupId: "group-5a",
-      groupName: "Quinto A",
+      audienceType: "groups",
+      targetGroupIds: ["group-5a"],
+      targetGroupNames: ["Quinto A"],
+      targetStudentIds: ["student-5a"],
+      recipientUserIds: ["student-5a", "family-5a"],
       storagePath: path,
       sizeBytes: 7,
       status: "active",

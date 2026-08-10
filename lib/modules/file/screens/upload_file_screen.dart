@@ -4,12 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../../models/academic/academic_group.dart';
 import '../../../models/file/file_model.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
-import '../../../utils/academic_group_service.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/parameters_service.dart';
@@ -28,35 +27,45 @@ class UploadFileScreen extends StatefulWidget {
 
 class _UploadFileScreenState extends State<UploadFileScreen> {
   final _service = FileService();
-  final _groupService = AcademicGroupService();
   final _parameters = ParametersService();
   final _schedule = ScheduleService();
+  final _messageController = TextEditingController();
   final _selectedFiles = <String>{};
+  final _selectedGroupIds = <String>{};
+  final _selectedStudentIds = <String>{};
 
   bool _loading = true;
   bool _busy = false;
   double? _uploadProgress;
   List<InstitutionOption> _institutions = [];
-  List<AcademicGroup> _groups = [];
   List<userModelv2> _children = [];
   List<FileModel> _files = [];
   FileStorageSummary? _summary;
+  FileAudienceOptions? _audienceOptions;
+  FileAudienceType _audienceType = FileAudienceType.groups;
   String? _institutionId;
   String? _campusId;
-  String? _groupId;
   String? _activeStudentId;
 
   userModelv2 get _user => context.read<UserProviderV2>().user!;
-  bool get _isStaff => _user.role == 'Administrador' || _user.role == 'Docente';
+  bool get _isAdmin => _user.isSuperadmin || _user.role == 'Administrador';
+  bool get _isStaff => _isAdmin || _user.role == 'Docente';
   bool get _canCreate =>
       _user.isSuperadmin || _user.permissions.contains('archivos.crear');
   bool get _canDelete =>
-      _user.isSuperadmin || _user.permissions.contains('archivos.eliminar');
+      _isAdmin &&
+      (_user.isSuperadmin || _user.permissions.contains('archivos.eliminar'));
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -79,13 +88,8 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
               : _children.first.id;
           await _selectChild(selected, reload: false);
         }
-      } else if (user.role == 'Estudiante' || user.role == 'Docente') {
-        _groupId = user.groupId;
-      } else {
-        await _loadGroups();
-        _groupId = _groups.isEmpty ? null : _groups.first.id;
       }
-      await _reloadContent();
+      await _reloadAll();
     } catch (error) {
       if (mounted) {
         await DialogUtils.showError(
@@ -99,35 +103,34 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     }
   }
 
-  Future<void> _loadGroups() async {
+  Future<void> _reloadAll() async {
     if (_institutionId == null || _campusId == null) return;
-    _groups = await _groupService.list(
-      institutionId: _institutionId!,
-      campusId: _campusId!,
-    );
-  }
-
-  Future<void> _reloadContent() async {
-    if (_institutionId == null || _campusId == null || _groupId == null) {
-      if (mounted) setState(() => _files = []);
-      return;
-    }
     final results = await Future.wait([
       _service.list(
         institutionId: _institutionId!,
         campusId: _campusId!,
-        groupId: _groupId!,
+        activeStudentId: _user.role == 'Familiar' ? _activeStudentId : null,
       ),
       if (_isStaff)
         _service.summary(institutionId: _institutionId)
       else
         Future<FileStorageSummary?>.value(null),
+      if (_canCreate)
+        _service.audienceOptions(
+          institutionId: _institutionId!,
+          campusId: _campusId!,
+        )
+      else
+        Future<FileAudienceOptions?>.value(null),
     ]);
     if (!mounted) return;
     setState(() {
-      _files = results.first as List<FileModel>;
-      _summary = results.last as FileStorageSummary?;
+      _files = results[0] as List<FileModel>;
+      _summary = results[1] as FileStorageSummary?;
+      _audienceOptions = results[2] as FileAudienceOptions?;
       _selectedFiles.clear();
+      _selectedGroupIds.clear();
+      _selectedStudentIds.clear();
     });
   }
 
@@ -136,43 +139,46 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       _loading = true;
       _institutionId = institution;
       _campusId = campus;
-      _groupId = null;
     });
     try {
-      await _loadGroups();
-      _groupId = _groups.isEmpty ? null : _groups.first.id;
-      await _reloadContent();
+      await _reloadAll();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _selectChild(String id, {bool reload = true}) async {
-    final child = _children.firstWhere((item) => item.id == id);
     await ActiveStudentService().select(
       userProvider: context.read<UserProviderV2>(),
       studentId: id,
     );
     _activeStudentId = id;
-    _groupId = child.groupId;
-    if (reload) await _reloadContent();
+    if (reload) await _reloadAll();
   }
 
-  String? _mimeFor(PlatformFile file) {
-    return switch (file.extension?.toLowerCase()) {
-      'pdf' => 'application/pdf',
-      'doc' => 'application/msword',
-      'docx' =>
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'xls' => 'application/vnd.ms-excel',
-      'xlsx' =>
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      _ => null,
-    };
-  }
+  String? _mimeFor(PlatformFile file) => switch (file.extension
+      ?.toLowerCase()) {
+    'pdf' => 'application/pdf',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls' => 'application/vnd.ms-excel',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    _ => null,
+  };
 
   Future<void> _upload() async {
-    if (!_canCreate || _groupId == null) return;
+    if (!_canCreate) return;
+    if (_audienceType == FileAudienceType.groups && _selectedGroupIds.isEmpty) {
+      await _showValidation('Selecciona al menos un grupo.');
+      return;
+    }
+    if (_audienceType == FileAudienceType.students &&
+        _selectedStudentIds.isEmpty) {
+      await _showValidation('Selecciona al menos un estudiante.');
+      return;
+    }
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
@@ -182,11 +188,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     final file = result.files.single;
     final mime = _mimeFor(file);
     if (file.bytes == null || mime == null) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Archivo no permitido',
-        message: 'Selecciona un PDF, Word o Excel válido.',
-      );
+      await _showValidation('Selecciona un PDF, Word o Excel válido.');
       return;
     }
     setState(() {
@@ -200,17 +202,22 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
         contentType: mime,
         institutionId: _institutionId!,
         campusId: _campusId!,
-        groupId: _groupId!,
+        audienceType: _audienceType,
+        targetGroupIds: _selectedGroupIds.toList(),
+        targetStudentIds: _selectedStudentIds.toList(),
+        message: _messageController.text.trim(),
         onProgress: (progress) {
           if (mounted) setState(() => _uploadProgress = progress.ratio);
         },
       );
-      await _reloadContent();
+      _messageController.clear();
+      await _reloadAll();
       if (mounted) {
         await DialogUtils.showSuccess(
           context: context,
           title: 'Archivo publicado',
-          message: 'La carga y su registro finalizaron correctamente.',
+          message:
+              'El archivo, el mensaje y sus destinatarios quedaron registrados.',
         );
       }
     } catch (error) {
@@ -231,6 +238,12 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     }
   }
 
+  Future<void> _showValidation(String message) => DialogUtils.showError(
+    context: context,
+    title: 'Falta información',
+    message: message,
+  );
+
   Future<void> _download(FileModel file) async {
     setState(() => _busy = true);
     try {
@@ -242,8 +255,6 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
         extra: {
           'fileId': file.id,
           'name': file.name,
-          'groupId': file.groupId,
-          'groupName': file.groupName,
           'sizeBytes': file.sizeBytes,
         },
       );
@@ -278,7 +289,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     setState(() => _busy = true);
     try {
       await _service.deleteSelected(_selectedFiles);
-      await _reloadContent();
+      await _reloadAll();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -293,7 +304,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
         title: const Text('Limpieza por antigüedad'),
         content: Text(
           'Se eliminarán todos los archivos con más de 60 días ($count '
-          'detectados actualmente). La acción quedará auditada.',
+          'detectados). La acción quedará auditada.',
         ),
         actions: [
           TextButton(
@@ -311,7 +322,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     setState(() => _busy = true);
     try {
       final deleted = await _service.deleteOlderThanRetention();
-      await _reloadContent();
+      await _reloadAll();
       if (mounted) {
         await DialogUtils.showSuccess(
           context: context,
@@ -324,12 +335,129 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     }
   }
 
-  String _size(int bytes) {
-    if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB';
+  Future<void> _selectGroups() async {
+    final temporary = {..._selectedGroupIds};
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Seleccionar grupos'),
+          content: SizedBox(
+            width: 480,
+            child: ListView(
+              shrinkWrap: true,
+              children: (_audienceOptions?.groups ?? const [])
+                  .map(
+                    (group) => CheckboxListTile(
+                      value: temporary.contains(group.id),
+                      title: Text(group.name),
+                      onChanged: (checked) => setDialogState(() {
+                        checked == true
+                            ? temporary.add(group.id)
+                            : temporary.remove(group.id);
+                      }),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, temporary),
+              child: const Text('Aplicar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _selectedGroupIds
+          ..clear()
+          ..addAll(result);
+      });
     }
-    return '${(bytes / 1024).toStringAsFixed(1)} KiB';
   }
+
+  Future<void> _selectStudents() async {
+    final temporary = {..._selectedStudentIds};
+    var search = '';
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final students = (_audienceOptions?.students ?? const []).where((
+            item,
+          ) {
+            final value = '${item.name} ${item.groupName}'.toLowerCase();
+            return value.contains(search.toLowerCase());
+          }).toList();
+          return AlertDialog(
+            title: const Text('Seleccionar estudiantes'),
+            content: SizedBox(
+              width: 520,
+              height: 480,
+              child: Column(
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Buscar por nombre o grupo',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) => setDialogState(() => search = value),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: students.length,
+                      itemBuilder: (context, index) {
+                        final student = students[index];
+                        return CheckboxListTile(
+                          value: temporary.contains(student.id),
+                          title: Text(student.name),
+                          subtitle: Text(student.groupName),
+                          onChanged: (checked) => setDialogState(() {
+                            checked == true
+                                ? temporary.add(student.id)
+                                : temporary.remove(student.id);
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, temporary),
+                child: const Text('Aplicar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _selectedStudentIds
+          ..clear()
+          ..addAll(result);
+      });
+    }
+  }
+
+  String _size(int bytes) => bytes >= 1024 * 1024
+      ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MiB'
+      : '${(bytes / 1024).toStringAsFixed(1)} KiB';
 
   InstitutionOption? get _selectedInstitution {
     for (final institution in _institutions) {
@@ -352,13 +480,6 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
           ),
         ],
       ),
-      floatingActionButton: _canCreate && _groupId != null
-          ? FloatingActionButton.extended(
-              onPressed: _busy ? null : _upload,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Publicar archivo'),
-            )
-          : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Stack(
@@ -378,8 +499,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                               (child) => DropdownMenuItem(
                                 value: child.id,
                                 child: Text(
-                                  '${child.firstName} ${child.lastName} • '
-                                  '${child.groupName ?? 'Sin grupo'}',
+                                  '${child.firstName} ${child.lastName} • ${child.groupName ?? 'Sin grupo'}',
                                 ),
                               ),
                             )
@@ -390,61 +510,8 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                                 if (value != null) _selectChild(value);
                               },
                       ),
-                    if (_user.role == 'Administrador')
-                      DropdownButtonFormField<String>(
-                        initialValue: _groupId,
-                        decoration: const InputDecoration(labelText: 'Grupo'),
-                        items: _groups
-                            .map(
-                              (group) => DropdownMenuItem(
-                                value: group.id,
-                                child: Text(group.name),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _busy
-                            ? null
-                            : (value) async {
-                                setState(() => _groupId = value);
-                                await _reloadContent();
-                              },
-                      ),
-                    if (_summary != null) ...[
-                      const SizedBox(height: 16),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Almacenamiento del módulo',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              LinearProgressIndicator(value: _summary!.ratio),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${_size(_summary!.usedBytes)} de '
-                                '${_size(_summary!.limitBytes)} utilizados • '
-                                'máximo ${_size(_summary!.maxFileBytes)} por archivo',
-                              ),
-                              if (_user.isSuperadmin) ...[
-                                const SizedBox(height: 12),
-                                OutlinedButton.icon(
-                                  onPressed: _busy ? null : _deleteOldFiles,
-                                  icon: const Icon(Icons.auto_delete_outlined),
-                                  label: Text(
-                                    'Eliminar archivos de más de 60 días '
-                                    '(${_summary!.oldFilesCount})',
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    if (_summary != null) _storageCard(),
+                    if (_canCreate) _publicationCard(),
                     if (_uploadProgress != null) ...[
                       const SizedBox(height: 12),
                       LinearProgressIndicator(value: _uploadProgress),
@@ -452,12 +519,12 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                         '${(_uploadProgress! * 100).toStringAsFixed(0)}% cargado',
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            'Documentos disponibles',
+                            'Publicaciones disponibles',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                         ),
@@ -475,52 +542,13 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Center(
-                            child: Text('No hay archivos para este grupo.'),
+                            child: Text('No hay publicaciones disponibles.'),
                           ),
                         ),
                       )
                     else
-                      ..._files.map(
-                        (file) => Card(
-                          child: CheckboxListTile(
-                            value: _selectedFiles.contains(file.id),
-                            onChanged:
-                                _canDelete &&
-                                    (_user.role != 'Docente' ||
-                                        file.uploadedBy == _user.id)
-                                ? (selected) => setState(() {
-                                    if (selected == true) {
-                                      _selectedFiles.add(file.id);
-                                    } else {
-                                      _selectedFiles.remove(file.id);
-                                    }
-                                  })
-                                : null,
-                            secondary: Icon(
-                              Icons.description_outlined,
-                              color: colors.primary,
-                            ),
-                            title: Text(file.name),
-                            subtitle: Text(
-                              '${file.groupName} • ${_size(file.sizeBytes)} • '
-                              '${DateFormat('dd/MM/yyyy').format(file.createdAt.toDate())}',
-                            ),
-                            controlAffinity: ListTileControlAffinity.trailing,
-                          ),
-                        ),
-                      ),
-                    if (_files.isNotEmpty)
-                      ..._files.map(
-                        (file) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            onPressed: _busy ? null : () => _download(file),
-                            icon: const Icon(Icons.download),
-                            label: Text('Descargar ${file.name}'),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 80),
+                      ..._files.map((file) => _fileCard(file, colors)),
+                    const SizedBox(height: 32),
                   ],
                 ),
                 if (_busy)
@@ -537,60 +565,223 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     );
   }
 
-  Widget _tenantSelectors() {
-    final campuses = _selectedInstitution?.campuses ?? const <String>[];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: _institutionId,
-              decoration: const InputDecoration(labelText: 'Institución'),
-              items: _institutions
+  Widget _publicationCard() {
+    final types = _user.role == 'Docente'
+        ? const [FileAudienceType.groups, FileAudienceType.students]
+        : FileAudienceType.values;
+    return Card(
+      margin: const EdgeInsets.only(top: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Nueva publicación',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<FileAudienceType>(
+              initialValue: _audienceType,
+              decoration: const InputDecoration(labelText: 'Enviar a'),
+              items: types
                   .map(
-                    (institution) => DropdownMenuItem(
-                      value: institution.id,
-                      child: Text(institution.label),
-                    ),
+                    (type) =>
+                        DropdownMenuItem(value: type, child: Text(type.label)),
                   )
                   .toList(),
               onChanged: _busy
                   ? null
                   : (value) {
                       if (value == null) return;
-                      final institution = _institutions.firstWhere(
-                        (item) => item.id == value,
-                      );
-                      if (institution.campuses.isNotEmpty) {
-                        _changeTenant(value, institution.campuses.first);
-                      }
+                      setState(() {
+                        _audienceType = value;
+                        _selectedGroupIds.clear();
+                        _selectedStudentIds.clear();
+                      });
                     },
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              key: ValueKey('$_institutionId:$_campusId'),
-              initialValue: _campusId,
-              decoration: const InputDecoration(labelText: 'Sede'),
-              items: campuses
-                  .map(
-                    (campus) =>
-                        DropdownMenuItem(value: campus, child: Text(campus)),
-                  )
-                  .toList(),
-              onChanged: _busy
-                  ? null
-                  : (value) {
-                      if (value != null && _institutionId != null) {
-                        _changeTenant(_institutionId!, value);
-                      }
-                    },
+            if (_audienceType == FileAudienceType.groups) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _selectGroups,
+                icon: const Icon(Icons.groups_outlined),
+                label: Text('Elegir grupos (${_selectedGroupIds.length})'),
+              ),
+            ],
+            if (_audienceType == FileAudienceType.students) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _selectStudents,
+                icon: const Icon(Icons.person_search_outlined),
+                label: Text(
+                  'Buscar estudiantes (${_selectedStudentIds.length})',
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _messageController,
+              maxLength: 2000,
+              minLines: 2,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Mensaje o enlace (opcional)',
+                hintText: 'Escribe una indicación o pega un enlace.',
+              ),
             ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _busy ? null : _upload,
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Elegir archivo y publicar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _storageCard() => Card(
+    margin: const EdgeInsets.only(top: 16),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Almacenamiento del módulo',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(value: _summary!.ratio),
+          const SizedBox(height: 8),
+          Text(
+            '${_size(_summary!.usedBytes)} de ${_size(_summary!.limitBytes)} utilizados • máximo ${_size(_summary!.maxFileBytes)} por archivo',
+          ),
+          if (_user.isSuperadmin) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _deleteOldFiles,
+              icon: const Icon(Icons.auto_delete_outlined),
+              label: Text(
+                'Eliminar archivos de más de 60 días (${_summary!.oldFilesCount})',
+              ),
+            ),
+          ],
         ],
       ),
+    ),
+  );
+
+  Widget _fileCard(FileModel file, ColorScheme colors) {
+    final uri = Uri.tryParse(file.message);
+    final isLink =
+        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.description_outlined, color: colors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    file.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (_canDelete)
+                  Checkbox(
+                    value: _selectedFiles.contains(file.id),
+                    onChanged: (checked) => setState(() {
+                      checked == true
+                          ? _selectedFiles.add(file.id)
+                          : _selectedFiles.remove(file.id);
+                    }),
+                  ),
+              ],
+            ),
+            Text('${file.audienceLabel} • ${_size(file.sizeBytes)}'),
+            Text(
+              'Enviado por ${file.uploaderName} • ${DateFormat('dd/MM/yyyy HH:mm').format(file.sentAt.toDate())}',
+            ),
+            if (file.message.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              if (isLink)
+                TextButton.icon(
+                  onPressed: () =>
+                      launchUrl(uri, mode: LaunchMode.externalApplication),
+                  icon: const Icon(Icons.link),
+                  label: Text(file.message),
+                )
+              else
+                SelectableText(file.message),
+            ],
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: _busy ? null : () => _download(file),
+              icon: const Icon(Icons.download),
+              label: const Text('Descargar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tenantSelectors() {
+    final campuses = _selectedInstitution?.campuses ?? const <String>[];
+    return Row(
+      children: [
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            initialValue: _institutionId,
+            decoration: const InputDecoration(labelText: 'Institución'),
+            items: _institutions
+                .map(
+                  (item) =>
+                      DropdownMenuItem(value: item.id, child: Text(item.label)),
+                )
+                .toList(),
+            onChanged: _busy
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    final institution = _institutions.firstWhere(
+                      (item) => item.id == value,
+                    );
+                    if (institution.campuses.isNotEmpty) {
+                      _changeTenant(value, institution.campuses.first);
+                    }
+                  },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: DropdownButtonFormField<String>(
+            key: ValueKey('$_institutionId:$_campusId'),
+            initialValue: _campusId,
+            decoration: const InputDecoration(labelText: 'Sede'),
+            items: campuses
+                .map(
+                  (campus) =>
+                      DropdownMenuItem(value: campus, child: Text(campus)),
+                )
+                .toList(),
+            onChanged: _busy
+                ? null
+                : (value) {
+                    if (value != null && _institutionId != null) {
+                      _changeTenant(_institutionId!, value);
+                    }
+                  },
+          ),
+        ),
+      ],
     );
   }
 }

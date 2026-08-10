@@ -87,6 +87,32 @@ service cloud.firestore {
           data.groupId;
     }
 
+    function canReadFile(data) {
+      let user = me();
+      let permissions = user.permissions is list ? user.permissions : [];
+      let local = (data.institutionId == user.institution &&
+        data.campusId == user.campus);
+      return user.status == 'activo' && data.status == 'active' && (
+          user.isSuperadmin == true ||
+          (local && user.role == 'Administrador' && permissions.hasAny([
+            'archivos.ver', 'archivos.crear', 'archivos.eliminar'
+          ])) ||
+          (local && data.recipientUserIds is list &&
+            request.auth.uid in data.recipientUserIds &&
+            ((user.role == 'Docente' &&
+                permissions.hasAny(['archivos.ver'])) ||
+              (user.role == 'Estudiante' &&
+                permissions.hasAny(['archivos.ver'])))) ||
+          (local && user.role == 'Familiar' &&
+            permissions.hasAny(['archivos.ver']) &&
+            user.activeStudentId is string && user.studentIds is list &&
+            user.activeStudentId in user.studentIds &&
+            data.recipientContextKeys is list &&
+            request.auth.uid + ':' + user.activeStudentId in
+              data.recipientContextKeys)
+      );
+    }
+
     match /configuracion_colegios/{id} {
       allow read: if true;
       allow write: if admin();
@@ -272,23 +298,19 @@ service cloud.firestore {
     }
 
     match /files/{id} {
-      allow read: if active() && (
-        (resource.data.status == 'uploading' &&
+      allow get: if signedIn() && (
+        (me().status == 'activo' && resource.data.status == 'uploading' &&
           resource.data.uploadedBy == request.auth.uid) ||
-        (resource.data.status == 'active' && sameTenant(resource.data) && (
-          superadmin() ||
-          (me().role == 'Administrador' &&
-            (hasPermission('archivos.ver') ||
-              hasPermission('archivos.crear') ||
-              hasPermission('archivos.eliminar'))) ||
-          (teacher() && hasPermission('archivos.ver') &&
-            resource.data.groupId == me().groupId) ||
-          (me().role == 'Estudiante' && hasPermission('archivos.ver') &&
-            resource.data.groupId == me().groupId) ||
-          (family() && hasPermission('archivos.ver') &&
-            familyCanReadGroupData(resource.data, 'archivos.ver'))
-        ))
+        canReadFile(resource.data)
       );
+      // El listado pasa por listarArchivos para validar sede y contexto del
+      // hijo activo sin depender de que las reglas actuen como filtro.
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /file_notification_events/{id} {
+      allow read: if admin() && sameTenant(resource.data);
       allow create, update, delete: if false;
     }
 

@@ -30,6 +30,9 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 - Archivos tiene cuota de 1 GiB por institución, máximo 25 MiB por documento y retención operativa de 60 días.
 - La carga usa reserva de cuota, ruta autorizada, metadatos verificados y confirmación backend.
 - Solo el superadministrador ejecuta la limpieza global por antigüedad; las eliminaciones manuales respetan permisos y siempre quedan auditadas.
+- Solo administradores y superadministradores eliminan archivos. Un docente nunca puede borrar ni ocultar publicaciones, aunque reciba un permiso manipulado.
+- Cada publicación puede incluir un mensaje o enlace y materializa su audiencia (`all`, `groups` o `students`), estudiantes destinatarios y usuarios notificados. El administrador puede usar las tres audiencias; el docente solo sus grupos dictados o estudiantes de esos grupos.
+- Las notificaciones de Archivos incluyen estudiantes y familiares. Cuando publica un administrador, incluyen además los docentes que dictan en los grupos involucrados.
 - Borrar primero el objeto de Storage y después sus metadatos/contador. Si Storage falla, conservar un estado reintentable.
 
 ## Interfaz y calidad

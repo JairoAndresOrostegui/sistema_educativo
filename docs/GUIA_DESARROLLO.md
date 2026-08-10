@@ -46,13 +46,17 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 
 ## Archivos y Storage
 
-- Ruta: `files/{groupId}/{fileId}/{safeName}`.
+- Ruta: `files/{fileId}/{safeName}`. La autorización se resuelve contra el documento `files/{fileId}`, no contra un segmento de ruta manipulable.
 - Cuota: 1 GiB por institución.
 - Archivo individual: máximo 25 MiB.
 - Tipos: PDF, Word y Excel aprobados.
 - Retención: el superadministrador puede eliminar todo documento con más de 60 días.
 - También puede seleccionar y eliminar manualmente sin importar fecha.
 - La cuota reserva bytes antes de subir; confirmar mueve la reserva a bytes usados; cancelar o rechazar libera la reserva.
+- Una publicación usa `audienceType` (`all`, `groups`, `students`), `targetGroupIds`, `targetStudentIds`, `recipientUserIds` y `recipientContextKeys`. La última lista enlaza familiar e hijo para que la consulta respete el hijo activo. Estas listas se derivan y validan en backend; nunca se aceptan nombres ni destinatarios confiando en el cliente.
+- El cliente lista mediante `listarArchivos`; la Function valida rol, permiso, sede y, para Familiar, que el hijo solicitado sea el vínculo activo. Firestore no permite listar `files` directamente, aunque sí protege la lectura puntual que necesita Storage.
+- El mensaje opcional admite hasta 2000 caracteres y puede ser texto o un enlace. `sentAt` registra el momento de confirmación del archivo.
+- El docente obtiene sus grupos desde `subjects.teacherId`; no se limita a un único `groupId` del perfil. Solo administradores eliminan, y nunca se ofrece borrado u ocultamiento a docentes.
 
 1 GiB permite atender la carga documental de ambas sedes y equivale a cerca del 20 % de una cuota sin costo de 5 GB. Todavía deja espacio para perfiles, contenido web y futuros recursos. La aplicación no promete costo cero: el proyecto debe estar en Blaze para Cloud Storage y el consumo real se vigila en Firebase/Google Cloud.
 
@@ -72,7 +76,7 @@ Reglas:
 
 ## Migraciones
 
-No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` ejecuta una migración única, seca por defecto y real con `--apply`. Antes de aplicar se debe validar el proyecto Firebase y conservar un respaldo administrado. Después se revisan conteos, referencias y objetos de Storage, y se eliminan los parámetros antiguos de grado.
+No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y `functions/scripts/migrate_file_audiences.js` migra las audiencias y rutas de Archivos. Ambas son secas por defecto, reales con `--apply` y verificables con `--verify`. Antes de aplicar se debe validar el proyecto Firebase y conservar un respaldo administrado.
 
 ## Validación y despliegue
 
@@ -92,6 +96,7 @@ npm run test:users
 npm run test:enrollment
 npm run test:authorization
 npm run test:schedule
+npm run test:files
 ```
 
 QA se despliega con el alias Firebase `default` actual. Producción real debe usar otro proyecto y alias. Nunca reutilizar secretos, bucket o credenciales de QA en producción.

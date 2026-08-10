@@ -474,7 +474,8 @@ async function userDeletionContext(targetSnap) {
   const [familiesSnap, routeStudentsSnap, routeManagersSnap,
     subjectsSnap, enrollmentCreatorsSnap, enrollmentUsersSnap,
     authorizationRequestersSnap,
-    authorizationStudentsSnap, filesSnap, threadsSnap, logsSnap,
+    authorizationStudentsSnap, filesSnap, receivedFilesSnap, threadsSnap,
+    logsSnap,
     historySnap, dailyRoutesSnap] = await Promise.all([
     db.collection("users").where("studentIds", "array-contains", uid).get(),
     db.collection("routes").where("estudiantes", "array-contains", uid).get(),
@@ -487,6 +488,9 @@ async function userDeletionContext(targetSnap) {
     db.collection("authorization_requests")
         .where("studentId", "==", uid).get(),
     db.collection("files").where("uploadedBy", "==", uid).get(),
+    db.collection("files").where(
+        "recipientUserIds", "array-contains", uid,
+    ).get(),
     db.collection("message_threads")
         .where("participantIds", "array-contains", uid).get(),
     db.collection("user_logs").where("userId", "==", uid).get(),
@@ -530,6 +534,8 @@ async function userDeletionContext(targetSnap) {
       snapshotDocuments(authorizationStudentsSnap),
   );
   const files = snapshotDocuments(filesSnap);
+  const receivedFiles = snapshotDocuments(receivedFilesSnap)
+      .filter((item) => !files.some((file) => file.id === item.id));
   const threads = snapshotDocuments(threadsSnap);
   const auditCount = logsSnap.size + historySnap.size;
 
@@ -540,6 +546,8 @@ async function userDeletionContext(targetSnap) {
       count: authorizations.length, action: "delete"},
     {key: "files", label: "Archivos subidos", count: files.length,
       action: "delete"},
+    {key: "fileRecipients", label: "Destinos en archivos",
+      count: receivedFiles.length, action: "unlink"},
     {key: "messages", label: "Conversaciones", count: threads.length,
       action: "delete"},
     {key: "families", label: "Vinculos familiares", count: families.length,
@@ -563,6 +571,7 @@ async function userDeletionContext(targetSnap) {
     enrollments,
     authorizations,
     files,
+    receivedFiles,
     threads,
     dailyStudentRefs,
     dailyManagerDocs,
@@ -739,8 +748,13 @@ function requireFileAction(caller, action) {
   if (caller.isSuperadmin === true) return;
   const permissions = Array.isArray(caller.permissions) ?
     caller.permissions : [];
-  if (["Administrador", "Docente"].includes(caller.role) &&
-      permissions.includes(`archivos.${action}`)) return;
+  if (action === "eliminar") {
+    if (caller.role === "Administrador" &&
+        permissions.includes("archivos.eliminar")) return;
+  } else if (["Administrador", "Docente"].includes(caller.role) &&
+      permissions.includes(`archivos.${action}`)) {
+    return;
+  }
   throw new HttpsError(
       "permission-denied", `No tienes permiso de archivos.${action}.`,
   );
@@ -789,16 +803,169 @@ function safeFileName(name) {
  * @param {Object} caller Usuario.
  * @param {Object} group Grupo.
  */
-function requireFileGroupAccess(caller, group) {
+function requireFileGroupAccess(caller, group, teacherGroupIds = new Set()) {
   if (!sameTenant(caller, group)) {
     throw new HttpsError("permission-denied", "Grupo fuera de tu sede.");
   }
   if (caller.isSuperadmin !== true && caller.role === "Docente" &&
-      caller.groupId !== group.id) {
+      !teacherGroupIds.has(group.id)) {
     throw new HttpsError(
-        "permission-denied", "Solo puedes publicar para tu grupo asignado.",
+        "permission-denied",
+        "Solo puedes publicar para grupos donde dictas clase.",
     );
   }
+}
+
+/** @param {Object} caller Docente. @return {Promise<Set<string>>} Grupos. */
+async function fileTeacherGroupIds(caller) {
+  if (caller.role !== "Docente") return new Set();
+  const snapshot = await db.collection("subjects")
+      .where("institutionId", "==", caller.institution)
+      .where("campusId", "==", caller.campus)
+      .where("teacherId", "==", caller.uid).get();
+  return new Set(snapshot.docs.map((item) => item.data().groupId)
+      .filter((id) => typeof id === "string" && id));
+}
+
+/** @param {Query} base Consulta base. @param {string[]} ids IDs. */
+async function usersByIds(base, ids) {
+  const users = [];
+  for (let index = 0; index < ids.length; index += 30) {
+    const snapshot = await base.where(FieldPath.documentId(), "in",
+        ids.slice(index, index + 30)).get();
+    users.push(...snapshot.docs);
+  }
+  return users;
+}
+
+/**
+ * Resuelve y valida la audiencia de una publicacion de Archivos.
+ * @param {Object} caller Usuario.
+ * @param {Object} input Solicitud.
+ * @param {string} institution Institucion.
+ * @param {string} campus Sede.
+ * @return {Promise<Object>} Audiencia materializada.
+ */
+async function resolveFileAudience(caller, input, institution, campus) {
+  const audienceType = requiredString(input.audienceType, "audiencia", 20);
+  const allowedTypes = caller.role === "Docente" ?
+    new Set(["groups", "students"]) :
+    new Set(["all", "groups", "students"]);
+  if (!allowedTypes.has(audienceType)) {
+    throw new HttpsError("permission-denied", "Audiencia no permitida.");
+  }
+  const requestedGroupIds = Array.isArray(input.targetGroupIds) ?
+    [...new Set(input.targetGroupIds.filter((id) =>
+      typeof id === "string" && id.trim()).map((id) => id.trim()))] : [];
+  const requestedStudentIds = Array.isArray(input.targetStudentIds) ?
+    [...new Set(input.targetStudentIds.filter((id) =>
+      typeof id === "string" && id.trim()).map((id) => id.trim()))] : [];
+  if (requestedGroupIds.length > 100 || requestedStudentIds.length > 500) {
+    throw new HttpsError(
+        "invalid-argument", "La audiencia es demasiado grande.",
+    );
+  }
+  if (audienceType === "groups" && requestedGroupIds.length === 0 ||
+      audienceType === "students" && requestedStudentIds.length === 0) {
+    throw new HttpsError(
+        "invalid-argument", "Selecciona al menos un destinatario.",
+    );
+  }
+
+  const teacherGroups = await fileTeacherGroupIds(caller);
+  let targetGroupIds = requestedGroupIds;
+  let targetStudents;
+  const userBase = db.collection("users")
+      .where("institution", "==", institution)
+      .where("campus", "==", campus);
+
+  if (audienceType === "all") {
+    const groups = await db.collection("academic_groups")
+        .where("institutionId", "==", institution)
+        .where("campusId", "==", campus)
+        .where("active", "==", true).get();
+    targetGroupIds = groups.docs.map((item) => item.id);
+    targetStudents = (await userBase.where("role", "==", "Estudiante")
+        .where("status", "==", "activo").get()).docs;
+  } else if (audienceType === "groups") {
+    for (const groupId of targetGroupIds) {
+      const group = await requireAcademicGroup({groupId, institution, campus});
+      requireFileGroupAccess(caller, group, teacherGroups);
+    }
+    const snapshots = await Promise.all(targetGroupIds.map((groupId) =>
+      userBase.where("role", "==", "Estudiante")
+          .where("status", "==", "activo")
+          .where("groupId", "==", groupId).get()));
+    targetStudents = snapshots.flatMap((snapshot) => snapshot.docs);
+  } else {
+    targetStudents = await usersByIds(userBase, requestedStudentIds);
+    if (targetStudents.length !== requestedStudentIds.length ||
+        targetStudents.some((item) => item.data().role !== "Estudiante" ||
+          item.data().status !== "activo")) {
+      throw new HttpsError(
+          "failed-precondition", "Hay estudiantes no disponibles.",
+      );
+    }
+    targetGroupIds = [...new Set(targetStudents.map((item) =>
+      item.data().groupId).filter((id) => typeof id === "string" && id))];
+    if (caller.role === "Docente" &&
+        targetGroupIds.some((id) => !teacherGroups.has(id))) {
+      throw new HttpsError("permission-denied",
+          "Solo puedes seleccionar estudiantes de tus grupos.");
+    }
+  }
+  if (targetStudents.length === 0) {
+    throw new HttpsError(
+        "failed-precondition", "La audiencia no tiene estudiantes activos.",
+    );
+  }
+
+  const groups = await Promise.all(targetGroupIds.map((groupId) =>
+    requireAcademicGroup({groupId, institution, campus})));
+  const targetGroupNames = groups.map((item) => item.name || item.id);
+  const targetStudentIds = targetStudents.map((item) => item.id);
+  const recipients = new Map(targetStudents.map((item) => [item.id, item]));
+  const recipientContextKeys = new Set();
+  for (let index = 0; index < targetStudentIds.length; index += 30) {
+    const families = await userBase.where("role", "==", "Familiar")
+        .where("status", "==", "activo")
+        .where("studentIds", "array-contains-any",
+            targetStudentIds.slice(index, index + 30)).get();
+    families.docs.forEach((item) => {
+      recipients.set(item.id, item);
+      const linked = Array.isArray(item.data().studentIds) ?
+        item.data().studentIds : [];
+      targetStudentIds.filter((id) => linked.includes(id))
+          .forEach((id) => recipientContextKeys.add(`${item.id}:${id}`));
+    });
+  }
+  if (caller.role === "Administrador" || caller.isSuperadmin === true) {
+    const teacherIds = new Set();
+    for (const groupId of targetGroupIds) {
+      const subjects = await db.collection("subjects")
+          .where("institutionId", "==", institution)
+          .where("campusId", "==", campus)
+          .where("groupId", "==", groupId).get();
+      subjects.docs.forEach((item) => {
+        const id = item.data().teacherId;
+        if (typeof id === "string" && id) teacherIds.add(id);
+      });
+    }
+    const teachers = await usersByIds(userBase, [...teacherIds]);
+    teachers.filter((item) => item.data().role === "Docente" &&
+      item.data().status === "activo")
+        .forEach((item) => recipients.set(item.id, item));
+  }
+  const callerSnapshot = await db.collection("users").doc(caller.uid).get();
+  recipients.set(caller.uid, callerSnapshot);
+  return {
+    audienceType,
+    targetGroupIds,
+    targetGroupNames,
+    targetStudentIds,
+    recipientUserIds: [...recipients.keys()],
+    recipientContextKeys: [...recipientContextKeys],
+  };
 }
 
 const SCHEDULE_DAYS = new Set([
@@ -2320,7 +2487,6 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
     ["users", "groupId"],
     ["subjects", "groupId"],
     ["authorization_requests", "groupId"],
-    ["files", "groupId"],
     ["message_threads", "contextStudentGroupId"],
   ];
   for (const [collection, field] of collections) {
@@ -2332,6 +2498,14 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
           "El grupo tiene informacion institucional y no puede eliminarse.",
       );
     }
+  }
+  const linkedFiles = await db.collection("files")
+      .where("targetGroupIds", "array-contains", id).limit(1).get();
+  if (!linkedFiles.empty) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El grupo tiene archivos institucionales y no puede eliminarse.",
+    );
   }
   const enrollments = await db.collection("enrollments")
       .where("data.groupId", "==", id).limit(1).get();
@@ -2355,6 +2529,113 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
   return {success: true};
 });
 
+exports.obtenerOpcionesAudienciaArchivos = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireFileAction(caller, "crear");
+  const institution = caller.isSuperadmin === true ? requiredString(
+      request.data?.institutionId, "institucion", 120,
+  ) : caller.institution;
+  const campus = caller.isSuperadmin === true ? requiredString(
+      request.data?.campusId, "sede", 120,
+  ) : caller.campus;
+  if (!sameTenant(caller, {institution, campus})) {
+    throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
+  }
+  const teacherGroups = await fileTeacherGroupIds(caller);
+  const groupSnapshot = await db.collection("academic_groups")
+      .where("institutionId", "==", institution)
+      .where("campusId", "==", campus)
+      .where("active", "==", true).get();
+  const groups = groupSnapshot.docs
+      .filter((item) => caller.role !== "Docente" ||
+        teacherGroups.has(item.id))
+      .map((item) => ({id: item.id, name: item.data().name || item.id}))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const allowedGroupIds = new Set(groups.map((item) => item.id));
+  const students = (await db.collection("user_directory")
+      .where("institution", "==", institution)
+      .where("campus", "==", campus)
+      .where("role", "==", "Estudiante")
+      .where("status", "==", "activo").get()).docs
+      .filter((item) => allowedGroupIds.has(item.data().groupId))
+      .map((item) => ({
+        id: item.id,
+        name: `${item.data().firstName || ""} ${item.data().lastName || ""}`
+            .trim(),
+        groupId: item.data().groupId,
+        groupName: item.data().groupName || "",
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  return {groups, students};
+});
+
+exports.listarArchivos = onCall(async (request) => {
+  const caller = await getCaller(request);
+  const permissions = Array.isArray(caller.permissions) ?
+    caller.permissions : [];
+  const staffAccess = permissions.some((permission) => [
+    "archivos.ver", "archivos.crear", "archivos.eliminar",
+  ].includes(permission));
+  if (caller.isSuperadmin !== true &&
+      (caller.role === "Administrador" ? !staffAccess :
+       !permissions.includes("archivos.ver"))) {
+    throw new HttpsError("permission-denied", "No tienes acceso a Archivos.");
+  }
+  const institution = caller.isSuperadmin === true ? requiredString(
+      request.data?.institutionId, "institucion", 120,
+  ) : caller.institution;
+  const campus = caller.isSuperadmin === true ? requiredString(
+      request.data?.campusId, "sede", 120,
+  ) : caller.campus;
+  if (!sameTenant(caller, {institution, campus})) {
+    throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
+  }
+  let query = db.collection("files")
+      .where("institutionId", "==", institution)
+      .where("campusId", "==", campus)
+      .where("status", "==", "active");
+  if (caller.role === "Familiar") {
+    const studentId = requiredString(
+        request.data?.activeStudentId, "hijo activo", 128,
+    );
+    if (!Array.isArray(caller.studentIds) ||
+        !caller.studentIds.includes(studentId) ||
+        caller.activeStudentId !== studentId) {
+      throw new HttpsError(
+          "permission-denied", "El hijo no es el contexto familiar activo.",
+      );
+    }
+    await requireLinkedStudent(studentId, institution, campus);
+    query = query.where(
+        "recipientContextKeys", "array-contains", `${caller.uid}:${studentId}`,
+    );
+  } else if (!["Administrador"].includes(caller.role) &&
+      caller.isSuperadmin !== true) {
+    query = query.where(
+        "recipientUserIds", "array-contains", caller.uid,
+    );
+  }
+  const snapshot = await query.limit(500).get();
+  return {files: snapshot.docs.map((item) => {
+    const file = item.data();
+    return {
+      id: item.id,
+      name: file.name || "",
+      storagePath: file.storagePath || "",
+      audienceType: file.audienceType || "groups",
+      targetGroupIds: file.targetGroupIds || [],
+      targetGroupNames: file.targetGroupNames || [],
+      targetStudentIds: file.targetStudentIds || [],
+      message: file.message || "",
+      uploadedBy: file.uploadedBy || "",
+      uploaderName: file.uploaderName || "",
+      sentAtMillis: file.sentAt?.toMillis?.() ||
+        file.createdAt?.toMillis?.() || Date.now(),
+      sizeBytes: Number(file.sizeBytes || 0),
+    };
+  })};
+});
+
 exports.solicitarCargaArchivo = onCall(async (request) => {
   const caller = await getCaller(request);
   requireFileAction(caller, "crear");
@@ -2365,19 +2646,23 @@ exports.solicitarCargaArchivo = onCall(async (request) => {
   if (!sameTenant(caller, {institution, campus})) {
     throw new HttpsError("permission-denied", "No puedes cargar en otra sede.");
   }
-  const group = await requireAcademicGroup({
-    groupId: request.data?.groupId,
-    institution,
-    campus,
-  });
-  requireFileGroupAccess(caller, group);
+  const audience = await resolveFileAudience(
+      caller, request.data || {}, institution, campus,
+  );
   const name = safeFileName(request.data?.name);
   const contentType = validatedFileMime(request.data?.contentType);
   const expectedSize = validatedFileSize(request.data?.sizeBytes);
+  const message = typeof request.data?.message === "string" ?
+    request.data.message.trim() : "";
+  if (message.length > 2000) {
+    throw new HttpsError(
+        "invalid-argument", "El mensaje no puede superar 2000 caracteres.",
+    );
+  }
   const ref = db.collection("files").doc();
   const usageRef = db.collection("file_storage_usage")
       .doc(fileUsageId(institution));
-  const storagePath = `files/${group.id}/${ref.id}/${name}`;
+  const storagePath = `files/${ref.id}/${name}`;
   await db.runTransaction(async (transaction) => {
     const usageSnapshot = await transaction.get(usageRef);
     const usage = usageSnapshot.data() || {};
@@ -2402,8 +2687,13 @@ exports.solicitarCargaArchivo = onCall(async (request) => {
       contentType,
       expectedSize,
       sizeBytes: 0,
-      groupId: group.id,
-      groupName: group.name,
+      audienceType: audience.audienceType,
+      targetGroupIds: audience.targetGroupIds,
+      targetGroupNames: audience.targetGroupNames,
+      targetStudentIds: audience.targetStudentIds,
+      recipientUserIds: audience.recipientUserIds,
+      recipientContextKeys: audience.recipientContextKeys,
+      message,
       uploadedBy: caller.uid,
       uploaderName:
         `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
@@ -2478,6 +2768,7 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
       expectedSize: FieldValue.delete(),
       expiresAt: FieldValue.delete(),
       confirmedAt: FieldValue.serverTimestamp(),
+      sentAt: FieldValue.serverTimestamp(),
     });
     transaction.set(usageRef, {
       usedBytes: Number(usage.usedBytes || 0) + actualSize,
@@ -2494,24 +2785,50 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
       performedBy: caller.uid,
       institutionId: file.institutionId,
       campusId: file.campusId,
-      groupId: file.groupId,
-      groupName: file.groupName,
+      audienceType: file.audienceType,
+      targetGroupIds: file.targetGroupIds,
+      targetStudentIds: file.targetStudentIds,
+      recipientCount: Array.isArray(file.recipientUserIds) ?
+        file.recipientUserIds.length : 0,
       sizeBytes: actualSize,
       createdAt: FieldValue.serverTimestamp(),
     });
   });
   try {
-    const tokens = await resolveAudienceTokens(caller, {
-      roles: ["Estudiante"],
-      groupId: file.groupId,
-      includeFamiliesForGroup: true,
+    const recipientDocs = await usersByIds(
+        db.collection("users")
+            .where("institution", "==", file.institutionId)
+            .where("campus", "==", file.campusId),
+        (file.recipientUserIds || []).filter((id) => id !== caller.uid),
+    );
+    const tokens = new Set();
+    recipientDocs.forEach((item) => {
+      const user = item.data();
+      if (user.status !== "activo") return;
+      for (const slot of ["web", "mobile"]) {
+        const token = user.notificationTokens?.[slot];
+        if (typeof token === "string" && token.length >= 20) tokens.add(token);
+      }
     });
-    if (tokens.length) {
+    if (tokens.size) {
       await messaging.sendEachForMulticast({
-        notification: {title: "Nuevo archivo disponible", body: file.name},
-        tokens,
+        notification: {
+          title: "Nuevo archivo disponible",
+          body: file.message || file.name,
+        },
+        tokens: [...tokens],
       });
     }
+    await db.collection("file_notification_events").add({
+      fileId: id,
+      recipientIds: recipientDocs.map((item) => item.id),
+      audienceType: file.audienceType,
+      targetGroupIds: file.targetGroupIds,
+      targetStudentIds: file.targetStudentIds,
+      institutionId: file.institutionId,
+      campusId: file.campusId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   } catch (error) {
     console.error("Notificacion de archivo omitida:", error.code || error);
   }
@@ -2560,8 +2877,7 @@ async function deleteFileRecords(caller, ids, source) {
     if (!snapshot.exists) continue;
     const file = snapshot.data();
     if (!sameTenant(caller, file) ||
-        (caller.isSuperadmin !== true && caller.role === "Docente" &&
-         file.uploadedBy !== caller.uid)) {
+        (caller.isSuperadmin !== true && caller.role !== "Administrador")) {
       throw new HttpsError("permission-denied", "Archivo fuera de tu alcance.");
     }
     files.push({id, ref: snapshot.ref, ...file});
@@ -2608,8 +2924,9 @@ async function deleteFileRecords(caller, ids, source) {
         performedBy: caller.uid,
         institutionId: file.institutionId,
         campusId: file.campusId,
-        groupId: file.groupId,
-        groupName: file.groupName,
+        audienceType: file.audienceType,
+        targetGroupIds: file.targetGroupIds || [],
+        targetStudentIds: file.targetStudentIds || [],
         sizeBytes: Number(file.sizeBytes || 0),
         createdAt: FieldValue.serverTimestamp(),
       });
@@ -2983,16 +3300,23 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
       await thread.ref.delete();
     }
 
-    await deleteDocuments(context.files);
-    const manifest = target.deletionManifest?.storagePaths ||
-      context.storagePaths;
-    for (const path of manifest) {
-      try {
-        await storage.bucket().file(path).delete({ignoreNotFound: true});
-      } catch (error) {
-        console.error("Error eliminando archivo:", path, error.code);
-        throw error;
+    await deleteFileRecords(
+        caller, context.files.map((item) => item.id), "user_cascade",
+    );
+    for (const file of context.receivedFiles) {
+      const contextKeys = Array.isArray(file.data().recipientContextKeys) ?
+        file.data().recipientContextKeys : [];
+      const changes = {
+        recipientUserIds: FieldValue.arrayRemove(uid),
+        recipientContextKeys: contextKeys.filter((key) =>
+          typeof key === "string" &&
+          !key.startsWith(`${uid}:`) && !key.endsWith(`:${uid}`)),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (target.role === "Estudiante") {
+        changes.targetStudentIds = FieldValue.arrayRemove(uid);
       }
+      await file.ref.update(changes);
     }
     await storage.bucket().deleteFiles({
       prefix: `fotos_perfil/${uid}/`,

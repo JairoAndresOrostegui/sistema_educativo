@@ -3,7 +3,7 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "eslint .",
-    "test:rules": "firebase emulators:exec --config ../firebase.test.json --only firestore,storage \"mocha --reporter dot test/firestore.rules.test.js test/storage.rules.test.js\"",
+    "test:rules": "firebase emulators:exec --config ../firebase.test.json --only firestore,storage \"mocha --reporter spec test/firestore.rules.test.js test/storage.rules.test.js\"",
     "test:auth": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-auth-test --only firestore,functions \"mocha --timeout 30000 test/auth.function.test.js\"",
     "test:users": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-users-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/users.function.test.js\"",
     "test:enrollment": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-enrollment-test --only auth,firestore,functions \"mocha --timeout 60000 test/enrollment.function.test.js\"",
