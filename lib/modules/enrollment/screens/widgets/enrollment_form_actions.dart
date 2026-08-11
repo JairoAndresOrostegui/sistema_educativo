@@ -75,7 +75,11 @@ class EnrollmentFormActions extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: disabled ? null : onGuardarRevision,
         icon: Icon(Icons.save),
-        label: Text('Guardar solicitud'),
+        label: Text(
+          currentEstado == 'correccion_solicitada'
+              ? 'Enviar correcciones'
+              : 'Guardar solicitud',
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
           foregroundColor: AppPalette.surface,

@@ -96,7 +96,7 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.all(8),
-                          child: Text(entry['grado']?.toString() ?? '-'),
+                          child: Text(entry['groupName']?.toString() ?? '-'),
                         ),
                         Padding(
                           padding: const EdgeInsets.all(4),
@@ -163,7 +163,7 @@ class EnrollmentGradeHistorySection extends StatelessWidget {
               'Institución',
               entry['institucion']?.toString() ?? '-',
             ),
-            _mobileValue('Grado', entry['grado']?.toString() ?? '-'),
+            _mobileValue('Grado', entry['groupName']?.toString() ?? '-'),
             if (!readOnly && !interno)
               Wrap(
                 alignment: WrapAlignment.end,

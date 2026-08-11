@@ -36,7 +36,7 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 ## Estados relevantes
 
 - Usuario: `activo`, `inactivo`, `eliminado`, `eliminando`.
-- Matrícula: estados del flujo configurado; las correcciones respetan rol y sede.
+- Matrícula: unicidad por `institution + data.numeroIdentidad + anioMatricula`; estados del flujo configurado; las correcciones respetan rol, sede e hijo activo. La creación, consulta familiar y transiciones sensibles pasan por Cloud Functions. Cada transición vuelve a leer y actualizar la matrícula en una transacción para impedir decisiones concurrentes contradictorias y escribe `enrollment_history`. El payload acepta únicamente el esquema vigente, deriva `institution`, `campus`, `groupId` y `groupName` en backend, y rechaza `grade`, `grado`, `gradoAspirado` y campos arbitrarios. El administrador queda fijado a su sede; solo el superadministrador envía un alcance distinto.
 - Autorización: `pending`, `approved`, `rejected`, `finalized`. Finalizada es inmutable, salvo corrección expresa del superadministrador con historial.
 - Archivo: `uploading`, `active`, `deleting`.
 

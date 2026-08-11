@@ -52,9 +52,13 @@ class EnrollmentFormController extends ChangeNotifier {
   List<String> eps = [];
   List<String> tiposSangre = ['A', 'B', 'AB', 'O'];
   List<InstitutionOption> institutionOptions = [];
+  String? selectedInstitutionId;
+  String? selectedCampusId;
   Map<String, String> epsLabels = {};
 
   String? documentoSeleccionado;
+  String? activeEnrollmentId;
+  String? activeEnrollmentStatus;
   int? anioMatricula;
   String? currentEstado;
   bool readOnlyForm = false;
@@ -119,22 +123,24 @@ class EnrollmentFormController extends ChangeNotifier {
     if (anio != null) {
       anioMatricula = anio;
       setValue('anioInscripcion', anio.toString());
-      if (documentoSeleccionado != null && documentoSeleccionado!.isNotEmpty) {
-        await checkExistingEnrollmentForDocument(documentoSeleccionado!);
-        await loadInternalGradeHistory(documentoSeleccionado!);
-      }
       notifyListeners();
     }
   }
 
-  Future<void> loadOptions() async {
+  Future<void> loadOptions({UserProviderV2? userProvider}) async {
     loadingOptions = true;
     notifyListeners();
     try {
-      final groupSnapshot = await _firestore
+      final user = userProvider?.user;
+      Query<Map<String, dynamic>> groupQuery = _firestore
           .collection('academic_groups')
-          .where('active', isEqualTo: true)
-          .get();
+          .where('active', isEqualTo: true);
+      if (user != null && !user.isSuperadmin) {
+        groupQuery = groupQuery
+            .where('institutionId', isEqualTo: user.institution)
+            .where('campusId', isEqualTo: user.campus);
+      }
+      final groupSnapshot = await groupQuery.get();
       academicGroups = groupSnapshot.docs
           .map(AcademicGroup.fromDocument)
           .toList();
@@ -149,14 +155,30 @@ class EnrollmentFormController extends ChangeNotifier {
         tiposDocumento = docTypes.map((d) => d.valor.trim()).toList();
       }
 
-      final campusesSet = <String>{};
       institutionOptions = await _params.getInstitutions();
-      for (final institution in institutionOptions) {
-        campusesSet.addAll(institution.campuses);
+      if (user != null && !user.isSuperadmin) {
+        institutionOptions = institutionOptions
+            .where((item) => item.id == user.institution)
+            .toList();
+        selectedInstitutionId = user.institution;
+        selectedCampusId = user.campus;
+      } else {
+        selectedInstitutionId ??= institutionOptions.isEmpty
+            ? null
+            : institutionOptions.first.id;
+        final selectedInstitution = institutionOptions.where(
+          (item) => item.id == selectedInstitutionId,
+        );
+        final availableCampuses = selectedInstitution.isEmpty
+            ? const <String>[]
+            : selectedInstitution.first.campuses;
+        selectedCampusId ??= availableCampuses.isEmpty
+            ? null
+            : availableCampuses.first;
       }
-      campusesSet.addAll(['Piedecuesta', 'Barrancabermeja']);
-      if (campusesSet.isNotEmpty) {
-        sedes = campusesSet.toList()..sort();
+      _refreshCampuses();
+      if ((selectedCampusId ?? '').isNotEmpty) {
+        setValue('sedeAspirada', selectedCampusId);
       }
 
       final epsParams = await _params.getEps();
@@ -172,9 +194,6 @@ class EnrollmentFormController extends ChangeNotifier {
     if (tiposDocumento.isEmpty) {
       tiposDocumento = ['RC', 'TI', 'CC', 'Pasaporte'];
     }
-    if (sedes.isEmpty) {
-      sedes = ['Piedecuesta', 'Barrancabermeja'];
-    }
     if (eps.isEmpty) {
       eps = ['Sura', 'Sanitas', 'Coomeva'];
     }
@@ -183,6 +202,42 @@ class EnrollmentFormController extends ChangeNotifier {
     }
     tiposSangre = ['A', 'B', 'AB', 'O'];
     loadingOptions = false;
+    notifyListeners();
+  }
+
+  void _refreshCampuses() {
+    final selected = institutionOptions.where(
+      (item) => item.id == selectedInstitutionId,
+    );
+    sedes = selected.isEmpty ? <String>[] : [...selected.first.campuses];
+    sedes.sort();
+    if (!sedes.contains(selectedCampusId)) {
+      selectedCampusId = sedes.isEmpty ? null : sedes.first;
+    }
+  }
+
+  void selectInstitution(String institutionId) {
+    if (selectedInstitutionId == institutionId) return;
+    selectedInstitutionId = institutionId;
+    selectedCampusId = null;
+    _refreshCampuses();
+    setValue('sedeAspirada', selectedCampusId ?? '');
+    setValue('groupId', '');
+    notifyListeners();
+  }
+
+  void selectCampus(String campusId) {
+    if (!sedes.contains(campusId)) return;
+    selectedCampusId = campusId;
+    setValue('sedeAspirada', campusId);
+    final currentGroupId = controllers['groupId']?.text ?? '';
+    final groupIsValid = academicGroups.any(
+      (group) =>
+          group.id == currentGroupId &&
+          group.institutionId == selectedInstitutionId &&
+          group.campusId == campusId,
+    );
+    if (!groupIsValid) setValue('groupId', '');
     notifyListeners();
   }
 
@@ -236,7 +291,7 @@ class EnrollmentFormController extends ChangeNotifier {
           userProvider: userProvider,
           studentId: selected.id,
         );
-        await onChildSelected(selected);
+        await onChildSelected(selected, userProvider: userProvider);
       }
       notifyListeners();
     } catch (_) {}
@@ -263,10 +318,10 @@ class EnrollmentFormController extends ChangeNotifier {
       case 'tiposSangre':
         return tiposSangre;
       case 'academicGroups':
-        final campus = controllers['sedeAspirada']?.text.trim() ?? '';
-        final institution = institutionOptions.isEmpty
-            ? ''
-            : institutionOptions.first.id;
+        final campus =
+            selectedCampusId ??
+            (controllers['sedeAspirada']?.text.trim() ?? '');
+        final institution = selectedInstitutionId ?? '';
         return academicGroups
             .where(
               (group) =>
@@ -445,18 +500,67 @@ class EnrollmentFormController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> checkExistingEnrollmentForDocument(String document) async {
-    if (document.trim().isEmpty) return;
-    final anio = anioMatricula ?? DateTime.now().year;
-    try {
-      blockedByExistingEnrollment = await _enrollmentService
-          .existsByDocumentAndYear(
-            document: document.trim(),
-            anioMatricula: anio,
-          );
-    } catch (_) {
+  Future<void> loadSecureEnrollmentContext({
+    required UserProviderV2 userProvider,
+    String? document,
+  }) async {
+    final user = userProvider.user;
+    if (user == null) return;
+    final role = user.role.trim().toLowerCase();
+    if (role != 'familiar' && role != 'administrador') return;
+    final year = anioMatricula ?? DateTime.now().year;
+    final input = <String, dynamic>{'anioMatricula': year};
+    if (role == 'familiar') {
+      if ((selectedChildId ?? '').isEmpty) return;
+      input['studentId'] = selectedChildId;
+    } else {
+      final cleanDocument = (document ?? documentoSeleccionado ?? '').trim();
+      if (cleanDocument.isEmpty) return;
+      input.addAll({
+        'document': cleanDocument,
+        'institution': user.isSuperadmin
+            ? selectedInstitutionId
+            : user.institution,
+        'campus': user.isSuperadmin ? selectedCampusId : user.campus,
+      });
+    }
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('consultarMatriculaEstudiante')
+        .call(input);
+    final response = Map<String, dynamic>.from(result.data as Map);
+    final previous = (response['previous'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => item['anioMatricula'] is int)
+        .map(
+          (item) => <String, dynamic>{
+            'anio': item['anioMatricula'],
+            'institucion': item['institution']?.toString() ?? '',
+            'groupName': item['groupName']?.toString() ?? '',
+            'interno': true,
+          },
+        )
+        .toList();
+    internalGradeHistory = previous;
+    final rawEnrollment = response['enrollment'];
+    if (response['exists'] == true && rawEnrollment is Map) {
+      final enrollment = Map<String, dynamic>.from(rawEnrollment);
+      activeEnrollmentId = enrollment['id']?.toString();
+      activeEnrollmentStatus = enrollment['estado']?.toString();
+      currentEstado = activeEnrollmentStatus;
+      final storedData = enrollment['data'];
+      if (storedData is Map) {
+        applyPrefill(Map<String, dynamic>.from(storedData));
+      }
+      blockedByExistingEnrollment =
+          activeEnrollmentStatus != 'correccion_solicitada';
+    } else {
+      activeEnrollmentId = null;
+      activeEnrollmentStatus = null;
+      currentEstado = null;
       blockedByExistingEnrollment = false;
     }
+    _updateGradeHistoryValue();
     notifyListeners();
   }
 
@@ -500,14 +604,6 @@ class EnrollmentFormController extends ChangeNotifier {
         }
       }
 
-      if (found == null) {
-        final enrollment = await _enrollmentService.getByDocument(doc);
-        if (enrollment != null) {
-          found = enrollment.data;
-          documentoSeleccionado = doc;
-        }
-      }
-
       if (found != null) {
         applyPrefill(found);
         recomputeAge();
@@ -515,8 +611,17 @@ class EnrollmentFormController extends ChangeNotifier {
       } else {
         documentoSeleccionado = doc;
       }
-      await checkExistingEnrollmentForDocument(doc);
-      await loadInternalGradeHistory(doc);
+      final caller = userProvider?.user;
+      if (caller != null &&
+          [
+            'familiar',
+            'administrador',
+          ].contains(caller.role.trim().toLowerCase())) {
+        await loadSecureEnrollmentContext(
+          userProvider: userProvider!,
+          document: doc,
+        );
+      }
     } catch (_) {
       // ignore errors
     } finally {
@@ -525,7 +630,10 @@ class EnrollmentFormController extends ChangeNotifier {
     }
   }
 
-  Future<void> onChildSelected(ChildOption? selected) async {
+  Future<void> onChildSelected(
+    ChildOption? selected, {
+    UserProviderV2? userProvider,
+  }) async {
     selectedChildId = selected?.id;
     if (selected == null) {
       notifyListeners();
@@ -538,38 +646,10 @@ class EnrollmentFormController extends ChangeNotifier {
     applyPrefill(selected.data);
     recomputeAge();
     if (selected.document != null && selected.document!.isNotEmpty) {
-      await checkExistingEnrollmentForDocument(selected.document!);
-      await loadInternalGradeHistory(selected.document!);
+      if (userProvider != null) {
+        await loadSecureEnrollmentContext(userProvider: userProvider);
+      }
     }
-    notifyListeners();
-  }
-
-  Future<void> loadInternalGradeHistory(String document) async {
-    if (document.trim().isEmpty) return;
-    final anio = anioMatricula ?? DateTime.now().year;
-    try {
-      final items = await _enrollmentService.listFinalizedByDocumentBeforeYear(
-        document: document.trim(),
-        anioMatricula: anio,
-      );
-      internalGradeHistory =
-          items.where((e) => e.anioMatricula != null).map((e) {
-            return {
-              'anio': e.anioMatricula,
-              'institucion':
-                  (e.data['institucion'] ?? e.data['institution'] ?? '')
-                      .toString(),
-              'grado': (e.data['groupName'] ?? '').toString(),
-              'interno': true,
-            };
-          }).toList()..sort(
-            (a, b) =>
-                (a['anio'] as int? ?? 0).compareTo((b['anio'] as int? ?? 0)),
-          );
-    } catch (_) {
-      internalGradeHistory = [];
-    }
-    _updateGradeHistoryValue();
     notifyListeners();
   }
 
@@ -592,7 +672,7 @@ class EnrollmentFormController extends ChangeNotifier {
           (e) =>
               !(e['anio'] == entry['anio'] &&
                   e['institucion'] == entry['institucion'] &&
-                  e['grado'] == entry['grado'] &&
+                  e['groupName'] == entry['groupName'] &&
                   e['interno'] == entry['interno']),
         )
         .toList();
@@ -610,7 +690,7 @@ class EnrollmentFormController extends ChangeNotifier {
           (e) =>
               !(e['anio'] == oldEntry['anio'] &&
                   e['institucion'] == oldEntry['institucion'] &&
-                  e['grado'] == oldEntry['grado'] &&
+                  e['groupName'] == oldEntry['groupName'] &&
                   e['interno'] == oldEntry['interno']),
         )
         .toList();
@@ -634,7 +714,7 @@ class EnrollmentFormController extends ChangeNotifier {
     final aspiradoOrder = group?.order;
     if (aspiradoOrder == null) return [];
     final internos = internalGradeHistory
-        .map((e) => e['grado']?.toString())
+        .map((e) => e['groupName']?.toString())
         .whereType<String>()
         .toSet();
     return grados
@@ -651,6 +731,7 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   bool validateForm() {
+    lastValidationError = null;
     if (!(formKey.currentState?.validate() ?? false)) return false;
 
     // Validar que si tieneAcudienteDiferente está marcado,
@@ -670,6 +751,50 @@ class EnrollmentFormController extends ChangeNotifier {
             'El número de documento del acudiente tiene que ser distinto al del padre o madre ';
         return false;
       }
+      for (final field in const [
+        'nombreAcudiente',
+        'cedulaAcudiente',
+        'emailAcudiente',
+        'celularAcudiente',
+      ]) {
+        if ((controllers[field]?.text.trim() ?? '').isEmpty) {
+          lastValidationError =
+              'Completa los datos obligatorios del acudiente diferente.';
+          return false;
+        }
+      }
+    } else if (!const [
+      'padre',
+      'madre',
+    ].contains(controllers['acudientePrincipal']?.text.trim())) {
+      lastValidationError = 'Selecciona quién es el acudiente principal.';
+      return false;
+    }
+
+    final emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    final emailFields = [
+      'emailPadre',
+      'emailMadre',
+      if (tieneAcudiente) 'emailAcudiente',
+    ];
+    if (emailFields.any(
+      (field) => !emailPattern.hasMatch(controllers[field]?.text.trim() ?? ''),
+    )) {
+      lastValidationError = 'Revisa los correos del formulario.';
+      return false;
+    }
+
+    final transporte =
+        (controllers['servicioTransporte']?.text ?? '').toLowerCase() == 'true';
+    if (transporte &&
+        (controllers['servicioTransporteTipo']?.text.trim() ?? '').isEmpty) {
+      lastValidationError = 'Selecciona el tipo de transporte.';
+      return false;
+    }
+    if ((selectedInstitutionId ?? '').isEmpty ||
+        (selectedCampusId ?? '').isEmpty) {
+      lastValidationError = 'Selecciona la institución y la sede.';
+      return false;
     }
 
     return true;
@@ -761,17 +886,13 @@ class EnrollmentFormController extends ChangeNotifier {
         (user?.institution ?? '').isNotEmpty) {
       payload['institucion'] = user?.institution;
     }
-    final institution = (user?.institution ?? '').trim().isNotEmpty
-        ? user!.institution.trim()
-        : (payload['institucion'] ??
-                  (institutionOptions.isNotEmpty
-                      ? institutionOptions.first.id
-                      : ''))
-              .toString()
-              .trim();
-    final campus = (user?.campus ?? '').trim().isNotEmpty
-        ? user!.campus.trim()
-        : (payload['sedeAspirada'] ?? '').toString().trim();
+    final useCallerScope = user != null && !user.isSuperadmin;
+    final institution = useCallerScope
+        ? user.institution.trim()
+        : (selectedInstitutionId ?? '').trim();
+    final campus = useCallerScope
+        ? user.campus.trim()
+        : (selectedCampusId ?? payload['sedeAspirada'] ?? '').toString().trim();
 
     try {
       if (isEditing) {
@@ -804,7 +925,7 @@ class EnrollmentFormController extends ChangeNotifier {
           estado = 'pendiente_revision';
         }
       } else {
-        await _enrollmentService.createEnrollment(
+        activeEnrollmentId = await _enrollmentService.createEnrollment(
           data: payload,
           estado: estado,
           institution: institution,
@@ -816,6 +937,10 @@ class EnrollmentFormController extends ChangeNotifier {
       }
 
       currentEstado = estado;
+      activeEnrollmentStatus = estado;
+      if (!isAdmin) {
+        blockedByExistingEnrollment = estado != 'correccion_solicitada';
+      }
       notifyListeners();
       return SubmitResult(success: true, estado: estado, payload: payload);
     } catch (e) {

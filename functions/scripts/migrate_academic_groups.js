@@ -55,6 +55,31 @@ const bucket = getStorage().bucket();
 const apply = process.argv.includes("--apply");
 const verify = process.argv.includes("--verify");
 const fileModuleLimitBytes = 1024 * 1024 * 1024;
+const enrollmentDataFields = new Set([
+  "anioInscripcion", "fechaInscripcion", "nombresAlumno",
+  "apellidosAlumno", "nombresApellidosAlumno", "lugarNacimiento",
+  "fechaNacimiento", "edad", "tipoSangre", "rh", "tipoIdentidad",
+  "numeroIdentidad", "direccionAlumno", "telefonoAlumno", "epsEstudiante",
+  "nombrePadre", "cedulaPadre", "emailPadre", "celularPadre",
+  "lugarTrabajoPadre", "ocupacionPadre", "cargoPadre", "nombreMadre",
+  "cedulaMadre", "emailMadre", "celularMadre", "lugarTrabajoMadre",
+  "ocupacionMadre", "cargoMadre", "tieneAcudienteDiferente",
+  "acudientePrincipal", "nombreAcudiente", "cedulaAcudiente",
+  "emailAcudiente", "celularAcudiente", "lugarTrabajoAcudiente",
+  "ocupacionAcudiente", "cargoAcudiente", "facturaElectronica",
+  "sedeAspirada", "groupId", "groupName", "nivelesCursadosInstitucion",
+  "servicioLonchera", "servicioAlmuerzo", "servicioTransporte",
+  "servicioTransporteTipo", "observacionesPadres", "fueReferido",
+  "nombreReferido", "nombrePadresReferentes", "telefonoReferentes",
+  "celularReferentes", "institucion",
+]);
+const requiredEnrollmentFields = [
+  "nombresAlumno", "apellidosAlumno", "lugarNacimiento",
+  "fechaNacimiento", "tipoSangre", "rh", "tipoIdentidad",
+  "numeroIdentidad", "direccionAlumno", "epsEstudiante", "nombrePadre",
+  "cedulaPadre", "emailPadre", "celularPadre", "nombreMadre",
+  "cedulaMadre", "emailMadre", "celularMadre", "sedeAspirada", "groupId",
+];
 
 const slug = (value) => value.toString().normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -145,6 +170,29 @@ async function verifyMigration() {
     }
     if (data.groupId && !groupIds.has(data.groupId)) {
       violations.push(`enrollments/${document.id}: grupo inexistente`);
+    }
+    const unknownFields = Object.keys(data).filter((key) =>
+      !enrollmentDataFields.has(key));
+    if (unknownFields.length) {
+      violations.push(
+          `enrollments/${document.id}: campos no permitidos ` +
+          unknownFields.join(", "),
+      );
+    }
+    const missingFields = requiredEnrollmentFields.filter((key) =>
+      !data[key]?.toString().trim());
+    if (missingFields.length) {
+      violations.push(
+          `enrollments/${document.id}: campos obligatorios ausentes ` +
+          missingFields.join(", "),
+      );
+    }
+    const history = Array.isArray(data.nivelesCursadosInstitucion) ?
+      data.nivelesCursadosInstitucion : [];
+    if (history.some((item) => item && Object.hasOwn(item, "grado"))) {
+      violations.push(
+          `enrollments/${document.id}: historial con campo grado antiguo`,
+      );
     }
   }
 
@@ -334,10 +382,22 @@ async function main() {
     const enrollmentData = data.data || {};
     const hasLegacyField = ["grade", "grado", "gradoAspirado"].some((key) =>
       Object.hasOwn(enrollmentData, key));
-    if (!patch && !hasLegacyField) return null;
+    const history = Array.isArray(enrollmentData.nivelesCursadosInstitucion) ?
+      enrollmentData.nivelesCursadosInstitucion : [];
+    const hasLegacyHistory = history.some((item) =>
+      item && Object.hasOwn(item, "grado"));
+    if (!patch && !hasLegacyField && !hasLegacyHistory) return null;
     return {
       data: {
         ...(patch || {}),
+        ...(hasLegacyHistory ? {
+          nivelesCursadosInstitucion: history.map((item) => ({
+            ...Object.fromEntries(
+                Object.entries(item).filter(([key]) => key !== "grado"),
+            ),
+            groupName: item.groupName || item.grado || "",
+          })),
+        } : {}),
         grade: FieldValue.delete(),
         grado: FieldValue.delete(),
         gradoAspirado: FieldValue.delete(),

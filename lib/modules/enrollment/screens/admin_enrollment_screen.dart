@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:sistema_educativo/config/app_palette.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
@@ -112,19 +113,40 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
   }
 
   Future<void> _aprobar(Enrollment e) async {
-    if (!mounted) return;
-    if (!mounted) return;
-    // ignore: use_build_context_synchronously
-    // ignore: use_build_context_synchronously
-    // ignore: use_build_context_synchronously
-    final up = context.read<UserProviderV2>();
+    if ((e.vinculaUsuarioId ?? '').isEmpty) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Falta vincular al estudiante',
+        message:
+            'Edita la matrícula y busca el usuario estudiantil antes de aprobarla.',
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Aprobar matrícula'),
+        content: const Text(
+          'La solicitud pasará a Matriculado. ¿Deseas continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Aprobar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     try {
-      await EnrollmentService().updateEnrollment(
+      await EnrollmentService().transitionEnrollment(
         id: e.id,
-        data: e.data,
-        estado: 'matriculado',
-        revisadoPor: up.user?.id,
-        vinculaUsuarioId: e.vinculaUsuarioId,
+        action: 'approve',
+        linkedStudentId: e.vinculaUsuarioId,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -132,11 +154,31 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         title: 'Aprobado',
         message: 'La matricula fue marcada como matriculado.',
       );
-      await EnrollmentPdfUtils.export(
-        e.data,
-        estado: 'matriculado',
-        anio: e.anioMatricula,
+      if (!mounted) return;
+      final shouldPrint = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Imprimir matrícula'),
+          content: const Text('¿Deseas generar el formulario en PDF?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Ahora no'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Generar PDF'),
+            ),
+          ],
+        ),
       );
+      if (shouldPrint == true) {
+        await EnrollmentPdfUtils.export(
+          e.data,
+          estado: 'matriculado',
+          anio: e.anioMatricula,
+        );
+      }
       _fetch();
     } catch (_) {
       if (!mounted) return;
@@ -235,15 +277,11 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     if (motivo == null || motivo.isEmpty) return;
 
     if (!mounted) return;
-    final up = context.read<UserProviderV2>();
     try {
-      await EnrollmentService().updateEnrollment(
+      await EnrollmentService().transitionEnrollment(
         id: e.id,
-        data: e.data,
-        estado: 'rechazado',
-        revisadoPor: up.user?.id,
-        rechazoMotivo: motivo,
-        vinculaUsuarioId: e.vinculaUsuarioId,
+        action: 'reject',
+        observation: motivo,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -282,15 +320,10 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     );
     if (confirm != true) return;
 
-    // ignore: use_build_context_synchronously
-    final up = context.read<UserProviderV2>();
     try {
-      await EnrollmentService().updateEnrollment(
+      await EnrollmentService().transitionEnrollment(
         id: e.id,
-        data: e.data,
-        estado: 'desmatriculado',
-        revisadoPor: up.user?.id,
-        vinculaUsuarioId: e.vinculaUsuarioId,
+        action: 'withdraw',
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -320,6 +353,8 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
           initialLinkedStudentId: e.vinculaUsuarioId,
           modeOverride: EnrollmentEntryMode.admin,
           anioMatricula: e.anioMatricula,
+          institution: e.institution,
+          campus: e.campus,
         ),
       ),
     ).then((_) => _fetch());
@@ -336,6 +371,8 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
           initialLinkedStudentId: e.vinculaUsuarioId,
           modeOverride: EnrollmentEntryMode.admin,
           anioMatricula: e.anioMatricula,
+          institution: e.institution,
+          campus: e.campus,
           forceReadOnly: true,
         ),
       ),
@@ -384,8 +421,87 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       case 'correction':
         _accionDocente(enrollment, 'request_correction');
         return;
+      case 'history':
+        _showHistory(enrollment);
+        return;
     }
   }
+
+  Future<void> _showHistory(Enrollment enrollment) async {
+    late final List<Map<String, dynamic>> history;
+    try {
+      history = await EnrollmentService().listHistory(enrollment.id);
+    } catch (_) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: context,
+        title: 'Historial no disponible',
+        message: 'No fue posible cargar los movimientos de la matrícula.',
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Historial de la matrícula'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620, maxHeight: 560),
+          child: history.isEmpty
+              ? const Center(child: Text('No hay movimientos registrados.'))
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: history.length,
+                  separatorBuilder: (_, _) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final item = history[index];
+                    final timestamp = item['createdAt'];
+                    final date = timestamp is Timestamp
+                        ? DateFormat(
+                            'dd/MM/yyyy, h:mm a',
+                          ).format(timestamp.toDate().toLocal())
+                        : 'Fecha pendiente';
+                    final observation = (item['observation'] ?? '')
+                        .toString()
+                        .trim();
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.history),
+                      title: Text(
+                        '${_historyAction(item['action']?.toString())}: '
+                        '${_estadoDisplay((item['toStatus'] ?? '').toString())}',
+                      ),
+                      subtitle: Text(
+                        '$date\nActor: ${item['performedByRole'] ?? 'Sistema'}'
+                        '${observation.isEmpty ? '' : '\n$observation'}',
+                      ),
+                      isThreeLine: observation.isNotEmpty,
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _historyAction(String? action) => switch (action) {
+    'created' => 'Creada',
+    'save_review' => 'Guardada en revisión',
+    'update_enrolled' => 'Datos actualizados',
+    'approve' => 'Aprobada',
+    'reject' => 'Rechazada',
+    'withdraw' => 'Retirada',
+    'request_correction' => 'Corrección solicitada',
+    'resubmit' => 'Corrección enviada',
+    'observe' => 'Observación registrada',
+    _ => action ?? 'Movimiento',
+  };
 
   @override
   void dispose() {
@@ -493,6 +609,10 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                                         value: 'view',
                                         child: Text('Ver detalle'),
                                       ),
+                                      const PopupMenuItem(
+                                        value: 'history',
+                                        child: Text('Ver historial'),
+                                      ),
                                       if (!isTeacher &&
                                           canEdit &&
                                           (e.estado == 'prematriculado' ||
@@ -508,6 +628,10 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                                           (e.estado == 'prematriculado' ||
                                               e.estado ==
                                                   'pendiente_revision')) ...[
+                                        const PopupMenuItem(
+                                          value: 'correction',
+                                          child: Text('Solicitar corrección'),
+                                        ),
                                         const PopupMenuItem(
                                           value: 'approve',
                                           child: Text('Aprobar'),
@@ -547,6 +671,11 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                                         icon: const Icon(Icons.visibility),
                                         tooltip: 'Ver detalle',
                                       ),
+                                      IconButton(
+                                        onPressed: () => _showHistory(e),
+                                        icon: const Icon(Icons.history),
+                                        tooltip: 'Ver historial',
+                                      ),
                                       if (!isTeacher &&
                                           canEdit &&
                                           (e.estado == 'prematriculado' ||
@@ -557,6 +686,18 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
                                           onPressed: () => _editar(e),
                                           icon: const Icon(Icons.edit),
                                           tooltip: 'Editar',
+                                        ),
+                                      if (!isTeacher &&
+                                          canEdit &&
+                                          (e.estado == 'prematriculado' ||
+                                              e.estado == 'pendiente_revision'))
+                                        IconButton(
+                                          onPressed: () => _accionDocente(
+                                            e,
+                                            'request_correction',
+                                          ),
+                                          icon: const Icon(Icons.rule),
+                                          tooltip: 'Solicitar corrección',
                                         ),
                                       if (!isTeacher &&
                                           canEdit &&

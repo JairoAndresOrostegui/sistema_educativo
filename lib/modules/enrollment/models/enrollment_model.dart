@@ -16,6 +16,8 @@ class Enrollment {
   final DateTime? fechaDiligenciamiento;
   final String? revisadoPor; // uid admin que aprobó/rechazó
   final String? rechazoMotivo;
+  final String institution;
+  final String campus;
 
   Enrollment({
     required this.id,
@@ -32,6 +34,8 @@ class Enrollment {
     this.fechaDiligenciamiento,
     this.revisadoPor,
     this.rechazoMotivo,
+    required this.institution,
+    required this.campus,
   });
 
   factory Enrollment.fromDoc(DocumentSnapshot doc) {
@@ -51,6 +55,8 @@ class Enrollment {
           ?.toDate(),
       revisadoPor: data['revisadoPor'] as String?,
       rechazoMotivo: data['rechazoMotivo'] as String?,
+      institution: (data['institution'] ?? '').toString(),
+      campus: (data['campus'] ?? '').toString(),
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),

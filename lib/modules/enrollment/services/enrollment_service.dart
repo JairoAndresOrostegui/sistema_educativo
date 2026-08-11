@@ -85,44 +85,21 @@ class EnrollmentService {
     return Enrollment.fromDoc(doc);
   }
 
+  Future<List<Map<String, dynamic>>> listHistory(String enrollmentId) async {
+    final snapshot = await _db
+        .collection('enrollment_history')
+        .where('enrollmentId', isEqualTo: enrollmentId)
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snapshot.docs
+        .map((document) => {'id': document.id, ...document.data()})
+        .toList();
+  }
+
   Future<Enrollment?> getByToken(String token) async {
     final snap = await _col.where('token', isEqualTo: token).limit(1).get();
     if (snap.docs.isEmpty) return null;
     return Enrollment.fromDoc(snap.docs.first);
-  }
-
-  Future<Enrollment?> getByDocument(String document) async {
-    final snap = await _col
-        .where('data.numeroIdentidad', isEqualTo: document)
-        .limit(1)
-        .get();
-    if (snap.docs.isEmpty) return null;
-    return Enrollment.fromDoc(snap.docs.first);
-  }
-
-  Future<bool> existsByDocumentAndYear({
-    required String document,
-    required int anioMatricula,
-  }) async {
-    final snap = await _col
-        .where('data.numeroIdentidad', isEqualTo: document)
-        .where('anioMatricula', isEqualTo: anioMatricula)
-        .limit(1)
-        .get();
-    return snap.docs.isNotEmpty;
-  }
-
-  Future<List<Enrollment>> listFinalizedByDocumentBeforeYear({
-    required String document,
-    required int anioMatricula,
-  }) async {
-    final snap = await _col
-        .where('data.numeroIdentidad', isEqualTo: document)
-        .where('anioMatricula', isLessThan: anioMatricula)
-        .where('estado', whereIn: ['matriculado', 'finalizado'])
-        .orderBy('anioMatricula')
-        .get();
-    return snap.docs.map(Enrollment.fromDoc).toList();
   }
 
   Future<List<Enrollment>> listByEstado(

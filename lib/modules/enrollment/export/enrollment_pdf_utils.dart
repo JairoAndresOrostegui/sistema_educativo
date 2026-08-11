@@ -17,7 +17,7 @@ class EnrollmentPdfUtils {
     final font = await PdfGoogleFonts.openSansRegular();
     final fontBold = await PdfGoogleFonts.openSansBold();
     final now = DateTime.now();
-    final currentYear = now.year;
+    final currentYear = anio ?? now.year;
     final currentDate =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
     final primaryPdf = pdf.PdfColor.fromInt(AppPalette.primary.toARGB32());
@@ -37,14 +37,14 @@ class EnrollmentPdfUtils {
 
     String normalizeValue(dynamic value) {
       if (value == null) return '-';
-      if (value is bool) return value ? 'Si' : 'No';
+      if (value is bool) return value ? 'Sí' : 'No';
       if (value is List) {
         if (value.isEmpty) return '-';
         return value.map((e) => e.toString()).join(', ');
       }
       final text = value.toString().trim();
       if (text.isEmpty) return '-';
-      if (text.toLowerCase() == 'true') return 'Si';
+      if (text.toLowerCase() == 'true') return 'Sí';
       if (text.toLowerCase() == 'false') return 'No';
       return text;
     }
@@ -117,13 +117,13 @@ class EnrollmentPdfUtils {
       return [sectionTitle(title), ...sectionRows(fieldNames)];
     }
 
-    final sectionsToPrint = enrollmentSections.take(4).toList();
+    final sectionsToPrint = enrollmentSections;
 
     doc.addPage(
       pw.MultiPage(
         pageTheme: pw.PageTheme(
           theme: pw.ThemeData.withFont(base: font, bold: fontBold),
-          margin: const pw.EdgeInsets.fromLTRB(58, -18, 38, -68),
+          margin: const pw.EdgeInsets.fromLTRB(38, 24, 38, 36),
           buildBackground: (context) => pw.Align(
             alignment: const pw.Alignment(0, -0.20),
             child: pw.Opacity(
@@ -139,10 +139,7 @@ class EnrollmentPdfUtils {
         ),
         maxPages: 200,
         header: (context) => pw.Container(
-          margin: pw.EdgeInsets.only(
-            top: 0,
-            bottom: context.pageNumber == 1 ? -46 : 8,
-          ),
+          margin: pw.EdgeInsets.only(top: 0, bottom: 8),
           child: pw.Image(logoHeader, fit: pw.BoxFit.fitWidth),
         ),
         build: (context) => [

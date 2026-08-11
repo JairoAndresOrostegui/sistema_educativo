@@ -64,6 +64,7 @@ service cloud.firestore {
           me().groupId is string &&
           enrollmentGroupId(data) == me().groupId) ||
         (family() &&
+          hasPermission('matricula.ver') &&
           (data.createdByUserId == request.auth.uid ||
             (me().studentIds is list &&
               data.vinculaUsuarioId in me().studentIds)))
@@ -198,7 +199,9 @@ service cloud.firestore {
     }
 
     match /enrollment_notification_events/{eventId} {
-      allow read: if admin() && sameTenant(resource.data);
+      allow read: if admin() &&
+        (hasPermission('matricula.ver') || hasPermission('matricula.editar')) &&
+        sameTenant(resource.data);
       allow create, update, delete: if false;
     }
 

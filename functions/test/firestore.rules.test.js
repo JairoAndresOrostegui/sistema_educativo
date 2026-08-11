@@ -66,6 +66,9 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "users/site-editor"), activeUser("Administrador", {
         permissions: ["sitio_web.ver", "sitio_web.editar"],
       }));
+      await setDoc(doc(db, "users/admin-no-enrollment"), activeUser(
+          "Administrador",
+      ));
       await setDoc(doc(db, "users/user-manager"), activeUser("Docente", {
         permissions: ["usuarios.ver"],
       }));
@@ -95,6 +98,11 @@ describe("Reglas Firestore", () => {
           "archivos.ver",
         ],
       }));
+      await setDoc(doc(db, "users/family-no-enrollment"), activeUser(
+          "Familiar", {
+            studentIds: ["student"], activeStudentId: "student",
+          },
+      ));
       await setDoc(doc(db, "users/peer"), activeUser("Estudiante"));
       await setDoc(doc(db, "users/removed"), activeUser("Estudiante", {
         status: "eliminado",
@@ -115,6 +123,11 @@ describe("Reglas Firestore", () => {
         campus: "campus-2",
         estado: "prematriculado",
         data: {groupId: "group-5a", groupName: "Quinto A"},
+      });
+      await setDoc(doc(db, "enrollment_notification_events/local-event"), {
+        institution: "inst-1",
+        campus: "campus-1",
+        enrollmentId: "local",
       });
       await setDoc(doc(db, "authorization_requests/local-auth"), {
         institutionId: "inst-1",
@@ -298,6 +311,26 @@ describe("Reglas Firestore", () => {
     await assertFails(updateDoc(doc(teacherDb, "enrollments/grade-5a"), {
       estado: "matriculado",
     }));
+  });
+
+  it("exige permiso para leer matriculas y sus eventos", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "enrollments/family-linked"), {
+        institution: "inst-1",
+        campus: "campus-1",
+        estado: "prematriculado",
+        vinculaUsuarioId: "student",
+        data: {groupId: "group-5a", groupName: "Quinto A"},
+      });
+    });
+    const familyDb = env.authenticatedContext("family-no-enrollment")
+        .firestore();
+    const adminDb = env.authenticatedContext("admin-no-enrollment")
+        .firestore();
+    await assertFails(getDoc(doc(familyDb, "enrollments/family-linked")));
+    await assertFails(getDoc(doc(
+        adminDb, "enrollment_notification_events/local-event",
+    )));
   });
 
   it("protege autorizaciones por rol y obliga a usar Functions", async () => {

@@ -22,6 +22,7 @@ import 'widgets/enrollment_document_search_card.dart';
 import 'widgets/enrollment_form_actions.dart';
 import 'widgets/enrollment_fields_section.dart';
 import 'widgets/enrollment_grade_history_section.dart';
+import 'widgets/enrollment_scope_selector.dart';
 
 enum EnrollmentEntryMode { admin, padreAutenticado, publico }
 
@@ -35,6 +36,8 @@ class EnrollmentFormScreen extends StatefulWidget {
   final String? enrollmentId;
   final Map<String, dynamic>? existingData;
   final String? initialEstado;
+  final String? institution;
+  final String? campus;
 
   const EnrollmentFormScreen({
     super.key,
@@ -47,6 +50,8 @@ class EnrollmentFormScreen extends StatefulWidget {
     this.enrollmentId,
     this.existingData,
     this.initialEstado,
+    this.institution,
+    this.campus,
   });
 
   @override
@@ -57,6 +62,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
   // moved to config\n
   late EnrollmentFormController _controller;
   final Map<int, List<EnrollmentField>> _stepFields = {};
+  bool _submitting = false;
 
   Map<String, TextEditingController> get _controllers =>
       _controller.controllers;
@@ -80,6 +86,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     super.initState();
     _controller = EnrollmentFormController();
     _controller.initControllers();
+    _controller.selectedInstitutionId = widget.institution;
+    _controller.selectedCampusId = widget.campus;
     _controller.initDefaults(
       anioInicial: widget.anioMatricula,
       initialEstado: widget.initialEstado,
@@ -91,7 +99,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
               _resolveMode() != EnrollmentEntryMode.admin),
     );
     _controller.loadAnioFromParameters();
-    _controller.loadOptions();
+    _controller.loadOptions(userProvider: context.read<UserProviderV2>());
     _controller.loadPendingCount(
       isAdmin: _resolveMode() == EnrollmentEntryMode.admin,
       userProvider: context.read<UserProviderV2>(),
@@ -218,7 +226,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                     Navigator.pop(dialogContext, {
                       'anio': int.parse(yearController.text.trim()),
                       'institucion': institutionController.text.trim(),
-                      'grado': selectedGrade,
+                      'groupName': selectedGrade,
                       'interno': false,
                     });
                   },
@@ -251,11 +259,13 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       text: (entry['institucion']?.toString() ?? ''),
     );
     final grades = List<String>.from(availableGrades);
-    if (entry['grado'] != null && !grades.contains(entry['grado'].toString())) {
-      grades.insert(0, entry['grado'].toString());
+    if (entry['groupName'] != null &&
+        !grades.contains(entry['groupName'].toString())) {
+      grades.insert(0, entry['groupName'].toString());
     }
     String? selectedGrade =
-        entry['grado']?.toString() ?? (grades.isNotEmpty ? grades.first : null);
+        entry['groupName']?.toString() ??
+        (grades.isNotEmpty ? grades.first : null);
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -340,7 +350,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                     Navigator.pop(dialogContext, {
                       'anio': int.parse(yearController.text.trim()),
                       'institucion': institutionController.text.trim(),
-                      'grado': selectedGrade,
+                      'groupName': selectedGrade,
                       'interno': false,
                     });
                   },
@@ -455,7 +465,10 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
           studentId: selected.id,
         );
       }
-      await _controller.onChildSelected(selected);
+      await _controller.onChildSelected(
+        selected,
+        userProvider: context.read<UserProviderV2>(),
+      );
       if (mounted) setState(() {});
     } catch (_) {
       if (!mounted) return;
@@ -555,6 +568,9 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                         _controllers['servicioTransporteTipo']?.text = '';
                         _values['servicioTransporteTipo'] = '';
                       }
+                      if (fieldName == 'sedeAspirada' && v != null) {
+                        _controller.selectCampus(v);
+                      }
                       setState(() {});
                     },
                   ),
@@ -626,6 +642,7 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     bool matricularAhora = false,
     bool promptPrint = false,
   }) async {
+    if (_submitting) return;
     final mode = _resolveMode();
     final isAdmin = mode == EnrollmentEntryMode.admin;
     final isBlocked = !isAdmin && _controller.blockedByExistingEnrollment;
@@ -663,20 +680,24 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
     }
     final userProvider = context.read<UserProviderV2>();
 
+    final effectiveEnrollmentId =
+        widget.enrollmentId ?? _controller.activeEnrollmentId;
+    setState(() => _submitting = true);
     final SubmitResult result = await _controller.submit(
       isAdmin: isAdmin,
       isPublicLink: mode == EnrollmentEntryMode.publico,
       matricularAhora: matricularAhora,
-      enrollmentId: widget.enrollmentId,
+      enrollmentId: effectiveEnrollmentId,
       token: widget.token,
       currentEstadoExt: _currentEstado,
       userProvider: userProvider,
     );
+    if (mounted) setState(() => _submitting = false);
 
     await EnrollmentSubmitHandler.handle(
       context,
       result: result,
-      isEditing: widget.enrollmentId != null,
+      isEditing: effectiveEnrollmentId != null,
       controller: _controller,
     );
 
@@ -920,6 +941,31 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
+                            if ((context
+                                        .read<UserProviderV2>()
+                                        .user
+                                        ?.isSuperadmin ??
+                                    false) ||
+                                (mode == EnrollmentEntryMode.publico &&
+                                    _controller.institutionOptions.length >
+                                        1)) ...[
+                              EnrollmentScopeSelector(
+                                institutions: _controller.institutionOptions,
+                                campuses: _controller.sedes,
+                                institutionId:
+                                    _controller.selectedInstitutionId,
+                                campusId: _controller.selectedCampusId,
+                                onInstitutionChanged: (value) {
+                                  _controller.selectInstitution(value);
+                                  setState(() {});
+                                },
+                                onCampusChanged: (value) {
+                                  _controller.selectCampus(value);
+                                  setState(() {});
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             if (isBlocked)
                               Container(
                                 width: double.infinity,
@@ -936,7 +982,9 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  'Este estudiante ya tiene una matrícula registrada para el año activo.',
+                                  'Este estudiante ya tiene una matrícula para el año activo '
+                                  'en estado "${_controller.activeEnrollmentStatus ?? 'registrada'}". '
+                                  'No se puede crear una segunda solicitud.',
                                   style: TextStyle(
                                     color: AppPalette.primary,
                                     fontWeight: FontWeight.w600,
@@ -944,6 +992,28 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                                 ),
                               ),
                             if (isBlocked) const SizedBox(height: 12),
+                            if (!isAdmin &&
+                                _controller.activeEnrollmentStatus ==
+                                    'correccion_solicitada') ...[
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.info.withValues(alpha: .08),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppPalette.info.withValues(
+                                      alpha: .35,
+                                    ),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'El colegio solicitó correcciones. Revisa el formulario y usa "Enviar correcciones" para devolverlo a revisión.',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
                             if (_childOptions.isNotEmpty)
                               EnrollmentChildSelector(
                                 options: _childOptions,
@@ -1028,7 +1098,8 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
                             if (!_readOnlyForm)
                               EnrollmentFormActions(
                                 isAdmin: isAdmin,
-                                disabled: requireDocStep || isBlocked,
+                                disabled:
+                                    requireDocStep || isBlocked || _submitting,
                                 currentEstado: _currentEstado,
                                 onGuardarRevision: () =>
                                     _onSubmit(promptPrint: true),

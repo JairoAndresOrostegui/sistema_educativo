@@ -616,12 +616,200 @@ function enrollmentGroupId(data) {
   return (data.groupId || "").toString().trim();
 }
 
-/** @param {Object} data Datos. @param {Object} group Grupo. @return {Object} */
-function normalizedEnrollmentData(data, group) {
-  const clean = {...data};
+const ENROLLMENT_DATA_FIELDS = new Set([
+  "anioInscripcion", "fechaInscripcion", "nombresAlumno",
+  "apellidosAlumno", "nombresApellidosAlumno", "lugarNacimiento",
+  "fechaNacimiento", "edad", "tipoSangre", "rh", "tipoIdentidad",
+  "numeroIdentidad", "direccionAlumno", "telefonoAlumno", "epsEstudiante",
+  "nombrePadre", "cedulaPadre", "emailPadre", "celularPadre",
+  "lugarTrabajoPadre", "ocupacionPadre", "cargoPadre", "nombreMadre",
+  "cedulaMadre", "emailMadre", "celularMadre", "lugarTrabajoMadre",
+  "ocupacionMadre", "cargoMadre", "tieneAcudienteDiferente",
+  "acudientePrincipal", "nombreAcudiente", "cedulaAcudiente",
+  "emailAcudiente", "celularAcudiente", "lugarTrabajoAcudiente",
+  "ocupacionAcudiente", "cargoAcudiente", "facturaElectronica",
+  "sedeAspirada", "groupId", "groupName", "nivelesCursadosInstitucion",
+  "servicioLonchera", "servicioAlmuerzo", "servicioTransporte",
+  "servicioTransporteTipo", "observacionesPadres", "fueReferido",
+  "nombreReferido", "nombrePadresReferentes", "telefonoReferentes",
+  "celularReferentes", "institucion",
+]);
+
+const REQUIRED_ENROLLMENT_FIELDS = [
+  "nombresAlumno", "apellidosAlumno", "lugarNacimiento",
+  "fechaNacimiento", "tipoSangre", "rh", "tipoIdentidad",
+  "numeroIdentidad", "direccionAlumno", "epsEstudiante", "nombrePadre",
+  "cedulaPadre", "emailPadre", "celularPadre", "nombreMadre",
+  "cedulaMadre", "emailMadre", "celularMadre", "sedeAspirada", "groupId",
+];
+
+/** @param {*} value Valor booleano. @return {boolean} Booleano normalizado. */
+function enrollmentBoolean(value) {
+  return value === true || value?.toString().toLowerCase() === "true";
+}
+
+/**
+ * Valida y normaliza el formulario, sin aceptar campos de esquemas antiguos.
+ * @param {Object} input Datos recibidos.
+ * @param {Object} group Grupo validado.
+ * @param {number} year Ano lectivo.
+ * @param {string} institution Institucion.
+ * @param {string} campus Sede.
+ * @return {Object} Datos confiables.
+ */
+function validatedEnrollmentData(input, group, year, institution, campus) {
+  if (!input || typeof input !== "object" || Array.isArray(input) ||
+      JSON.stringify(input).length > 100000) {
+    throw new HttpsError("invalid-argument", "Formulario no valido.");
+  }
+  const forbidden = ["grade", "grado", "gradoAspirado"];
+  if (forbidden.some((field) => Object.hasOwn(input, field))) {
+    throw new HttpsError(
+        "invalid-argument", "El formulario usa campos academicos antiguos.",
+    );
+  }
+  const unknown = Object.keys(input)
+      .filter((field) => !ENROLLMENT_DATA_FIELDS.has(field));
+  if (unknown.length) {
+    throw new HttpsError(
+        "invalid-argument", `El formulario contiene campos no permitidos: ` +
+        unknown.slice(0, 5).join(", "),
+    );
+  }
+
+  const clean = {};
+  for (const field of ENROLLMENT_DATA_FIELDS) {
+    if (!Object.hasOwn(input, field) || field === "groupName" ||
+        field === "nivelesCursadosInstitucion") continue;
+    const value = input[field];
+    if (value == null) {
+      clean[field] = "";
+      continue;
+    }
+    if (!["string", "number", "boolean"].includes(typeof value)) {
+      throw new HttpsError(
+          "invalid-argument", `El campo ${field} no es valido.`,
+      );
+    }
+    const text = value.toString().trim();
+    const maxLength = field === "observacionesPadres" ? 2000 : 500;
+    if (text.length > maxLength) {
+      throw new HttpsError(
+          "invalid-argument", `El campo ${field} es demasiado largo.`,
+      );
+    }
+    clean[field] = text;
+  }
+
+  for (const field of REQUIRED_ENROLLMENT_FIELDS) {
+    if (!clean[field]) {
+      throw new HttpsError(
+          "invalid-argument", `El campo ${field} es obligatorio.`,
+      );
+    }
+  }
+  const emailFields = ["emailPadre", "emailMadre"];
+  if (enrollmentBoolean(clean.tieneAcudienteDiferente)) {
+    for (const field of [
+      "nombreAcudiente", "cedulaAcudiente", "emailAcudiente",
+      "celularAcudiente",
+    ]) {
+      if (!clean[field]) {
+        throw new HttpsError(
+            "invalid-argument", `El campo ${field} es obligatorio.`,
+        );
+      }
+    }
+    emailFields.push("emailAcudiente");
+    if (clean.cedulaAcudiente === clean.cedulaPadre ||
+        clean.cedulaAcudiente === clean.cedulaMadre) {
+      throw new HttpsError(
+          "invalid-argument",
+          "El documento del acudiente debe ser diferente al de los padres.",
+      );
+    }
+  } else if (!new Set(["padre", "madre"]).has(clean.acudientePrincipal)) {
+    throw new HttpsError(
+        "invalid-argument", "Selecciona el acudiente principal.",
+    );
+  }
+  for (const field of emailFields) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean[field] || "")) {
+      throw new HttpsError(
+          "invalid-argument", `El campo ${field} no es un correo valido.`,
+      );
+    }
+  }
+  if (enrollmentBoolean(clean.servicioTransporte) &&
+      !new Set(["medio_tiempo", "tiempo_completo"])
+          .has(clean.servicioTransporteTipo)) {
+    throw new HttpsError(
+        "invalid-argument", "Selecciona el tipo de transporte.",
+    );
+  }
+  const birthDate = new Date(`${clean.fechaNacimiento}T00:00:00Z`);
+  const now = new Date();
+  if (Number.isNaN(birthDate.getTime()) || birthDate > now) {
+    throw new HttpsError(
+        "invalid-argument", "La fecha de nacimiento no es valida.",
+    );
+  }
+  let age = now.getUTCFullYear() - birthDate.getUTCFullYear();
+  const birthday = new Date(Date.UTC(
+      now.getUTCFullYear(), birthDate.getUTCMonth(), birthDate.getUTCDate(),
+  ));
+  if (birthday > now) age -= 1;
+
+  const history = Array.isArray(input.nivelesCursadosInstitucion) ?
+    input.nivelesCursadosInstitucion : [];
+  if (history.length > 30) {
+    throw new HttpsError(
+        "invalid-argument", "El historial academico es demasiado largo.",
+    );
+  }
+  clean.nivelesCursadosInstitucion = history
+      .filter((item) => item && typeof item === "object" &&
+        item.interno !== true)
+      .map((item) => {
+        const historyYear = Number(item.anio);
+        if (!Number.isInteger(historyYear) || historyYear < 1990 ||
+            historyYear >= year) {
+          throw new HttpsError(
+              "invalid-argument", "El ano del historial no es valido.",
+          );
+        }
+        return {
+          anio: historyYear,
+          institucion: requiredString(
+              item.institucion, "institucion anterior", 200,
+          ),
+          groupName: requiredString(
+              item.groupName, "grupo academico anterior", 100,
+          ),
+          interno: false,
+        };
+      });
+  clean.anioInscripcion = year.toString();
+  clean.fechaInscripcion = new Date().toISOString();
+  clean.institucion = institution;
+  clean.sedeAspirada = campus;
   clean.groupId = group.id;
   clean.groupName = group.name;
+  clean.edad = age.toString();
+  clean.numeroIdentidad = clean.numeroIdentidad.trim();
+  clean.nombresApellidosAlumno =
+    `${clean.nombresAlumno} ${clean.apellidosAlumno}`.trim();
   return clean;
+}
+
+/** @param {Object} student Estudiante. @param {string} document Documento. */
+function requireMatchingEnrollmentDocument(student, document) {
+  if ((student.document || "").toString().trim() !== document.trim()) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El documento del formulario no corresponde al estudiante vinculado.",
+    );
+  }
 }
 
 /**
@@ -1754,6 +1942,9 @@ exports.crearMatricula = onCall(async (request) => {
     institution,
     campus,
   });
+  const cleanData = validatedEnrollmentData(
+      data, group, year, institution, campus,
+  );
 
   const caller = authenticatedCaller;
   let createdByRole = "publico";
@@ -1763,21 +1954,39 @@ exports.crearMatricula = onCall(async (request) => {
   if (request.auth?.uid) {
     createdByUserId = caller.uid;
     if (caller.role === "Familiar") {
-      createdByRole = "padre";
-      if (!Array.isArray(caller.studentIds) ||
-          !caller.studentIds.includes(linkedStudentId)) {
+      const permissions = Array.isArray(caller.permissions) ?
+        caller.permissions : [];
+      if (!permissions.includes("matricula.ver")) {
         throw new HttpsError(
-            "permission-denied",
-            "Solo puedes matricular estudiantes vinculados a tu familia.",
+            "permission-denied", "No tienes habilitado el modulo Matriculas.",
         );
       }
-      await requireLinkedStudent(linkedStudentId, institution, campus);
+      createdByRole = "padre";
+      if (!Array.isArray(caller.studentIds) ||
+          !caller.studentIds.includes(linkedStudentId) ||
+          caller.activeStudentId !== linkedStudentId) {
+        throw new HttpsError(
+            "permission-denied",
+            "Selecciona un estudiante activo vinculado a tu familia.",
+        );
+      }
+      const student = await requireLinkedStudent(
+          linkedStudentId, institution, campus,
+      );
+      requireMatchingEnrollmentDocument(student, cleanData.numeroIdentidad);
     } else if (caller.role === "Administrador") {
       createdByRole = "admin";
       estado = input.matricularAhora === true ?
         "matriculado" : "pendiente_revision";
-      if (estado === "matriculado") {
-        await requireLinkedStudent(linkedStudentId, institution, campus);
+      if (linkedStudentId != null) {
+        const student = await requireLinkedStudent(
+            linkedStudentId, institution, campus,
+        );
+        requireMatchingEnrollmentDocument(student, cleanData.numeroIdentidad);
+      } else if (estado === "matriculado") {
+        throw new HttpsError(
+            "invalid-argument", "Vincula un estudiante antes de matricular.",
+        );
       }
     } else {
       throw new HttpsError(
@@ -1814,7 +2023,8 @@ exports.crearMatricula = onCall(async (request) => {
   }
 
   const duplicate = await db.collection("enrollments")
-      .where("data.numeroIdentidad", "==", document)
+      .where("institution", "==", institution)
+      .where("data.numeroIdentidad", "==", cleanData.numeroIdentidad)
       .where("anioMatricula", "==", year).limit(1).get();
   if (!duplicate.empty) {
     throw new HttpsError(
@@ -1824,7 +2034,8 @@ exports.crearMatricula = onCall(async (request) => {
   }
 
   const enrollmentId = crypto.createHash("sha256")
-      .update(`${year}:${document.toLowerCase()}`).digest("hex");
+      .update(`${institution}:${year}:` +
+        cleanData.numeroIdentidad.toLowerCase()).digest("hex");
   const enrollmentRef = db.collection("enrollments").doc(enrollmentId);
   const enrollment = {
     id: enrollmentRef.id,
@@ -1838,9 +2049,7 @@ exports.crearMatricula = onCall(async (request) => {
     anioMatricula: year,
     institution,
     campus,
-    data: normalizedEnrollmentData(
-        {...data, numeroIdentidad: document}, group,
-    ),
+    data: cleanData,
     fechaDiligenciamiento: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -1897,6 +2106,12 @@ exports.actualizarMatricula = onCall(async (request) => {
           "invalid-argument", "La observacion docente es obligatoria.",
       );
     }
+    if (!["prematriculado", "pendiente_revision",
+      "correccion_solicitada"].includes(current.estado)) {
+      throw new HttpsError(
+          "failed-precondition", "Este estado no admite observaciones.",
+      );
+    }
     changes.teacherObservation = observation;
     changes.teacherObservationBy = caller.uid;
     changes.teacherObservationAt = FieldValue.serverTimestamp();
@@ -1909,10 +2124,14 @@ exports.actualizarMatricula = onCall(async (request) => {
       nextStatus = "correccion_solicitada";
     }
   } else if (caller.role === "Familiar") {
+    const permissions = Array.isArray(caller.permissions) ?
+      caller.permissions : [];
     const owns = current.createdByUserId === caller.uid ||
       (Array.isArray(caller.studentIds) &&
        caller.studentIds.includes(current.vinculaUsuarioId));
-    if (!owns || action !== "resubmit" ||
+    if (!permissions.includes("matricula.ver") || !owns ||
+        caller.activeStudentId !== current.vinculaUsuarioId ||
+        action !== "resubmit" ||
         current.estado !== "correccion_solicitada") {
       throw new HttpsError(
           "permission-denied", "No puedes corregir esta matricula.",
@@ -1929,26 +2148,32 @@ exports.actualizarMatricula = onCall(async (request) => {
           "failed-precondition", "No puedes cambiar el documento.",
       );
     }
+    const linked = await requireLinkedStudent(
+        current.vinculaUsuarioId, current.institution, current.campus,
+    );
+    requireMatchingEnrollmentDocument(linked, current.data.numeroIdentidad);
     const correctedGroup = await requireAcademicGroup({
       groupId: data.groupId,
       institution: current.institution,
       campus: current.campus,
     });
-    changes.data = normalizedEnrollmentData({
+    changes.data = validatedEnrollmentData({
       ...data,
       numeroIdentidad: current.data.numeroIdentidad,
-    }, correctedGroup);
+    }, correctedGroup, current.anioMatricula,
+    current.institution, current.campus);
     groupId = correctedGroup.id;
     groupName = correctedGroup.name;
     nextStatus = "pendiente_revision";
   } else if (caller.role === "Administrador") {
     requireEnrollmentAction(caller, "editar");
     const requestedLinkedStudent = request.data?.vinculaUsuarioId;
+    let linkedStudent = null;
     if (requestedLinkedStudent != null) {
-      const linked = await requireLinkedStudent(
+      linkedStudent = await requireLinkedStudent(
           requestedLinkedStudent, current.institution, current.campus,
       );
-      changes.vinculaUsuarioId = linked.uid;
+      changes.vinculaUsuarioId = linkedStudent.uid;
     }
     const transitions = {
       save_review: [
@@ -1963,6 +2188,10 @@ exports.actualizarMatricula = onCall(async (request) => {
       reject: [
         ["prematriculado", "rechazado"],
         ["pendiente_revision", "rechazado"],
+      ],
+      request_correction: [
+        ["prematriculado", "correccion_solicitada"],
+        ["pendiente_revision", "correccion_solicitada"],
       ],
       withdraw: [["matriculado", "desmatriculado"]],
     };
@@ -1990,6 +2219,7 @@ exports.actualizarMatricula = onCall(async (request) => {
       });
       if (submittedDocument !== current.data.numeroIdentidad) {
         const duplicate = await db.collection("enrollments")
+            .where("institution", "==", current.institution)
             .where("data.numeroIdentidad", "==", submittedDocument)
             .where("anioMatricula", "==", current.anioMatricula)
             .limit(2).get();
@@ -2000,27 +2230,39 @@ exports.actualizarMatricula = onCall(async (request) => {
           );
         }
       }
-      changes.data = normalizedEnrollmentData({
+      changes.data = validatedEnrollmentData({
         ...submittedData,
         numeroIdentidad: submittedDocument,
-      }, submittedGroup);
+      }, submittedGroup, current.anioMatricula,
+      current.institution, current.campus);
       groupId = submittedGroup.id;
       groupName = submittedGroup.name;
     }
-    if (action === "reject") {
+    const resultingDocument =
+      (changes.data?.numeroIdentidad || current.data.numeroIdentidad)
+          .toString();
+    if (linkedStudent) {
+      requireMatchingEnrollmentDocument(linkedStudent, resultingDocument);
+    }
+    if (["reject", "request_correction"].includes(action)) {
       if (!observation) {
         throw new HttpsError(
-            "invalid-argument", "El motivo de rechazo es obligatorio.",
+            "invalid-argument", "La observacion es obligatoria.",
         );
       }
-      changes.rechazoMotivo = observation;
+      if (action === "reject") changes.rechazoMotivo = observation;
+      if (action === "request_correction") {
+        changes.correctionRequest = observation;
+        changes.correctionRequestedAt = FieldValue.serverTimestamp();
+      }
     }
     if (action === "approve") {
-      await requireLinkedStudent(
+      const approvedStudent = await requireLinkedStudent(
           changes.vinculaUsuarioId || current.vinculaUsuarioId,
           current.institution,
           current.campus,
       );
+      requireMatchingEnrollmentDocument(approvedStudent, resultingDocument);
       changes.fechaMatricula = FieldValue.serverTimestamp();
     }
     changes.revisadoPor = caller.uid;
@@ -2031,26 +2273,122 @@ exports.actualizarMatricula = onCall(async (request) => {
   }
 
   changes.estado = nextStatus;
-  const batch = db.batch();
-  batch.update(ref, changes);
-  batch.create(db.collection("enrollment_history").doc(), {
-    enrollmentId: id,
-    action,
-    fromStatus: current.estado,
-    toStatus: nextStatus,
-    observation: observation || null,
-    performedBy: caller.uid,
-    performedByRole: caller.role,
-    institution: current.institution,
-    campus: current.campus,
-    groupId,
-    groupName,
-    createdAt: FieldValue.serverTimestamp(),
+  const historyRef = db.collection("enrollment_history").doc();
+  await db.runTransaction(async (transaction) => {
+    const latest = await transaction.get(ref);
+    if (!latest.exists || latest.data().estado !== current.estado) {
+      throw new HttpsError(
+          "failed-precondition",
+          "La matricula cambio mientras la editabas. Vuelve a cargarla.",
+      );
+    }
+    transaction.update(ref, changes);
+    transaction.create(historyRef, {
+      enrollmentId: id,
+      action,
+      fromStatus: current.estado,
+      toStatus: nextStatus,
+      observation: observation || null,
+      performedBy: caller.uid,
+      performedByRole: caller.role,
+      institution: current.institution,
+      campus: current.campus,
+      groupId,
+      groupName,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   });
-  await batch.commit();
   await notifyEnrollment({...current, ...changes, id, estado: nextStatus},
       action === "resubmit" ? "resubmitted" : "updated");
   return {success: true, estado: nextStatus};
+});
+
+exports.consultarMatriculaEstudiante = onCall(async (request) => {
+  const caller = await getCaller(request);
+  const year = Number(request.data?.anioMatricula);
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new HttpsError("invalid-argument", "Ano de matricula no valido.");
+  }
+  let institution = caller.institution;
+  let campus = caller.campus;
+  let document;
+  if (caller.role === "Familiar") {
+    const permissions = Array.isArray(caller.permissions) ?
+      caller.permissions : [];
+    const studentId = requiredString(
+        request.data?.studentId, "estudiante", 128,
+    );
+    if (!permissions.includes("matricula.ver") ||
+        !Array.isArray(caller.studentIds) ||
+        !caller.studentIds.includes(studentId) ||
+        caller.activeStudentId !== studentId) {
+      throw new HttpsError(
+          "permission-denied", "El estudiante no es el hijo activo.",
+      );
+    }
+    const student = await requireLinkedStudent(
+        studentId, institution, campus,
+    );
+    document = requiredString(student.document, "documento", 40);
+  } else if (caller.role === "Administrador") {
+    const permissions = Array.isArray(caller.permissions) ?
+      caller.permissions : [];
+    if (caller.isSuperadmin !== true &&
+        !permissions.includes("matricula.ver") &&
+        !permissions.includes("matricula.editar")) {
+      throw new HttpsError(
+          "permission-denied", "No tienes acceso a Matriculas.",
+      );
+    }
+    institution = caller.isSuperadmin === true ?
+      requiredString(request.data?.institution, "institucion", 120) :
+      caller.institution;
+    campus = caller.isSuperadmin === true ?
+      requiredString(request.data?.campus, "sede", 120) : caller.campus;
+    await validateInstitutionCampus({institution, campus});
+    document = requiredString(request.data?.document, "documento", 40);
+  } else {
+    throw new HttpsError(
+        "permission-denied", "Tu rol no puede consultar esta matricula.",
+    );
+  }
+
+  const currentSnapshot = await db.collection("enrollments")
+      .where("institution", "==", institution)
+      .where("data.numeroIdentidad", "==", document)
+      .where("anioMatricula", "==", year).limit(1).get();
+  const previousSnapshot = await db.collection("enrollments")
+      .where("institution", "==", institution)
+      .where("data.numeroIdentidad", "==", document)
+      .where("anioMatricula", "<", year)
+      .orderBy("anioMatricula").get();
+  const previous = previousSnapshot.docs
+      .filter((item) => ["matriculado", "desmatriculado"]
+          .includes(item.data().estado))
+      .map((item) => ({
+        anioMatricula: item.data().anioMatricula,
+        institution: item.data().institution,
+        groupId: enrollmentGroupId(item.data().data || {}),
+        groupName: item.data().data?.groupName || "",
+        estado: item.data().estado,
+      }));
+  if (currentSnapshot.empty) {
+    return {exists: false, enrollment: null, previous};
+  }
+  const item = currentSnapshot.docs[0];
+  const enrollment = item.data();
+  return {
+    exists: true,
+    enrollment: {
+      id: item.id,
+      estado: enrollment.estado,
+      data: enrollment.data || {},
+      vinculaUsuarioId: enrollment.vinculaUsuarioId || null,
+      anioMatricula: enrollment.anioMatricula,
+      updatedAt: enrollment.updatedAt || null,
+    },
+    previous,
+  };
 });
 
 exports.crearAutorizacion = onCall(async (request) => {

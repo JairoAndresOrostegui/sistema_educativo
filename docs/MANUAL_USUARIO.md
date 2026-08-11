@@ -53,7 +53,11 @@ Un grupo con información institucional vinculada no se elimina. Primero se reas
 
 La matrícula pública crea una prematrícula; el personal autorizado revisa y cambia su estado. Familiar selecciona el hijo correspondiente. Docentes solo consultan o intervienen cuando poseen el permiso y el grupo apropiado. Los administradores trabajan en su sede y el superadministrador puede cambiar de sede.
 
-El sistema valida duplicidad por documento/año y conserva historial de cambios. El grupo aspirado se selecciona desde los grupos activos de la sede.
+El sistema valida duplicidad por institución, documento y año, y conserva el historial de cada cambio. El grupo aspirado se selecciona exclusivamente desde los grupos activos de la sede elegida. Un administrador normal no puede cambiar de institución ni sede; el superadministrador dispone del selector de alcance.
+
+Cuando la solicitud pertenece a una familia, el sistema comprueba en backend que el estudiante esté activo, sea el hijo seleccionado y que su documento coincida con la matrícula. Si el colegio solicita una corrección, el familiar puede abrir esa misma solicitud, ajustar los datos y enviarla nuevamente; no se crea un duplicado. Aprobar, rechazar, retirar o solicitar correcciones exige confirmación y queda registrado con actor, fecha, estado y observación.
+
+El administrador puede consultar el historial desde la lista. Al aprobar, puede generar el PDF completo con todas las secciones del formulario. Las decisiones simultáneas se serializan: si otra persona ya cambió el estado, la segunda operación se detiene sin sobrescribir el resultado.
 
 ## Autorizaciones
 

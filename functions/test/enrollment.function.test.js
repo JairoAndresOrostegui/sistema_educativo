@@ -15,7 +15,7 @@ let db;
 const profile = (role, extra = {}) => ({
   firstName: "Usuario",
   lastName: "Prueba",
-  document: "10000000",
+  document: "12345678",
   institutionalEmail: `${role.toLowerCase()}@colegio.test`,
   role,
   status: "activo",
@@ -89,7 +89,26 @@ function enrollmentData(document = "12345678", groupId = "group-5a") {
   return {
     numeroIdentidad: document,
     groupId,
+    sedeAspirada: "campus-1",
+    nombresAlumno: "Estudiante",
+    apellidosAlumno: "Prueba",
     nombresApellidosAlumno: "Estudiante Prueba",
+    lugarNacimiento: "Bucaramanga",
+    fechaNacimiento: "2015-05-10",
+    tipoSangre: "O",
+    rh: "+",
+    tipoIdentidad: "TI",
+    direccionAlumno: "Calle 1",
+    epsEstudiante: "Sura",
+    nombrePadre: "Padre Prueba",
+    cedulaPadre: "90000001",
+    emailPadre: "padre@example.com",
+    celularPadre: "3000000001",
+    nombreMadre: "Madre Prueba",
+    cedulaMadre: "90000002",
+    emailMadre: "madre@example.com",
+    celularMadre: "3000000002",
+    acudientePrincipal: "madre",
   };
 }
 
@@ -205,6 +224,8 @@ describe("matriculas seguras", () => {
     await seedUser("student", "Estudiante");
     const familyToken = await signIn(await seedUser("family", "Familiar", {
       studentIds: ["student"],
+      activeStudentId: "student",
+      permissions: ["matricula.ver"],
     }));
     const response = await callFunction(
         "crearMatricula",
@@ -332,6 +353,8 @@ describe("matriculas seguras", () => {
     await seedUser("student", "Estudiante");
     const familyToken = await signIn(await seedUser("family", "Familiar", {
       studentIds: ["student"],
+      activeStudentId: "student",
+      permissions: ["matricula.ver"],
     }));
     const created = await callFunction("crearMatricula", createPayload({
       vinculaUsuarioId: "student",
@@ -358,5 +381,165 @@ describe("matriculas seguras", () => {
       data: {...enrollmentData(), nombresApellidosAlumno: "Nombre Corregido"},
     }, familyToken);
     assert.equal(corrected.body.result.estado, "pendiente_revision");
+  });
+
+  it("exige permiso, hijo activo y documento coincidente", async () => {
+    await seedUser("student", "Estudiante");
+    const withoutPermission = await signIn(await seedUser(
+        "family-no-permission", "Familiar", {
+          studentIds: ["student"], activeStudentId: "student",
+        },
+    ));
+    const deniedPermission = await callFunction(
+        "crearMatricula",
+        createPayload({vinculaUsuarioId: "student"}),
+        withoutPermission,
+    );
+    assertError(deniedPermission, "PERMISSION_DENIED");
+
+    const wrongActive = await signIn(await seedUser(
+        "family-wrong-active", "Familiar", {
+          studentIds: ["student"], activeStudentId: "other",
+          permissions: ["matricula.ver"],
+        },
+    ));
+    const deniedActive = await callFunction(
+        "crearMatricula",
+        createPayload({vinculaUsuarioId: "student"}),
+        wrongActive,
+    );
+    assertError(deniedActive, "PERMISSION_DENIED");
+
+    const family = await signIn(await seedUser("family-valid", "Familiar", {
+      studentIds: ["student"], activeStudentId: "student",
+      permissions: ["matricula.ver"],
+    }));
+    const wrongDocument = await callFunction(
+        "crearMatricula",
+        createPayload({
+          vinculaUsuarioId: "student",
+          data: enrollmentData("87654321"),
+        }),
+        family,
+    );
+    assertError(wrongDocument, "FAILED_PRECONDITION");
+  });
+
+  it("rechaza campos antiguos o arbitrarios", async () => {
+    const legacy = await callFunction("crearMatricula", createPayload({
+      data: {...enrollmentData(), grado: "Quinto"},
+    }));
+    assertError(legacy, "INVALID_ARGUMENT");
+    const arbitrary = await callFunction("crearMatricula", createPayload({
+      data: {...enrollmentData("87654321"), isSuperadmin: true},
+    }));
+    assertError(arbitrary, "INVALID_ARGUMENT");
+  });
+
+  it("normaliza el historial academico al modelo de grupos", async () => {
+    const response = await callFunction("crearMatricula", createPayload({
+      data: {
+        ...enrollmentData(),
+        nivelesCursadosInstitucion: [
+          {
+            anio: 2025,
+            institucion: "Colegio anterior",
+            groupName: "Cuarto A",
+            interno: false,
+          },
+          {
+            anio: 2024,
+            institucion: "Dato manipulado",
+            groupName: "Tercero A",
+            interno: true,
+          },
+        ],
+      },
+    }));
+    assert.ok(response.body.result, JSON.stringify(response.body));
+    const saved = (await db.collection("enrollments")
+        .doc(response.body.result.id).get()).data();
+    assert.deepEqual(saved.data.nivelesCursadosInstitucion, [{
+      anio: 2025,
+      institucion: "Colegio anterior",
+      groupName: "Cuarto A",
+      interno: false,
+    }]);
+    assert.equal(
+        Object.hasOwn(saved.data.nivelesCursadosInstitucion[0], "grado"),
+        false,
+    );
+  });
+
+  it("separa la unicidad por institucion", async () => {
+    await db.collection("configuracion_colegios").doc("inst-2").set({
+      institutionId: "inst-2", nombre: "Otro colegio", sedes: ["campus-1"],
+    });
+    await db.collection("academic_groups").doc("group-inst-2").set({
+      institutionId: "inst-2", campusId: "campus-1", level: "Quinto",
+      section: "A", name: "Quinto A", order: 5, active: true,
+    });
+    const first = await callFunction("crearMatricula", createPayload());
+    const second = await callFunction("crearMatricula", {
+      ...createPayload(),
+      institution: "inst-2",
+      data: enrollmentData("12345678", "group-inst-2"),
+    });
+    assert.ok(first.body.result, JSON.stringify(first.body));
+    assert.ok(second.body.result, JSON.stringify(second.body));
+    assert.notEqual(first.body.result.id, second.body.result.id);
+  });
+
+  it("permite al administrador solicitar correccion", async () => {
+    const admin = await signIn(await seedUser("admin", "Administrador", {
+      permissions: ["matricula.editar"],
+    }));
+    const created = await callFunction(
+        "crearMatricula", createPayload(), admin,
+    );
+    const corrected = await callFunction("actualizarMatricula", {
+      id: created.body.result.id,
+      action: "request_correction",
+      observation: "Adjunta la informacion faltante.",
+    }, admin);
+    assert.equal(corrected.body.result.estado, "correccion_solicitada");
+  });
+
+  it("serializa decisiones concurrentes sobre el mismo estado", async () => {
+    await seedUser("student", "Estudiante");
+    const admin = await signIn(await seedUser("admin", "Administrador", {
+      permissions: ["matricula.editar"],
+    }));
+    const created = await callFunction("crearMatricula", createPayload({
+      vinculaUsuarioId: "student",
+    }), admin);
+    const [approve, reject] = await Promise.all([
+      callFunction("actualizarMatricula", {
+        id: created.body.result.id, action: "approve",
+      }, admin),
+      callFunction("actualizarMatricula", {
+        id: created.body.result.id, action: "reject", observation: "No aplica",
+      }, admin),
+    ]);
+    const results = [approve, reject];
+    assert.equal(results.filter((item) => item.body.result).length, 1);
+    assert.equal(results.filter((item) => item.body.error).length, 1);
+    assert.equal((await db.collection("enrollment_history").get()).size, 2);
+  });
+
+  it("consulta de forma segura la matricula del hijo activo", async () => {
+    await seedUser("student", "Estudiante");
+    const family = await signIn(await seedUser("family", "Familiar", {
+      studentIds: ["student"], activeStudentId: "student",
+      permissions: ["matricula.ver"],
+    }));
+    await callFunction("crearMatricula", createPayload({
+      vinculaUsuarioId: "student",
+    }), family);
+    const response = await callFunction("consultarMatriculaEstudiante", {
+      studentId: "student", anioMatricula: 2026,
+    }, family);
+    assert.equal(response.body.result.exists, true);
+    assert.equal(response.body.result.enrollment.estado, "prematriculado");
   });
 });
