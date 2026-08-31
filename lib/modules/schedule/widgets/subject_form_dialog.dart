@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/schedule/subject_model.dart';
@@ -98,6 +97,14 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
       });
       return;
     }
+    final startMinutes = _startTime!.hour * 60 + _startTime!.minute;
+    final endMinutes = _endTime!.hour * 60 + _endTime!.minute;
+    if (endMinutes <= startMinutes) {
+      setState(() {
+        _errorMessage = 'La hora final debe ser posterior a la inicial.';
+      });
+      return;
+    }
 
     setState(() {
       _errorMessage = null;
@@ -159,6 +166,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
     return PopScope(
       canPop: !_submitting,
       child: AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: Text(
           widget.subjectToEdit == null ? 'Crear materia' : 'Editar materia',
         ),
@@ -174,6 +182,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                   children: [
                     TextFormField(
                       controller: _subjectNameController,
+                      maxLength: 120,
                       decoration: const InputDecoration(
                         labelText: 'Nombre de la materia',
                       ),
@@ -186,6 +195,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _selectedTeacherId,
                       decoration: const InputDecoration(labelText: 'Profesor'),
                       items: widget.teachers.map((teacher) {
@@ -193,6 +203,8 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                           value: teacher.id,
                           child: Text(
                             '${teacher.firstName} ${teacher.lastName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         );
                       }).toList(),
@@ -224,6 +236,7 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                       ),
                     ] else ...[
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _selectedDay,
                         decoration: const InputDecoration(
                           labelText: 'Día de la semana',
@@ -250,31 +263,30 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _submitting
-                                ? null
-                                : () => _selectTime(true),
-                            child: Text(
-                              _startTime == null
-                                  ? 'Hora de inicio'
-                                  : _startTime!.format(context),
-                            ),
+                        ElevatedButton.icon(
+                          onPressed: _submitting
+                              ? null
+                              : () => _selectTime(true),
+                          icon: const Icon(Icons.schedule),
+                          label: Text(
+                            _startTime == null
+                                ? 'Hora de inicio'
+                                : _startTime!.format(context),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _submitting
-                                ? null
-                                : () => _selectTime(false),
-                            child: Text(
-                              _endTime == null
-                                  ? 'Hora de fin'
-                                  : _endTime!.format(context),
-                            ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: _submitting
+                              ? null
+                              : () => _selectTime(false),
+                          icon: const Icon(Icons.schedule_outlined),
+                          label: Text(
+                            _endTime == null
+                                ? 'Hora de fin'
+                                : _endTime!.format(context),
                           ),
                         ),
                       ],
@@ -284,7 +296,9 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                         padding: const EdgeInsets.only(top: 16),
                         child: Text(
                           _errorMessage!,
-                          style: TextStyle(color: AppPalette.primary),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
                   ],

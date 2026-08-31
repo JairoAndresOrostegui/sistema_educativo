@@ -2,7 +2,9 @@ import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../../../providers/user_provider_v2.dart';
 import '../services/schedule_history_service.dart';
 import '../export/utils/schedule_export_utils.dart';
 
@@ -20,7 +22,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
   String _grupoContiene = '';
   String _materiaContiene = '';
   String? _dia; // lunes..domingo
-  String? _accion; // create_subject|update_subject|delete_subject
+  String? _accion; // create_subject|edit_subject|delete_subject
   DateTimeRange? _rango;
   bool _filtrosPendientes = false;
 
@@ -52,6 +54,11 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
 
   Future<void> _aplicarFiltros({bool recargar = false}) async {
     setState(() => _cargando = true);
+    final user = context.read<UserProviderV2>().user;
+    if (user == null) {
+      if (mounted) setState(() => _cargando = false);
+      return;
+    }
 
     if (recargar) {
       _cursors
@@ -61,6 +68,8 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
     }
 
     final page = await _service.obtenerHistorialHorarios(
+      institutionId: user.institution,
+      campusId: user.campus,
       groupContains: _grupoContiene.trim().isEmpty
           ? null
           : _grupoContiene.trim(),
@@ -75,6 +84,8 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
     );
 
     final total = await _service.contarTotal(
+      institutionId: user.institution,
+      campusId: user.campus,
       action: _accion,
       day: _dia?.toLowerCase(),
       rango: _rango,
@@ -335,7 +346,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                           child: Text('Crear materia'),
                         ),
                         DropdownMenuItem(
-                          value: 'update_subject',
+                          value: 'edit_subject',
                           child: Text('Editar materia'),
                         ),
                         DropdownMenuItem(

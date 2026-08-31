@@ -43,7 +43,7 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
 
   final ScrollController _webScrollController = ScrollController();
 
-  bool get _isDesktop => MediaQuery.of(context).size.width > 600;
+  bool get _isDesktop => MediaQuery.of(context).size.width >= 1100;
 
   @override
   void initState() {
@@ -61,15 +61,24 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
     setState(() => _loading = true);
     try {
       final user = context.read<UserProviderV2>().user;
-      final assignedGroupId = user?.groupId?.trim() ?? '';
-      final assignedGroupName = user?.groupName?.trim() ?? '';
-      _grades = assignedGroupId.isEmpty ? [] : [assignedGroupId];
-      if (assignedGroupId.isNotEmpty) {
-        _groupLabels[assignedGroupId] = assignedGroupName;
-      }
-
+      if (user == null) return;
+      final contextResult = await _schedule.getTeacherScheduleContext();
+      _grades = contextResult.groups
+          .map((group) => group['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      _groupLabels
+        ..clear()
+        ..addEntries(
+          contextResult.groups.map(
+            (group) => MapEntry(
+              group['id']?.toString() ?? '',
+              group['name']?.toString() ?? '',
+            ),
+          ),
+        );
       _selectedKey = 'My schedule';
-      await _loadSchedulesForSelection(_selectedKey!);
+      _byDay = _schedule.groupByDay(contextResult.subjects);
     } catch (_) {
       // Capturar error.
     }
@@ -245,7 +254,7 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = ['My schedule', ...grades];
     return Semantics(
-      label: 'Seleccionar grado o ver mi horario',
+      label: 'Seleccionar grupo o ver mi horario',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
@@ -263,13 +272,17 @@ class _FilterBar extends StatelessWidget {
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: selected,
-            hint: const Text('Selecciona un grado'),
+            hint: const Text('Selecciona un grupo'),
             isExpanded: true,
             items: items
                 .map(
                   (g) => DropdownMenuItem(
                     value: g,
-                    child: Text(groupLabels[g] ?? g),
+                    child: Text(
+                      g == 'My schedule' ? 'Mis clases' : (groupLabels[g] ?? g),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 )
                 .toList(),

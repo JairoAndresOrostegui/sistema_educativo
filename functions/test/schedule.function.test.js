@@ -262,15 +262,98 @@ describe("horarios seguros", () => {
     const id = created.body.result.id;
     const edited = await callFunction("editarHorario", {
       id,
+      expectedRevision: 1,
       ...schedule({subject: "Ciencias", startMinutes: 600, endMinutes: 660}),
     }, token);
     assert.equal(edited.body.result.success, true);
     assert.equal((await db.collection("subjects").doc(id).get()).data().subject,
         "Ciencias");
-    const removed = await callFunction("eliminarHorario", {id}, token);
+    assert.equal((await db.collection("subjects").doc(id).get())
+        .data().revision, 2);
+    const removed = await callFunction(
+        "eliminarHorario", {id, expectedRevision: 2}, token,
+    );
     assert.equal(removed.body.result.success, true);
     assert.equal((await db.collection("subjects").doc(id).get()).exists, false);
     assert.equal((await db.collection("schedule_history").get()).size, 3);
+  });
+
+  it("rechaza campos arbitrarios y serializa ediciones concurrentes",
+      async () => {
+        const token = await signIn(await seedUser("admin", "Administrador", {
+          permissions: ["horarios.crear", "horarios.editar"],
+        }));
+        assertError(await callFunction("crearHorario", schedule({
+          isSuperadmin: true,
+        }), token), "INVALID_ARGUMENT");
+        const created = await callFunction("crearHorario", schedule(), token);
+        const id = created.body.result.id;
+        const [first, second] = await Promise.all([
+          callFunction("editarHorario", {
+            id, expectedRevision: 1,
+            ...schedule({subject: "Ciencias"}),
+          }, token),
+          callFunction("editarHorario", {
+            id, expectedRevision: 1,
+            ...schedule({subject: "Lenguaje"}),
+          }, token),
+        ]);
+        const responses = [first, second];
+        assert.equal(responses.filter((item) => item.body.result).length, 1);
+        assert.equal(responses.filter((item) =>
+          item.body.error?.status === "ABORTED").length, 1);
+        assert.equal((await db.collection("subjects").doc(id).get())
+            .data().revision, 2);
+      });
+
+  it("consulta por rol y permite al docente todos sus grupos", async () => {
+    const adminToken = await signIn(await seedUser("admin", "Administrador", {
+      permissions: ["horarios.crear"],
+    }));
+    const first = await callFunction("crearHorario", schedule(), adminToken);
+    assert.ok(first.body.result);
+    const second = await callFunction("crearHorario", schedule({
+      teacherId: "teacher-2",
+      startMinutes: 9 * 60,
+      endMinutes: 10 * 60,
+    }), adminToken);
+    assert.ok(second.body.result);
+
+    const teacherToken = await signIn("teacher-1@colegio.test");
+    const own = await callFunction(
+        "consultarHorarios", {mode: "teacher"}, teacherToken,
+    );
+    assert.equal(own.body.result.subjects.length, 1);
+    assert.deepEqual(own.body.result.groups, [
+      {id: "group-5a", name: "Quinto A"},
+    ]);
+    const group = await callFunction("consultarHorarios", {
+      mode: "group", groupId: "group-5a",
+    }, teacherToken);
+    assert.equal(group.body.result.subjects.length, 2);
+    assertError(await callFunction("consultarHorarios", {
+      mode: "group", groupId: "group-6a",
+    }, teacherToken), "PERMISSION_DENIED");
+
+    const studentToken = await signIn(await seedUser(
+        "student", "Estudiante", {permissions: ["horarios.ver"]},
+    ));
+    const student = await callFunction(
+        "consultarHorarios", {mode: "group"}, studentToken,
+    );
+    assert.equal(student.body.result.subjects.length, 2);
+
+    const familyToken = await signIn(await seedUser("family", "Familiar", {
+      studentIds: ["student"], activeStudentId: "student",
+      permissions: ["horarios.ver"],
+    }));
+    const family = await callFunction("consultarHorarios", {
+      mode: "group", studentId: "student",
+    }, familyToken);
+    assert.equal(family.body.result.subjects.length, 2);
+    assertError(await callFunction("consultarHorarios", {
+      mode: "group", studentId: "teacher-1",
+    }, familyToken), "PERMISSION_DENIED");
   });
 
   it("solo permite seleccionar un hijo activo y realmente vinculado",

@@ -2,7 +2,11 @@ const {
   applicationDefault,
   initializeApp,
 } = require("firebase-admin/app");
-const {FieldValue, getFirestore} = require("firebase-admin/firestore");
+const {
+  FieldValue,
+  Timestamp,
+  getFirestore,
+} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const fs = require("fs");
 const os = require("os");
@@ -54,6 +58,13 @@ const db = getFirestore();
 const bucket = getStorage().bucket();
 const apply = process.argv.includes("--apply");
 const verify = process.argv.includes("--verify");
+const argumentValue = (name) => {
+  const prefix = `--${name}=`;
+  return process.argv.find((argument) => argument.startsWith(prefix))
+      ?.slice(prefix.length);
+};
+const repairSubjectId = argumentValue("repair-subject");
+const repairEndMinutesValue = argumentValue("end-minutes");
 const fileModuleLimitBytes = 1024 * 1024 * 1024;
 const enrollmentDataFields = new Set([
   "anioInscripcion", "fechaInscripcion", "nombresAlumno",
@@ -87,6 +98,74 @@ const slug = (value) => value.toString().normalize("NFD")
 
 const groupIdFor = (institution, campus, level) =>
   `${slug(institution)}__${slug(campus)}__${slug(level)}__a`;
+
+function scheduleMinutes(data, field, timestampField) {
+  if (Number.isInteger(data[field])) return data[field];
+  const date = data[timestampField]?.toDate?.();
+  if (!(date instanceof Date)) return -1;
+  const bogotaHour = (date.getUTCHours() + 19) % 24;
+  return bogotaHour * 60 + date.getUTCMinutes();
+}
+
+async function repairScheduleEndTime() {
+  if (!apply) {
+    throw new Error("La reparacion puntual requiere --apply.");
+  }
+  const endMinutes = Number(repairEndMinutesValue);
+  if (!repairSubjectId || !Number.isInteger(endMinutes) ||
+      endMinutes < 1 || endMinutes >= 1440) {
+    throw new Error("Indique --repair-subject y --end-minutes validos.");
+  }
+
+  const subjectRef = db.collection("subjects").doc(repairSubjectId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(subjectRef);
+    if (!snapshot.exists) throw new Error("El horario indicado no existe.");
+    const before = snapshot.data();
+    const startMinutes = scheduleMinutes(
+        before, "startMinutes", "startTime",
+    );
+    if (startMinutes < 0 || endMinutes <= startMinutes) {
+      throw new Error("La hora final debe ser posterior a la inicial.");
+    }
+
+    const revision = Number.isInteger(before.revision) ?
+      before.revision + 1 : 2;
+    const patch = {
+      endMinutes,
+      endTime: Timestamp.fromMillis(
+          Date.UTC(2000, 0, 1) + (endMinutes + 300) * 60000,
+      ),
+      revision,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: "migration:schedule_time_repair",
+    };
+    const backupRef = db.collection("migration_backups").doc();
+    const historyRef = db.collection("schedule_history").doc();
+    transaction.create(backupRef, {
+      migration: "schedule_time_repair",
+      sourcePath: subjectRef.path,
+      sourceData: before,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.update(subjectRef, patch);
+    transaction.create(historyRef, {
+      action: "repair_subject_time",
+      subjectId: subjectRef.id,
+      institutionId: before.institutionId,
+      campusId: before.campusId,
+      groupId: before.groupId,
+      before,
+      after: {...before, ...patch},
+      performedBy: "migration:schedule_time_repair",
+      performedByRole: "Sistema",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  console.log(
+      `Horario ${repairSubjectId} reparado: fin ${endMinutes} minutos.`,
+  );
+}
 
 async function commitOperations(operations) {
   if (!apply) return;
@@ -196,6 +275,73 @@ async function verifyMigration() {
     }
   }
 
+  const subjects = await db.collection("subjects").get();
+  const usersSnapshot = await db.collection("users").get();
+  const usersById = new Map(usersSnapshot.docs.map((item) => [
+    item.id, item.data(),
+  ]));
+  const scheduleRows = [];
+  for (const document of subjects.docs) {
+    const data = document.data();
+    if (!Number.isInteger(data.revision) || data.revision < 1) {
+      violations.push(`subjects/${document.id}: revision ausente o invalida`);
+    }
+    const start = scheduleMinutes(data, "startMinutes", "startTime");
+    const end = scheduleMinutes(data, "endMinutes", "endTime");
+    if (!new Set(["lunes", "martes", "miercoles", "jueves", "viernes"])
+        .has(data.day) || start < 0 || end <= start || end >= 24 * 60) {
+      violations.push(
+          `subjects/${document.id}: franja o dia invalido ` +
+          `(${data.subject || "sin materia"}, ` +
+          `${data.groupName || "sin grupo"}, ` +
+          `${data.day}, ${start}-${end}, ` +
+          `${data.startTime?.toDate?.()?.toISOString?.() || "sin inicio"}, ` +
+          `${data.endTime?.toDate?.()?.toISOString?.() || "sin fin"})`,
+      );
+    }
+    const group = groupsSnapshot.docs.find((item) => item.id === data.groupId)
+        ?.data();
+    if (!group || group.institutionId !== data.institutionId ||
+        group.campusId !== data.campusId || group.name !== data.groupName) {
+      violations.push(`subjects/${document.id}: grupo o sede inconsistente`);
+    }
+    const teacher = usersById.get(data.teacherId);
+    const teacherName = `${teacher?.firstName || ""} ` +
+      `${teacher?.lastName || ""}`.trim();
+    const teacherIssues = [
+      !teacher ? "inexistente" : null,
+      teacher && teacher.role !== "Docente" ? `rol=${teacher.role}` : null,
+      teacher && teacher.status !== "activo" ?
+        `estado=${teacher.status}` : null,
+      teacher && teacher.institution !== data.institutionId ?
+        "institucion" : null,
+      teacher && teacher.campus !== data.campusId ? "sede" : null,
+      teacher && teacherName.trim() !== (data.teacherName || "").trim() ?
+        "nombre derivado" : null,
+    ].filter(Boolean);
+    if (teacherIssues.length) {
+      violations.push(
+          `subjects/${document.id}: docente inconsistente ` +
+          `(${teacherIssues.join(", ")})`,
+      );
+    }
+    scheduleRows.push({id: document.id, ...data, start, end});
+  }
+  for (let left = 0; left < scheduleRows.length; left += 1) {
+    for (let right = left + 1; right < scheduleRows.length; right += 1) {
+      const a = scheduleRows[left];
+      const b = scheduleRows[right];
+      if (a.institutionId !== b.institutionId ||
+          a.campusId !== b.campusId || a.day !== b.day ||
+          a.start >= b.end || a.end <= b.start) continue;
+      if (a.groupId === b.groupId || a.teacherId === b.teacherId) {
+        violations.push(
+            `subjects/${a.id} y subjects/${b.id}: cruce de horario`,
+        );
+      }
+    }
+  }
+
   const threads = await db.collection("message_threads").get();
   for (const document of threads.docs) {
     const data = document.data();
@@ -279,6 +425,7 @@ async function verifyMigration() {
     academicGroups: groupsSnapshot.size,
     academicGroupIds: [...groupIds].sort(),
     enrollments: enrollments.size,
+    subjects: subjects.size,
     files: files.size,
     activeFileBytes,
     fileStorageUsageDocuments: usageSnapshot.size,
@@ -293,6 +440,10 @@ async function verifyMigration() {
 }
 
 async function main() {
+  if (repairSubjectId || repairEndMinutesValue) {
+    await repairScheduleEndTime();
+    return;
+  }
   if (verify) {
     await verifyMigration();
     return;
@@ -366,6 +517,41 @@ async function main() {
       return Object.keys(update).length ? update : null;
     });
   }
+
+  await migrateCollection("subjects", async (data) => {
+    const update = {};
+    if (!Number.isInteger(data.revision) || data.revision < 1) {
+      update.revision = 1;
+    }
+    if (!Number.isInteger(data.startMinutes)) {
+      const start = scheduleMinutes(data, "startMinutes", "startTime");
+      if (start >= 0) update.startMinutes = start;
+    }
+    if (!Number.isInteger(data.endMinutes)) {
+      const end = scheduleMinutes(data, "endMinutes", "endTime");
+      if (end >= 0) update.endMinutes = end;
+    }
+    if (data.day === "miércoles") update.day = "miercoles";
+    const [group, teacher] = await Promise.all([
+      db.collection("academic_groups").doc(data.groupId || "_").get(),
+      db.collection("users").doc(data.teacherId || "_").get(),
+    ]);
+    if (group.exists && group.data().institutionId === data.institutionId &&
+        group.data().campusId === data.campusId &&
+        data.groupName !== group.data().name) {
+      update.groupName = group.data().name;
+    }
+    if (teacher.exists && teacher.data().role === "Docente" &&
+        teacher.data().institution === data.institutionId &&
+        teacher.data().campus === data.campusId) {
+      const name = `${teacher.data().firstName || ""} ` +
+        `${teacher.data().lastName || ""}`.trim();
+      if (name.trim() !== (data.teacherName || "").trim()) {
+        update.teacherName = name.trim();
+      }
+    }
+    return Object.keys(update).length ? update : null;
+  });
 
   for (const collection of ["routes", "daily_routes"]) {
     await migrateCollection(collection, (data) => {

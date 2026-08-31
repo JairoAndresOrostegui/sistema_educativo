@@ -158,6 +158,23 @@ describe("Reglas Firestore", () => {
         groupName: "Sexto A",
         day: "lunes",
       });
+      await setDoc(doc(db, "schedule_notification_events/local-event"), {
+        institutionId: "inst-1",
+        campusId: "campus-1",
+        subjectId: "grade-5a",
+      });
+      await setDoc(doc(db, "schedule_history/local-history"), {
+        institutionId: "inst-1",
+        campusId: "campus-1",
+        subjectId: "grade-5a",
+        action: "create_subject",
+      });
+      await setDoc(doc(db, "schedule_history/foreign-history"), {
+        institutionId: "inst-2",
+        campusId: "campus-2",
+        subjectId: "foreign",
+        action: "create_subject",
+      });
       await setDoc(doc(db, "user_logs/local"), {
         institution: "inst-1",
         campus: "campus-1",
@@ -378,6 +395,21 @@ describe("Reglas Firestore", () => {
       teacherId: "teacher-other",
     }));
     await assertFails(deleteDoc(doc(adminDb, "subjects/grade-5a")));
+    await assertSucceeds(getDoc(doc(
+        adminDb, "schedule_notification_events/local-event",
+    )));
+    const noPermissionDb = env.authenticatedContext(
+        "admin-no-enrollment",
+    ).firestore();
+    await assertFails(getDoc(doc(
+        noPermissionDb, "schedule_notification_events/local-event",
+    )));
+    await assertSucceeds(getDocs(query(
+        collection(adminDb, "schedule_history"),
+        where("institutionId", "==", "inst-1"),
+        where("campusId", "==", "campus-1"),
+    )));
+    await assertFails(getDocs(collection(adminDb, "schedule_history")));
   });
 
   it("impide que el cliente falsifique registros de auditoría", async () => {

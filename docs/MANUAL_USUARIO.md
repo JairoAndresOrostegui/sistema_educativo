@@ -67,7 +67,11 @@ Después de finalizar nadie puede editar. Solo el superadministrador puede corre
 
 ## Horarios
 
-Administrador selecciona grupo de su sede y crea asignaturas con docente, día y franja. El sistema evita cruces del mismo docente o grupo. Docente consulta su horario y el de su grupo según permiso. Estudiante consulta el propio; familiar cambia de hijo y ve el horario y grupo elegidos.
+El administrador selecciona un grupo activo de su sede y crea clases indicando materia, docente, día, hora inicial y hora final. Solo el superadministrador puede cambiar de institución o sede. El sistema impide que un grupo o un docente tenga dos clases superpuestas; las franjas contiguas sí son válidas.
+
+El docente dispone de “Mis clases” y de cada grupo donde realmente dicta. En “Mis clases” ve únicamente sus asignaciones; al elegir un grupo ve su horario completo. El estudiante consulta exclusivamente su grupo. El familiar selecciona uno de sus hijos activos y el backend vuelve a validar el vínculo antes de mostrar el horario.
+
+Crear, editar y eliminar genera historial con actor, rol, sede y datos anteriores y posteriores. Si otra persona modificó la clase desde que se abrió el formulario, la operación se detiene y solicita recargar para evitar sobrescribir cambios. El historial administrativo se filtra siempre por institución y sede.
 
 ## Archivos
 

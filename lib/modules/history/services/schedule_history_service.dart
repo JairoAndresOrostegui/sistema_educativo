@@ -17,6 +17,8 @@ class AdminScheduleHistoryService {
   final _db = FirebaseFirestore.instance;
 
   Future<ScheduleHistoryPage> obtenerHistorialHorarios({
+    required String institutionId,
+    required String campusId,
     String? groupContains,
     String? subjectContains,
     String? day,
@@ -25,7 +27,10 @@ class AdminScheduleHistoryService {
     required int limite,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    Query<Map<String, dynamic>> query = _db.collection('schedule_history');
+    Query<Map<String, dynamic>> query = _db
+        .collection('schedule_history')
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId);
     if (action != null && action.isNotEmpty) {
       query = query.where('action', isEqualTo: action);
     }
@@ -82,6 +87,8 @@ class AdminScheduleHistoryService {
   }
 
   Future<int> contarTotal({
+    required String institutionId,
+    required String campusId,
     String? action,
     String? day,
     DateTimeRange? rango,
@@ -89,6 +96,8 @@ class AdminScheduleHistoryService {
     String? subjectContains,
   }) async {
     final page = await obtenerHistorialHorarios(
+      institutionId: institutionId,
+      campusId: campusId,
       groupContains: groupContains,
       subjectContains: subjectContains,
       day: day,

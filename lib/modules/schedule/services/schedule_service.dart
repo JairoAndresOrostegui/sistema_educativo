@@ -15,22 +15,12 @@ class ScheduleService {
     required String groupId,
     required String day,
   }) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('subjects')
-          .where('institutionId', isEqualTo: institutionId)
-          .where('campusId', isEqualTo: campusId)
-          .where('groupId', isEqualTo: groupId)
-          .where('day', isEqualTo: day)
-          .orderBy('startTime')
-          .get();
-
-      return querySnapshot.docs
-          .map((doc) => SubjectModel.fromMap(doc.data(), id: doc.id))
-          .toList();
-    } catch (e) {
-      throw Exception('Error consultando el horario de $day: $e');
-    }
+    final schedules = await getSchedulesForGroup(
+      institutionId: institutionId,
+      campusId: campusId,
+      groupId: groupId,
+    );
+    return schedules[day] ?? const [];
   }
 
   Future<void> createSubject({
@@ -57,6 +47,7 @@ class ScheduleService {
       }
       await _functions.httpsCallable('editarHorario').call({
         'id': newSubject.id,
+        'expectedRevision': oldSubject.revision,
         ..._callableSubject(newSubject),
       });
     } catch (e) {
@@ -74,6 +65,7 @@ class ScheduleService {
       }
       await _functions.httpsCallable('eliminarHorario').call({
         'id': subject.id,
+        'expectedRevision': subject.revision,
       });
     } catch (e) {
       throw Exception('Error deleting subject: $e');
@@ -99,19 +91,16 @@ class ScheduleService {
     required String institutionId,
     required String campusId,
     required String groupId,
+    String? studentId,
   }) async {
-    final Map<String, List<SubjectModel>> allSchedules = {};
-    final days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
-
-    for (var day in days) {
-      allSchedules[day] = await getDaySchedule(
-        institutionId: institutionId,
-        campusId: campusId,
-        groupId: groupId,
-        day: day,
-      );
-    }
-    return allSchedules;
+    final response = await _query({
+      'mode': 'group',
+      'institutionId': institutionId,
+      'campusId': campusId,
+      'groupId': groupId,
+      'studentId': ?studentId,
+    });
+    return groupByDay(response.subjects);
   }
 
   Future<List<userModelv2>> getUsersByIds({
@@ -138,17 +127,53 @@ class ScheduleService {
     required String campusId,
     required String teacherId,
   }) async {
-    final snap = await _firestore
-        .collection('subjects')
-        .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId)
-        .where('teacherId', isEqualTo: teacherId)
-        .get();
+    final response = await _query({
+      'mode': 'teacher',
+      'institutionId': institutionId,
+      'campusId': campusId,
+    });
+    return groupByDay(response.subjects);
+  }
 
-    final all = snap.docs
-        .map((d) => SubjectModel.fromMap(d.data(), id: d.id))
+  Future<ScheduleQueryResult> getTeacherScheduleContext() =>
+      _query(const {'mode': 'teacher'});
+
+  Future<List<userModelv2>> getLinkedChildren() async {
+    final result = await _functions
+        .httpsCallable('obtenerHijosVinculados')
+        .call();
+    final payload = Map<String, dynamic>.from(result.data as Map);
+    return (payload['children'] as List? ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) => userModelv2.fromFirestore(
+            Map<String, dynamic>.from(item),
+            item['id']?.toString() ?? '',
+          ),
+        )
+        .where((child) => child.id.isNotEmpty && child.status == 'activo')
         .toList();
+  }
 
+  Future<ScheduleQueryResult> _query(Map<String, dynamic> input) async {
+    final result = await _functions
+        .httpsCallable('consultarHorarios')
+        .call(input);
+    final payload = Map<String, dynamic>.from(result.data as Map);
+    final subjects = (payload['subjects'] as List? ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) => SubjectModel.fromCallable(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+    final groups = (payload['groups'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    return ScheduleQueryResult(subjects: subjects, groups: groups);
+  }
+
+  Map<String, List<SubjectModel>> groupByDay(List<SubjectModel> all) {
     final Map<String, List<SubjectModel>> byDay = {
       'lunes': [],
       'martes': [],
@@ -183,4 +208,11 @@ class ScheduleService {
       'endMinutes': end.hour * 60 + end.minute,
     };
   }
+}
+
+class ScheduleQueryResult {
+  final List<SubjectModel> subjects;
+  final List<Map<String, dynamic>> groups;
+
+  const ScheduleQueryResult({required this.subjects, required this.groups});
 }

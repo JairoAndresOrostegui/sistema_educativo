@@ -931,6 +931,23 @@ function requireScheduleAction(caller, action) {
   );
 }
 
+/** @param {Object} caller Usuario que consulta horarios. */
+function requireScheduleRead(caller) {
+  if (caller.isSuperadmin === true) return;
+  const permissions = Array.isArray(caller.permissions) ?
+    caller.permissions : [];
+  const allowed = caller.role === "Administrador" ?
+    ["ver", "crear", "editar", "eliminar"].some((action) =>
+      permissions.includes(`horarios.${action}`)) :
+    ["Docente", "Estudiante", "Familiar"].includes(caller.role) &&
+      permissions.includes("horarios.ver");
+  if (!allowed) {
+    throw new HttpsError(
+        "permission-denied", "No tienes permiso para consultar horarios.",
+    );
+  }
+}
+
 /** @param {Object} caller Usuario. @param {string} action Accion. */
 function requireFileAction(caller, action) {
   if (caller.isSuperadmin === true) return;
@@ -1188,6 +1205,17 @@ async function validatedScheduleData(input, institution, campus) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new HttpsError("invalid-argument", "Horario no valido.");
   }
+  const allowedFields = new Set([
+    "id", "expectedRevision", "subject", "teacherId", "groupId", "day",
+    "institutionId", "campusId", "startMinutes", "endMinutes",
+  ]);
+  const unknown = Object.keys(input).filter((key) => !allowedFields.has(key));
+  if (unknown.length) {
+    throw new HttpsError(
+        "invalid-argument",
+        `El horario contiene campos no permitidos: ${unknown.join(", ")}`,
+    );
+  }
   const subject = requiredString(input.subject, "materia", 120);
   const group = await requireAcademicGroup({
     groupId: input.groupId,
@@ -1233,6 +1261,35 @@ async function validatedScheduleData(input, institution, campus) {
   };
 }
 
+/** @param {Object} data Horario. @param {string} id Documento. */
+function scheduleResponse(data, id) {
+  return {
+    id,
+    subject: data.subject,
+    teacherId: data.teacherId,
+    teacherName: data.teacherName,
+    groupId: data.groupId,
+    groupName: data.groupName,
+    day: data.day,
+    institutionId: data.institutionId,
+    campusId: data.campusId,
+    startMinutes: data.startMinutes,
+    endMinutes: data.endMinutes,
+    startTimeMillis: data.startTime?.toMillis?.() || 0,
+    endTimeMillis: data.endTime?.toMillis?.() || 0,
+    revision: Number(data.revision || 1),
+  };
+}
+
+/** @param {*} value Revision enviada por el cliente. @return {number} */
+function scheduleRevision(value) {
+  const revision = Number(value);
+  if (!Number.isInteger(revision) || revision < 1) {
+    throw new HttpsError("invalid-argument", "Revision de horario no valida.");
+  }
+  return revision;
+}
+
 /**
  * Detecta choques de grado o docente.
  * @param {FirebaseFirestore.Transaction} transaction Transaccion.
@@ -1271,6 +1328,13 @@ async function ensureNoScheduleConflict(transaction, schedule, excludeId) {
 /** @param {Object} schedule Horario. @param {string} event Evento. */
 async function notifySchedule(schedule, event) {
   try {
+    const groupSubjects = await db.collection("subjects")
+        .where("institutionId", "==", schedule.institutionId)
+        .where("campusId", "==", schedule.campusId)
+        .where("groupId", "==", schedule.groupId).get();
+    const groupTeacherIds = new Set(groupSubjects.docs.map((item) =>
+      item.data().teacherId).filter((id) => typeof id === "string" && id));
+    groupTeacherIds.add(schedule.teacherId);
     const snapshot = await db.collection("users")
         .where("institution", "==", schedule.institutionId)
         .where("campus", "==", schedule.campusId)
@@ -1296,7 +1360,7 @@ async function notifySchedule(schedule, event) {
         recipients.add(item.id);
       }
       if (user.role === "Docente" &&
-          (item.id === schedule.teacherId ||
+          (groupTeacherIds.has(item.id) ||
            user.groupId === schedule.groupId)) {
         recipients.add(item.id);
       }
@@ -2585,6 +2649,112 @@ exports.actualizarAutorizacion = onCall(async (request) => {
   return {success: true, status: nextStatus};
 });
 
+exports.consultarHorarios = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireScheduleRead(caller);
+  const input = request.data || {};
+  const queryFields = new Set([
+    "mode", "institutionId", "campusId", "groupId", "studentId",
+  ]);
+  const unknown = Object.keys(input).filter((key) => !queryFields.has(key));
+  if (unknown.length) {
+    throw new HttpsError(
+        "invalid-argument", "La consulta contiene campos no permitidos.",
+    );
+  }
+  const mode = (input.mode || "group").toString().trim().toLowerCase();
+  let institution = caller.institution;
+  let campus = caller.campus;
+  let groupId = "";
+  let teacherOnly = false;
+  let allowedGroups;
+
+  if (caller.role === "Administrador" || caller.isSuperadmin === true) {
+    institution = requiredString(
+        input.institutionId || caller.institution, "institucion", 120,
+    );
+    campus = requiredString(input.campusId || caller.campus, "sede", 120);
+    if (!sameTenant(caller, {institutionId: institution, campusId: campus})) {
+      throw new HttpsError(
+          "permission-denied", "No puedes consultar otra sede.",
+      );
+    }
+    await validateInstitutionCampus({institution, campus});
+    groupId = requiredString(input.groupId, "grupo", 128);
+    const group = await requireAcademicGroup({
+      groupId, institutionId: institution, campusId: campus,
+    });
+    allowedGroups = [{id: group.id, name: group.name}];
+  } else if (caller.role === "Docente") {
+    const assigned = await db.collection("subjects")
+        .where("institutionId", "==", institution)
+        .where("campusId", "==", campus)
+        .where("teacherId", "==", caller.uid).get();
+    const groupIdSet = new Set(assigned.docs.map((item) =>
+      item.data().groupId).filter((id) => typeof id === "string" && id));
+    if (typeof caller.groupId === "string" && caller.groupId) {
+      groupIdSet.add(caller.groupId);
+    }
+    const groupIds = [...groupIdSet];
+    const groups = await Promise.all(groupIds.map((id) =>
+      requireAcademicGroup({
+        groupId: id, institutionId: institution, campusId: campus,
+      })));
+    allowedGroups = groups.map((group) => ({
+      id: group.id, name: group.name,
+    })).sort((a, b) => a.name.localeCompare(b.name, "es"));
+    if (mode === "teacher") {
+      teacherOnly = true;
+    } else {
+      groupId = requiredString(input.groupId, "grupo", 128);
+      if (!groupIds.includes(groupId)) {
+        throw new HttpsError(
+            "permission-denied",
+            "Solo puedes consultar grupos donde dictas clase.",
+        );
+      }
+    }
+  } else if (caller.role === "Estudiante") {
+    groupId = requiredString(caller.groupId, "grupo del estudiante", 128);
+    const group = await requireAcademicGroup({
+      groupId, institutionId: institution, campusId: campus,
+    });
+    allowedGroups = [{id: group.id, name: group.name}];
+  } else if (caller.role === "Familiar") {
+    const studentId = requiredString(input.studentId, "estudiante", 128);
+    if (!Array.isArray(caller.studentIds) ||
+        !caller.studentIds.includes(studentId) ||
+        caller.activeStudentId !== studentId) {
+      throw new HttpsError(
+          "permission-denied", "Selecciona primero un hijo activo vinculado.",
+      );
+    }
+    const student = await requireLinkedStudent(
+        studentId, institution, campus,
+    );
+    groupId = requiredString(student.groupId, "grupo del estudiante", 128);
+    const group = await requireAcademicGroup({
+      groupId, institutionId: institution, campusId: campus,
+    });
+    allowedGroups = [{id: group.id, name: group.name}];
+  } else {
+    throw new HttpsError("permission-denied", "Rol no autorizado.");
+  }
+
+  let query = db.collection("subjects")
+      .where("institutionId", "==", institution)
+      .where("campusId", "==", campus);
+  query = teacherOnly ?
+    query.where("teacherId", "==", caller.uid) :
+    query.where("groupId", "==", groupId);
+  const snapshot = await query.get();
+  const subjects = snapshot.docs
+      .map((item) => scheduleResponse(item.data(), item.id))
+      .sort((a, b) => a.day.localeCompare(b.day) ||
+        a.startMinutes - b.startMinutes);
+  return {subjects, groups: allowedGroups};
+});
+
 exports.crearHorario = onCall(async (request) => {
   const caller = await getCaller(request);
   requireScheduleAction(caller, "crear");
@@ -2604,6 +2774,7 @@ exports.crearHorario = onCall(async (request) => {
     await ensureNoScheduleConflict(transaction, schedule, null);
     transaction.create(ref, {
       ...schedule,
+      revision: 1,
       createdBy: caller.uid,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -2614,6 +2785,7 @@ exports.crearHorario = onCall(async (request) => {
       before: null,
       after: schedule,
       performedBy: caller.uid,
+      performedByRole: caller.role,
       institutionId: institution,
       campusId: campus,
       groupId: schedule.groupId,
@@ -2629,6 +2801,7 @@ exports.editarHorario = onCall(async (request) => {
   const caller = await getCaller(request);
   requireScheduleAction(caller, "editar");
   const id = requiredString(request.data?.id, "horario", 128);
+  const expectedRevision = scheduleRevision(request.data?.expectedRevision);
   const ref = db.collection("subjects").doc(id);
   const snapshot = await ref.get();
   if (!snapshot.exists || !sameTenant(caller, snapshot.data())) {
@@ -2643,9 +2816,19 @@ exports.editarHorario = onCall(async (request) => {
     if (!fresh.exists) {
       throw new HttpsError("not-found", "El horario no existe.");
     }
+    if (!sameTenant(caller, fresh.data())) {
+      throw new HttpsError("permission-denied", "Horario fuera de tu sede.");
+    }
+    const freshRevision = Number(fresh.data().revision || 1);
+    if (freshRevision !== expectedRevision) {
+      throw new HttpsError(
+          "aborted", "El horario cambio. Recarga antes de volver a editar.",
+      );
+    }
     await ensureNoScheduleConflict(transaction, schedule, id);
     transaction.update(ref, {
       ...schedule,
+      revision: freshRevision + 1,
       updatedBy: caller.uid,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -2655,6 +2838,7 @@ exports.editarHorario = onCall(async (request) => {
       before: fresh.data(),
       after: schedule,
       performedBy: caller.uid,
+      performedByRole: caller.role,
       institutionId: current.institutionId,
       campusId: current.campusId,
       groupId: schedule.groupId,
@@ -2670,6 +2854,7 @@ exports.eliminarHorario = onCall(async (request) => {
   const caller = await getCaller(request);
   requireScheduleAction(caller, "eliminar");
   const id = requiredString(request.data?.id, "horario", 128);
+  const expectedRevision = scheduleRevision(request.data?.expectedRevision);
   const ref = db.collection("subjects").doc(id);
   let deletedSchedule;
   await db.runTransaction(async (transaction) => {
@@ -2678,6 +2863,11 @@ exports.eliminarHorario = onCall(async (request) => {
       throw new HttpsError("permission-denied", "Horario fuera de tu sede.");
     }
     const current = snapshot.data();
+    if (Number(current.revision || 1) !== expectedRevision) {
+      throw new HttpsError(
+          "aborted", "El horario cambio. Recarga antes de eliminarlo.",
+      );
+    }
     deletedSchedule = current;
     transaction.delete(ref);
     transaction.create(db.collection("schedule_history").doc(), {
@@ -2686,6 +2876,7 @@ exports.eliminarHorario = onCall(async (request) => {
       before: current,
       after: null,
       performedBy: caller.uid,
+      performedByRole: caller.role,
       institutionId: current.institutionId,
       campusId: current.campusId,
       groupId: current.groupId,
@@ -3827,7 +4018,8 @@ exports.obtenerHijosVinculados = onCall(async (request) => {
         .get();
     snapshot.docs.forEach((item) => {
       const child = item.data();
-      if (sameTenant(caller, child) && child.role === "Estudiante") {
+      if (sameTenant(caller, child) && child.role === "Estudiante" &&
+          child.status === "activo") {
         children.push({
           id: item.id,
           firstName: child.firstName || "",
@@ -3839,6 +4031,7 @@ exports.obtenerHijosVinculados = onCall(async (request) => {
           birthDate: child.birthDate || null,
           institution: child.institution,
           campus: child.campus,
+          status: child.status,
         });
       }
     });

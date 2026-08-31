@@ -67,11 +67,13 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     required String institutionId,
     required String campusId,
     required String groupId,
+    String? studentId,
   }) async {
     final data = await _service.getSchedulesForGroup(
       institutionId: institutionId,
       campusId: campusId,
       groupId: groupId,
+      studentId: studentId,
     );
     for (final d in data.keys) {
       data[d]!.sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -111,19 +113,24 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
       // Rol Familiar
       if (user.role == 'Familiar') {
-        final ids = user.studentIds ?? const <String>[];
-        if (ids.isEmpty) {
+        if ((user.studentIds ?? const <String>[]).isEmpty) {
           if (mounted) setState(() => _loading = false);
           return;
         }
 
-        final kids = await _service.getUsersByIds(
-          userIds: ids,
-          institutionId: user.institution,
-          campusId: user.campus,
-        );
+        final kids = await _service.getLinkedChildren();
 
         if (!mounted) return;
+        if (kids.isEmpty) {
+          setState(() {
+            _children = [];
+            _activeStudentId = null;
+            _byDay = {};
+            _selectedDay = _days.first;
+            _loading = false;
+          });
+          return;
+        }
 
         String initialId =
             user.activeStudentId ?? (kids.isNotEmpty ? kids.first.id : '');
@@ -146,6 +153,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             institutionId: user.institution,
             campusId: user.campus,
             groupId: groupId,
+            studentId: initialId,
           );
         } else {
           _byDay = {};
@@ -202,6 +210,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         institutionId: u.institution,
         campusId: u.campus,
         groupId: groupId,
+        studentId: newId,
       );
     } else {
       setState(() {

@@ -76,7 +76,7 @@ class AdminDayColumn extends StatelessWidget {
                 ? const Center(
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('No hay materias para este dia.'),
+                      child: Text('No hay materias para este día.'),
                     ),
                   )
                 : ListView.separated(

@@ -37,23 +37,35 @@ class AdminSubjectItem extends StatelessWidget {
         ),
         subtitle: Text(
           '${TimeOfDay.fromDateTime(subject.startTime.toDate()).format(context)} '
-          'to ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)} - ${subject.teacherName}',
+          'a ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)} · ${subject.teacherName}',
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showEdit)
-              IconButton(
-                icon: Icon(Icons.edit, color: AppPalette.info),
-                onPressed: onEdit,
-              ),
-            if (showDelete)
-              IconButton(
-                icon: Icon(Icons.delete, color: AppPalette.primary),
-                onPressed: onDelete,
-              ),
-          ],
-        ),
+        trailing: showEdit || showDelete
+            ? PopupMenuButton<String>(
+                tooltip: 'Acciones de la materia',
+                onSelected: (action) {
+                  if (action == 'edit') onEdit();
+                  if (action == 'delete') onDelete();
+                },
+                itemBuilder: (context) => [
+                  if (showEdit)
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit),
+                        title: Text('Editar'),
+                      ),
+                    ),
+                  if (showDelete)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete),
+                        title: Text('Eliminar'),
+                      ),
+                    ),
+                ],
+              )
+            : null,
       ),
     );
   }

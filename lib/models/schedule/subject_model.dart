@@ -12,6 +12,7 @@ class SubjectModel {
   final String? day;
   final String? campusId;
   final String? institutionId;
+  final int revision;
 
   SubjectModel({
     this.id,
@@ -25,6 +26,7 @@ class SubjectModel {
     this.day,
     this.campusId,
     this.institutionId,
+    this.revision = 1,
   });
 
   factory SubjectModel.fromMap(Map<String, dynamic> data, {String? id}) {
@@ -40,6 +42,7 @@ class SubjectModel {
       day: data['day'] as String?,
       campusId: data['campusId'] as String?,
       institutionId: data['institutionId'] as String?,
+      revision: (data['revision'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -56,6 +59,7 @@ class SubjectModel {
       if (day != null) 'day': day,
       if (campusId != null) 'campusId': campusId,
       if (institutionId != null) 'institutionId': institutionId,
+      'revision': revision,
     };
   }
 
@@ -71,6 +75,7 @@ class SubjectModel {
     String? day,
     String? campusId,
     String? institutionId,
+    int? revision,
   }) {
     return SubjectModel(
       id: id ?? this.id,
@@ -84,6 +89,26 @@ class SubjectModel {
       day: day ?? this.day,
       campusId: campusId ?? this.campusId,
       institutionId: institutionId ?? this.institutionId,
+      revision: revision ?? this.revision,
+    );
+  }
+
+  factory SubjectModel.fromCallable(Map<String, dynamic> data) {
+    final startMillis = (data['startTimeMillis'] as num?)?.toInt() ?? 0;
+    final endMillis = (data['endTimeMillis'] as num?)?.toInt() ?? 0;
+    return SubjectModel(
+      id: data['id']?.toString(),
+      subject: data['subject']?.toString() ?? '',
+      startTime: Timestamp.fromMillisecondsSinceEpoch(startMillis),
+      endTime: Timestamp.fromMillisecondsSinceEpoch(endMillis),
+      teacherId: data['teacherId']?.toString() ?? '',
+      teacherName: data['teacherName']?.toString() ?? '',
+      groupId: data['groupId']?.toString() ?? '',
+      groupName: data['groupName']?.toString() ?? '',
+      day: data['day']?.toString(),
+      campusId: data['campusId']?.toString(),
+      institutionId: data['institutionId']?.toString(),
+      revision: (data['revision'] as num?)?.toInt() ?? 1,
     );
   }
 }

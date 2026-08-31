@@ -132,7 +132,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           groupId: groupId,
         );
       }
-    } catch (_) {}
+    } catch (error) {
+      _allSchedules = {};
+      _loadError = 'No fue posible cargar el horario seleccionado. $error';
+    }
 
     setState(() => _isLoading = false);
   }
@@ -143,6 +146,15 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         context: context,
         title: 'Selecciona grupo',
         message: 'Por favor, selecciona un grupo primero.',
+      );
+      return;
+    }
+
+    if (_teachers.isEmpty) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Sin docentes disponibles',
+        message: 'No hay docentes activos en esta sede para asignar la clase.',
       );
       return;
     }
@@ -281,9 +293,9 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        title: const Text('Confirmar eliminacion'),
+        title: const Text('Confirmar eliminación'),
         content: Text(
-          'Estas seguro de que deseas eliminar la materia "${subject.subject}"?',
+          '¿Estás seguro de que deseas eliminar la materia "${subject.subject}"?',
         ),
         actions: [
           TextButton(
@@ -305,7 +317,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   if (!mounted) return;
                   await DialogUtils.showSuccess(
                     context: context,
-                    title: 'Exito',
+                    title: 'Éxito',
                     message: 'Materia eliminada.',
                   );
                 }
@@ -320,7 +332,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                 _setBlocking(false);
               }
             },
-            child: const Text('Si'),
+            child: const Text('Sí'),
           ),
         ],
       ),
@@ -360,10 +372,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   Widget build(BuildContext context) {
     final currentUser = context.read<UserProviderV2>().user;
     if (currentUser == null) {
-      return const Center(child: Text('Error: No se encontro el usuario.'));
+      return const Center(child: Text('Error: no se encontró el usuario.'));
     }
 
-    final bool isDesktop = MediaQuery.of(context).size.width > 600;
+    final bool isDesktop = MediaQuery.of(context).size.width >= 1100;
 
     final content = SafeArea(
       child: Padding(
@@ -372,10 +384,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (currentUser.isSuperadmin && _institutions.isNotEmpty) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final selectors = <Widget>[
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _selectedInstitution,
                       decoration: const InputDecoration(
                         labelText: 'Institución',
@@ -385,7 +398,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                           .map(
                             (item) => DropdownMenuItem(
                               value: item.id,
-                              child: Text(item.label),
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(),
@@ -402,10 +419,8 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                         }
                       },
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
                       key: ValueKey(
                         '${_selectedInstitution ?? ''}:${_selectedCampus ?? ''}',
                       ),
@@ -420,7 +435,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                               .map(
                                 (campus) => DropdownMenuItem(
                                   value: campus,
-                                  child: Text(campus),
+                                  child: Text(
+                                    campus,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               )
                               .toList(),
@@ -434,8 +453,25 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                         );
                       },
                     ),
-                  ),
-                ],
+                  ];
+                  if (constraints.maxWidth < 560) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        selectors.first,
+                        const SizedBox(height: 12),
+                        selectors.last,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: selectors.first),
+                      const SizedBox(width: 12),
+                      Expanded(child: selectors.last),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
             ],
@@ -471,7 +507,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
             else if (_selectedGroupId == null)
               const Expanded(
                 child: Center(
-                  child: Text('Selecciona un grado para ver el horario'),
+                  child: Text('Selecciona un grupo para ver el horario'),
                 ),
               )
             else if (isDesktop)
@@ -614,7 +650,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     return AdminDayColumn(
       day: day,
       subjects: subjects,
-      canCreate: _selectedGroupId != null && _permite('horarios.crear'),
+      canCreate:
+          _selectedGroupId != null &&
+          _teachers.isNotEmpty &&
+          _permite('horarios.crear'),
       canEdit: _permite('horarios.editar'),
       canDelete: _permite('horarios.eliminar'),
       onAddSubject: () => _showCreateDialog(day),

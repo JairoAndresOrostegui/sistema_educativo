@@ -37,6 +37,7 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 
 - Usuario: `activo`, `inactivo`, `eliminado`, `eliminando`.
 - Matrícula: unicidad por `institution + data.numeroIdentidad + anioMatricula`; estados del flujo configurado; las correcciones respetan rol, sede e hijo activo. La creación, consulta familiar y transiciones sensibles pasan por Cloud Functions. Cada transición vuelve a leer y actualizar la matrícula en una transacción para impedir decisiones concurrentes contradictorias y escribe `enrollment_history`. El payload acepta únicamente el esquema vigente, deriva `institution`, `campus`, `groupId` y `groupName` en backend, y rechaza `grade`, `grado`, `gradoAspirado` y campos arbitrarios. El administrador queda fijado a su sede; solo el superadministrador envía un alcance distinto.
+- Horario: `subjects` usa `institutionId`, `campusId`, `groupId`, `groupName`, docente, día, minutos de inicio/fin y `revision`. Crear, consultar, editar y eliminar pasa por Cloud Functions. `consultarHorarios` deriva el alcance: administrador en su sede, superadministrador en la sede elegida, docente en sus clases o en grupos donde dicta, estudiante en su grupo y familiar en el grupo del hijo activo. Las mutaciones validan grupo y docente activos, rechazan campos arbitrarios, bloquean cruces de grupo o docente y comparan `expectedRevision` dentro de la transacción para impedir sobrescrituras concurrentes. Cada cambio escribe `schedule_history` de forma atómica.
 - Autorización: `pending`, `approved`, `rejected`, `finalized`. Finalizada es inmutable, salvo corrección expresa del superadministrador con historial.
 - Archivo: `uploading`, `active`, `deleting`.
 
@@ -94,7 +95,7 @@ Al publicar, las rutas de imágenes obsoletas y los reintentos anteriores se gua
 
 ## Migraciones
 
-No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos, `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio de bloques a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`. La migración web guarda `website/config` y cada página anterior en `migration_backups` antes de reemplazarlos mediante un lote atómico.
+No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y normaliza horarios (`miercoles`, minutos, nombres derivados y revisión), `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio de bloques a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`. La verificación académica también detecta franjas inválidas, docentes o grupos inconsistentes y cruces. La migración web guarda `website/config` y cada página anterior en `migration_backups` antes de reemplazarlos mediante un lote atómico.
 
 ## Validación y despliegue
 
