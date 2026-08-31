@@ -112,15 +112,25 @@ describe("Reglas Firestore", () => {
         institution: "inst-2",
         campus: "campus-2",
       }));
+      await setDoc(doc(db, "academic_years/year-local"), {
+        institutionId: "inst-1", campusId: "campus-1",
+        year: 2026, status: "active",
+      });
+      await setDoc(doc(db, "academic_years/year-foreign"), {
+        institutionId: "inst-2", campusId: "campus-2",
+        year: 2026, status: "active",
+      });
       await setDoc(doc(db, "enrollments/local"), {
         institution: "inst-1",
         campus: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         estado: "prematriculado",
         data: {groupId: "group-5a", groupName: "Quinto A"},
       });
       await setDoc(doc(db, "enrollments/foreign"), {
         institution: "inst-2",
         campus: "campus-2",
+        academicYearId: "year-foreign", academicYear: 2026,
         estado: "prematriculado",
         data: {groupId: "group-5a", groupName: "Quinto A"},
       });
@@ -132,6 +142,7 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "authorization_requests/local-auth"), {
         institutionId: "inst-1",
         campusId: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         studentId: "student",
         requesterId: "family",
         groupId: "group-5a",
@@ -141,6 +152,7 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "subjects/grade-5a"), {
         institutionId: "inst-1",
         campusId: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         subject: "Matematicas",
         teacherId: "teacher",
         teacherName: "Prueba Usuario",
@@ -151,6 +163,7 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "subjects/grade-6a"), {
         institutionId: "inst-1",
         campusId: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         subject: "Ciencias",
         teacherId: "teacher-other",
         teacherName: "Prueba Usuario",
@@ -178,6 +191,7 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "user_logs/local"), {
         institution: "inst-1",
         campus: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         userId: "student",
       });
       await setDoc(doc(db, "user_logs/foreign"), {
@@ -188,6 +202,8 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "files/publication"), {
         institutionId: "inst-1",
         campusId: "campus-1",
+        academicYearId: "year-local",
+        academicYear: 2026,
         status: "active",
         audienceType: "groups",
         targetGroupIds: ["group-5a"],
@@ -312,6 +328,7 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(context.firestore(), "enrollments/grade-5a"), {
         institution: "inst-1",
         campus: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         estado: "prematriculado",
         createdByUserId: "another-family",
         vinculaUsuarioId: "student",
@@ -335,6 +352,7 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(context.firestore(), "enrollments/family-linked"), {
         institution: "inst-1",
         campus: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
         estado: "prematriculado",
         vinculaUsuarioId: "student",
         data: {groupId: "group-5a", groupName: "Quinto A"},

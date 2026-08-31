@@ -57,6 +57,8 @@ const RESTRICTED_DELEGATED_PERMISSIONS = new Set([
 const FILE_MODULE_LIMIT_BYTES = 1024 * 1024 * 1024;
 const FILE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024;
 const FILE_RETENTION_DAYS = 60;
+const ACADEMIC_YEAR_MIN = 2020;
+const ACADEMIC_YEAR_MAX = 2100;
 const FILE_MIME_TYPES = new Set([
   "application/pdf",
   "application/msword",
@@ -64,6 +66,99 @@ const FILE_MIME_TYPES = new Set([
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
+
+/**
+ * Identificador estable y opaco para el contexto lectivo de una sede.
+ * @param {string} institution Institucion.
+ * @param {string} campus Sede.
+ * @param {number|string} year Anio.
+ * @return {string} Identificador.
+ */
+function academicYearId(institution, campus, year) {
+  return crypto.createHash("sha256")
+      .update(`${institution}\u0000${campus}\u0000${year}`)
+      .digest("hex");
+}
+
+/** @param {string} institution Institucion. @param {string} campus Sede. */
+function academicYearSettingsId(institution, campus) {
+  return crypto.createHash("sha256")
+      .update(`${institution}\u0000${campus}`).digest("hex");
+}
+
+/** @param {*} value Anio recibido. @return {number} Anio valido. */
+function validatedAcademicYear(value) {
+  const year = Number(value);
+  if (!Number.isInteger(year) || year < ACADEMIC_YEAR_MIN ||
+      year > ACADEMIC_YEAR_MAX) {
+    throw new HttpsError("invalid-argument", "El anio lectivo no es valido.");
+  }
+  return year;
+}
+
+/**
+ * Obtiene el anio activo. La ausencia de configuracion es un error deliberado:
+ * la migracion debe ejecutarse antes del despliegue y no hay esquema heredado.
+ * @param {string} institution Institucion.
+ * @param {string} campus Sede.
+ * @return {Promise<Object>} Contexto lectivo activo.
+ */
+async function requireActiveAcademicYear(institution, campus) {
+  const settings = await db.collection("academic_year_settings")
+      .doc(academicYearSettingsId(institution, campus)).get();
+  const activeYearId = settings.data()?.activeYearId;
+  if (!settings.exists || typeof activeYearId !== "string" || !activeYearId) {
+    throw new HttpsError(
+        "failed-precondition",
+        "La sede no tiene un anio lectivo activo. Configuralo en Parametros.",
+    );
+  }
+  const yearSnapshot = await db.collection("academic_years")
+      .doc(activeYearId).get();
+  const year = yearSnapshot.data() || {};
+  if (!yearSnapshot.exists || year.status !== "active" ||
+      year.institutionId !== institution || year.campusId !== campus) {
+    throw new HttpsError(
+        "failed-precondition", "La configuracion del anio lectivo es invalida.",
+    );
+  }
+  return {id: yearSnapshot.id, ...year};
+}
+
+/**
+ * Valida un anio solicitado por un administrador o devuelve el vigente.
+ * @param {Object} caller Usuario llamador.
+ * @param {string} institution Institucion.
+ * @param {string} campus Sede.
+ * @param {*} requestedId Identificador opcional.
+ * @param {boolean} writable Exige anio activo.
+ * @return {Promise<Object>} Contexto lectivo.
+ */
+async function resolveAcademicYear(caller, institution, campus, requestedId,
+    writable = false) {
+  if (!requestedId) return requireActiveAcademicYear(institution, campus);
+  const id = requiredString(requestedId, "anio lectivo", 128);
+  const snapshot = await db.collection("academic_years").doc(id).get();
+  const year = snapshot.data() || {};
+  if (!snapshot.exists || year.institutionId !== institution ||
+      year.campusId !== campus) {
+    throw new HttpsError("permission-denied", "Anio lectivo fuera de la sede.");
+  }
+  const canChoose = caller.isSuperadmin === true ||
+    caller.role === "Administrador";
+  if (!canChoose && year.status !== "active") {
+    throw new HttpsError(
+        "permission-denied", "Solo un administrador consulta anios historicos.",
+    );
+  }
+  if (writable && year.status !== "active") {
+    throw new HttpsError(
+        "failed-precondition",
+        "Un anio cerrado o en preparacion es de solo lectura.",
+    );
+  }
+  return {id: snapshot.id, ...year};
+}
 
 /**
  * Impone permisos compatibles con el rol, incluso si se omite la interfaz.
@@ -317,8 +412,12 @@ async function requireAcademicGroup(profile) {
   const group = snapshot.data() || {};
   const institution = profile.institution || profile.institutionId;
   const campus = profile.campus || profile.campusId;
+  const year = profile.academicYearId ?
+    {id: profile.academicYearId} :
+    await requireActiveAcademicYear(institution, campus);
   if (!snapshot.exists || group.active !== true ||
-      group.institutionId !== institution || group.campusId !== campus) {
+      group.institutionId !== institution || group.campusId !== campus ||
+      group.academicYearId !== year.id) {
     throw new HttpsError(
         "failed-precondition", "El grupo no pertenece a la sede seleccionada.",
     );
@@ -449,6 +548,11 @@ function snapshotDocuments(snapshot) {
   return snapshot.docs || [];
 }
 
+/**
+ * Escribe operaciones en lotes seguros. Cada elemento recibe un WriteBatch.
+ * @param {Array<Function>} operations Operaciones diferidas.
+ * @return {Promise<void>}
+ */
 /**
  * Une documentos sin repetir referencias.
  * @param {Array<Array<FirebaseFirestore.QueryDocumentSnapshot>>} groups Listas.
@@ -898,6 +1002,8 @@ async function notifyEnrollment(enrollment, event) {
       recipientIds: [...recipientIds],
       institution: enrollment.institution,
       campus: enrollment.campus,
+      academicYearId: enrollment.academicYearId,
+      academicYear: enrollment.academicYear,
       groupId,
       groupName: enrollment.data?.groupName || "",
       createdAt: FieldValue.serverTimestamp(),
@@ -1024,9 +1130,13 @@ function requireFileGroupAccess(caller, group, teacherGroupIds = new Set()) {
 /** @param {Object} caller Docente. @return {Promise<Set<string>>} Grupos. */
 async function fileTeacherGroupIds(caller) {
   if (caller.role !== "Docente") return new Set();
+  const year = await requireActiveAcademicYear(
+      caller.institution, caller.campus,
+  );
   const snapshot = await db.collection("subjects")
       .where("institutionId", "==", caller.institution)
       .where("campusId", "==", caller.campus)
+      .where("academicYearId", "==", year.id)
       .where("teacherId", "==", caller.uid).get();
   return new Set(snapshot.docs.map((item) => item.data().groupId)
       .filter((id) => typeof id === "string" && id));
@@ -1052,6 +1162,7 @@ async function usersByIds(base, ids) {
  * @return {Promise<Object>} Audiencia materializada.
  */
 async function resolveFileAudience(caller, input, institution, campus) {
+  const academicYear = await requireActiveAcademicYear(institution, campus);
   const audienceType = requiredString(input.audienceType, "audiencia", 20);
   const allowedTypes = caller.role === "Docente" ?
     new Set(["groups", "students"]) :
@@ -1088,6 +1199,7 @@ async function resolveFileAudience(caller, input, institution, campus) {
     const groups = await db.collection("academic_groups")
         .where("institutionId", "==", institution)
         .where("campusId", "==", campus)
+        .where("academicYearId", "==", academicYear.id)
         .where("active", "==", true).get();
     targetGroupIds = groups.docs.map((item) => item.id);
     targetStudents = (await userBase.where("role", "==", "Estudiante")
@@ -1208,6 +1320,7 @@ async function validatedScheduleData(input, institution, campus) {
   const allowedFields = new Set([
     "id", "expectedRevision", "subject", "teacherId", "groupId", "day",
     "institutionId", "campusId", "startMinutes", "endMinutes",
+    "academicYearId",
   ]);
   const unknown = Object.keys(input).filter((key) => !allowedFields.has(key));
   if (unknown.length) {
@@ -1216,11 +1329,13 @@ async function validatedScheduleData(input, institution, campus) {
         `El horario contiene campos no permitidos: ${unknown.join(", ")}`,
     );
   }
+  const year = await requireActiveAcademicYear(institution, campus);
   const subject = requiredString(input.subject, "materia", 120);
   const group = await requireAcademicGroup({
     groupId: input.groupId,
     institutionId: institution,
     campusId: campus,
+    academicYearId: year.id,
   });
   const day = requiredString(input.day, "dia", 20).toLowerCase();
   if (!SCHEDULE_DAYS.has(day)) {
@@ -1258,6 +1373,8 @@ async function validatedScheduleData(input, institution, campus) {
     endTime: Timestamp.fromMillis(baseDate + (endMinutes + 300) * 60000),
     institutionId: institution,
     campusId: campus,
+    academicYearId: year.id,
+    academicYear: year.year,
   };
 }
 
@@ -1273,6 +1390,8 @@ function scheduleResponse(data, id) {
     day: data.day,
     institutionId: data.institutionId,
     campusId: data.campusId,
+    academicYearId: data.academicYearId,
+    academicYear: data.academicYear,
     startMinutes: data.startMinutes,
     endMinutes: data.endMinutes,
     startTimeMillis: data.startTime?.toMillis?.() || 0,
@@ -1300,6 +1419,7 @@ async function ensureNoScheduleConflict(transaction, schedule, excludeId) {
   const query = db.collection("subjects")
       .where("institutionId", "==", schedule.institutionId)
       .where("campusId", "==", schedule.campusId)
+      .where("academicYearId", "==", schedule.academicYearId)
       .where("day", "==", schedule.day);
   const snapshot = await transaction.get(query);
   for (const item of snapshot.docs) {
@@ -1388,6 +1508,8 @@ async function notifySchedule(schedule, event) {
       event,
       institutionId: schedule.institutionId,
       campusId: schedule.campusId,
+      academicYearId: schedule.academicYearId,
+      academicYear: schedule.academicYear,
       groupId: schedule.groupId,
       groupName: schedule.groupName,
       recipientIds: [...recipients],
@@ -1512,6 +1634,8 @@ async function notifyAuthorization(authorization, event) {
       recipientIds: [...recipients],
       institutionId: authorization.institutionId,
       campusId: authorization.campusId,
+      academicYearId: authorization.academicYearId,
+      academicYear: authorization.academicYear,
       groupId: authorization.groupId,
       groupName: authorization.groupName,
       createdAt: FieldValue.serverTimestamp(),
@@ -1989,6 +2113,13 @@ exports.crearMatricula = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Ano de matricula no valido.");
   }
   await validateInstitutionCampus({institution, campus});
+  const academicYear = await requireActiveAcademicYear(institution, campus);
+  if (year !== Number(academicYear.year)) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Las matriculas solo se modifican en el anio lectivo vigente.",
+    );
+  }
   let authenticatedCaller = null;
   if (request.auth?.uid) {
     authenticatedCaller = await getCaller(request);
@@ -2005,6 +2136,7 @@ exports.crearMatricula = onCall(async (request) => {
     groupId: data.groupId,
     institution,
     campus,
+    academicYearId: academicYear.id,
   });
   const cleanData = validatedEnrollmentData(
       data, group, year, institution, campus,
@@ -2111,6 +2243,8 @@ exports.crearMatricula = onCall(async (request) => {
       createdByRole === "padre" ? "app_padre" : "admin",
     vinculaUsuarioId: linkedStudentId,
     anioMatricula: year,
+    academicYearId: academicYear.id,
+    academicYear: academicYear.year,
     institution,
     campus,
     data: cleanData,
@@ -2150,6 +2284,14 @@ exports.actualizarMatricula = onCall(async (request) => {
   const current = snapshot.data();
   if (!sameTenant(caller, current)) {
     throw new HttpsError("permission-denied", "Matricula fuera de tu sede.");
+  }
+  const activeYear = await requireActiveAcademicYear(
+      current.institution, current.campus,
+  );
+  if (current.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition", "Las matriculas historicas son de solo lectura.",
+    );
   }
   let groupId = enrollmentGroupId(current.data || {});
   let groupName = (current.data?.groupName || "").toString();
@@ -2220,6 +2362,7 @@ exports.actualizarMatricula = onCall(async (request) => {
       groupId: data.groupId,
       institution: current.institution,
       campus: current.campus,
+      academicYearId: current.academicYearId,
     });
     changes.data = validatedEnrollmentData({
       ...data,
@@ -2280,6 +2423,7 @@ exports.actualizarMatricula = onCall(async (request) => {
         groupId: submittedData.groupId,
         institution: current.institution,
         campus: current.campus,
+        academicYearId: current.academicYearId,
       });
       if (submittedDocument !== current.data.numeroIdentidad) {
         const duplicate = await db.collection("enrollments")
@@ -2477,12 +2621,17 @@ exports.crearAutorizacion = onCall(async (request) => {
   const student = await requireLinkedStudent(
       studentId, caller.institution, caller.campus,
   );
+  const academicYear = await requireActiveAcademicYear(
+      caller.institution, caller.campus,
+  );
   const form = validatedAuthorizationData(request.data, student);
   const ref = db.collection("authorization_requests").doc();
   const authorization = {
     id: ref.id,
     institutionId: caller.institution,
     campusId: caller.campus,
+    academicYearId: academicYear.id,
+    academicYear: academicYear.year,
     ...form,
     requesterId: caller.uid,
     requesterFullName:
@@ -2505,6 +2654,8 @@ exports.crearAutorizacion = onCall(async (request) => {
     performedByRole: caller.role,
     institutionId: caller.institution,
     campusId: caller.campus,
+    academicYearId: academicYear.id,
+    academicYear: academicYear.year,
     groupId: form.groupId,
     groupName: form.groupName,
     createdAt: FieldValue.serverTimestamp(),
@@ -2529,6 +2680,15 @@ exports.actualizarAutorizacion = onCall(async (request) => {
     campus: current.campusId,
   })) {
     throw new HttpsError("permission-denied", "Autorizacion fuera de tu sede.");
+  }
+  const activeYear = await requireActiveAcademicYear(
+      current.institutionId, current.campusId,
+  );
+  if (current.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Las autorizaciones historicas son de solo lectura.",
+    );
   }
   const note = typeof request.data?.note === "string" ?
     request.data.note.trim().slice(0, 2000) : "";
@@ -2639,6 +2799,8 @@ exports.actualizarAutorizacion = onCall(async (request) => {
     performedByRole: caller.role,
     institutionId: current.institutionId,
     campusId: current.campusId,
+    academicYearId: current.academicYearId,
+    academicYear: current.academicYear,
     groupId: changes.groupId || current.groupId,
     groupName: changes.groupName || current.groupName,
     createdAt: FieldValue.serverTimestamp(),
@@ -2655,7 +2817,7 @@ exports.consultarHorarios = onCall(async (request) => {
   const input = request.data || {};
   const queryFields = new Set([
     "mode", "institutionId", "campusId", "groupId", "studentId",
-    "teacherId",
+    "teacherId", "academicYearId",
   ]);
   const unknown = Object.keys(input).filter((key) => !queryFields.has(key));
   if (unknown.length) {
@@ -2673,6 +2835,7 @@ exports.consultarHorarios = onCall(async (request) => {
   let teacherOnly = false;
   let queryTeacherId = "";
   let allowedGroups;
+  let year;
 
   if (caller.role === "Administrador" || caller.isSuperadmin === true) {
     institution = requiredString(
@@ -2685,13 +2848,17 @@ exports.consultarHorarios = onCall(async (request) => {
       );
     }
     await validateInstitutionCampus({institution, campus});
+    year = await resolveAcademicYear(
+        caller, institution, campus, input.academicYearId, false,
+    );
     if (mode === "teacher") {
       queryTeacherId = requiredString(input.teacherId, "docente", 128);
       const teacherSnapshot = await db.collection("users")
           .doc(queryTeacherId).get();
       const teacher = teacherSnapshot.data() || {};
       if (!teacherSnapshot.exists || teacher.role !== "Docente" ||
-          teacher.status !== "activo" ||
+          (year.status === "active" ? teacher.status !== "activo" :
+            teacher.status === "eliminado") ||
           teacher.institution !== institution || teacher.campus !== campus) {
         throw new HttpsError(
             "failed-precondition", "El docente no pertenece a esta sede.",
@@ -2703,13 +2870,16 @@ exports.consultarHorarios = onCall(async (request) => {
       groupId = requiredString(input.groupId, "grupo", 128);
       const group = await requireAcademicGroup({
         groupId, institutionId: institution, campusId: campus,
+        academicYearId: year.id,
       });
       allowedGroups = [{id: group.id, name: group.name}];
     }
   } else if (caller.role === "Docente") {
+    year = await requireActiveAcademicYear(institution, campus);
     const assigned = await db.collection("subjects")
         .where("institutionId", "==", institution)
         .where("campusId", "==", campus)
+        .where("academicYearId", "==", year.id)
         .where("teacherId", "==", caller.uid).get();
     const groupIdSet = new Set(assigned.docs.map((item) =>
       item.data().groupId).filter((id) => typeof id === "string" && id));
@@ -2720,6 +2890,7 @@ exports.consultarHorarios = onCall(async (request) => {
     const groups = await Promise.all(groupIds.map((id) =>
       requireAcademicGroup({
         groupId: id, institutionId: institution, campusId: campus,
+        academicYearId: year.id,
       })));
     allowedGroups = groups.map((group) => ({
       id: group.id, name: group.name,
@@ -2737,12 +2908,15 @@ exports.consultarHorarios = onCall(async (request) => {
       }
     }
   } else if (caller.role === "Estudiante") {
+    year = await requireActiveAcademicYear(institution, campus);
     groupId = requiredString(caller.groupId, "grupo del estudiante", 128);
     const group = await requireAcademicGroup({
       groupId, institutionId: institution, campusId: campus,
+      academicYearId: year.id,
     });
     allowedGroups = [{id: group.id, name: group.name}];
   } else if (caller.role === "Familiar") {
+    year = await requireActiveAcademicYear(institution, campus);
     const studentId = requiredString(input.studentId, "estudiante", 128);
     if (!Array.isArray(caller.studentIds) ||
         !caller.studentIds.includes(studentId) ||
@@ -2757,6 +2931,7 @@ exports.consultarHorarios = onCall(async (request) => {
     groupId = requiredString(student.groupId, "grupo del estudiante", 128);
     const group = await requireAcademicGroup({
       groupId, institutionId: institution, campusId: campus,
+      academicYearId: year.id,
     });
     allowedGroups = [{id: group.id, name: group.name}];
   } else {
@@ -2765,7 +2940,8 @@ exports.consultarHorarios = onCall(async (request) => {
 
   let query = db.collection("subjects")
       .where("institutionId", "==", institution)
-      .where("campusId", "==", campus);
+      .where("campusId", "==", campus)
+      .where("academicYearId", "==", year.id);
   query = teacherOnly ?
     query.where("teacherId", "==", queryTeacherId) :
     query.where("groupId", "==", groupId);
@@ -2780,7 +2956,11 @@ exports.consultarHorarios = onCall(async (request) => {
       {id: subject.groupId, name: subject.groupName},
     ])).values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
   }
-  return {subjects, groups: allowedGroups};
+  return {
+    subjects,
+    groups: allowedGroups,
+    academicYear: {id: year.id, year: year.year, status: year.status},
+  };
 });
 
 exports.crearHorario = onCall(async (request) => {
@@ -2816,6 +2996,8 @@ exports.crearHorario = onCall(async (request) => {
       performedByRole: caller.role,
       institutionId: institution,
       campusId: campus,
+      academicYearId: schedule.academicYearId,
+      academicYear: schedule.academicYear,
       groupId: schedule.groupId,
       groupName: schedule.groupName,
       createdAt: FieldValue.serverTimestamp(),
@@ -2836,6 +3018,14 @@ exports.editarHorario = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Horario fuera de tu sede.");
   }
   const current = snapshot.data();
+  const activeYear = await requireActiveAcademicYear(
+      current.institutionId, current.campusId,
+  );
+  if (current.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition", "Los horarios historicos son de solo lectura.",
+    );
+  }
   const schedule = await validatedScheduleData(
       request.data, current.institutionId, current.campusId,
   );
@@ -2869,6 +3059,8 @@ exports.editarHorario = onCall(async (request) => {
       performedByRole: caller.role,
       institutionId: current.institutionId,
       campusId: current.campusId,
+      academicYearId: schedule.academicYearId,
+      academicYear: schedule.academicYear,
       groupId: schedule.groupId,
       groupName: schedule.groupName,
       createdAt: FieldValue.serverTimestamp(),
@@ -2885,6 +3077,19 @@ exports.eliminarHorario = onCall(async (request) => {
   const expectedRevision = scheduleRevision(request.data?.expectedRevision);
   const ref = db.collection("subjects").doc(id);
   let deletedSchedule;
+  const initialSnapshot = await ref.get();
+  if (!initialSnapshot.exists || !sameTenant(caller, initialSnapshot.data())) {
+    throw new HttpsError("permission-denied", "Horario fuera de tu sede.");
+  }
+  const initial = initialSnapshot.data();
+  const activeYear = await requireActiveAcademicYear(
+      initial.institutionId, initial.campusId,
+  );
+  if (initial.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition", "Los horarios historicos son de solo lectura.",
+    );
+  }
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || !sameTenant(caller, snapshot.data())) {
@@ -2907,6 +3112,8 @@ exports.eliminarHorario = onCall(async (request) => {
       performedByRole: caller.role,
       institutionId: current.institutionId,
       campusId: current.campusId,
+      academicYearId: current.academicYearId,
+      academicYear: current.academicYear,
       groupId: current.groupId,
       groupName: current.groupName,
       createdAt: FieldValue.serverTimestamp(),
@@ -2939,6 +3146,7 @@ exports.crearGrupoAcademico = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
   }
   await validateInstitutionCampus({institution, campus});
+  const academicYear = await requireActiveAcademicYear(institution, campus);
   const level = requiredString(request.data?.level, "nivel", 80);
   const section = requiredString(request.data?.section, "grupo", 10)
       .toUpperCase();
@@ -2946,6 +3154,7 @@ exports.crearGrupoAcademico = onCall(async (request) => {
   const duplicate = await db.collection("academic_groups")
       .where("institutionId", "==", institution)
       .where("campusId", "==", campus)
+      .where("academicYearId", "==", academicYear.id)
       .where("name", "==", name).limit(1).get();
   if (!duplicate.empty) {
     throw new HttpsError("already-exists", "El grupo ya existe en esta sede.");
@@ -2955,6 +3164,8 @@ exports.crearGrupoAcademico = onCall(async (request) => {
   const group = {
     institutionId: institution,
     campusId: campus,
+    academicYearId: academicYear.id,
+    academicYear: academicYear.year,
     level,
     section,
     name,
@@ -2973,6 +3184,8 @@ exports.crearGrupoAcademico = onCall(async (request) => {
     performedBy: caller.uid,
     institutionId: institution,
     campusId: campus,
+    academicYearId: academicYear.id,
+    academicYear: academicYear.year,
     createdAt: FieldValue.serverTimestamp(),
   });
   await batch.commit();
@@ -2989,6 +3202,14 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
   if (!snapshot.exists || !sameTenant(caller, current)) {
     throw new HttpsError("permission-denied", "Grupo fuera de tu alcance.");
   }
+  const activeYear = await requireActiveAcademicYear(
+      current.institutionId, current.campusId,
+  );
+  if (current.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition", "Los grupos historicos son de solo lectura.",
+    );
+  }
   const active = request.data?.active;
   if (typeof active !== "boolean") {
     throw new HttpsError("invalid-argument", "Estado de grupo no valido.");
@@ -3001,6 +3222,7 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
   const duplicate = await db.collection("academic_groups")
       .where("institutionId", "==", current.institutionId)
       .where("campusId", "==", current.campusId)
+      .where("academicYearId", "==", current.academicYearId)
       .where("name", "==", name).get();
   if (duplicate.docs.some((item) => item.id !== id)) {
     throw new HttpsError("already-exists", "El grupo ya existe en esta sede.");
@@ -3024,6 +3246,8 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
     performedBy: caller.uid,
     institutionId: current.institutionId,
     campusId: current.campusId,
+    academicYearId: current.academicYearId,
+    academicYear: current.academicYear,
     createdAt: FieldValue.serverTimestamp(),
   });
   await batch.commit();
@@ -3039,6 +3263,14 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
   const current = snapshot.data() || {};
   if (!snapshot.exists || !sameTenant(caller, current)) {
     throw new HttpsError("permission-denied", "Grupo fuera de tu alcance.");
+  }
+  const activeYear = await requireActiveAcademicYear(
+      current.institutionId, current.campusId,
+  );
+  if (current.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition", "Los grupos historicos son de solo lectura.",
+    );
   }
   const collections = [
     ["users", "groupId"],
@@ -3080,6 +3312,8 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
     performedBy: caller.uid,
     institutionId: current.institutionId,
     campusId: current.campusId,
+    academicYearId: current.academicYearId,
+    academicYear: current.academicYear,
     createdAt: FieldValue.serverTimestamp(),
   });
   await batch.commit();
@@ -3099,9 +3333,11 @@ exports.obtenerOpcionesAudienciaArchivos = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
   }
   const teacherGroups = await fileTeacherGroupIds(caller);
+  const academicYear = await requireActiveAcademicYear(institution, campus);
   const groupSnapshot = await db.collection("academic_groups")
       .where("institutionId", "==", institution)
       .where("campusId", "==", campus)
+      .where("academicYearId", "==", academicYear.id)
       .where("active", "==", true).get();
   const groups = groupSnapshot.docs
       .filter((item) => caller.role !== "Docente" ||
@@ -3147,9 +3383,11 @@ exports.listarArchivos = onCall(async (request) => {
   if (!sameTenant(caller, {institution, campus})) {
     throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
   }
+  const academicYear = await requireActiveAcademicYear(institution, campus);
   let query = db.collection("files")
       .where("institutionId", "==", institution)
       .where("campusId", "==", campus)
+      .where("academicYearId", "==", academicYear.id)
       .where("status", "==", "active");
   if (caller.role === "Familiar") {
     const studentId = requiredString(
@@ -3203,6 +3441,7 @@ exports.solicitarCargaArchivo = onCall(async (request) => {
   if (!sameTenant(caller, {institution, campus})) {
     throw new HttpsError("permission-denied", "No puedes cargar en otra sede.");
   }
+  const academicYear = await requireActiveAcademicYear(institution, campus);
   const audience = await resolveFileAudience(
       caller, request.data || {}, institution, campus,
   );
@@ -3256,6 +3495,8 @@ exports.solicitarCargaArchivo = onCall(async (request) => {
         `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
       institutionId: institution,
       campusId: campus,
+      academicYearId: academicYear.id,
+      academicYear: academicYear.year,
       storagePath,
       status: "uploading",
       createdAt: FieldValue.serverTimestamp(),
@@ -3280,6 +3521,14 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
   if (!snapshot.exists || file.status !== "uploading" ||
       file.uploadedBy !== caller.uid || !sameTenant(caller, file)) {
     throw new HttpsError("permission-denied", "Reserva de archivo no valida.");
+  }
+  const activeYear = await requireActiveAcademicYear(
+      file.institutionId, file.campusId,
+  );
+  if (file.academicYearId !== activeYear.id) {
+    throw new HttpsError(
+        "failed-precondition", "La reserva pertenece a un anio cerrado.",
+    );
   }
   const [metadata] = await storage.bucket().file(file.storagePath)
       .getMetadata();
@@ -3342,6 +3591,8 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
       performedBy: caller.uid,
       institutionId: file.institutionId,
       campusId: file.campusId,
+      academicYearId: file.academicYearId,
+      academicYear: file.academicYear,
       audienceType: file.audienceType,
       targetGroupIds: file.targetGroupIds,
       targetStudentIds: file.targetStudentIds,
@@ -3384,6 +3635,8 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
       targetStudentIds: file.targetStudentIds,
       institutionId: file.institutionId,
       campusId: file.campusId,
+      academicYearId: file.academicYearId,
+      academicYear: file.academicYear,
       createdAt: FieldValue.serverTimestamp(),
     });
   } catch (error) {
@@ -3994,6 +4247,9 @@ exports.registrarAuditoria = onCall(async (request) => {
   }
 
   if (type === "route_history") {
+    const academicYear = await requireActiveAcademicYear(
+        caller.institution, caller.campus,
+    );
     await db.collection("routes_admin_history").add({
       routeId: requiredString(payload.routeId, "routeId", 128),
       routeName: requiredString(payload.routeName, "routeName", 200),
@@ -4002,6 +4258,8 @@ exports.registrarAuditoria = onCall(async (request) => {
       adminName: callerName,
       institution: caller.institution,
       campus: caller.campus,
+      academicYearId: academicYear.id,
+      academicYear: academicYear.year,
       date: now,
       changes: payload.changes && typeof payload.changes === "object" ?
         payload.changes : {},
@@ -4010,6 +4268,15 @@ exports.registrarAuditoria = onCall(async (request) => {
   }
 
   if (type === "schedule_history") {
+    const subjectData = payload.subjectData &&
+      typeof payload.subjectData === "object" ? payload.subjectData : {};
+    const academicYear = await resolveAcademicYear(
+        caller,
+        caller.institution,
+        caller.campus,
+        subjectData.academicYearId,
+        true,
+    );
     await db.collection("schedule_history").add({
       action: requiredString(payload.action, "action", 50),
       timestamp: now,
@@ -4017,8 +4284,9 @@ exports.registrarAuditoria = onCall(async (request) => {
       userName: callerName,
       institutionId: caller.institution,
       campusId: caller.campus,
-      subjectData: payload.subjectData &&
-        typeof payload.subjectData === "object" ? payload.subjectData : {},
+      academicYearId: academicYear.id,
+      academicYear: academicYear.year,
+      subjectData,
       message: typeof payload.message === "string" ?
         payload.message.slice(0, 500) : "",
     });
@@ -4090,6 +4358,694 @@ exports.seleccionarHijoActivo = onCall(async (request) => {
     activeStudentId: studentId,
   }, {merge: true});
   return {success: true, studentId};
+});
+
+/**
+ * Reune la carga vigente transferible de un docente y detecta choques.
+ * @param {Object} caller Administrador.
+ * @param {string} sourceId Docente saliente.
+ * @param {string} targetId Docente reemplazo.
+ * @return {Promise<Object>} Contexto validado e impacto.
+ */
+async function teacherTransferContext(caller, sourceId, targetId) {
+  if (sourceId === targetId) {
+    throw new HttpsError(
+        "invalid-argument", "El docente saliente y el reemplazo deben diferir.",
+    );
+  }
+  const [sourceSnapshot, targetSnapshot] = await Promise.all([
+    db.collection("users").doc(sourceId).get(),
+    db.collection("users").doc(targetId).get(),
+  ]);
+  const source = sourceSnapshot.data() || {};
+  const target = targetSnapshot.data() || {};
+  for (const [snapshot, teacher, label] of [
+    [sourceSnapshot, source, "saliente"],
+    [targetSnapshot, target, "reemplazo"],
+  ]) {
+    if (!snapshot.exists || teacher.role !== "Docente" ||
+        teacher.status !== "activo") {
+      throw new HttpsError(
+          "failed-precondition", `El docente ${label} no esta activo.`,
+      );
+    }
+    if (!sameTenant(caller, teacher)) {
+      throw new HttpsError(
+          "permission-denied", `El docente ${label} esta fuera de tu sede.`,
+      );
+    }
+  }
+  if (source.institution !== target.institution ||
+      source.campus !== target.campus) {
+    throw new HttpsError(
+        "failed-precondition", "El reemplazo debe pertenecer a la misma sede.",
+    );
+  }
+  const year = await requireActiveAcademicYear(
+      source.institution, source.campus,
+  );
+  const [sourceSubjects, targetSubjects, routes, dailyRoutes, threads,
+    recipientFiles, uploadedFiles] = await Promise.all([
+    db.collection("subjects")
+        .where("academicYearId", "==", year.id)
+        .where("teacherId", "==", sourceId).get(),
+    db.collection("subjects")
+        .where("academicYearId", "==", year.id)
+        .where("teacherId", "==", targetId).get(),
+    db.collection("routes").where("gestionador", "==", sourceId).get(),
+    db.collection("daily_routes").where("gestionador", "==", sourceId).get(),
+    db.collection("message_threads")
+        .where("participantIds", "array-contains", sourceId).get(),
+    db.collection("files")
+        .where("recipientUserIds", "array-contains", sourceId).get(),
+    db.collection("files").where("uploadedBy", "==", sourceId).get(),
+  ]);
+  const inScope = (item) => {
+    const data = item.data();
+    const institution = data.institutionId || data.institution;
+    const campus = data.campusId || data.campus;
+    return institution === source.institution && campus === source.campus &&
+      data.academicYearId === year.id;
+  };
+  const scopedRoutes = routes.docs.filter(inScope);
+  const scopedDailyRoutes = dailyRoutes.docs.filter(inScope);
+  const scopedThreads = threads.docs.filter(inScope);
+  const scopedFiles = uniqueDocuments(
+      recipientFiles.docs,
+      uploadedFiles.docs,
+  ).filter(inScope);
+  const conflicts = [];
+  for (const sourceSubject of sourceSubjects.docs) {
+    const current = sourceSubject.data();
+    for (const targetSubject of targetSubjects.docs) {
+      const assigned = targetSubject.data();
+      if (current.day !== assigned.day) continue;
+      const currentStart = Number(current.startMinutes);
+      const currentEnd = Number(current.endMinutes);
+      const targetStart = Number(assigned.startMinutes);
+      const targetEnd = Number(assigned.endMinutes);
+      if (currentStart < targetEnd && currentEnd > targetStart) {
+        conflicts.push({
+          type: "schedule",
+          sourceSubjectId: sourceSubject.id,
+          targetSubjectId: targetSubject.id,
+          message: `${current.day}: ${current.subject} coincide con ` +
+            `${assigned.subject}.`,
+        });
+      }
+    }
+  }
+  const sourceTutorGroupId = source.tutorGroupId || null;
+  const targetTutorGroupId = target.tutorGroupId || null;
+  if (sourceTutorGroupId && targetTutorGroupId &&
+      sourceTutorGroupId !== targetTutorGroupId) {
+    conflicts.push({
+      type: "tutoring",
+      message: "El reemplazo ya es director de otro grupo.",
+    });
+  }
+  const targetHasLoad = targetSubjects.size > 0 ||
+    Boolean(targetTutorGroupId);
+  return {
+    sourceId,
+    targetId,
+    source,
+    target,
+    year,
+    sourceSubjects: sourceSubjects.docs,
+    targetSubjects: targetSubjects.docs,
+    routes: scopedRoutes,
+    dailyRoutes: scopedDailyRoutes,
+    threads: scopedThreads,
+    files: scopedFiles,
+    sourceTutorGroupId,
+    targetHasLoad,
+    conflicts,
+    impact: {
+      schedules: sourceSubjects.size,
+      tutoring: sourceTutorGroupId ? 1 : 0,
+      routes: scopedRoutes.length,
+      dailyRoutes: scopedDailyRoutes.length,
+      messageThreads: scopedThreads.length,
+      accessibleFiles: scopedFiles.length,
+    },
+  };
+}
+
+/**
+ * @param {Object} context Contexto interno.
+ * @return {Object} Respuesta segura.
+ */
+function teacherTransferResponse(context) {
+  const name = (teacher) =>
+    `${teacher.firstName || ""} ${teacher.lastName || ""}`.trim();
+  return {
+    source: {id: context.sourceId, name: name(context.source)},
+    target: {id: context.targetId, name: name(context.target)},
+    academicYear: {
+      id: context.year.id,
+      year: context.year.year,
+    },
+    impact: context.impact,
+    targetHasLoad: context.targetHasLoad,
+    conflicts: context.conflicts,
+  };
+}
+
+exports.previsualizarTrasladoDocente = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireUserAction(caller, "editar");
+  const sourceId = requiredString(
+      request.data?.sourceTeacherId, "docente saliente", 128,
+  );
+  const targetId = requiredString(
+      request.data?.targetTeacherId, "docente reemplazo", 128,
+  );
+  return teacherTransferResponse(
+      await teacherTransferContext(caller, sourceId, targetId),
+  );
+});
+
+exports.listarTrasladosDocentes = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireUserAction(caller, "editar");
+  const institution = caller.isSuperadmin === true ? requiredString(
+      request.data?.institutionId, "institucion", 120,
+  ) : caller.institution;
+  const campus = caller.isSuperadmin === true ? requiredString(
+      request.data?.campusId, "sede", 120,
+  ) : caller.campus;
+  if (!sameTenant(caller, {institutionId: institution, campusId: campus})) {
+    throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
+  }
+  let query = db.collection("teacher_transfers")
+      .where("status", "==", "active");
+  if (caller.isSuperadmin !== true || request.data?.allTenants !== true) {
+    query = query.where("institutionId", "==", institution)
+        .where("campusId", "==", campus);
+  }
+  const snapshot = await query.get();
+  const transfers = snapshot.docs.map((item) => {
+    const data = item.data();
+    return {
+      id: item.id,
+      sourceTeacherName: data.sourceTeacherName,
+      targetTeacherName: data.targetTeacherName,
+      mode: data.mode,
+      academicYear: data.academicYear,
+      endsAtMillis: data.endsAt?.toMillis?.() || null,
+      impact: data.impact || {},
+    };
+  });
+  return {transfers};
+});
+
+exports.ejecutarTrasladoDocente = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireUserAction(caller, "editar");
+  const sourceId = requiredString(
+      request.data?.sourceTeacherId, "docente saliente", 128,
+  );
+  const targetId = requiredString(
+      request.data?.targetTeacherId, "docente reemplazo", 128,
+  );
+  const mode = requiredString(request.data?.mode, "modalidad", 20);
+  if (!["temporary", "permanent"].includes(mode)) {
+    throw new HttpsError("invalid-argument", "Modalidad no valida.");
+  }
+  const allowMerge = request.data?.allowMerge === true;
+  const context = await teacherTransferContext(caller, sourceId, targetId);
+  if (context.conflicts.length) {
+    throw new HttpsError(
+        "failed-precondition",
+        `Hay ${context.conflicts.length} conflicto(s) que debes resolver.`,
+        {conflicts: context.conflicts},
+    );
+  }
+  if (context.targetHasLoad && !allowMerge) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El reemplazo ya tiene carga. Autoriza expresamente la combinacion.",
+    );
+  }
+  let endsAt = null;
+  if (mode === "temporary") {
+    const endMillis = Number(request.data?.endsAtMillis);
+    const now = Date.now();
+    if (!Number.isFinite(endMillis) || endMillis <= now ||
+        endMillis > now + 2 * 366 * 24 * 60 * 60 * 1000) {
+      throw new HttpsError(
+          "invalid-argument", "Indica una fecha valida para el reemplazo.",
+      );
+    }
+    endsAt = Timestamp.fromMillis(endMillis);
+  }
+  const targetName = `${context.target.firstName || ""} ` +
+    `${context.target.lastName || ""}`.trim();
+  const transferRef = db.collection("teacher_transfers").doc();
+  const changes = {
+    subjectIds: context.sourceSubjects.map((item) => item.id),
+    routeIds: context.routes.map((item) => item.id),
+    dailyRouteIds: context.dailyRoutes.map((item) => item.id),
+    threadIds: [],
+    fileIds: [],
+    tutorGroupId: context.sourceTutorGroupId,
+  };
+  const operations = [];
+  for (const item of context.sourceSubjects) {
+    operations.push((batch) => batch.update(item.ref, {
+      teacherId: targetId,
+      teacherName: targetName,
+      revision: Number(item.data().revision || 1) + 1,
+      updatedBy: caller.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const item of context.routes) {
+    operations.push((batch) => batch.update(item.ref, {
+      gestionador: targetId,
+      updatedBy: caller.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const item of context.dailyRoutes) {
+    operations.push((batch) => batch.update(item.ref, {
+      gestionador: targetId,
+      gestionadaPorNombre: targetName,
+      updatedBy: caller.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const item of context.threads) {
+    const data = item.data();
+    const participants = Array.isArray(data.participantIds) ?
+      [...data.participantIds] : [];
+    if (participants.includes(targetId)) continue;
+    participants.push(targetId);
+    const names = {...(data.participantNames || {}), [targetId]: targetName};
+    const roles = {...(data.participantRoles || {}), [targetId]: "Docente"};
+    changes.threadIds.push(item.id);
+    operations.push((batch) => batch.update(item.ref, {
+      participantIds: participants,
+      participantNames: names,
+      participantRoles: roles,
+      delegatedFromTeacherId: sourceId,
+      delegatedToTeacherId: targetId,
+      delegatedByTransferId: transferRef.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const item of context.files) {
+    const recipients = Array.isArray(item.data().recipientUserIds) ?
+      [...item.data().recipientUserIds] : [];
+    if (recipients.includes(targetId)) continue;
+    recipients.push(targetId);
+    changes.fileIds.push(item.id);
+    operations.push((batch) => batch.update(item.ref, {
+      recipientUserIds: recipients,
+      delegatedByTransferId: transferRef.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  if (context.sourceTutorGroupId) {
+    operations.push((batch) => batch.update(
+        db.collection("users").doc(targetId), {
+          tutorGroupId: context.sourceTutorGroupId,
+          updatedAt: FieldValue.serverTimestamp(),
+        }));
+  }
+  operations.push((batch) => batch.update(
+      db.collection("users").doc(sourceId), {
+        status: "inactivo",
+        tutorGroupId: FieldValue.delete(),
+        transferredToTeacherId: targetId,
+        activeTeacherTransferId: transferRef.id,
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
+  operations.push((batch) => batch.create(transferRef, {
+    sourceTeacherId: sourceId,
+    targetTeacherId: targetId,
+    sourceTeacherName: `${context.source.firstName || ""} ` +
+      `${context.source.lastName || ""}`.trim(),
+    targetTeacherName: targetName,
+    institutionId: context.source.institution,
+    campusId: context.source.campus,
+    academicYearId: context.year.id,
+    academicYear: context.year.year,
+    mode,
+    status: "active",
+    allowMerge,
+    endsAt,
+    impact: context.impact,
+    changes,
+    performedBy: caller.uid,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }));
+  if (operations.length > 400) {
+    throw new HttpsError(
+        "resource-exhausted",
+        "La carga supera el limite seguro. Contacta al superadministrador.",
+    );
+  }
+  await auth.updateUser(sourceId, {disabled: true});
+  try {
+    const batch = db.batch();
+    operations.forEach((operation) => operation(batch));
+    await batch.commit();
+  } catch (error) {
+    await auth.updateUser(sourceId, {disabled: false}).catch(() => null);
+    throw error;
+  }
+  return {success: true, id: transferRef.id};
+});
+
+exports.revertirTrasladoDocenteTemporal = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireUserAction(caller, "editar");
+  const id = requiredString(request.data?.id, "traslado", 128);
+  const ref = db.collection("teacher_transfers").doc(id);
+  const snapshot = await ref.get();
+  const transfer = snapshot.data() || {};
+  if (!snapshot.exists || !sameTenant(caller, transfer)) {
+    throw new HttpsError("permission-denied", "Traslado fuera de tu sede.");
+  }
+  if (transfer.mode !== "temporary" || transfer.status !== "active") {
+    throw new HttpsError(
+        "failed-precondition", "El traslado no es temporal o ya fue cerrado.",
+    );
+  }
+  const sourceSnapshot = await db.collection("users")
+      .doc(transfer.sourceTeacherId).get();
+  const source = sourceSnapshot.data() || {};
+  const sourceName = `${source.firstName || ""} ` +
+    `${source.lastName || ""}`.trim();
+  const changes = transfer.changes || {};
+  const operations = [];
+  for (const subjectId of changes.subjectIds || []) {
+    const subjectRef = db.collection("subjects").doc(subjectId);
+    const item = await subjectRef.get();
+    if (item.data()?.teacherId === transfer.targetTeacherId) {
+      operations.push((batch) => batch.update(subjectRef, {
+        teacherId: transfer.sourceTeacherId,
+        teacherName: sourceName,
+        revision: Number(item.data().revision || 1) + 1,
+        updatedBy: caller.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
+    }
+  }
+  for (const [collection, ids] of [
+    ["routes", changes.routeIds || []],
+    ["daily_routes", changes.dailyRouteIds || []],
+  ]) {
+    for (const documentId of ids) {
+      const itemRef = db.collection(collection).doc(documentId);
+      const item = await itemRef.get();
+      if (item.data()?.gestionador === transfer.targetTeacherId) {
+        operations.push((batch) => batch.update(itemRef, {
+          gestionador: transfer.sourceTeacherId,
+          ...(collection === "daily_routes" ?
+            {gestionadaPorNombre: sourceName} : {}),
+          updatedBy: caller.uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        }));
+      }
+    }
+  }
+  for (const documentId of changes.threadIds || []) {
+    const itemRef = db.collection("message_threads").doc(documentId);
+    const item = await itemRef.get();
+    const data = item.data() || {};
+    const participants = Array.isArray(data.participantIds) ?
+      data.participantIds.filter((value) =>
+        value !== transfer.targetTeacherId) : [];
+    const names = {...(data.participantNames || {})};
+    const roles = {...(data.participantRoles || {})};
+    delete names[transfer.targetTeacherId];
+    delete roles[transfer.targetTeacherId];
+    operations.push((batch) => batch.update(itemRef, {
+      participantIds: participants,
+      participantNames: names,
+      participantRoles: roles,
+      delegatedFromTeacherId: FieldValue.delete(),
+      delegatedToTeacherId: FieldValue.delete(),
+      delegatedByTransferId: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const documentId of changes.fileIds || []) {
+    const itemRef = db.collection("files").doc(documentId);
+    const item = await itemRef.get();
+    const recipients = Array.isArray(item.data()?.recipientUserIds) ?
+      item.data().recipientUserIds.filter((value) =>
+        value !== transfer.targetTeacherId) : [];
+    operations.push((batch) => batch.update(itemRef, {
+      recipientUserIds: recipients,
+      delegatedByTransferId: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  operations.push((batch) => batch.update(
+      db.collection("users").doc(transfer.sourceTeacherId), {
+        status: "activo",
+        tutorGroupId: changes.tutorGroupId || FieldValue.delete(),
+        transferredToTeacherId: FieldValue.delete(),
+        activeTeacherTransferId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
+  if (changes.tutorGroupId) {
+    operations.push((batch) => batch.update(
+        db.collection("users").doc(transfer.targetTeacherId), {
+          tutorGroupId: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }));
+  }
+  operations.push((batch) => batch.update(ref, {
+    status: "reverted",
+    revertedBy: caller.uid,
+    revertedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }));
+  if (operations.length > 400) {
+    throw new HttpsError("resource-exhausted", "El traslado requiere soporte.");
+  }
+  await auth.updateUser(transfer.sourceTeacherId, {disabled: false});
+  try {
+    const batch = db.batch();
+    operations.forEach((operation) => operation(batch));
+    await batch.commit();
+  } catch (error) {
+    await auth.updateUser(transfer.sourceTeacherId, {disabled: true})
+        .catch(() => null);
+    throw error;
+  }
+  return {success: true};
+});
+
+exports.listarAniosLectivos = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireAdmin(caller);
+  const institution = caller.isSuperadmin === true ? requiredString(
+      request.data?.institutionId, "institucion", 120,
+  ) : caller.institution;
+  const campus = caller.isSuperadmin === true ? requiredString(
+      request.data?.campusId, "sede", 120,
+  ) : caller.campus;
+  if (!sameTenant(caller, {institutionId: institution, campusId: campus})) {
+    throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
+  }
+  await validateInstitutionCampus({institution, campus});
+  const snapshot = await db.collection("academic_years")
+      .where("institutionId", "==", institution)
+      .where("campusId", "==", campus).get();
+  const years = snapshot.docs.map((item) => ({id: item.id, ...item.data()}))
+      .sort((a, b) => Number(b.year) - Number(a.year));
+  return {years};
+});
+
+exports.prepararAnioLectivo = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireAdmin(caller);
+  const institution = caller.isSuperadmin === true ? requiredString(
+      request.data?.institutionId, "institucion", 120,
+  ) : caller.institution;
+  const campus = caller.isSuperadmin === true ? requiredString(
+      request.data?.campusId, "sede", 120,
+  ) : caller.campus;
+  if (!sameTenant(caller, {institutionId: institution, campusId: campus})) {
+    throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
+  }
+  await validateInstitutionCampus({institution, campus});
+  const year = validatedAcademicYear(request.data?.year);
+  const cloneGroups = request.data?.cloneGroups !== false;
+  const cloneSchedules = request.data?.cloneSchedules === true;
+  if (cloneSchedules && !cloneGroups) {
+    throw new HttpsError(
+        "invalid-argument", "Para copiar horarios tambien debes copiar grupos.",
+    );
+  }
+  const targetId = academicYearId(institution, campus, year);
+  if ((await db.collection("academic_years").doc(targetId).get()).exists) {
+    throw new HttpsError("already-exists", "Ese anio lectivo ya existe.");
+  }
+  const active = await requireActiveAcademicYear(institution, campus);
+  if (year <= Number(active.year)) {
+    throw new HttpsError(
+        "failed-precondition", "El nuevo anio debe ser posterior al vigente.",
+    );
+  }
+
+  const sourceGroups = cloneGroups ? await db.collection("academic_groups")
+      .where("institutionId", "==", institution)
+      .where("campusId", "==", campus)
+      .where("academicYearId", "==", active.id).get() : null;
+  const groupMap = new Map();
+  const operations = [];
+  for (const source of sourceGroups?.docs || []) {
+    const target = db.collection("academic_groups").doc();
+    groupMap.set(source.id, target.id);
+    const data = source.data();
+    operations.push((batch) => batch.create(target, {
+      institutionId: institution,
+      campusId: campus,
+      academicYearId: targetId,
+      academicYear: year,
+      level: data.level,
+      section: data.section,
+      name: data.name,
+      order: Number(data.order || 0),
+      active: data.active === true,
+      sourceGroupId: source.id,
+      createdBy: caller.uid,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+
+  let copiedSchedules = 0;
+  if (cloneSchedules) {
+    const sourceSchedules = await db.collection("subjects")
+        .where("institutionId", "==", institution)
+        .where("campusId", "==", campus)
+        .where("academicYearId", "==", active.id).get();
+    for (const source of sourceSchedules.docs) {
+      const data = source.data();
+      const targetGroupId = groupMap.get(data.groupId);
+      if (!targetGroupId) continue;
+      const target = db.collection("subjects").doc();
+      const targetGroup = sourceGroups.docs.find((item) =>
+        item.id === data.groupId)?.data();
+      operations.push((batch) => batch.create(target, {
+        ...data,
+        groupId: targetGroupId,
+        groupName: targetGroup?.name || data.groupName,
+        academicYearId: targetId,
+        academicYear: year,
+        sourceSubjectId: source.id,
+        revision: 1,
+        createdBy: caller.uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
+      copiedSchedules += 1;
+    }
+  }
+
+  const yearRef = db.collection("academic_years").doc(targetId);
+  operations.unshift((batch) => batch.create(yearRef, {
+    institutionId: institution,
+    campusId: campus,
+    year,
+    status: "draft",
+    sourceAcademicYearId: active.id,
+    copiedGroups: groupMap.size,
+    copiedSchedules,
+    createdBy: caller.uid,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }));
+  if (operations.length > 400) {
+    throw new HttpsError(
+        "resource-exhausted",
+        "La preparacion supera el limite atomico seguro. " +
+          "Reduce la copia de horarios o solicita soporte.",
+    );
+  }
+  const batch = db.batch();
+  operations.forEach((operation) => operation(batch));
+  await batch.commit();
+  return {
+    success: true,
+    id: targetId,
+    copiedGroups: groupMap.size,
+    copiedSchedules,
+  };
+});
+
+exports.activarAnioLectivo = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireAdmin(caller);
+  const id = requiredString(request.data?.academicYearId, "anio lectivo", 128);
+  const confirmation = requiredString(
+      request.data?.confirmation, "confirmacion", 40,
+  );
+  const ref = db.collection("academic_years").doc(id);
+  await db.runTransaction(async (transaction) => {
+    const targetSnapshot = await transaction.get(ref);
+    const target = targetSnapshot.data() || {};
+    if (!targetSnapshot.exists || !sameTenant(caller, target)) {
+      throw new HttpsError("permission-denied", "Anio fuera de tu alcance.");
+    }
+    if (target.status !== "draft") {
+      throw new HttpsError(
+          "failed-precondition", "Solo se activa un anio en preparacion.",
+      );
+    }
+    if (confirmation !== `ACTIVAR ${target.year}`) {
+      throw new HttpsError("invalid-argument", "Confirmacion incorrecta.");
+    }
+    const settingsRef = db.collection("academic_year_settings")
+        .doc(academicYearSettingsId(target.institutionId, target.campusId));
+    const settingsSnapshot = await transaction.get(settingsRef);
+    const previousId = settingsSnapshot.data()?.activeYearId;
+    if (typeof previousId === "string" && previousId && previousId !== id) {
+      const previousRef = db.collection("academic_years").doc(previousId);
+      const previousSnapshot = await transaction.get(previousRef);
+      if (previousSnapshot.exists) {
+        transaction.update(previousRef, {
+          status: "closed",
+          closedBy: caller.uid,
+          closedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+    transaction.set(settingsRef, {
+      institutionId: target.institutionId,
+      campusId: target.campusId,
+      activeYearId: id,
+      activeYear: target.year,
+      updatedBy: caller.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.update(ref, {
+      status: "active",
+      activatedBy: caller.uid,
+      activatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.create(db.collection("academic_year_history").doc(), {
+      academicYearId: id,
+      action: "activated",
+      institutionId: target.institutionId,
+      campusId: target.campusId,
+      academicYear: target.year,
+      performedBy: caller.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return {success: true};
 });
 
 exports.submitWebsiteForm = onCall(async (request) => {

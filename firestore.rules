@@ -48,6 +48,17 @@ service cloud.firestore {
            (data.campus == me().campus || data.campusId == me().campus)));
     }
 
+    function academicYearActive(data) {
+      return data.academicYearId is string &&
+        get(/databases/$(database)/documents/academic_years/$(data.academicYearId))
+          .data.status == 'active' &&
+        sameTenant(get(/databases/$(database)/documents/academic_years/$(data.academicYearId)).data);
+    }
+
+    function operationalYearReadable(data) {
+      return admin() || academicYearActive(data);
+    }
+
     function enrollmentGroupId(data) {
       return data.data.groupId;
     }
@@ -93,7 +104,8 @@ service cloud.firestore {
       let permissions = user.permissions is list ? user.permissions : [];
       let local = (data.institutionId == user.institution &&
         data.campusId == user.campus);
-      return user.status == 'activo' && data.status == 'active' && (
+      return user.status == 'activo' && data.status == 'active' &&
+        operationalYearReadable(data) && (
           user.isSuperadmin == true ||
           (local && user.role == 'Administrador' && permissions.hasAny([
             'archivos.ver', 'archivos.crear', 'archivos.eliminar'
@@ -125,7 +137,28 @@ service cloud.firestore {
     }
 
     match /academic_groups/{id} {
-      allow read: if resource.data.active == true;
+      allow read: if active() && resource.data.active == true &&
+        sameTenant(resource.data) && operationalYearReadable(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /academic_years/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /academic_year_settings/{id} {
+      allow read: if active() && sameTenant(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /academic_year_history/{id} {
+      allow read: if admin() && sameTenant(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /teacher_transfers/{id} {
+      allow read: if admin() && sameTenant(resource.data);
       allow create, update, delete: if false;
     }
 
@@ -179,7 +212,8 @@ service cloud.firestore {
     }
 
     match /enrollments/{enrollmentId} {
-      allow read: if canReadEnrollment(resource.data);
+      allow read: if canReadEnrollment(resource.data) &&
+        operationalYearReadable(resource.data);
       // Altas y transiciones pasan por Cloud Functions para validar sede,
       // grado, parentesco, unicidad, estados, notificaciones y auditoria.
       allow create, update, delete: if false;
@@ -241,12 +275,16 @@ service cloud.firestore {
         return active() && request.auth.uid in data.participantIds;
       }
       allow read: if participant(resource.data);
-      allow create: if participant(request.resource.data) && sameTenant(request.resource.data) &&
+      allow create: if participant(request.resource.data) &&
+        sameTenant(request.resource.data) &&
+        academicYearActive(request.resource.data) &&
         request.resource.data.participantIds.size() >= 2;
       allow update: if participant(resource.data) && participant(request.resource.data) &&
+        academicYearActive(resource.data) &&
         request.resource.data.participantIds == resource.data.participantIds &&
         request.resource.data.institutionId == resource.data.institutionId &&
-        request.resource.data.campusId == resource.data.campusId;
+        request.resource.data.campusId == resource.data.campusId &&
+        request.resource.data.academicYearId == resource.data.academicYearId;
       allow delete: if admin() && sameTenant(resource.data);
 
       match /messages/{messageId} {
@@ -255,6 +293,7 @@ service cloud.firestore {
         }
         allow read: if active() && request.auth.uid in parent().participantIds;
         allow create: if active() && request.auth.uid in parent().participantIds &&
+          academicYearActive(parent()) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.recipientId in parent().participantIds &&
           request.resource.data.body is string &&
@@ -264,7 +303,7 @@ service cloud.firestore {
     }
 
     match /authorization_requests/{id} {
-      allow read: if active() && (
+      allow read: if active() && operationalYearReadable(resource.data) && (
         superadmin() ||
         (me().role == 'Administrador' &&
           (hasPermission('autorizaciones.ver') ||
@@ -330,7 +369,8 @@ service cloud.firestore {
     }
 
     match /subjects/{id} {
-      allow read: if active() && sameTenant(resource.data) && (
+      allow read: if active() && sameTenant(resource.data) &&
+        operationalYearReadable(resource.data) && (
         superadmin() ||
         (me().role == 'Administrador' &&
           (hasPermission('horarios.ver') ||
@@ -348,18 +388,29 @@ service cloud.firestore {
     }
 
     match /routes/{id} {
-      allow read: if sameTenant(resource.data);
-      allow create: if admin() && sameTenant(request.resource.data);
-      allow update, delete: if admin() && sameTenant(resource.data);
+      allow read: if sameTenant(resource.data) &&
+        operationalYearReadable(resource.data);
+      allow create: if admin() && sameTenant(request.resource.data) &&
+        academicYearActive(request.resource.data);
+      allow update: if admin() && sameTenant(resource.data) &&
+        academicYearActive(resource.data) &&
+        request.resource.data.academicYearId == resource.data.academicYearId;
+      allow delete: if admin() && sameTenant(resource.data) &&
+        academicYearActive(resource.data);
     }
 
     match /daily_routes/{routeId} {
-      allow read: if sameTenant(resource.data);
+      allow read: if sameTenant(resource.data) &&
+        operationalYearReadable(resource.data);
       allow create: if teacher() && sameTenant(request.resource.data) &&
+        academicYearActive(request.resource.data) &&
         request.resource.data.gestionador == request.auth.uid;
       allow update: if sameTenant(resource.data) &&
+        academicYearActive(resource.data) &&
+        request.resource.data.academicYearId == resource.data.academicYearId &&
         (admin() || (teacher() && resource.data.gestionador == request.auth.uid));
-      allow delete: if admin() && sameTenant(resource.data);
+      allow delete: if admin() && sameTenant(resource.data) &&
+        academicYearActive(resource.data);
 
       match /students/{studentId} {
         function route() {

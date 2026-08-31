@@ -118,6 +118,23 @@ Eliminar una fila, columna, componente, elemento o página modifica primero el b
 
 Los módulos sensibles generan registros con actor, sede, acción, fecha y contexto. Los historiales no se pueden falsificar desde el cliente. La visibilidad respeta sede; el superadministrador puede consultar transversalmente cuando corresponde.
 
+## Años lectivos
+
+En **Parámetros > Años lectivos**, un administrador prepara el siguiente año
+sin afectar el vigente. Puede copiar la estructura de grupos y, opcionalmente,
+los horarios para revisarlos. Al activar el nuevo período, el anterior queda
+cerrado y disponible únicamente para consulta. El sistema no cambia de año de
+forma automática.
+
+## Continuidad docente
+
+En **Usuarios > Continuidad docente**, el administrador elige al docente
+saliente y al reemplazo. El sistema muestra horarios, dirección de grupo,
+rutas, conversaciones y archivos involucrados, y bloquea choques antes de
+confirmar. El traslado puede ser temporal o definitivo. En uno temporal,
+**Restaurar** devuelve el acceso y la carga que todavía corresponda al docente
+original. La autoría histórica de mensajes y archivos no cambia.
+
 ## Rutas, QR y módulos en evolución
 
 Rutas gestiona recorridos y estados diarios, sujeto a permisos y sede. QR identifica al estudiante cuando está habilitado. Los permisos de ubicación y el flujo Android deben volver a validarse antes de publicar en Play Store. Toda ampliación futura debe mantener selección de hijo, grupos por sede, seguridad backend, auditoría y tema central.

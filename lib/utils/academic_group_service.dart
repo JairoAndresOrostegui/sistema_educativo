@@ -15,11 +15,30 @@ class AcademicGroupService {
     required String institutionId,
     required String campusId,
     bool activeOnly = true,
+    String? academicYearId,
   }) async {
+    var resolvedYearId = academicYearId;
+    if ((resolvedYearId ?? '').isEmpty) {
+      final settings = await _db
+          .collection('academic_year_settings')
+          .where('institutionId', isEqualTo: institutionId)
+          .where('campusId', isEqualTo: campusId)
+          .limit(1)
+          .get();
+      if (settings.docs.isEmpty) {
+        throw StateError('La sede no tiene un año lectivo vigente.');
+      }
+      resolvedYearId = (settings.docs.first.data()['activeYearId'] ?? '')
+          .toString();
+      if (resolvedYearId.isEmpty) {
+        throw StateError('La configuración del año lectivo es inválida.');
+      }
+    }
     Query<Map<String, dynamic>> query = _db
         .collection('academic_groups')
         .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId);
+        .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: resolvedYearId);
     if (activeOnly) query = query.where('active', isEqualTo: true);
     final snapshot = await query.get();
     final groups = snapshot.docs.map(AcademicGroup.fromDocument).toList();

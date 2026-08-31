@@ -45,6 +45,8 @@ class MessageThreadSummary {
   final String? lastSenderId;
   final String? lastSenderName;
   final DateTime? lastMessageAt;
+  final String? delegatedFromTeacherId;
+  final String? delegatedToTeacherId;
 
   const MessageThreadSummary({
     required this.id,
@@ -59,6 +61,8 @@ class MessageThreadSummary {
     this.lastSenderId,
     this.lastSenderName,
     this.lastMessageAt,
+    this.delegatedFromTeacherId,
+    this.delegatedToTeacherId,
   });
 
   factory MessageThreadSummary.fromMap(Map<String, dynamic> data, String id) {
@@ -95,32 +99,35 @@ class MessageThreadSummary {
       lastSenderId: data['lastSenderId']?.toString(),
       lastSenderName: data['lastSenderName']?.toString(),
       lastMessageAt: ts is Timestamp ? ts.toDate() : null,
+      delegatedFromTeacherId: data['delegatedFromTeacherId']?.toString(),
+      delegatedToTeacherId: data['delegatedToTeacherId']?.toString(),
+    );
+  }
+
+  String? _peerId(String userId) {
+    final excludedTeacher = userId == delegatedToTeacherId
+        ? delegatedFromTeacherId
+        : null;
+    return participantIds.cast<String?>().firstWhere(
+      (id) => id != userId && id != excludedTeacher,
+      orElse: () => null,
     );
   }
 
   String peerNameFor(String userId) {
-    final peerId = participantIds.cast<String?>().firstWhere(
-      (id) => id != userId,
-      orElse: () => null,
-    );
+    final peerId = _peerId(userId);
     if (peerId == null) return 'Conversación';
     return participantNames[peerId] ?? 'Conversación';
   }
 
   String peerRoleFor(String userId) {
-    final peerId = participantIds.cast<String?>().firstWhere(
-      (id) => id != userId,
-      orElse: () => null,
-    );
+    final peerId = _peerId(userId);
     if (peerId == null) return '';
     return participantRoles[peerId] ?? '';
   }
 
   String? peerIdFor(String userId) {
-    return participantIds.cast<String?>().firstWhere(
-      (id) => id != userId,
-      orElse: () => null,
-    );
+    return _peerId(userId);
   }
 }
 

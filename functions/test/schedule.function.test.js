@@ -4,6 +4,7 @@ const assert = require("assert");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {seedAcademicYear} = require("./academic_year_fixture");
 
 const projectId = "sistema-educativo-schedule-test";
 const functionsBase = `http://127.0.0.1:5002/${projectId}/us-central1`;
@@ -120,16 +121,21 @@ describe("horarios seguros", () => {
       nombre: "Colegio de prueba",
       sedes: ["campus-1", "campus-2"],
     });
+    const yearId = await seedAcademicYear(db, "inst-1", "campus-1");
+    const campus2YearId = await seedAcademicYear(db, "inst-1", "campus-2");
     await db.collection("academic_groups").doc("group-5a").set({
       institutionId: "inst-1", campusId: "campus-1", level: "Quinto",
+      academicYearId: yearId, academicYear: 2026,
       section: "A", name: "Quinto A", order: 5, active: true,
     });
     await db.collection("academic_groups").doc("group-6a").set({
       institutionId: "inst-1", campusId: "campus-1", level: "Sexto",
+      academicYearId: yearId, academicYear: 2026,
       section: "A", name: "Sexto A", order: 6, active: true,
     });
     await db.collection("academic_groups").doc("group-5a-campus-2").set({
       institutionId: "inst-1", campusId: "campus-2", level: "Quinto",
+      academicYearId: campus2YearId, academicYear: 2026,
       section: "A", name: "Quinto A", order: 5, active: true,
     });
     await seedUser("teacher-1", "Docente", {

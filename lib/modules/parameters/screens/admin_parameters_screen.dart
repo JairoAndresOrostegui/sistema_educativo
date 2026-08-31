@@ -6,6 +6,7 @@ import '../../../utils/navigation_utils.dart';
 import '../models/parameter_entry.dart';
 import '../services/parameter_admin_service.dart';
 import '../widgets/academic_groups_admin_panel.dart';
+import '../widgets/academic_years_admin_panel.dart';
 
 class AdminParametersScreen extends StatefulWidget {
   const AdminParametersScreen({super.key});
@@ -159,6 +160,8 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
               child: ListView(
                 padding: EdgeInsets.all(16),
                 children: [
+                  AcademicYearsAdminPanel(),
+                  SizedBox(height: 16),
                   AcademicGroupsAdminPanel(),
                   SizedBox(height: 16),
                   Row(

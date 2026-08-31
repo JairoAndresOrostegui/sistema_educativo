@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
 import '../../../models/academic/academic_group.dart';
+import '../../../models/academic/academic_year.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/parameters_service.dart';
 import '../../../utils/academic_group_service.dart';
+import '../../../utils/academic_year_service.dart';
 import '../widgets/subject_form_dialog.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
@@ -27,6 +29,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   final ParametersService _parametersService = ParametersService();
   final ScheduleService _scheduleService = ScheduleService();
   final AcademicGroupService _groupService = AcademicGroupService();
+  final AcademicYearService _yearService = AcademicYearService();
 
   String? _selectedGroupId;
   String? _selectedTeacherId;
@@ -40,6 +43,8 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   List<InstitutionOption> _institutions = [];
   String? _selectedInstitution;
   String? _selectedCampus;
+  String? _selectedAcademicYearId;
+  List<AcademicYear> _academicYears = [];
   final ScrollController _webScrollController = ScrollController();
 
   // Overlay bloqueante
@@ -61,6 +66,12 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     final funcs = u.permissions;
     return funcs.contains(clave);
   }
+
+  AcademicYear? get _selectedAcademicYear => _academicYears
+      .where((item) => item.id == _selectedAcademicYearId)
+      .firstOrNull;
+
+  bool get _canWriteCurrentYear => _selectedAcademicYear?.status == 'active';
 
   @override
   void initState() {
@@ -96,13 +107,23 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         _institutions = institutions;
         _selectedInstitution = currentUser.institution;
         _selectedCampus = currentUser.campus;
+        _academicYears = await _yearService.list(
+          institutionId: _selectedInstitution!,
+          campusId: _selectedCampus!,
+        );
+        _selectedAcademicYearId = _academicYears
+            .where((item) => item.status == 'active')
+            .firstOrNull
+            ?.id;
         _teachers = await _scheduleService.getTeachers(
           institutionId: _selectedInstitution!,
           campusId: _selectedCampus!,
+          includeInactive: !_canWriteCurrentYear,
         );
         _availableGroups = await _groupService.list(
           institutionId: _selectedInstitution!,
           campusId: _selectedCampus!,
+          academicYearId: _selectedAcademicYearId,
         );
         _loadError = null;
       }
@@ -133,6 +154,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           institutionId: _selectedInstitution ?? currentUser.institution,
           campusId: _selectedCampus ?? currentUser.campus,
           groupId: groupId,
+          academicYearId: _selectedAcademicYearId,
         );
       }
     } catch (error) {
@@ -164,6 +186,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           institutionId: _selectedInstitution ?? currentUser.institution,
           campusId: _selectedCampus ?? currentUser.campus,
           teacherId: teacherId,
+          academicYearId: _selectedAcademicYearId,
         );
       }
     } catch (error) {
@@ -189,6 +212,14 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   }
 
   Future<void> _showCreateDialog(String day) async {
+    if (!_canWriteCurrentYear) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Año cerrado',
+        message: 'Los horarios históricos son de solo lectura.',
+      );
+      return;
+    }
     if (_selectedGroupId == null) {
       await DialogUtils.showError(
         context: context,
@@ -268,6 +299,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   }
 
   void _showEditDialog(SubjectModel subject) {
+    if (!_canWriteCurrentYear) return;
     if (!_permite('horarios.editar')) {
       DialogUtils.showError(
         context: context,
@@ -329,6 +361,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   }
 
   void _showDeleteConfirmationDialog(SubjectModel subject) {
+    if (!_canWriteCurrentYear) return;
     if (!_permite('horarios.eliminar')) {
       DialogUtils.showError(
         context: context,
@@ -399,13 +432,47 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       _allSchedules = {};
       _isLoading = true;
     });
+    _academicYears = await _yearService.list(
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    _selectedAcademicYearId = _academicYears
+        .where((item) => item.status == 'active')
+        .firstOrNull
+        ?.id;
     _teachers = await _scheduleService.getTeachers(
       institutionId: institutionId,
       campusId: campusId,
+      includeInactive: !_canWriteCurrentYear,
     );
     _availableGroups = await _groupService.list(
       institutionId: institutionId,
       campusId: campusId,
+      academicYearId: _selectedAcademicYearId,
+    );
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _changeAcademicYear(String? id) async {
+    if (id == null || _selectedInstitution == null || _selectedCampus == null) {
+      return;
+    }
+    setState(() {
+      _selectedAcademicYearId = id;
+      _selectedGroupId = null;
+      _selectedTeacherId = null;
+      _allSchedules = {};
+      _isLoading = true;
+    });
+    _teachers = await _scheduleService.getTeachers(
+      institutionId: _selectedInstitution!,
+      campusId: _selectedCampus!,
+      includeInactive: !_canWriteCurrentYear,
+    );
+    _availableGroups = await _groupService.list(
+      institutionId: _selectedInstitution!,
+      campusId: _selectedCampus!,
+      academicYearId: id,
     );
     if (mounted) setState(() => _isLoading = false);
   }
@@ -524,6 +591,37 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
               ),
               const SizedBox(height: 12),
             ],
+            DropdownButtonFormField<String>(
+              key: ValueKey(
+                '${_selectedInstitution ?? ''}:${_selectedCampus ?? ''}:'
+                '${_selectedAcademicYearId ?? ''}',
+              ),
+              initialValue: _selectedAcademicYearId,
+              decoration: const InputDecoration(
+                labelText: 'Año lectivo',
+                border: OutlineInputBorder(),
+              ),
+              items: _academicYears
+                  .map(
+                    (item) => DropdownMenuItem(
+                      value: item.id,
+                      child: Text('${item.year} · ${item.statusLabel}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _isLoading ? null : _changeAcademicYear,
+            ),
+            if (!_canWriteCurrentYear && _selectedAcademicYear != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Consulta histórica: este horario es de solo lectura.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -748,9 +846,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           _scheduleView == 'group' &&
           _selectedGroupId != null &&
           _teachers.isNotEmpty &&
+          _canWriteCurrentYear &&
           _permite('horarios.crear'),
-      canEdit: _permite('horarios.editar'),
-      canDelete: _permite('horarios.eliminar'),
+      canEdit: _canWriteCurrentYear && _permite('horarios.editar'),
+      canDelete: _canWriteCurrentYear && _permite('horarios.eliminar'),
       onAddSubject: () => _showCreateDialog(day),
       onEditSubject: _showEditDialog,
       onDeleteSubject: _showDeleteConfirmationDialog,
@@ -764,4 +863,8 @@ extension StringExtension on String {
     if (isEmpty) return this;
     return "${this[0].toUpperCase()}${substring(1)}";
   }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

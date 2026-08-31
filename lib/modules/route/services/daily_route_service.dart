@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../models/route/daily_route_model.dart';
 import '../../../models/route/student_route_model.dart';
 import '../../../models/user/user_model_v2.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class RutaDiariaService {
   final FirebaseFirestore _firestore;
@@ -28,12 +29,19 @@ class RutaDiariaService {
   }
 
   Future<RutaDiaria?> getRutaDia(String routeId) async {
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _firestore,
+      institutionId: _currentUser.institution,
+      campusId: _currentUser.campus,
+    );
     final idRutaDia = _generateRutaDiaId(routeId);
     final doc = await _firestore
         .collection(_colDailyRoutes)
         .doc(idRutaDia)
         .get();
-    return doc.exists ? RutaDiaria.fromFirestore(doc) : null;
+    return doc.exists && doc.data()?['academicYearId'] == academicYear.id
+        ? RutaDiaria.fromFirestore(doc)
+        : null;
   }
 
   Future<List<EstudianteRutaDiaria>> getEstudiantesRutaDia(
@@ -66,6 +74,11 @@ class RutaDiariaService {
 
     final inst = _currentUser.institution;
     final camp = _currentUser.campus;
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _firestore,
+      institutionId: inst,
+      campusId: camp,
+    );
 
     final usersCol = _firestore.collection(_colUserDirectory);
     final List<Map<String, dynamic>> studentsPayload = [];
@@ -95,6 +108,8 @@ class RutaDiariaService {
         'orden': i,
         'institution': inst,
         'campus': camp,
+        'academicYearId': academicYear.id,
+        'academicYear': academicYear.year,
       });
     }
 
@@ -109,6 +124,8 @@ class RutaDiariaService {
       'horaFin': null,
       'institution': inst,
       'campus': camp,
+      'academicYearId': academicYear.id,
+      'academicYear': academicYear.year,
     });
 
     for (final st in studentsPayload) {

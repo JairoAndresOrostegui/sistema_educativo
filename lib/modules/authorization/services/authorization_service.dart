@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
 import '../../../models/user/user_model_v2.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class AuthorizationPage {
   final List<AuthorizationRequest> items;
@@ -38,11 +39,17 @@ class AuthorizationService {
     required String campusId,
     required String studentId,
     int limit = 20,
-  }) {
-    return _db
+  }) async* {
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    yield* _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: year.id)
         .where('studentId', isEqualTo: studentId)
         .snapshots()
         .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
@@ -53,11 +60,17 @@ class AuthorizationService {
     required String campusId,
     required String groupId,
     int limit = 20,
-  }) {
-    return _db
+  }) async* {
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    yield* _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: year.id)
         .where('groupId', isEqualTo: groupId)
         .snapshots()
         .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
@@ -67,15 +80,21 @@ class AuthorizationService {
     String? institutionId,
     String? campusId,
     int limit = 50,
-  }) {
+  }) async* {
+    if ((institutionId ?? '').isEmpty || (campusId ?? '').isEmpty) {
+      throw StateError('Selecciona una institución y una sede.');
+    }
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId!,
+      campusId: campusId!,
+    );
     Query<Map<String, dynamic>> query = _db.collection(_col);
-    if ((institutionId ?? '').isNotEmpty) {
-      query = query.where('institutionId', isEqualTo: institutionId);
-    }
-    if ((campusId ?? '').isNotEmpty) {
-      query = query.where('campusId', isEqualTo: campusId);
-    }
-    return query.snapshots().map(
+    query = query
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId);
+    query = query.where('academicYearId', isEqualTo: year.id);
+    yield* query.snapshots().map(
       (snap) => _sortedItemsFromSnapshot(snap, limit: limit),
     );
   }
@@ -87,10 +106,16 @@ class AuthorizationService {
     required int limit,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
     final snap = await _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: year.id)
         .where('studentId', isEqualTo: studentId)
         .get();
 
@@ -171,10 +196,16 @@ class AuthorizationService {
     int limit = 20,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
     final snap = await _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: year.id)
         .where('groupId', isEqualTo: groupId)
         .get();
 
@@ -195,10 +226,16 @@ class AuthorizationService {
     required String institutionId,
     required String campusId,
   }) async {
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
     final snap = await _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: year.id)
         .get();
 
     final items =
@@ -242,15 +279,21 @@ class AuthorizationService {
   Stream<int> watchPendingCountForAdmin({
     String? institutionId,
     String? campusId,
-  }) {
+  }) async* {
+    if ((institutionId ?? '').isEmpty || (campusId ?? '').isEmpty) {
+      throw StateError('Selecciona una institución y una sede.');
+    }
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId!,
+      campusId: campusId!,
+    );
     Query<Map<String, dynamic>> query = _db.collection(_col);
-    if ((institutionId ?? '').isNotEmpty) {
-      query = query.where('institutionId', isEqualTo: institutionId);
-    }
-    if ((campusId ?? '').isNotEmpty) {
-      query = query.where('campusId', isEqualTo: campusId);
-    }
-    return query
+    query = query
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId);
+    query = query.where('academicYearId', isEqualTo: year.id);
+    yield* query
         .where('status', isEqualTo: AuthorizationStatus.pending.name)
         .snapshots()
         .map((snap) => snap.size);
@@ -260,11 +303,17 @@ class AuthorizationService {
     required String institutionId,
     required String campusId,
     required String groupId,
-  }) {
-    return _db
+  }) async* {
+    final year = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    yield* _db
         .collection(_col)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: year.id)
         .where('groupId', isEqualTo: groupId)
         .where('status', isEqualTo: AuthorizationStatus.pending.name)
         .snapshots()

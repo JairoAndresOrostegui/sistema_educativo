@@ -47,6 +47,71 @@ class UserDeletionImpact {
   }
 }
 
+class TeacherTransferPreview {
+  final Map<String, int> impact;
+  final bool targetHasLoad;
+  final List<String> conflicts;
+  final int academicYear;
+
+  const TeacherTransferPreview({
+    required this.impact,
+    required this.targetHasLoad,
+    required this.conflicts,
+    required this.academicYear,
+  });
+
+  factory TeacherTransferPreview.fromMap(Map<String, dynamic> data) {
+    final rawImpact = Map<String, dynamic>.from(
+      data['impact'] as Map? ?? const {},
+    );
+    return TeacherTransferPreview(
+      impact: rawImpact.map(
+        (key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0),
+      ),
+      targetHasLoad: data['targetHasLoad'] == true,
+      conflicts: (data['conflicts'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((item) => (item['message'] ?? '').toString())
+          .where((item) => item.isNotEmpty)
+          .toList(),
+      academicYear:
+          ((data['academicYear'] as Map?)?['year'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class ActiveTeacherTransfer {
+  final String id;
+  final String sourceTeacherName;
+  final String targetTeacherName;
+  final bool temporary;
+  final int academicYear;
+  final DateTime? endsAt;
+
+  const ActiveTeacherTransfer({
+    required this.id,
+    required this.sourceTeacherName,
+    required this.targetTeacherName,
+    required this.temporary,
+    required this.academicYear,
+    required this.endsAt,
+  });
+
+  factory ActiveTeacherTransfer.fromMap(Map<String, dynamic> data) =>
+      ActiveTeacherTransfer(
+        id: (data['id'] ?? '').toString(),
+        sourceTeacherName: (data['sourceTeacherName'] ?? '').toString(),
+        targetTeacherName: (data['targetTeacherName'] ?? '').toString(),
+        temporary: data['mode'] == 'temporary',
+        academicYear: (data['academicYear'] as num?)?.toInt() ?? 0,
+        endsAt: data['endsAtMillis'] is num
+            ? DateTime.fromMillisecondsSinceEpoch(
+                (data['endsAtMillis'] as num).toInt(),
+              )
+            : null,
+      );
+}
+
 class UserServiceV2 {
   final _db = FirebaseFirestore.instance;
 
@@ -181,6 +246,74 @@ class UserServiceV2 {
     final result = await callable.call({'uid': uid, 'status': status});
     if (result.data['success'] != true) {
       throw Exception('No se pudo actualizar el estado del usuario');
+    }
+  }
+
+  Future<TeacherTransferPreview> previewTeacherTransfer({
+    required String sourceTeacherId,
+    required String targetTeacherId,
+  }) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('previsualizarTrasladoDocente')
+        .call({
+          'sourceTeacherId': sourceTeacherId,
+          'targetTeacherId': targetTeacherId,
+        });
+    return TeacherTransferPreview.fromMap(
+      Map<String, dynamic>.from(result.data as Map),
+    );
+  }
+
+  Future<List<ActiveTeacherTransfer>> listActiveTeacherTransfers({
+    required String institutionId,
+    required String campusId,
+    bool allTenants = false,
+  }) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('listarTrasladosDocentes')
+        .call({
+          'institutionId': institutionId,
+          'campusId': campusId,
+          'allTenants': allTenants,
+        });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return (data['transfers'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) =>
+              ActiveTeacherTransfer.fromMap(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+  }
+
+  Future<void> revertTemporaryTeacherTransfer(String id) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('revertirTrasladoDocenteTemporal')
+        .call({'id': id});
+    if (result.data['success'] != true) {
+      throw Exception('No se pudo cerrar el reemplazo temporal.');
+    }
+  }
+
+  Future<void> executeTeacherTransfer({
+    required String sourceTeacherId,
+    required String targetTeacherId,
+    required bool temporary,
+    required bool allowMerge,
+    DateTime? endsAt,
+  }) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('ejecutarTrasladoDocente')
+        .call({
+          'sourceTeacherId': sourceTeacherId,
+          'targetTeacherId': targetTeacherId,
+          'mode': temporary ? 'temporary' : 'permanent',
+          'allowMerge': allowMerge,
+          if (temporary && endsAt != null)
+            'endsAtMillis': endsAt.millisecondsSinceEpoch,
+        });
+    if (result.data['success'] != true) {
+      throw Exception('No se pudo trasladar la carga docente.');
     }
   }
 

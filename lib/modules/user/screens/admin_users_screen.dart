@@ -9,6 +9,7 @@ import '../services/user_service_v2.dart';
 import '../widgets/admin/admin_photo_widget.dart';
 import '../widgets/admin/admin_user_form_widget.dart';
 import '../widgets/admin/teacher_bulk_import_dialog.dart';
+import '../widgets/admin/teacher_transfer_dialog.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -96,6 +97,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         elevation: 1,
         leading: const BackToDashboardButton(),
         actions: [
+          if (esSuperadminActual ||
+              funcionalidadesActual.contains('usuarios.editar'))
+            IconButton(
+              tooltip: 'Continuidad docente',
+              onPressed: _mostrarTrasladoDocente,
+              icon: const Icon(Icons.swap_horiz),
+            ),
           if (esSuperadminActual)
             IconButton(
               tooltip: 'Importar docentes',
@@ -507,6 +515,32 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     if (shouldRefresh == true) {
       if (!mounted) return;
       await _cargarUsuarios();
+    }
+  }
+
+  Future<void> _mostrarTrasladoDocente() async {
+    final logged = context.read<UserProviderV2>().user!;
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => TeacherTransferDialog(
+        users: usuarios,
+        institutionId: logged.institution,
+        campusId: logged.campus,
+        isSuperadmin: logged.isSuperadmin,
+      ),
+    );
+    if (changed == true) {
+      await _cargarUsuarios();
+      if (mounted) {
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Carga trasladada',
+          message:
+              'El docente saliente quedó inactivo y la responsabilidad '
+              'vigente pasó al reemplazo.',
+        );
+      }
     }
   }
 }

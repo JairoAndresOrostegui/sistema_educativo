@@ -196,7 +196,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     );
   }
 
-  void _listenPending() {
+  Future<void> _listenPending() async {
     final user = context.read<UserProviderV2>().user;
     if (user == null) return;
     Query<Map<String, dynamic>> query = FirebaseFirestore.instance
@@ -209,6 +209,30 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
             'correccion_solicitada',
           ],
         );
+    if (user.isSuperadmin) {
+      final settings = await FirebaseFirestore.instance
+          .collection('academic_year_settings')
+          .get();
+      final ids = settings.docs
+          .map((item) => (item.data()['activeYearId'] ?? '').toString())
+          .where((item) => item.isNotEmpty)
+          .take(30)
+          .toList();
+      if (ids.isEmpty) return;
+      query = query.where('academicYearId', whereIn: ids);
+    } else {
+      final settings = await FirebaseFirestore.instance
+          .collection('academic_year_settings')
+          .where('institutionId', isEqualTo: user.institution)
+          .where('campusId', isEqualTo: user.campus)
+          .limit(1)
+          .get();
+      if (settings.docs.isEmpty) return;
+      query = query.where(
+        'academicYearId',
+        isEqualTo: settings.docs.first.data()['activeYearId'],
+      );
+    }
     if (!user.isSuperadmin) {
       query = query
           .where('institution', isEqualTo: user.institution)

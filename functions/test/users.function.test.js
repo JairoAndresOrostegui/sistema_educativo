@@ -4,6 +4,10 @@ const assert = require("assert");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {
+  academicYearId,
+  seedAcademicYear,
+} = require("./academic_year_fixture");
 
 const projectId = "sistema-educativo-users-test";
 const functionsBase = `http://127.0.0.1:5002/${projectId}/us-central1`;
@@ -195,12 +199,16 @@ describe("baja y eliminacion de usuarios", () => {
       nombre: "Colegio de prueba",
       sedes: ["campus-1", "campus-2"],
     });
+    const yearId = await seedAcademicYear(db, "inst-1", "campus-1");
+    const campus2YearId = await seedAcademicYear(db, "inst-1", "campus-2");
     await db.collection("academic_groups").doc("group-5a").set({
       institutionId: "inst-1", campusId: "campus-1", level: "Quinto",
+      academicYearId: yearId, academicYear: 2026,
       section: "A", name: "Quinto A", order: 5, active: true,
     });
     await db.collection("academic_groups").doc("group-5a-campus-2").set({
       institutionId: "inst-1", campusId: "campus-2", level: "Quinto",
+      academicYearId: campus2YearId, academicYear: 2026,
       section: "A", name: "Quinto A", order: 5, active: true,
     });
   });
@@ -655,5 +663,127 @@ describe("baja y eliminacion de usuarios", () => {
     assert.equal(response.body.error.status, "FAILED_PRECONDITION");
     assert.equal((await db.collection("users").doc("target").get())
         .data().campus, "campus-1");
+  });
+
+  it("traslada y revierte la carga sin falsear autoria", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.editar"],
+    });
+    await seedUser("source-teacher", "Docente", {
+      firstName: "Docente", lastName: "Saliente", tutorGroupId: "group-5a",
+    });
+    await seedUser("target-teacher", "Docente", {
+      firstName: "Docente", lastName: "Reemplazo",
+    });
+    const yearId = academicYearId("inst-1", "campus-1");
+    await db.collection("subjects").doc("source-subject").set({
+      institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: yearId, academicYear: 2026,
+      teacherId: "source-teacher", teacherName: "Docente Saliente",
+      groupId: "group-5a", groupName: "Quinto A", subject: "Ciencias",
+      day: "lunes", startMinutes: 480, endMinutes: 540, revision: 1,
+    });
+    await db.collection("routes").doc("teacher-route").set({
+      institution: "inst-1", campus: "campus-1",
+      academicYearId: yearId, academicYear: 2026,
+      gestionador: "source-teacher",
+    });
+    await db.collection("daily_routes").doc("teacher-daily-route").set({
+      institution: "inst-1", campus: "campus-1",
+      academicYearId: yearId, academicYear: 2026,
+      gestionador: "source-teacher", gestionadaPorNombre: "Docente Saliente",
+    });
+    await db.collection("message_threads").doc("teacher-thread").set({
+      institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: yearId, academicYear: 2026,
+      participantIds: ["source-teacher", "student"],
+      participantNames: {
+        "source-teacher": "Docente Saliente", "student": "Estudiante",
+      },
+      participantRoles: {
+        "source-teacher": "Docente", "student": "Estudiante",
+      },
+    });
+    await db.collection("message_threads").doc("teacher-thread")
+        .collection("messages").doc("historic-message").set({
+          senderId: "source-teacher", senderName: "Docente Saliente",
+        });
+    await db.collection("files").doc("teacher-file").set({
+      institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: yearId, academicYear: 2026,
+      uploadedBy: "source-teacher",
+      recipientUserIds: ["source-teacher"],
+    });
+    const token = await signIn(adminEmail);
+    const preview = await callFunction("previsualizarTrasladoDocente", {
+      sourceTeacherId: "source-teacher",
+      targetTeacherId: "target-teacher",
+    }, token);
+    assert.equal(preview.body.result.impact.schedules, 1);
+    assert.equal(preview.body.result.impact.messageThreads, 1);
+    assert.deepEqual(preview.body.result.conflicts, []);
+
+    const moved = await callFunction("ejecutarTrasladoDocente", {
+      sourceTeacherId: "source-teacher",
+      targetTeacherId: "target-teacher",
+      mode: "temporary",
+      endsAtMillis: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      allowMerge: false,
+    }, token);
+    assert.ok(moved.body.result.success, JSON.stringify(moved.body));
+    assert.equal((await auth.getUser("source-teacher")).disabled, true);
+    assert.equal((await db.collection("subjects").doc("source-subject").get())
+        .data().teacherId, "target-teacher");
+    const thread = (await db.collection("message_threads")
+        .doc("teacher-thread").get()).data();
+    assert.ok(thread.participantIds.includes("target-teacher"));
+    const message = (await db.collection("message_threads")
+        .doc("teacher-thread").collection("messages")
+        .doc("historic-message").get()).data();
+    assert.equal(message.senderId, "source-teacher");
+    assert.equal((await db.collection("files").doc("teacher-file").get())
+        .data().uploadedBy, "source-teacher");
+
+    const reverted = await callFunction("revertirTrasladoDocenteTemporal", {
+      id: moved.body.result.id,
+    }, token);
+    assert.ok(reverted.body.result.success, JSON.stringify(reverted.body));
+    assert.equal((await auth.getUser("source-teacher")).disabled, false);
+    assert.equal((await db.collection("subjects").doc("source-subject").get())
+        .data().teacherId, "source-teacher");
+  });
+
+  it("prepara y activa el siguiente anio sin borrar el historico", async () => {
+    const adminEmail = await seedUser("admin", "Administrador");
+    const token = await signIn(adminEmail);
+    const prepared = await callFunction("prepararAnioLectivo", {
+      institutionId: "inst-1",
+      campusId: "campus-1",
+      year: 2027,
+      cloneGroups: true,
+      cloneSchedules: false,
+    }, token);
+    assert.ok(prepared.body.result.success, JSON.stringify(prepared.body));
+    assert.equal(prepared.body.result.copiedGroups, 1);
+    const newYearId = prepared.body.result.id;
+    assert.equal((await db.collection("academic_years").doc(newYearId).get())
+        .data().status, "draft");
+    const groups = await db.collection("academic_groups")
+        .where("academicYearId", "==", newYearId).get();
+    assert.equal(groups.size, 1);
+    assert.notEqual(groups.docs[0].id, "group-5a");
+
+    const activated = await callFunction("activarAnioLectivo", {
+      academicYearId: newYearId,
+      confirmation: "ACTIVAR 2027",
+    }, token);
+    assert.ok(activated.body.result.success, JSON.stringify(activated.body));
+    assert.equal((await db.collection("academic_years").doc(newYearId).get())
+        .data().status, "active");
+    const oldYearId = academicYearId("inst-1", "campus-1", 2026);
+    assert.equal((await db.collection("academic_years").doc(oldYearId).get())
+        .data().status, "closed");
+    assert.ok((await db.collection("academic_groups").doc("group-5a").get())
+        .exists);
   });
 });

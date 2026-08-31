@@ -88,4 +88,9 @@ firebase use default
 firebase deploy --only firestore,storage,functions,hosting
 ```
 
+Las reglas permanentes de arquitectura están en [AGENTS.md](AGENTS.md). Todo
+módulo operativo usa el año lectivo universal y todo módulo con responsabilidad
+docente debe registrarse en
+[docs/REGISTRO_CARGA_DOCENTE.md](docs/REGISTRO_CARGA_DOCENTE.md).
+
 Antes de desplegar confirme que `default` apunta al proyecto QA esperado y que todas las pruebas anteriores finalizaron correctamente.

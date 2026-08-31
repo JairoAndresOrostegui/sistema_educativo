@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/active_academic_year_context.dart';
 import '../export/enrollment_pdf_utils.dart';
 import '../models/enrollment_model.dart';
 import '../screens/enrollment_form_screen.dart';
@@ -52,7 +53,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
     _fetch();
   }
 
-  void _listenPending() {
+  Future<void> _listenPending() async {
     final user = context.read<UserProviderV2>().user!;
     final isTeacher = user.role.trim().toLowerCase() == 'docente';
     if (isTeacher && (user.groupId ?? '').trim().isEmpty) return;
@@ -66,6 +67,20 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
             'correccion_solicitada',
           ],
         );
+    if (user.isSuperadmin) {
+      final ids = await loadAllActiveAcademicYearIds(
+        firestore: FirebaseFirestore.instance,
+      );
+      if (ids.isEmpty) return;
+      query = query.where('academicYearId', whereIn: ids.take(30).toList());
+    } else {
+      final year = await loadActiveAcademicYear(
+        firestore: FirebaseFirestore.instance,
+        institutionId: user.institution,
+        campusId: user.campus,
+      );
+      query = query.where('academicYearId', isEqualTo: year.id);
+    }
     if (!user.isSuperadmin) {
       query = query
           .where('institution', isEqualTo: user.institution)

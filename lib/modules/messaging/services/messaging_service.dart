@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/messaging/message_models.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/notification_service.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class MessagingService {
   MessagingService({FirebaseFirestore? firestore})
@@ -16,11 +17,17 @@ class MessagingService {
     required String institutionId,
     required String campusId,
     required String userId,
-  }) {
-    return _db
+  }) async* {
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    yield* _db
         .collection(_threadsCol)
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: academicYear.id)
         .where('participantIds', arrayContains: userId)
         .snapshots()
         .map((snap) {
@@ -146,6 +153,11 @@ class MessagingService {
       institutionId: sender.institution,
       campusId: sender.campus,
     );
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: sender.institution,
+      campusId: sender.campus,
+    );
     if (recipient == null) {
       throw Exception('No se encontro el destinatario.');
     }
@@ -153,6 +165,10 @@ class MessagingService {
     final existingThread = threadId != null && threadId.trim().isNotEmpty
         ? await _db.collection(_threadsCol).doc(threadId).get()
         : null;
+    if (existingThread != null &&
+        existingThread.data()?['academicYearId'] != academicYear.id) {
+      throw Exception('Los mensajes de años cerrados son de solo lectura.');
+    }
 
     final canMessage = await _canSendMessage(
       sender: sender,
@@ -173,6 +189,8 @@ class MessagingService {
             studentContextName: studentContextName,
             studentContextGroupId: studentContextGroupId,
             studentContextGroupName: studentContextGroupName,
+            academicYearId: academicYear.id,
+            academicYear: academicYear.year,
           );
 
     final threadRef = _db.collection(_threadsCol).doc(resolvedThreadId);
@@ -186,6 +204,8 @@ class MessagingService {
         tx.set(threadRef, {
           'institutionId': sender.institution,
           'campusId': sender.campus,
+          'academicYearId': academicYear.id,
+          'academicYear': academicYear.year,
           'participantIds': [sender.id, recipient.id],
           'participantNames': {
             sender.id: senderName,
@@ -210,11 +230,15 @@ class MessagingService {
         'recipientId': recipient.id,
         'body': trimmed,
         'createdAt': FieldValue.serverTimestamp(),
+        'academicYearId': academicYear.id,
+        'academicYear': academicYear.year,
       });
 
       tx.set(threadRef, {
         'institutionId': sender.institution,
         'campusId': sender.campus,
+        'academicYearId': academicYear.id,
+        'academicYear': academicYear.year,
         'participantIds': [sender.id, recipient.id],
         'participantNames': {
           sender.id: senderName,
@@ -617,11 +641,14 @@ class MessagingService {
     String? studentContextName,
     String? studentContextGroupId,
     String? studentContextGroupName,
+    required String academicYearId,
+    required int academicYear,
   }) async {
     final snap = await _db
         .collection(_threadsCol)
         .where('institutionId', isEqualTo: sender.institution)
         .where('campusId', isEqualTo: sender.campus)
+        .where('academicYearId', isEqualTo: academicYearId)
         .where('participantIds', arrayContains: sender.id)
         .get();
 
@@ -643,6 +670,8 @@ class MessagingService {
     await ref.set({
       'institutionId': sender.institution,
       'campusId': sender.campus,
+      'academicYearId': academicYearId,
+      'academicYear': academicYear,
       'participantIds': [sender.id, recipient.id],
       'participantNames': {sender.id: senderName, recipient.id: recipientName},
       'participantRoles': {

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/route/daily_route_model.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class MyRouteService {
   final FirebaseFirestore _firestore;
@@ -14,6 +15,11 @@ class MyRouteService {
     required String institutionId,
     required String campusId,
   }) async {
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _firestore,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
     final end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
@@ -22,6 +28,7 @@ class MyRouteService {
         .collection(_colDaily)
         .where('institution', isEqualTo: institutionId)
         .where('campus', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: academicYear.id)
         .get();
 
     final todaysDocs = byTenant.docs.where((d) {

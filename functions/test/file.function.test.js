@@ -5,6 +5,7 @@ const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
+const {seedAcademicYear} = require("./academic_year_fixture");
 
 const projectId = "sistema-educativo-file-test";
 const functionsBase = `http://127.0.0.1:5002/${projectId}/us-central1`;
@@ -111,16 +112,20 @@ describe("archivos seguros", () => {
   beforeEach(async () => {
     await clearFirestore();
     await clearAuth();
+    const yearId = await seedAcademicYear(db, "inst-1", "campus-1");
     await db.collection("academic_groups").doc("group-5a").set({
       institutionId: "inst-1", campusId: "campus-1", level: "Quinto",
+      academicYearId: yearId, academicYear: 2026,
       section: "A", name: "Quinto A", order: 5, active: true,
     });
     await db.collection("academic_groups").doc("group-6a").set({
       institutionId: "inst-1", campusId: "campus-1", level: "Sexto",
+      academicYearId: yearId, academicYear: 2026,
       section: "A", name: "Sexto A", order: 6, active: true,
     });
     await db.collection("subjects").doc("subject-5a").set({
       institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: yearId, academicYear: 2026,
       groupId: "group-5a", teacherId: "teacher",
     });
     await seedUser("student-5a", "Estudiante", ["archivos.ver"], {

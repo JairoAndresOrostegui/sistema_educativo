@@ -47,3 +47,8 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 - El proyecto Firebase actual es QA. Producción real tendrá proyecto, credenciales, bucket, hosting y variables separados.
 
 Consulta [docs/GUIA_DESARROLLO.md](docs/GUIA_DESARROLLO.md) y [docs/MANUAL_USUARIO.md](docs/MANUAL_USUARIO.md) antes de ampliar un módulo.
+
+Antes de crear o ampliar un módulo con responsabilidad docente, consulta y
+actualiza [docs/REGISTRO_CARGA_DOCENTE.md](docs/REGISTRO_CARGA_DOCENTE.md). Debe
+integrarse al impacto, traslado temporal/definitivo y reversión; no se permiten
+listas manuales de pasos fuera del sistema.

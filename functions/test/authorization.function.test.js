@@ -4,6 +4,7 @@ const assert = require("assert");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {seedAcademicYear} = require("./academic_year_fixture");
 
 const projectId = "sistema-educativo-authorization-test";
 const functionsBase = `http://127.0.0.1:5002/${projectId}/us-central1`;
@@ -128,8 +129,10 @@ describe("autorizaciones seguras", () => {
   beforeEach(async () => {
     await clearFirestore();
     await clearAuth();
+    const yearId = await seedAcademicYear(db, "inst-1", "campus-1");
     await db.collection("academic_groups").doc("group-5a").set({
       institutionId: "inst-1", campusId: "campus-1", level: "Quinto",
+      academicYearId: yearId, academicYear: 2026,
       section: "A", name: "Quinto A", order: 5, active: true,
     });
   });
@@ -221,10 +224,15 @@ describe("autorizaciones seguras", () => {
 
   it("admin solo opera su sede y superadmin cruza sedes", async () => {
     await seedUser("student-2", "Estudiante", {campus: "campus-2"});
+    const foreignYearId = await seedAcademicYear(
+        db, "inst-1", "campus-2",
+    );
     const foreignRef = db.collection("authorization_requests").doc("foreign");
     await foreignRef.set({
       institutionId: "inst-1",
       campusId: "campus-2",
+      academicYearId: foreignYearId,
+      academicYear: 2026,
       studentId: "student-2",
       studentFullName: "Estudiante Dos",
       requesterId: "family-2",

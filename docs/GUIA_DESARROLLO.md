@@ -118,4 +118,14 @@ npm run test:schedule
 npm run test:files
 ```
 
+## Contexto universal de año lectivo
+
+Toda colección operativa incluye `academicYearId` y `academicYear`, además de
+institución y sede. Las escrituras solo se permiten sobre el año `active`; los
+administradores pueden consultar períodos cerrados en modo lectura. Nunca se
+usa el año del reloj como sustituto silencioso de la configuración.
+
+Todo módulo con responsabilidad docente debe cumplir y actualizar el contrato
+de [REGISTRO_CARGA_DOCENTE.md](REGISTRO_CARGA_DOCENTE.md).
+
 QA se despliega con el alias Firebase `default` actual. Producción real debe usar otro proyecto y alias. Nunca reutilizar secretos, bucket o credenciales de QA en producción.

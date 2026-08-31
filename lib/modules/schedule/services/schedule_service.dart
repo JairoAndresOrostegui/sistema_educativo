@@ -75,8 +75,21 @@ class ScheduleService {
   Future<List<userModelv2>> getTeachers({
     required String institutionId,
     required String campusId,
+    bool includeInactive = false,
   }) async {
     try {
+      if (includeInactive) {
+        final snapshot = await _firestore
+            .collection('user_directory')
+            .where('institution', isEqualTo: institutionId)
+            .where('campus', isEqualTo: campusId)
+            .where('role', isEqualTo: 'Docente')
+            .get();
+        return snapshot.docs
+            .where((item) => item.data()['status'] != 'eliminado')
+            .map((item) => userModelv2.fromFirestore(item.data(), item.id))
+            .toList();
+      }
       return await ParametersService().getUsersByFilters(
         institution: institutionId,
         campus: campusId,
@@ -92,6 +105,7 @@ class ScheduleService {
     required String campusId,
     required String groupId,
     String? studentId,
+    String? academicYearId,
   }) async {
     final response = await _query({
       'mode': 'group',
@@ -99,6 +113,7 @@ class ScheduleService {
       'campusId': campusId,
       'groupId': groupId,
       'studentId': ?studentId,
+      'academicYearId': ?academicYearId,
     });
     return groupByDay(response.subjects);
   }
@@ -126,12 +141,14 @@ class ScheduleService {
     required String institutionId,
     required String campusId,
     required String teacherId,
+    String? academicYearId,
   }) async {
     final response = await _query({
       'mode': 'teacher',
       'institutionId': institutionId,
       'campusId': campusId,
       'teacherId': teacherId,
+      'academicYearId': ?academicYearId,
     });
     return groupByDay(response.subjects);
   }

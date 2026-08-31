@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/enrollment_model.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class EnrollmentService {
   final FirebaseFirestore _db;
@@ -110,6 +111,7 @@ class EnrollmentService {
     String? groupId,
   }) async {
     Query<Map<String, dynamic>> query = _col.where('estado', isEqualTo: estado);
+    query = await _activeYearQuery(query, institution, campus);
     if (institution != null && institution.isNotEmpty) {
       query = query.where('institution', isEqualTo: institution);
     }
@@ -138,6 +140,7 @@ class EnrollmentService {
       'estado',
       whereIn: estados.length > 10 ? estados.sublist(0, 10) : estados,
     );
+    query = await _activeYearQuery(query, institution, campus);
     if ((institution ?? '').isNotEmpty) {
       query = query.where('institution', isEqualTo: institution);
     }
@@ -170,6 +173,7 @@ class EnrollmentService {
         whereIn: estados.length > 10 ? estados.sublist(0, 10) : estados,
       );
     }
+    query = await _activeYearQuery(query, institution, campus);
     if ((institution ?? '').isNotEmpty) {
       query = query.where('institution', isEqualTo: institution);
     }
@@ -181,6 +185,27 @@ class EnrollmentService {
     }
     final snap = await query.get();
     return snap.size;
+  }
+
+  Future<Query<Map<String, dynamic>>> _activeYearQuery(
+    Query<Map<String, dynamic>> query,
+    String? institution,
+    String? campus,
+  ) async {
+    if ((institution ?? '').isNotEmpty && (campus ?? '').isNotEmpty) {
+      final year = await loadActiveAcademicYear(
+        firestore: _db,
+        institutionId: institution!,
+        campusId: campus!,
+      );
+      return query.where('academicYearId', isEqualTo: year.id);
+    }
+    final ids = await loadAllActiveAcademicYearIds(firestore: _db);
+    if (ids.isEmpty) return query.where('academicYearId', isEqualTo: 'none');
+    if (ids.length > 30) {
+      throw StateError('Hay demasiadas sedes para una consulta transversal.');
+    }
+    return query.where('academicYearId', whereIn: ids);
   }
 
   Future<bool> hasEnrollmentForUser({
