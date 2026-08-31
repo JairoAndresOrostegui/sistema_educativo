@@ -131,6 +131,7 @@ class ScheduleService {
       'mode': 'teacher',
       'institutionId': institutionId,
       'campusId': campusId,
+      'teacherId': teacherId,
     });
     return groupByDay(response.subjects);
   }

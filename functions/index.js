@@ -2655,6 +2655,7 @@ exports.consultarHorarios = onCall(async (request) => {
   const input = request.data || {};
   const queryFields = new Set([
     "mode", "institutionId", "campusId", "groupId", "studentId",
+    "teacherId",
   ]);
   const unknown = Object.keys(input).filter((key) => !queryFields.has(key));
   if (unknown.length) {
@@ -2663,10 +2664,14 @@ exports.consultarHorarios = onCall(async (request) => {
     );
   }
   const mode = (input.mode || "group").toString().trim().toLowerCase();
+  if (!["group", "teacher"].includes(mode)) {
+    throw new HttpsError("invalid-argument", "Modo de consulta no valido.");
+  }
   let institution = caller.institution;
   let campus = caller.campus;
   let groupId = "";
   let teacherOnly = false;
+  let queryTeacherId = "";
   let allowedGroups;
 
   if (caller.role === "Administrador" || caller.isSuperadmin === true) {
@@ -2680,11 +2685,27 @@ exports.consultarHorarios = onCall(async (request) => {
       );
     }
     await validateInstitutionCampus({institution, campus});
-    groupId = requiredString(input.groupId, "grupo", 128);
-    const group = await requireAcademicGroup({
-      groupId, institutionId: institution, campusId: campus,
-    });
-    allowedGroups = [{id: group.id, name: group.name}];
+    if (mode === "teacher") {
+      queryTeacherId = requiredString(input.teacherId, "docente", 128);
+      const teacherSnapshot = await db.collection("users")
+          .doc(queryTeacherId).get();
+      const teacher = teacherSnapshot.data() || {};
+      if (!teacherSnapshot.exists || teacher.role !== "Docente" ||
+          teacher.status !== "activo" ||
+          teacher.institution !== institution || teacher.campus !== campus) {
+        throw new HttpsError(
+            "failed-precondition", "El docente no pertenece a esta sede.",
+        );
+      }
+      teacherOnly = true;
+      allowedGroups = [];
+    } else {
+      groupId = requiredString(input.groupId, "grupo", 128);
+      const group = await requireAcademicGroup({
+        groupId, institutionId: institution, campusId: campus,
+      });
+      allowedGroups = [{id: group.id, name: group.name}];
+    }
   } else if (caller.role === "Docente") {
     const assigned = await db.collection("subjects")
         .where("institutionId", "==", institution)
@@ -2705,6 +2726,7 @@ exports.consultarHorarios = onCall(async (request) => {
     })).sort((a, b) => a.name.localeCompare(b.name, "es"));
     if (mode === "teacher") {
       teacherOnly = true;
+      queryTeacherId = caller.uid;
     } else {
       groupId = requiredString(input.groupId, "grupo", 128);
       if (!groupIds.includes(groupId)) {
@@ -2745,13 +2767,19 @@ exports.consultarHorarios = onCall(async (request) => {
       .where("institutionId", "==", institution)
       .where("campusId", "==", campus);
   query = teacherOnly ?
-    query.where("teacherId", "==", caller.uid) :
+    query.where("teacherId", "==", queryTeacherId) :
     query.where("groupId", "==", groupId);
   const snapshot = await query.get();
   const subjects = snapshot.docs
       .map((item) => scheduleResponse(item.data(), item.id))
       .sort((a, b) => a.day.localeCompare(b.day) ||
         a.startMinutes - b.startMinutes);
+  if (teacherOnly && !allowedGroups.length) {
+    allowedGroups = [...new Map(subjects.map((subject) => [
+      subject.groupId,
+      {id: subject.groupId, name: subject.groupName},
+    ])).values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }
   return {subjects, groups: allowedGroups};
 });
 

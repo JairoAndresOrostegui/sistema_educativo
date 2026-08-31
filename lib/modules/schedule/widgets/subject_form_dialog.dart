@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/schedule/subject_model.dart';
 import '../../../models/user/user_model_v2.dart';
+import 'searchable_schedule_selector.dart';
 
 // Extension para capitalizar el texto de los dias
 extension StringExtension on String {
@@ -194,31 +195,25 @@ class _SubjectFormDialogState extends State<SubjectFormDialog> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: _selectedTeacherId,
-                      decoration: const InputDecoration(labelText: 'Profesor'),
-                      items: widget.teachers.map((teacher) {
-                        return DropdownMenuItem<String>(
-                          value: teacher.id,
-                          child: Text(
-                            '${teacher.firstName} ${teacher.lastName}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (String? value) {
-                        setState(() {
-                          _selectedTeacherId = value;
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Por favor, selecciona un profesor';
-                        }
-                        return null;
-                      },
+                    SearchableScheduleSelector(
+                      label: 'Profesor',
+                      hint: 'Selecciona un profesor',
+                      searchHint: 'Buscar por nombre, documento o correo',
+                      emptyMessage: 'No se encontraron docentes.',
+                      selectedId: _selectedTeacherId,
+                      options: widget.teachers
+                          .map(
+                            (teacher) => ScheduleSelectorOption(
+                              id: teacher.id,
+                              label: '${teacher.firstName} ${teacher.lastName}'
+                                  .trim(),
+                              searchText:
+                                  '${teacher.document} ${teacher.institutionalEmail}',
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _selectedTeacherId = value),
                     ),
                     const SizedBox(height: 16),
                     if (widget.daysOfWeek.length == 1) ...[

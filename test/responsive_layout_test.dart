@@ -6,6 +6,7 @@ import 'package:sistema_educativo/modules/enrollment/screens/widgets/enrollment_
 import 'package:sistema_educativo/modules/enrollment/screens/widgets/enrollment_grade_history_section.dart';
 import 'package:sistema_educativo/modules/enrollment/screens/widgets/enrollment_scope_selector.dart';
 import 'package:sistema_educativo/modules/schedule/widgets/subject_form_dialog.dart';
+import 'package:sistema_educativo/modules/schedule/widgets/searchable_schedule_selector.dart';
 import 'package:sistema_educativo/utils/parameters_service.dart';
 
 void main() {
@@ -180,6 +181,45 @@ void main() {
     expect(find.text('Crear materia'), findsOneWidget);
     expect(find.text('Hora de inicio'), findsOneWidget);
     expect(find.text('Hora de fin'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('schedule selector searches teachers on mobile', (tester) async {
+    await useMobileViewport(tester);
+    String? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SearchableScheduleSelector(
+            label: 'Docente',
+            hint: 'Selecciona un docente',
+            searchHint: 'Buscar docente',
+            emptyMessage: 'Sin resultados',
+            selectedId: selected,
+            options: const [
+              ScheduleSelectorOption(id: 'ada', label: 'Ada Lovelace'),
+              ScheduleSelectorOption(
+                id: 'grace',
+                label: 'Grace Hopper',
+                searchText: 'grace@school.test 1234',
+              ),
+            ],
+            onChanged: (value) => selected = value,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Selecciona un docente'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '1234');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Grace Hopper'), findsOneWidget);
+    expect(find.text('Ada Lovelace'), findsNothing);
+    await tester.tap(find.text('Grace Hopper'));
+    await tester.pumpAndSettle();
+    expect(selected, 'grace');
     expect(tester.takeException(), isNull);
   });
 }

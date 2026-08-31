@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../../models/academic/academic_group.dart';
+import '../searchable_schedule_selector.dart';
 
 class AdminGradeDropdown extends StatelessWidget {
   final String? selectedGroupId;
@@ -17,36 +17,22 @@ class AdminGradeDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-        color: AppPalette.surfaceContainer,
-        boxShadow: [
-          BoxShadow(
-            color: AppPalette.onSurface.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedGroupId,
-          hint: const Text('Selecciona un grupo'),
-          isExpanded: true,
-          items: availableGroups
-              .map(
-                (group) => DropdownMenuItem<String>(
-                  value: group.id,
-                  child: Text(group.name),
-                ),
-              )
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
+    return SearchableScheduleSelector(
+      label: 'Grupo',
+      hint: 'Selecciona un grupo',
+      searchHint: 'Buscar grupo',
+      emptyMessage: 'No se encontraron grupos.',
+      selectedId: selectedGroupId,
+      options: availableGroups
+          .map(
+            (group) => ScheduleSelectorOption(
+              id: group.id,
+              label: group.name,
+              searchText: '${group.level} ${group.section}',
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
     );
   }
 }

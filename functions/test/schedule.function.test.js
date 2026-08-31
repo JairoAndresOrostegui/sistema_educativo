@@ -319,6 +319,24 @@ describe("horarios seguros", () => {
     }), adminToken);
     assert.ok(second.body.result);
 
+    const adminTeacher = await callFunction("consultarHorarios", {
+      mode: "teacher",
+      institutionId: "inst-1",
+      campusId: "campus-1",
+      teacherId: "teacher-1",
+    }, adminToken);
+    assert.equal(adminTeacher.body.result.subjects.length, 1);
+    assert.equal(adminTeacher.body.result.subjects[0].teacherId, "teacher-1");
+    assert.deepEqual(adminTeacher.body.result.groups, [
+      {id: "group-5a", name: "Quinto A"},
+    ]);
+    assertError(await callFunction("consultarHorarios", {
+      mode: "teacher",
+      institutionId: "inst-1",
+      campusId: "campus-1",
+      teacherId: "missing",
+    }, adminToken), "FAILED_PRECONDITION");
+
     const teacherToken = await signIn("teacher-1@colegio.test");
     const own = await callFunction(
         "consultarHorarios", {mode: "teacher"}, teacherToken,

@@ -9,6 +9,7 @@ class AdminSubjectItem extends StatelessWidget {
   final VoidCallback onDelete;
   final bool showEdit;
   final bool showDelete;
+  final bool showGroupName;
 
   const AdminSubjectItem({
     super.key,
@@ -17,6 +18,7 @@ class AdminSubjectItem extends StatelessWidget {
     required this.onDelete,
     this.showEdit = true,
     this.showDelete = true,
+    this.showGroupName = false,
   });
 
   @override
@@ -37,7 +39,8 @@ class AdminSubjectItem extends StatelessWidget {
         ),
         subtitle: Text(
           '${TimeOfDay.fromDateTime(subject.startTime.toDate()).format(context)} '
-          'a ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)} · ${subject.teacherName}',
+          'a ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)}'
+          '${showGroupName ? ' · ${subject.groupName}' : ' · ${subject.teacherName}'}',
         ),
         trailing: showEdit || showDelete
             ? PopupMenuButton<String>(

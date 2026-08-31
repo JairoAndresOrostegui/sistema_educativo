@@ -14,6 +14,7 @@ import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../widgets/admin/admin_grade_dropdown.dart';
 import '../widgets/admin/admin_day_column.dart';
+import '../widgets/searchable_schedule_selector.dart';
 
 class ScheduleAdminScreen extends StatefulWidget {
   const ScheduleAdminScreen({super.key});
@@ -28,6 +29,8 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   final AcademicGroupService _groupService = AcademicGroupService();
 
   String? _selectedGroupId;
+  String? _selectedTeacherId;
+  String _scheduleView = 'group';
   String _selectedDay = 'lunes';
   bool _isLoading = false;
   String? _loadError;
@@ -140,6 +143,51 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _loadSchedulesForTeacher(String? teacherId) async {
+    if (teacherId == null) {
+      setState(() {
+        _selectedTeacherId = null;
+        _allSchedules = {};
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _selectedTeacherId = teacherId;
+      _loadError = null;
+    });
+    try {
+      final currentUser = context.read<UserProviderV2>().user;
+      if (currentUser != null) {
+        _allSchedules = await _scheduleService.getSchedulesForTeacher(
+          institutionId: _selectedInstitution ?? currentUser.institution,
+          campusId: _selectedCampus ?? currentUser.campus,
+          teacherId: teacherId,
+        );
+      }
+    } catch (error) {
+      _allSchedules = {};
+      _loadError = 'No fue posible cargar el horario del docente. $error';
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _reloadSelectedSchedule() => _scheduleView == 'teacher'
+      ? _loadSchedulesForTeacher(_selectedTeacherId)
+      : _loadSchedulesForGroup(_selectedGroupId);
+
+  void _changeScheduleView(String view) {
+    if (_scheduleView == view) return;
+    setState(() {
+      _scheduleView = view;
+      _selectedGroupId = null;
+      _selectedTeacherId = null;
+      _allSchedules = {};
+      _loadError = null;
+    });
+  }
+
   Future<void> _showCreateDialog(String day) async {
     if (_selectedGroupId == null) {
       await DialogUtils.showError(
@@ -196,7 +244,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   subject: subjectToSave,
                   creator: currentUser,
                 );
-                await _loadSchedulesForGroup(_selectedGroupId);
+                await _reloadSelectedSchedule();
                 if (!mounted || !dialogContext.mounted) return;
                 Navigator.of(dialogContext).pop(); // cierra dialogo
               }
@@ -313,7 +361,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                     subject: subject,
                     remover: currentUser,
                   );
-                  await _loadSchedulesForGroup(_selectedGroupId);
+                  await _reloadSelectedSchedule();
                   if (!mounted) return;
                   await DialogUtils.showSuccess(
                     context: context,
@@ -347,6 +395,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       _selectedInstitution = institutionId;
       _selectedCampus = campusId;
       _selectedGroupId = null;
+      _selectedTeacherId = null;
       _allSchedules = {};
       _isLoading = true;
     });
@@ -475,11 +524,51 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            AdminGradeDropdown(
-              selectedGroupId: _selectedGroupId,
-              onChanged: _loadSchedulesForGroup,
-              availableGroups: _availableGroups,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  avatar: const Icon(Icons.school_outlined),
+                  label: const Text('Por grupo'),
+                  selected: _scheduleView == 'group',
+                  onSelected: (_) => _changeScheduleView('group'),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.person_search_outlined),
+                  label: const Text('Por docente'),
+                  selected: _scheduleView == 'teacher',
+                  onSelected: (_) => _changeScheduleView('teacher'),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            if (_scheduleView == 'group')
+              AdminGradeDropdown(
+                selectedGroupId: _selectedGroupId,
+                onChanged: _loadSchedulesForGroup,
+                availableGroups: _availableGroups,
+              )
+            else
+              SearchableScheduleSelector(
+                label: 'Docente',
+                hint: 'Selecciona un docente',
+                searchHint: 'Buscar por nombre, documento o correo',
+                emptyMessage: 'No se encontraron docentes.',
+                selectedId: _selectedTeacherId,
+                options: _teachers
+                    .map(
+                      (teacher) => ScheduleSelectorOption(
+                        id: teacher.id,
+                        label: '${teacher.firstName} ${teacher.lastName}'
+                            .trim(),
+                        searchText:
+                            '${teacher.document} ${teacher.institutionalEmail}',
+                      ),
+                    )
+                    .toList(),
+                onChanged: _loadSchedulesForTeacher,
+              ),
             if (_loadError != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -504,10 +593,15 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
             const SizedBox(height: 20),
             if (_isLoading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
-            else if (_selectedGroupId == null)
-              const Expanded(
+            else if ((_scheduleView == 'group' && _selectedGroupId == null) ||
+                (_scheduleView == 'teacher' && _selectedTeacherId == null))
+              Expanded(
                 child: Center(
-                  child: Text('Selecciona un grupo para ver el horario'),
+                  child: Text(
+                    _scheduleView == 'group'
+                        ? 'Selecciona un grupo para ver el horario'
+                        : 'Selecciona un docente para ver sus clases',
+                  ),
                 ),
               )
             else if (isDesktop)
@@ -651,6 +745,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       day: day,
       subjects: subjects,
       canCreate:
+          _scheduleView == 'group' &&
           _selectedGroupId != null &&
           _teachers.isNotEmpty &&
           _permite('horarios.crear'),
@@ -659,6 +754,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       onAddSubject: () => _showCreateDialog(day),
       onEditSubject: _showEditDialog,
       onDeleteSubject: _showDeleteConfirmationDialog,
+      showGroupName: _scheduleView == 'teacher',
     );
   }
 }

@@ -67,7 +67,7 @@ Después de finalizar nadie puede editar. Solo el superadministrador puede corre
 
 ## Horarios
 
-El administrador selecciona un grupo activo de su sede y crea clases indicando materia, docente, día, hora inicial y hora final. Solo el superadministrador puede cambiar de institución o sede. El sistema impide que un grupo o un docente tenga dos clases superpuestas; las franjas contiguas sí son válidas.
+El administrador puede consultar el horario por grupo o por docente activo de su sede. Ambos selectores incluyen buscador; el docente se puede localizar por nombre, documento o correo. Para crear clases se usa la vista por grupo y se indica materia, docente, día, hora inicial y hora final. Solo el superadministrador puede cambiar de institución o sede. El sistema impide que un grupo o un docente tenga dos clases superpuestas; las franjas contiguas sí son válidas.
 
 El docente dispone de “Mis clases” y de cada grupo donde realmente dicta. En “Mis clases” ve únicamente sus asignaciones; al elegir un grupo ve su horario completo. El estudiante consulta exclusivamente su grupo. El familiar selecciona uno de sus hijos activos y el backend vuelve a validar el vínculo antes de mostrar el horario.
 

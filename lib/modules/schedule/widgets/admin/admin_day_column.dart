@@ -10,6 +10,7 @@ class AdminDayColumn extends StatelessWidget {
   final bool canCreate;
   final bool canEdit;
   final bool canDelete;
+  final bool showGroupName;
   final VoidCallback? onAddSubject;
   final void Function(SubjectModel) onEditSubject;
   final void Function(SubjectModel) onDeleteSubject;
@@ -21,6 +22,7 @@ class AdminDayColumn extends StatelessWidget {
     required this.canCreate,
     required this.canEdit,
     required this.canDelete,
+    this.showGroupName = false,
     required this.onEditSubject,
     required this.onDeleteSubject,
     this.onAddSubject,
@@ -90,6 +92,7 @@ class AdminDayColumn extends StatelessWidget {
                       onDelete: () => onDeleteSubject(subjects[i]),
                       showEdit: canEdit,
                       showDelete: canDelete,
+                      showGroupName: showGroupName,
                     ),
                   ),
           ),
