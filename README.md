@@ -58,6 +58,15 @@ Set-Location functions
 node scripts/smoke_teacher_transfer_qa.js
 ```
 
+Para simular y preparar 2027 como borrador en Piedecuesta, sin cambiar el año
+activo, use:
+
+```powershell
+Set-Location functions
+node scripts/smoke_prepare_academic_year_qa.js
+node scripts/smoke_prepare_academic_year_qa.js --apply
+```
+
 Las pruebas de Functions y reglas usan los emuladores definidos en `firebase.test.json`.
 
 ## Migración a grupos académicos
