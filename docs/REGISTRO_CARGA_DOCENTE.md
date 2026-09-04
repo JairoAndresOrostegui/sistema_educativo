@@ -21,7 +21,7 @@ asigne responsabilidad, acceso o trabajo vigente a un docente.
 |---|---|---|
 | Horarios | `subjects.teacherId`, nombre derivado y revisión | historial previo |
 | Dirección de grupo | `users.tutorGroupId` | años cerrados |
-| Mensajería | acceso delegado a conversaciones vigentes | mensajes y remitente |
+| Mensajería | membresía de canales académicos por `subjects.teacherId` o `tutorGroupId`, publicación en canales de servicio y acceso delegado a privados vigentes | mensajes, autor, secuencia y lecturas históricas |
 | Archivos | acceso delegado a publicaciones vigentes | autor y fecha de carga |
 | Rutas | gestionador y rutas diarias abiertas | recorridos finalizados |
 | Autorizaciones | responsabilidad derivada del grupo | decisiones previas |
@@ -53,5 +53,9 @@ Si existe carga docente, se agrega una fila al inventario y se integra en
   `academicYear`.
 - Un año cerrado es de solo lectura. Usuarios, Perfil y Sitio web no se
   reinician.
+- Cada `academic_groups/{groupId}` tiene un único canal general. La membresía
+  docente se recalcula al cambiar una asignatura o dirección de grupo. El
+  traslado añade al reemplazo a privados vigentes y retira al saliente de los
+  canales académicos sin reescribir mensajes.
 - El cambio de año es asistido: preparar, revisar y activar. Nunca ocurre
   automáticamente el 1 de enero.

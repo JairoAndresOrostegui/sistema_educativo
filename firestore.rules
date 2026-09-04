@@ -270,36 +270,30 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /message_threads/{threadId} {
-      function participant(data) {
-        return active() && request.auth.uid in data.participantIds;
+    match /message_channels/{channelId} {
+      function canReadChannel(data) {
+        return active() && hasPermission('mensajeria.ver') &&
+          sameTenant(data) && operationalYearReadable(data) &&
+          (admin() ||
+            (data.memberUserIds is list &&
+              request.auth.uid in data.memberUserIds));
       }
-      allow read: if participant(resource.data);
-      allow create: if participant(request.resource.data) &&
-        sameTenant(request.resource.data) &&
-        academicYearActive(request.resource.data) &&
-        request.resource.data.participantIds.size() >= 2;
-      allow update: if participant(resource.data) && participant(request.resource.data) &&
-        academicYearActive(resource.data) &&
-        request.resource.data.participantIds == resource.data.participantIds &&
-        request.resource.data.institutionId == resource.data.institutionId &&
-        request.resource.data.campusId == resource.data.campusId &&
-        request.resource.data.academicYearId == resource.data.academicYearId;
-      allow delete: if admin() && sameTenant(resource.data);
+      allow read: if canReadChannel(resource.data);
+      allow create, update, delete: if false;
 
       match /messages/{messageId} {
-        function parent() {
-          return get(/databases/$(database)/documents/message_threads/$(threadId)).data;
+        function channel() {
+          return get(/databases/$(database)/documents/message_channels/$(channelId)).data;
         }
-        allow read: if active() && request.auth.uid in parent().participantIds;
-        allow create: if active() && request.auth.uid in parent().participantIds &&
-          academicYearActive(parent()) &&
-          request.resource.data.senderId == request.auth.uid &&
-          request.resource.data.recipientId in parent().participantIds &&
-          request.resource.data.body is string &&
-          request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 4000;
-        allow update, delete: if false;
+        allow read: if canReadChannel(channel());
+        allow create, update, delete: if false;
       }
+    }
+
+    match /messaging_audit/{id} {
+      allow read: if admin() && hasPermission('mensajeria.ver') &&
+        sameTenant(resource.data);
+      allow create, update, delete: if false;
     }
 
     match /authorization_requests/{id} {

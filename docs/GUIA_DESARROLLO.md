@@ -40,10 +40,32 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 - Horario: `subjects` usa `institutionId`, `campusId`, `groupId`, `groupName`, docente, día, minutos de inicio/fin y `revision`. Crear, consultar, editar y eliminar pasa por Cloud Functions. `consultarHorarios` deriva el alcance: administrador en su sede por grupo o docente, superadministrador en la sede elegida, docente en sus clases o en grupos donde dicta, estudiante en su grupo y familiar en el grupo del hijo activo. La consulta administrativa por docente vuelve a validar que sea un docente activo de la sede; el identificador enviado por el cliente no amplía el alcance. Las mutaciones validan grupo y docente activos, rechazan campos arbitrarios, bloquean cruces de grupo o docente y comparan `expectedRevision` dentro de la transacción para impedir sobrescrituras concurrentes. Cada cambio escribe `schedule_history` de forma atómica.
 - Autorización: `pending`, `approved`, `rejected`, `finalized`. Finalizada es inmutable, salvo corrección expresa del superadministrador con historial.
 - Archivo: `uploading`, `active`, `deleting`.
+- Canal de mensajería: `active`, `archived`; tipos `academic_group`, `service`
+  y `private`. Los mensajes son inmutables y usan una secuencia ascendente.
 
 ## Familias con varios hijos
 
 `studentIds` contiene vínculos y `activeStudentId` el contexto actual. Horario, matrícula, autorizaciones, archivos, mensajería y todo módulo futuro por estudiante deben mostrar selector, persistir el hijo activo y volver a validar el vínculo en backend/reglas.
+
+## Mensajería institucional
+
+`message_channels` es la única fuente de canales. El canal académico se
+identifica como `academic_{groupId}` y materializa estudiantes, familiares y
+docentes vigentes. Las Functions recalculan miembros desde usuarios,
+matrículas, horarios y dirección de grupo; el cliente nunca decide la
+audiencia ni escribe mensajes, lecturas o silencios directamente.
+
+`messageSequence` aumenta en transacción y `readSequences/readAtByUser`
+permiten obtener el número exacto de mensajes pendientes y los acuses de
+lectura sin crear una escritura por destinatario al enviar. `mutedByAdmin`
+convierte un canal colectivo en solo anuncios; no elimina contenido. Los
+canales `service` son extensibles por categoría e icono y almacenan
+comunicación, no el estado operativo del módulo que los origina.
+
+Al ampliar Rutas, Restaurante, Lonchera u otro módulo, ese módulo conserva sus
+entidades de negocio y publica o enlaza novedades con un canal de servicio.
+No se crea una segunda colección de chats. Toda nueva carga docente debe
+actualizar la sincronización de `REGISTRO_CARGA_DOCENTE.md`.
 
 ## Archivos y Storage
 
@@ -95,7 +117,7 @@ Al publicar, las rutas de imágenes obsoletas y los reintentos anteriores se gua
 
 ## Migraciones
 
-No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y normaliza horarios (`miercoles`, minutos, nombres derivados y revisión), `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio de bloques a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`. La verificación académica también detecta franjas inválidas, docentes o grupos inconsistentes y cruces. La migración web guarda `website/config` y cada página anterior en `migration_backups` antes de reemplazarlos mediante un lote atómico.
+No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y normaliza horarios, `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos, `functions/scripts/migrate_messaging_channels.js` convierte conversaciones y crea canales académicos, y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`.
 
 ## Validación y despliegue
 

@@ -75,14 +75,14 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "users/student"), activeUser("Estudiante", {
         groupId: "group-5a",
         groupName: "Quinto A",
-        permissions: ["horarios.ver", "archivos.ver"],
+        permissions: ["horarios.ver", "archivos.ver", "mensajeria.ver"],
       }));
       await setDoc(doc(db, "users/teacher"), activeUser("Docente", {
         groupId: "group-5a",
         groupName: "Quinto A",
         permissions: [
           "matricula.ver", "autorizaciones.ver", "horarios.ver",
-          "archivos.ver",
+          "archivos.ver", "mensajeria.ver",
         ],
       }));
       await setDoc(doc(db, "users/teacher-other"), activeUser("Docente", {
@@ -95,7 +95,7 @@ describe("Reglas Firestore", () => {
         activeStudentId: "student",
         permissions: [
           "matricula.ver", "autorizaciones.ver", "horarios.ver",
-          "archivos.ver",
+          "archivos.ver", "mensajeria.ver",
         ],
       }));
       await setDoc(doc(db, "users/family-no-enrollment"), activeUser(
@@ -211,6 +211,19 @@ describe("Reglas Firestore", () => {
         recipientUserIds: ["teacher", "student", "family"],
         recipientContextKeys: ["family:student"],
       });
+      await setDoc(doc(db, "message_channels/group-5a"), {
+        institutionId: "inst-1", campusId: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
+        channelType: "academic_group", status: "active",
+        memberUserIds: ["teacher", "student", "family"],
+        messageSequence: 1,
+      });
+      await setDoc(doc(
+          db, "message_channels/group-5a/messages/message-1",
+      ), {
+        senderId: "teacher", senderName: "Prueba Usuario",
+        senderRole: "Docente", sequence: 1, body: "Evaluacion el viernes",
+      });
     });
   });
 
@@ -282,6 +295,27 @@ describe("Reglas Firestore", () => {
     await assertFails(deleteDoc(doc(
         teacherDb, "files/publication",
     )));
+  });
+
+  it("protege canales, mensajes y membresia desde backend", async () => {
+    const studentDb = env.authenticatedContext("student").firestore();
+    const teacherDb = env.authenticatedContext("teacher").firestore();
+    const outsiderDb = env.authenticatedContext("teacher-other").firestore();
+    await assertSucceeds(getDoc(doc(
+        studentDb, "message_channels/group-5a",
+    )));
+    await assertSucceeds(getDoc(doc(
+        teacherDb, "message_channels/group-5a/messages/message-1",
+    )));
+    await assertFails(getDoc(doc(
+        outsiderDb, "message_channels/group-5a",
+    )));
+    await assertFails(setDoc(doc(
+        studentDb, "message_channels/group-5a/messages/forged",
+    ), {senderId: "student", sequence: 2, body: "sin validar"}));
+    await assertFails(updateDoc(doc(
+        teacherDb, "message_channels/group-5a",
+    ), {mutedByAdmin: true}));
   });
 
   it("obliga a crear usuarios mediante Cloud Functions", async () => {

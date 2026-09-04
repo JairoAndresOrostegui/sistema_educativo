@@ -106,7 +106,7 @@ const collections = [
   "authorization_history",
   "files",
   "file_history",
-  "message_threads",
+  "message_channels",
   "routes",
   "daily_routes",
   "schedule_history",

@@ -135,7 +135,7 @@ describe("Reglas Storage del sitio web", () => {
     ));
   });
 
-  it("aÃ­sla las descargas por grupo e hijo activo", async () => {
+  it("aísla las descargas por grupo e hijo activo", async () => {
     const bytes = Buffer.from("archivo de prueba");
     await env.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), "files/file-2"), {

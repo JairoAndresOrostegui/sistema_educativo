@@ -100,6 +100,20 @@ Set-Location ..
 
 La ejecución real conserva un respaldo en `migration_backups` y reemplaza atómicamente los bloques anteriores por filas, columnas y componentes.
 
+Antes del despliegue de Mensajería por canales, simule, aplique y verifique la
+migración desde `functions`:
+
+```powershell
+Set-Location functions
+node scripts/migrate_messaging_channels.js --firebase-cli-auth
+node scripts/migrate_messaging_channels.js --firebase-cli-auth --apply
+node scripts/migrate_messaging_channels.js --firebase-cli-auth --verify
+Set-Location ..
+```
+
+Esta migración crea el chat general de cada grupo y mueve las conversaciones
+privadas anteriores; la aplicación no conserva lectura dual del esquema viejo.
+
 ```powershell
 flutter build web
 firebase use default

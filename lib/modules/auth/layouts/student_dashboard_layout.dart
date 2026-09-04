@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:sistema_educativo/config/app_palette.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/parameters_service.dart';
 import '../../enrollment/services/enrollment_service.dart';
+import '../../messaging/services/messaging_service.dart';
 import 'dashboard_layout.dart';
 
 class EstudianteDashboardLayout extends StatefulWidget {
@@ -19,6 +22,7 @@ class EstudianteDashboardLayout extends StatefulWidget {
 class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
+  StreamSubscription<int>? _messageUnreadSub;
 
   @override
   void initState() {
@@ -150,6 +154,34 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       _menuItems = items;
       isLoading = false;
     });
+    if (perms.contains('mensajeria.ver')) {
+      _messageUnreadSub?.cancel();
+      _messageUnreadSub = MessagingService().watchUnreadCount(user).listen((
+        count,
+      ) {
+        if (!mounted) return;
+        setState(
+          () => _menuItems = _menuItems
+              .map(
+                (item) => item.route == '/messages'
+                    ? MenuItemData(
+                        label: item.label,
+                        icon: item.icon,
+                        route: item.route,
+                        badgeCount: count,
+                      )
+                    : item,
+              )
+              .toList(),
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _messageUnreadSub?.cancel();
+    super.dispose();
   }
 
   Future<bool> _shouldShowEnrollmentMenu(String userId) async {

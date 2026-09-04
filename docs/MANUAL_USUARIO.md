@@ -94,7 +94,34 @@ La eliminación retira primero el objeto de Storage y después ajusta registros 
 
 ## Mensajería y notificaciones
 
-Los contactos y envíos grupales usan el grupo académico exacto: Cuarto A no incluye Cuarto B. Un familiar conversa en el contexto del hijo seleccionado. Las notificaciones se resuelven por usuarios, roles, grupo e hijos vinculados; no por direcciones de correo ficticias.
+Mensajería tiene dos bandejas: **Grupos y servicios** y **Particulares**. Cada
+grupo académico posee un chat general propio: Cuarto A no incluye Cuarto B.
+Participan los estudiantes matriculados, sus familiares, el docente líder y
+los docentes que dictan alguna asignatura en el grupo. Cualquiera de sus
+miembros puede conversar; administración puede convertir temporalmente el
+grupo en solo anuncios con **Silenciar grupo**.
+
+La matrícula, el retiro, el cambio de grupo, el estado del usuario y la carga
+del horario actualizan los miembros automáticamente. Salir de un canal impide
+leer o escribir contenido nuevo, pero nunca cambia la autoría de sus mensajes
+históricos.
+
+**Particulares** permite buscar únicamente contactos autorizados. Un
+estudiante puede conversar con compañeros de su grupo, docentes que le dictan
+y administración. Un familiar conversa con docentes del hijo seleccionado y
+administración. El docente accede a estudiantes y familiares de los grupos
+donde dicta. El familiar siempre debe seleccionar primero el hijo activo.
+
+El número sobre el icono y en cada conversación muestra mensajes no leídos.
+Al abrir un canal se registra la fecha de lectura. Docentes y administradores
+pueden pulsar el texto **Leído por...** de un mensaje propio para consultar
+quién lo vio y cuándo.
+
+Administración también crea canales de servicio con iconos diferenciados para
+Lonchera, Restaurante, Ruta escolar, Comunidad u Otro. Son canales de anuncios
+para toda la sede o para grupos seleccionados. Las novedades de recorridos se
+originan en Rutas y se comunican por su canal enlazado: Mensajería no duplica
+el estado operativo ni la ubicación de la ruta.
 
 ## Sitio web
 

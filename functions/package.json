@@ -10,6 +10,7 @@
     "test:authorization": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-authorization-test --only auth,firestore,functions \"mocha --timeout 60000 test/authorization.function.test.js\"",
     "test:schedule": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-schedule-test --only auth,firestore,functions \"mocha --timeout 60000 test/schedule.function.test.js\"",
     "test:files": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-file-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/file.function.test.js\"",
+    "test:messaging": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-messaging-test --only auth,firestore,functions \"mocha --timeout 60000 test/messaging.function.test.js\"",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",

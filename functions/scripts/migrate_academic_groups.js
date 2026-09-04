@@ -342,18 +342,18 @@ async function verifyMigration() {
     }
   }
 
-  const threads = await db.collection("message_threads").get();
-  for (const document of threads.docs) {
+  const channels = await db.collection("message_channels").get();
+  for (const document of channels.docs) {
     const data = document.data();
     if (Object.hasOwn(data, "contextStudentGrade")) {
       violations.push(
-          `message_threads/${document.id}: contexto antiguo ` +
+          `message_channels/${document.id}: contexto antiguo ` +
           `${JSON.stringify(data.contextStudentGrade)}`,
       );
     }
-    if (data.contextStudentGroupId &&
-        !groupIds.has(data.contextStudentGroupId)) {
-      violations.push(`message_threads/${document.id}: grupo inexistente`);
+    const groupId = data.groupId || data.contextStudentGroupId;
+    if (groupId && !groupIds.has(groupId)) {
+      violations.push(`message_channels/${document.id}: grupo inexistente`);
     }
   }
 
@@ -589,22 +589,6 @@ async function main() {
         gradoAspirado: FieldValue.delete(),
       },
     };
-  });
-
-  await migrateCollection("message_threads", (data) => {
-    const level = (data.contextStudentGrade || "").toString().trim();
-    const scope = tenant(data);
-    const update = {};
-    if (level) {
-      update.contextStudentGroupId = groupIdFor(
-          scope.institution, scope.campus, level,
-      );
-      update.contextStudentGroupName = `${level} A`;
-    }
-    if (Object.hasOwn(data, "contextStudentGrade")) {
-      update.contextStudentGrade = FieldValue.delete();
-    }
-    return Object.keys(update).length ? update : null;
   });
 
   console.log(

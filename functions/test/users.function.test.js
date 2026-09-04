@@ -122,11 +122,12 @@ async function seedRelations(uid) {
     requesterId: uid,
     studentId: uid,
   });
-  const thread = db.collection("message_threads").doc("thread");
+  const thread = db.collection("message_channels").doc("thread");
   await thread.set({
     institutionId: "inst-1",
     campusId: "campus-1",
-    participantIds: [uid, "family"],
+    channelType: "private",
+    memberUserIds: [uid, "family"],
   });
   await thread.collection("messages").doc("message").set({senderId: uid});
   const daily = db.collection("daily_routes").doc("daily");
@@ -332,7 +333,7 @@ describe("baja y eliminacion de usuarios", () => {
         .exists, false);
     assert.equal((await db.collection("authorization_requests")
         .doc("authorization").get()).exists, false);
-    assert.equal((await db.collection("message_threads").doc("thread").get())
+    assert.equal((await db.collection("message_channels").doc("thread").get())
         .exists, false);
     const family = await db.collection("users").doc("family").get();
     assert.deepEqual(family.data().studentIds, []);
@@ -693,18 +694,19 @@ describe("baja y eliminacion de usuarios", () => {
       academicYearId: yearId, academicYear: 2026,
       gestionador: "source-teacher", gestionadaPorNombre: "Docente Saliente",
     });
-    await db.collection("message_threads").doc("teacher-thread").set({
+    await db.collection("message_channels").doc("teacher-thread").set({
       institutionId: "inst-1", campusId: "campus-1",
       academicYearId: yearId, academicYear: 2026,
-      participantIds: ["source-teacher", "student"],
-      participantNames: {
+      channelType: "private",
+      memberUserIds: ["source-teacher", "student"],
+      memberNames: {
         "source-teacher": "Docente Saliente", "student": "Estudiante",
       },
-      participantRoles: {
+      memberRoles: {
         "source-teacher": "Docente", "student": "Estudiante",
       },
     });
-    await db.collection("message_threads").doc("teacher-thread")
+    await db.collection("message_channels").doc("teacher-thread")
         .collection("messages").doc("historic-message").set({
           senderId: "source-teacher", senderName: "Docente Saliente",
         });
@@ -720,7 +722,7 @@ describe("baja y eliminacion de usuarios", () => {
       targetTeacherId: "target-teacher",
     }, token);
     assert.equal(preview.body.result.impact.schedules, 1);
-    assert.equal(preview.body.result.impact.messageThreads, 1);
+    assert.equal(preview.body.result.impact.messageThreads, 2);
     assert.deepEqual(preview.body.result.conflicts, []);
 
     const moved = await callFunction("ejecutarTrasladoDocente", {
@@ -734,10 +736,10 @@ describe("baja y eliminacion de usuarios", () => {
     assert.equal((await auth.getUser("source-teacher")).disabled, true);
     assert.equal((await db.collection("subjects").doc("source-subject").get())
         .data().teacherId, "target-teacher");
-    const thread = (await db.collection("message_threads")
+    const thread = (await db.collection("message_channels")
         .doc("teacher-thread").get()).data();
-    assert.ok(thread.participantIds.includes("target-teacher"));
-    const message = (await db.collection("message_threads")
+    assert.ok(thread.memberUserIds.includes("target-teacher"));
+    const message = (await db.collection("message_channels")
         .doc("teacher-thread").collection("messages")
         .doc("historic-message").get()).data();
     assert.equal(message.senderId, "source-teacher");

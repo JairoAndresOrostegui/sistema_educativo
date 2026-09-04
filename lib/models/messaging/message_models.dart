@@ -1,179 +1,182 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MessageContact {
-  final String id;
-  final String fullName;
-  final String role;
-  final bool isGroup;
-  final String? groupType;
-  final String? targetGroupId;
-  final String? targetRole;
-  final String? groupId;
-  final String? groupName;
-  final String? studentContextId;
-  final String? studentContextName;
-  final String? studentContextGroupId;
-  final String? studentContextGroupName;
-
   const MessageContact({
     required this.id,
     required this.fullName,
     required this.role,
-    this.isGroup = false,
-    this.groupType,
-    this.targetGroupId,
-    this.targetRole,
     this.groupId,
     this.groupName,
     this.studentContextId,
-    this.studentContextName,
-    this.studentContextGroupId,
-    this.studentContextGroupName,
   });
+  final String id;
+  final String fullName;
+  final String role;
+  final String? groupId;
+  final String? groupName;
+  final String? studentContextId;
+  factory MessageContact.fromMap(Map<String, dynamic> data) => MessageContact(
+    id: (data['id'] ?? '').toString(),
+    fullName: (data['fullName'] ?? '').toString(),
+    role: (data['role'] ?? '').toString(),
+    groupId: data['groupId']?.toString(),
+    groupName: data['groupName']?.toString(),
+    studentContextId: data['studentContextId']?.toString(),
+  );
 }
 
 class MessageThreadSummary {
-  final String id;
-  final List<String> participantIds;
-  final Map<String, String> participantNames;
-  final Map<String, String> participantRoles;
-  final String? contextStudentId;
-  final String? contextStudentName;
-  final String? contextStudentGroupId;
-  final String? contextStudentGroupName;
-  final String? lastMessage;
-  final String? lastSenderId;
-  final String? lastSenderName;
-  final DateTime? lastMessageAt;
-  final String? delegatedFromTeacherId;
-  final String? delegatedToTeacherId;
-
   const MessageThreadSummary({
     required this.id,
-    required this.participantIds,
-    required this.participantNames,
-    required this.participantRoles,
+    required this.channelType,
+    required this.category,
+    required this.iconKey,
+    required this.title,
+    required this.memberUserIds,
+    required this.memberNames,
+    required this.memberRoles,
+    required this.messageSequence,
+    required this.readSequences,
+    required this.readAtByUser,
+    required this.mutedByAdmin,
+    required this.status,
+    this.groupId,
+    this.groupName,
     this.contextStudentId,
     this.contextStudentName,
-    this.contextStudentGroupId,
-    this.contextStudentGroupName,
     this.lastMessage,
     this.lastSenderId,
     this.lastSenderName,
     this.lastMessageAt,
-    this.delegatedFromTeacherId,
-    this.delegatedToTeacherId,
   });
+  final String id, channelType, category, iconKey, title, status;
+  final List<String> memberUserIds;
+  final Map<String, String> memberNames, memberRoles;
+  final int messageSequence;
+  final Map<String, int> readSequences;
+  final Map<String, DateTime> readAtByUser;
+  final bool mutedByAdmin;
+  final String? groupId, groupName, contextStudentId, contextStudentName;
+  final String? lastMessage, lastSenderId, lastSenderName;
+  final DateTime? lastMessageAt;
+  bool get isPrivate => channelType == 'private';
+  bool get isAcademicGroup => channelType == 'academic_group';
+  bool get isService => channelType == 'service';
+  int unreadCountFor(String userId) =>
+      (messageSequence - (readSequences[userId] ?? 0)).clamp(0, 9999);
+  String displayTitleFor(String userId) {
+    if (!isPrivate) return title;
+    final peerId = memberUserIds.cast<String?>().firstWhere(
+      (id) => id != userId,
+      orElse: () => null,
+    );
+    return peerId == null
+        ? 'Conversación privada'
+        : memberNames[peerId] ?? 'Conversación privada';
+  }
 
+  String subtitleFor(String userId) {
+    if (isAcademicGroup) return groupName ?? 'Grupo académico';
+    if (isService) return 'Canal de servicio';
+    final peerId = memberUserIds.cast<String?>().firstWhere(
+      (id) => id != userId,
+      orElse: () => null,
+    );
+    final role = peerId == null ? '' : memberRoles[peerId] ?? '';
+    final context = (contextStudentName ?? '').trim();
+    return [
+      role,
+      if (context.isNotEmpty) 'Contexto: $context',
+    ].where((v) => v.isNotEmpty).join(' • ');
+  }
+
+  int readCountForSequence(int sequence, {String? excludingUserId}) =>
+      readSequences.entries
+          .where(
+            (entry) => entry.key != excludingUserId && entry.value >= sequence,
+          )
+          .length;
   factory MessageThreadSummary.fromMap(Map<String, dynamic> data, String id) {
-    final rawNames = (data['participantNames'] as Map?) ?? const {};
-    final rawRoles = (data['participantRoles'] as Map?) ?? const {};
-    final ts = data['lastMessageAt'];
-
+    final names = data['memberNames'] is Map
+        ? data['memberNames'] as Map
+        : const {};
+    final roles = data['memberRoles'] is Map
+        ? data['memberRoles'] as Map
+        : const {};
+    final reads = data['readSequences'] is Map
+        ? data['readSequences'] as Map
+        : const {};
+    final dates = data['readAtByUser'] is Map
+        ? data['readAtByUser'] as Map
+        : const {};
     return MessageThreadSummary(
       id: id,
-      participantIds: List<String>.from(data['participantIds'] ?? const []),
-      participantNames: rawNames.map(
-        (key, value) => MapEntry(key.toString(), (value ?? '').toString()),
+      channelType: (data['channelType'] ?? '').toString(),
+      category: (data['category'] ?? '').toString(),
+      iconKey: (data['iconKey'] ?? 'private').toString(),
+      title: (data['title'] ?? 'Conversación').toString(),
+      memberUserIds: List<String>.from(data['memberUserIds'] ?? const []),
+      memberNames: names.map((k, v) => MapEntry(k.toString(), v.toString())),
+      memberRoles: roles.map((k, v) => MapEntry(k.toString(), v.toString())),
+      messageSequence: (data['messageSequence'] as num?)?.toInt() ?? 0,
+      readSequences: reads.map(
+        (k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0),
       ),
-      participantRoles: rawRoles.map(
-        (key, value) => MapEntry(key.toString(), (value ?? '').toString()),
+      readAtByUser: dates.map(
+        (k, v) => MapEntry(
+          k.toString(),
+          v is Timestamp ? v.toDate() : DateTime.fromMillisecondsSinceEpoch(0),
+        ),
       ),
-      contextStudentId:
-          (data['contextStudentId'] ?? '').toString().trim().isEmpty
-          ? null
-          : data['contextStudentId'].toString(),
-      contextStudentName:
-          (data['contextStudentName'] ?? '').toString().trim().isEmpty
-          ? null
-          : data['contextStudentName'].toString(),
-      contextStudentGroupId:
-          (data['contextStudentGroupId'] ?? '').toString().trim().isEmpty
-          ? null
-          : data['contextStudentGroupId'].toString(),
-      contextStudentGroupName:
-          (data['contextStudentGroupName'] ?? '').toString().trim().isEmpty
-          ? null
-          : data['contextStudentGroupName'].toString(),
+      mutedByAdmin: data['mutedByAdmin'] == true,
+      status: (data['status'] ?? 'active').toString(),
+      groupId: data['groupId']?.toString(),
+      groupName: data['groupName']?.toString(),
+      contextStudentId: data['contextStudentId']?.toString(),
+      contextStudentName: data['contextStudentName']?.toString(),
       lastMessage: data['lastMessage']?.toString(),
       lastSenderId: data['lastSenderId']?.toString(),
       lastSenderName: data['lastSenderName']?.toString(),
-      lastMessageAt: ts is Timestamp ? ts.toDate() : null,
-      delegatedFromTeacherId: data['delegatedFromTeacherId']?.toString(),
-      delegatedToTeacherId: data['delegatedToTeacherId']?.toString(),
+      lastMessageAt: data['lastMessageAt'] is Timestamp
+          ? (data['lastMessageAt'] as Timestamp).toDate()
+          : null,
     );
-  }
-
-  String? _peerId(String userId) {
-    final excludedTeacher = userId == delegatedToTeacherId
-        ? delegatedFromTeacherId
-        : null;
-    return participantIds.cast<String?>().firstWhere(
-      (id) => id != userId && id != excludedTeacher,
-      orElse: () => null,
-    );
-  }
-
-  String peerNameFor(String userId) {
-    final peerId = _peerId(userId);
-    if (peerId == null) return 'Conversación';
-    return participantNames[peerId] ?? 'Conversación';
-  }
-
-  String peerRoleFor(String userId) {
-    final peerId = _peerId(userId);
-    if (peerId == null) return '';
-    return participantRoles[peerId] ?? '';
-  }
-
-  String? peerIdFor(String userId) {
-    return _peerId(userId);
   }
 }
 
 class MessageItem {
-  final String id;
-  final String senderId;
-  final String senderName;
-  final String senderRole;
-  final String recipientId;
-  final String body;
-  final DateTime? createdAt;
-
   const MessageItem({
     required this.id,
+    required this.sequence,
     required this.senderId,
     required this.senderName,
     required this.senderRole,
-    required this.recipientId,
     required this.body,
     this.createdAt,
   });
-
-  factory MessageItem.fromMap(Map<String, dynamic> data, String id) {
-    final ts = data['createdAt'];
-    return MessageItem(
-      id: id,
-      senderId: (data['senderId'] ?? '').toString(),
-      senderName: (data['senderName'] ?? '').toString(),
-      senderRole: (data['senderRole'] ?? '').toString(),
-      recipientId: (data['recipientId'] ?? '').toString(),
-      body: (data['body'] ?? '').toString(),
-      createdAt: ts is Timestamp ? ts.toDate() : null,
-    );
-  }
+  final String id, senderId, senderName, senderRole, body;
+  final int sequence;
+  final DateTime? createdAt;
+  factory MessageItem.fromMap(Map<String, dynamic> data, String id) =>
+      MessageItem(
+        id: id,
+        sequence: (data['sequence'] as num?)?.toInt() ?? 0,
+        senderId: (data['senderId'] ?? '').toString(),
+        senderName: (data['senderName'] ?? '').toString(),
+        senderRole: (data['senderRole'] ?? '').toString(),
+        body: (data['body'] ?? '').toString(),
+        createdAt: data['createdAt'] is Timestamp
+            ? (data['createdAt'] as Timestamp).toDate()
+            : null,
+      );
 }
 
 class MessagingChildContext {
-  final String id;
-  final String fullName;
-  final String groupId;
-  final String groupName;
-
   const MessagingChildContext({
     required this.id,
     required this.fullName,
     required this.groupId,
     required this.groupName,
   });
+  final String id, fullName, groupId, groupName;
 }

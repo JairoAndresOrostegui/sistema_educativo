@@ -35,6 +35,24 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 - Las notificaciones de Archivos incluyen estudiantes y familiares. Cuando publica un administrador, incluyen además los docentes que dictan en los grupos involucrados.
 - Borrar primero el objeto de Storage y después sus metadatos/contador. Si Storage falla, conservar un estado reintentable.
 
+## Mensajería institucional
+
+- Cada grupo académico tiene un único chat general con estudiantes activos,
+  familiares vinculados, docente líder y docentes que dictan en el grupo.
+- Estudiantes pueden conversar con compañeros solo dentro de su propio grupo.
+  Familiares no contactan estudiantes ajenos; usan el hijo activo para
+  conversar con sus docentes o administración.
+- Matrícula, retiro, cambio de grupo, estado de usuario, horario y traslado
+  docente sincronizan la membresía automáticamente sin reescribir la autoría.
+- Administración puede silenciar un canal colectivo: queda en solo anuncios,
+  sin borrar ni ocultar su historial.
+- Mensajes, lecturas y silencios se escriben mediante Cloud Functions. Cada
+  mensaje conserva secuencia, autor y fecha; docentes y administradores pueden
+  consultar quién leyó sus mensajes y cuándo.
+- Lonchera, Restaurante, Ruta y futuros servicios usan canales tipificados del
+  mismo motor. El módulo de origen conserva su estado operativo y Mensajería
+  conserva únicamente la comunicación; nunca duplicar colecciones de chat.
+
 ## Interfaz y calidad
 
 - Los colores, tipografía, nombre y logo globales se obtienen de la configuración del sitio en Firestore y se aplican mediante `ThemeData`/`ColorScheme`.

@@ -115,7 +115,7 @@ async function cleanup() {
     ["subjects", ids.subject],
     ["routes", ids.route],
     ["daily_routes", ids.dailyRoute],
-    ["message_threads", ids.thread],
+    ["message_channels", ids.thread],
     ["files", ids.file],
     ["teacher_transfers", transferId],
     ["users", ids.admin],
@@ -199,14 +199,15 @@ async function run() {
       academicYear: scope.activeYear,
       gestionador: ids.source,
     }),
-    db.collection("message_threads").doc(ids.thread).set({
+    db.collection("message_channels").doc(ids.thread).set({
       ...common,
-      participantIds: [ids.source, ids.admin],
-      participantNames: {
+      channelType: "private",
+      memberUserIds: [ids.source, ids.admin],
+      memberNames: {
         [ids.source]: "Prueba QA Docente",
         [ids.admin]: "Prueba QA Administrador",
       },
-      participantRoles: {
+      memberRoles: {
         [ids.source]: "Docente",
         [ids.admin]: "Administrador",
       },
@@ -250,14 +251,14 @@ async function run() {
       db.collection("users").doc(ids.source).get(),
       db.collection("users").doc(ids.target).get(),
       db.collection("subjects").doc(ids.subject).get(),
-      db.collection("message_threads").doc(ids.thread).get(),
+      db.collection("message_channels").doc(ids.thread).get(),
       db.collection("files").doc(ids.file).get(),
     ]);
   assert.equal(sourceAfter.data().status, "inactivo");
   assert.equal((await auth.getUser(ids.source)).disabled, true);
   assert.equal(targetAfter.data().tutorGroupId, group.id);
   assert.equal(subjectAfter.data().teacherId, ids.target);
-  assert.ok(threadAfter.data().participantIds.includes(ids.target));
+  assert.ok(threadAfter.data().memberUserIds.includes(ids.target));
   assert.equal(fileAfter.data().uploadedBy, ids.source);
   assert.ok(fileAfter.data().recipientUserIds.includes(ids.target));
   assert.equal((await signIn(sourceEmail)).ok, false);
@@ -269,13 +270,13 @@ async function run() {
     await Promise.all([
       db.collection("users").doc(ids.source).get(),
       db.collection("subjects").doc(ids.subject).get(),
-      db.collection("message_threads").doc(ids.thread).get(),
+      db.collection("message_channels").doc(ids.thread).get(),
       db.collection("files").doc(ids.file).get(),
     ]);
   assert.equal(restoredSource.data().status, "activo");
   assert.equal((await auth.getUser(ids.source)).disabled, false);
   assert.equal(restoredSubject.data().teacherId, ids.source);
-  assert.ok(!restoredThread.data().participantIds.includes(ids.target));
+  assert.ok(!restoredThread.data().memberUserIds.includes(ids.target));
   assert.ok(!restoredFile.data().recipientUserIds.includes(ids.target));
   assert.equal(restoredFile.data().uploadedBy, ids.source);
   assert.ok((await signIn(sourceEmail)).ok);

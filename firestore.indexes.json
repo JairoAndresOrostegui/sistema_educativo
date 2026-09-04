@@ -101,6 +101,28 @@
       ]
     },
     {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "institution", "order": "ASCENDING" },
+        { "fieldPath": "campus", "order": "ASCENDING" },
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "studentIds", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "institution", "order": "ASCENDING" },
+        { "fieldPath": "campus", "order": "ASCENDING" },
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "tutorGroupId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "authorization_requests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -371,13 +393,23 @@
       ]
     },
     {
-      "collectionGroup": "message_threads",
+      "collectionGroup": "message_channels",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "institutionId", "order": "ASCENDING" },
         { "fieldPath": "campusId", "order": "ASCENDING" },
         { "fieldPath": "academicYearId", "order": "ASCENDING" },
-        { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" }
+        { "fieldPath": "memberUserIds", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "message_channels",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "institutionId", "order": "ASCENDING" },
+        { "fieldPath": "campusId", "order": "ASCENDING" },
+        { "fieldPath": "academicYearId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
     {

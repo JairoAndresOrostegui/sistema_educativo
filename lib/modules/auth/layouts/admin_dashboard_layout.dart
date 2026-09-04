@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../authorization/services/authorization_service.dart';
 import '../../enrollment/services/enrollment_service.dart';
+import '../../messaging/services/messaging_service.dart';
 import 'dashboard_layout.dart';
 
 class AdminDashboardLayout extends StatefulWidget {
@@ -24,6 +25,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   Stream<QuerySnapshot<Map<String, dynamic>>>? _pendingStream;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingSub;
   StreamSubscription<int>? _pendingAuthSub;
+  StreamSubscription<int>? _messageUnreadSub;
 
   @override
   void initState() {
@@ -194,6 +196,30 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       user.campus,
       allCampuses: user.isSuperadmin,
     );
+    if (esSuperadmin || perms.contains('mensajeria.ver')) {
+      _messageUnreadSub?.cancel();
+      _messageUnreadSub = MessagingService()
+          .watchUnreadCount(user)
+          .listen(_setMessageBadge);
+    }
+  }
+
+  void _setMessageBadge(int count) {
+    if (!mounted) return;
+    setState(
+      () => _menuItems = _menuItems
+          .map(
+            (item) => item.route == '/messages'
+                ? MenuItemData(
+                    label: item.label,
+                    icon: item.icon,
+                    route: item.route,
+                    badgeCount: count,
+                  )
+                : item,
+          )
+          .toList(),
+    );
   }
 
   Future<void> _listenPending() async {
@@ -265,6 +291,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     required bool allCampuses,
   }) {
     _pendingAuthSub?.cancel();
+    _messageUnreadSub?.cancel();
     _pendingAuthSub = AuthorizationService()
         .watchPendingCountForAdmin(
           institutionId: allCampuses ? null : institutionId,

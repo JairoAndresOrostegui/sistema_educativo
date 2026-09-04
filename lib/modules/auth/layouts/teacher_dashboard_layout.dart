@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
 import '../../authorization/services/authorization_service.dart';
+import '../../messaging/services/messaging_service.dart';
 import 'dashboard_layout.dart';
 
 class DocenteDashboardLayout extends StatefulWidget {
@@ -19,6 +20,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
   StreamSubscription<int>? _pendingAuthSub;
+  StreamSubscription<int>? _messageUnreadSub;
 
   @override
   void initState() {
@@ -121,6 +123,28 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       _menuItems = items;
       isLoading = false;
     });
+    if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
+      _messageUnreadSub?.cancel();
+      _messageUnreadSub = MessagingService().watchUnreadCount(user).listen((
+        count,
+      ) {
+        if (!mounted) return;
+        setState(
+          () => _menuItems = _menuItems
+              .map(
+                (item) => item.route == '/messages'
+                    ? MenuItemData(
+                        label: item.label,
+                        icon: item.icon,
+                        route: item.route,
+                        badgeCount: count,
+                      )
+                    : item,
+              )
+              .toList(),
+        );
+      });
+    }
 
     if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
       final groupId = (user.groupId ?? '').trim();
@@ -156,6 +180,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
   @override
   void dispose() {
     _pendingAuthSub?.cancel();
+    _messageUnreadSub?.cancel();
     super.dispose();
   }
 
