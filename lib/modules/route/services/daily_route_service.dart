@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../models/route/daily_route_model.dart';
 import '../../../models/route/student_route_model.dart';
 import '../../../models/user/user_model_v2.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class RutaDiariaService {
   final FirebaseFirestore _firestore;
@@ -13,10 +14,13 @@ class RutaDiariaService {
     FirebaseFirestore? firestore,
     required userModelv2 currentUser,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       // El nombre publico preserva la API; el campo es privado.
+       // ignore: prefer_initializing_formals
        _currentUser = currentUser;
 
   static const String _colDailyRoutes = 'daily_routes';
   static const String _colUsers = 'users';
+  static const String _colUserDirectory = 'user_directory';
   static const String _subStudents = 'students';
 
   String _generateRutaDiaId(String routeId) {
@@ -25,24 +29,33 @@ class RutaDiariaService {
   }
 
   Future<RutaDiaria?> getRutaDia(String routeId) async {
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _firestore,
+      institutionId: _currentUser.institution,
+      campusId: _currentUser.campus,
+    );
     final idRutaDia = _generateRutaDiaId(routeId);
-    final doc =
-        await _firestore.collection(_colDailyRoutes).doc(idRutaDia).get();
-    return doc.exists ? RutaDiaria.fromFirestore(doc) : null;
+    final doc = await _firestore
+        .collection(_colDailyRoutes)
+        .doc(idRutaDia)
+        .get();
+    return doc.exists && doc.data()?['academicYearId'] == academicYear.id
+        ? RutaDiaria.fromFirestore(doc)
+        : null;
   }
 
   Future<List<EstudianteRutaDiaria>> getEstudiantesRutaDia(
     String dailyRouteId,
   ) async {
-    final snap =
-        await _firestore
-            .collection(_colDailyRoutes)
-            .doc(dailyRouteId)
-            .collection(_subStudents)
-            .get();
+    final snap = await _firestore
+        .collection(_colDailyRoutes)
+        .doc(dailyRouteId)
+        .collection(_subStudents)
+        .get();
 
-    final list =
-        snap.docs.map((d) => EstudianteRutaDiaria.fromFirestore(d)).toList();
+    final list = snap.docs
+        .map((d) => EstudianteRutaDiaria.fromFirestore(d))
+        .toList();
     list.sort((a, b) => (a.orden ?? 0).compareTo(b.orden ?? 0));
     return list;
   }
@@ -61,8 +74,13 @@ class RutaDiariaService {
 
     final inst = _currentUser.institution;
     final camp = _currentUser.campus;
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _firestore,
+      institutionId: inst,
+      campusId: camp,
+    );
 
-    final usersCol = _firestore.collection(_colUsers);
+    final usersCol = _firestore.collection(_colUserDirectory);
     final List<Map<String, dynamic>> studentsPayload = [];
 
     for (int i = 0; i < estudiantesIds.length; i++) {
@@ -74,8 +92,8 @@ class RutaDiariaService {
       final fullName =
           '${(sd['firstName'] ?? '').toString().trim()} ${(sd['lastName'] ?? '').toString().trim()}'
               .trim();
-      final address =
-          (sd['routeAddress'] ?? sd['direccionRuta'] ?? '').toString();
+      final address = (sd['routeAddress'] ?? sd['direccionRuta'] ?? '')
+          .toString();
 
       studentsPayload.add({
         'id': sid,
@@ -90,6 +108,8 @@ class RutaDiariaService {
         'orden': i,
         'institution': inst,
         'campus': camp,
+        'academicYearId': academicYear.id,
+        'academicYear': academicYear.year,
       });
     }
 
@@ -104,6 +124,8 @@ class RutaDiariaService {
       'horaFin': null,
       'institution': inst,
       'campus': camp,
+      'academicYearId': academicYear.id,
+      'academicYear': academicYear.year,
     });
 
     for (final st in studentsPayload) {

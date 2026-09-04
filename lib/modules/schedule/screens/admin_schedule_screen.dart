@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
+import '../../../models/academic/academic_group.dart';
+import '../../../models/academic/academic_year.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/parameters_service.dart';
+import '../../../utils/academic_group_service.dart';
+import '../../../utils/academic_year_service.dart';
 import '../widgets/subject_form_dialog.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../widgets/admin/admin_grade_dropdown.dart';
 import '../widgets/admin/admin_day_column.dart';
+import '../widgets/searchable_schedule_selector.dart';
 
 class ScheduleAdminScreen extends StatefulWidget {
   const ScheduleAdminScreen({super.key});
@@ -22,13 +28,23 @@ class ScheduleAdminScreen extends StatefulWidget {
 class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   final ParametersService _parametersService = ParametersService();
   final ScheduleService _scheduleService = ScheduleService();
+  final AcademicGroupService _groupService = AcademicGroupService();
+  final AcademicYearService _yearService = AcademicYearService();
 
-  String? _selectedGrade;
+  String? _selectedGroupId;
+  String? _selectedTeacherId;
+  String _scheduleView = 'group';
   String _selectedDay = 'lunes';
   bool _isLoading = false;
+  String? _loadError;
   List<userModelv2> _teachers = [];
   Map<String, List<SubjectModel>> _allSchedules = {};
-  List<String> _availableGrades = [];
+  List<AcademicGroup> _availableGroups = [];
+  List<InstitutionOption> _institutions = [];
+  String? _selectedInstitution;
+  String? _selectedCampus;
+  String? _selectedAcademicYearId;
+  List<AcademicYear> _academicYears = [];
   final ScrollController _webScrollController = ScrollController();
 
   // Overlay bloqueante
@@ -51,11 +67,16 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     return funcs.contains(clave);
   }
 
+  AcademicYear? get _selectedAcademicYear => _academicYears
+      .where((item) => item.id == _selectedAcademicYearId)
+      .firstOrNull;
+
+  bool get _canWriteCurrentYear => _selectedAcademicYear?.status == 'active';
+
   @override
   void initState() {
     super.initState();
     _initializeData();
-    _loadAvailableGradesFromParametersService();
   }
 
   @override
@@ -72,38 +93,50 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     });
   }
 
-  Future<void> _loadAvailableGradesFromParametersService() async {
-    setState(() => _isLoading = true);
-    try {
-      final parameters = await _parametersService.getGrades();
-      final grades =
-          parameters
-              .map((p) => p.valor.trim())
-              .where((g) => g.toLowerCase() != 'no aplica')
-              .toList();
-      setState(() => _availableGrades = grades);
-    } catch (_) {}
-    setState(() => _isLoading = false);
-  }
-
   Future<void> _initializeData() async {
     setState(() => _isLoading = true);
     try {
       final currentUser = context.read<UserProviderV2>().user;
       if (currentUser != null) {
-        _teachers = await _scheduleService.getTeachers(
-          institutionId: currentUser.institution,
-          campusId: currentUser.campus,
+        var institutions = await _parametersService.getInstitutions();
+        if (!currentUser.isSuperadmin) {
+          institutions = institutions
+              .where((item) => item.id == currentUser.institution)
+              .toList();
+        }
+        _institutions = institutions;
+        _selectedInstitution = currentUser.institution;
+        _selectedCampus = currentUser.campus;
+        _academicYears = await _yearService.list(
+          institutionId: _selectedInstitution!,
+          campusId: _selectedCampus!,
         );
+        _selectedAcademicYearId = _academicYears
+            .where((item) => item.status == 'active')
+            .firstOrNull
+            ?.id;
+        _teachers = await _scheduleService.getTeachers(
+          institutionId: _selectedInstitution!,
+          campusId: _selectedCampus!,
+          includeInactive: !_canWriteCurrentYear,
+        );
+        _availableGroups = await _groupService.list(
+          institutionId: _selectedInstitution!,
+          campusId: _selectedCampus!,
+          academicYearId: _selectedAcademicYearId,
+        );
+        _loadError = null;
       }
-    } catch (_) {}
+    } catch (e) {
+      _loadError = 'No se pudieron cargar los docentes. $e';
+    }
     setState(() => _isLoading = false);
   }
 
-  Future<void> _loadSchedulesForGrade(String? grade) async {
-    if (grade == null) {
+  Future<void> _loadSchedulesForGroup(String? groupId) async {
+    if (groupId == null) {
       setState(() {
-        _selectedGrade = null;
+        _selectedGroupId = null;
         _allSchedules = {};
       });
       return;
@@ -111,29 +144,96 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
 
     setState(() {
       _isLoading = true;
-      _selectedGrade = grade;
+      _selectedGroupId = groupId;
     });
 
     try {
       final currentUser = context.read<UserProviderV2>().user;
       if (currentUser != null) {
-        _allSchedules = await _scheduleService.getSchedulesForGrade(
-          institutionId: currentUser.institution,
-          campusId: currentUser.campus,
-          grade: grade,
+        _allSchedules = await _scheduleService.getSchedulesForGroup(
+          institutionId: _selectedInstitution ?? currentUser.institution,
+          campusId: _selectedCampus ?? currentUser.campus,
+          groupId: groupId,
+          academicYearId: _selectedAcademicYearId,
         );
       }
-    } catch (_) {}
+    } catch (error) {
+      _allSchedules = {};
+      _loadError = 'No fue posible cargar el horario seleccionado. $error';
+    }
 
     setState(() => _isLoading = false);
   }
 
+  Future<void> _loadSchedulesForTeacher(String? teacherId) async {
+    if (teacherId == null) {
+      setState(() {
+        _selectedTeacherId = null;
+        _allSchedules = {};
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _selectedTeacherId = teacherId;
+      _loadError = null;
+    });
+    try {
+      final currentUser = context.read<UserProviderV2>().user;
+      if (currentUser != null) {
+        _allSchedules = await _scheduleService.getSchedulesForTeacher(
+          institutionId: _selectedInstitution ?? currentUser.institution,
+          campusId: _selectedCampus ?? currentUser.campus,
+          teacherId: teacherId,
+          academicYearId: _selectedAcademicYearId,
+        );
+      }
+    } catch (error) {
+      _allSchedules = {};
+      _loadError = 'No fue posible cargar el horario del docente. $error';
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _reloadSelectedSchedule() => _scheduleView == 'teacher'
+      ? _loadSchedulesForTeacher(_selectedTeacherId)
+      : _loadSchedulesForGroup(_selectedGroupId);
+
+  void _changeScheduleView(String view) {
+    if (_scheduleView == view) return;
+    setState(() {
+      _scheduleView = view;
+      _selectedGroupId = null;
+      _selectedTeacherId = null;
+      _allSchedules = {};
+      _loadError = null;
+    });
+  }
+
   Future<void> _showCreateDialog(String day) async {
-    if (_selectedGrade == null) {
+    if (!_canWriteCurrentYear) {
       await DialogUtils.showError(
         context: context,
-        title: 'Selecciona grado',
-        message: 'Por favor, selecciona un grado primero.',
+        title: 'Año cerrado',
+        message: 'Los horarios históricos son de solo lectura.',
+      );
+      return;
+    }
+    if (_selectedGroupId == null) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Selecciona grupo',
+        message: 'Por favor, selecciona un grupo primero.',
+      );
+      return;
+    }
+
+    if (_teachers.isEmpty) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Sin docentes disponibles',
+        message: 'No hay docentes activos en esta sede para asignar la clase.',
       );
       return;
     }
@@ -161,9 +261,13 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
               final currentUser = context.read<UserProviderV2>().user;
               if (currentUser != null) {
                 final subjectToSave = newSubject.copyWith(
-                  institutionId: currentUser.institution,
-                  campusId: currentUser.campus,
-                  grade: _selectedGrade!,
+                  institutionId:
+                      _selectedInstitution ?? currentUser.institution,
+                  campusId: _selectedCampus ?? currentUser.campus,
+                  groupId: _selectedGroupId!,
+                  groupName: _availableGroups
+                      .firstWhere((group) => group.id == _selectedGroupId)
+                      .name,
                   day: day,
                 );
 
@@ -171,7 +275,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   subject: subjectToSave,
                   creator: currentUser,
                 );
-                await _loadSchedulesForGrade(_selectedGrade);
+                await _reloadSelectedSchedule();
                 if (!mounted || !dialogContext.mounted) return;
                 Navigator.of(dialogContext).pop(); // cierra dialogo
               }
@@ -195,6 +299,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   }
 
   void _showEditDialog(SubjectModel subject) {
+    if (!_canWriteCurrentYear) return;
     if (!_permite('horarios.editar')) {
       DialogUtils.showError(
         context: context,
@@ -232,7 +337,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   newSubject: toUpdate,
                   editor: currentUser,
                 );
-                await _loadSchedulesForGrade(_selectedGrade);
+                await _loadSchedulesForGroup(_selectedGroupId);
                 if (mounted && dialogContext.mounted) {
                   Navigator.of(dialogContext).pop();
                 }
@@ -256,6 +361,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
   }
 
   void _showDeleteConfirmationDialog(SubjectModel subject) {
+    if (!_canWriteCurrentYear) return;
     if (!_permite('horarios.eliminar')) {
       DialogUtils.showError(
         context: context,
@@ -267,62 +373,125 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
 
     showDialog(
       context: context,
-      builder:
-          (dialogCtx) => AlertDialog(
-            title: const Text('Confirmar eliminacion'),
-            content: Text(
-              'Estas seguro de que deseas eliminar la materia "${subject.subject}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogCtx).pop(),
-                child: const Text('No'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.of(dialogCtx).pop();
-                  _setBlocking(true, text: 'Eliminando materia...');
-                  try {
-                    final currentUser = context.read<UserProviderV2>().user;
-                    if (currentUser != null) {
-                      await _scheduleService.deleteSubject(
-                        subject: subject,
-                        remover: currentUser,
-                      );
-                      await _loadSchedulesForGrade(_selectedGrade);
-                      if (!mounted) return;
-                      await DialogUtils.showSuccess(
-                        context: context,
-                        title: 'Exito',
-                        message: 'Materia eliminada.',
-                      );
-                    }
-                  } catch (e) {
-                    if (!mounted) return;
-                    await DialogUtils.showError(
-                      context: context,
-                      title: 'Error',
-                      message: 'Error al eliminar la materia. ($e)',
-                    );
-                  } finally {
-                    _setBlocking(false);
-                  }
-                },
-                child: const Text('Si'),
-              ),
-            ],
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Text(
+          '¿Estás seguro de que deseas eliminar la materia "${subject.subject}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('No'),
           ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogCtx).pop();
+              _setBlocking(true, text: 'Eliminando materia...');
+              try {
+                final currentUser = context.read<UserProviderV2>().user;
+                if (currentUser != null) {
+                  await _scheduleService.deleteSubject(
+                    subject: subject,
+                    remover: currentUser,
+                  );
+                  await _reloadSelectedSchedule();
+                  if (!mounted) return;
+                  await DialogUtils.showSuccess(
+                    context: context,
+                    title: 'Éxito',
+                    message: 'Materia eliminada.',
+                  );
+                }
+              } catch (e) {
+                if (!mounted) return;
+                await DialogUtils.showError(
+                  context: context,
+                  title: 'Error',
+                  message: 'Error al eliminar la materia. ($e)',
+                );
+              } finally {
+                _setBlocking(false);
+              }
+            },
+            child: const Text('Sí'),
+          ),
+        ],
+      ),
     );
+  }
+
+  Future<void> _changeTenant({
+    required String institutionId,
+    required String campusId,
+  }) async {
+    setState(() {
+      _selectedInstitution = institutionId;
+      _selectedCampus = campusId;
+      _selectedGroupId = null;
+      _selectedTeacherId = null;
+      _allSchedules = {};
+      _isLoading = true;
+    });
+    _academicYears = await _yearService.list(
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    _selectedAcademicYearId = _academicYears
+        .where((item) => item.status == 'active')
+        .firstOrNull
+        ?.id;
+    _teachers = await _scheduleService.getTeachers(
+      institutionId: institutionId,
+      campusId: campusId,
+      includeInactive: !_canWriteCurrentYear,
+    );
+    _availableGroups = await _groupService.list(
+      institutionId: institutionId,
+      campusId: campusId,
+      academicYearId: _selectedAcademicYearId,
+    );
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _changeAcademicYear(String? id) async {
+    if (id == null || _selectedInstitution == null || _selectedCampus == null) {
+      return;
+    }
+    setState(() {
+      _selectedAcademicYearId = id;
+      _selectedGroupId = null;
+      _selectedTeacherId = null;
+      _allSchedules = {};
+      _isLoading = true;
+    });
+    _teachers = await _scheduleService.getTeachers(
+      institutionId: _selectedInstitution!,
+      campusId: _selectedCampus!,
+      includeInactive: !_canWriteCurrentYear,
+    );
+    _availableGroups = await _groupService.list(
+      institutionId: _selectedInstitution!,
+      campusId: _selectedCampus!,
+      academicYearId: id,
+    );
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  InstitutionOption? get _selectedInstitutionOption {
+    for (final institution in _institutions) {
+      if (institution.id == _selectedInstitution) return institution;
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUser = context.read<UserProviderV2>().user;
     if (currentUser == null) {
-      return const Center(child: Text('Error: No se encontro el usuario.'));
+      return const Center(child: Text('Error: no se encontró el usuario.'));
     }
 
-    final bool isDesktop = MediaQuery.of(context).size.width > 600;
+    final bool isDesktop = MediaQuery.of(context).size.width >= 1100;
 
     final content = SafeArea(
       child: Padding(
@@ -330,18 +499,207 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AdminGradeDropdown(
-              selectedGrade: _selectedGrade,
-              onChanged: (String? newGrade) => _loadSchedulesForGrade(newGrade),
-              availableGrades: _availableGrades,
+            if (currentUser.isSuperadmin && _institutions.isNotEmpty) ...[
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final selectors = <Widget>[
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: _selectedInstitution,
+                      decoration: const InputDecoration(
+                        labelText: 'Institución',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _institutions
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item.id,
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        final institution = _institutions.firstWhere(
+                          (item) => item.id == value,
+                        );
+                        final campus = institution.campuses.isEmpty
+                            ? ''
+                            : institution.campuses.first;
+                        if (campus.isNotEmpty) {
+                          _changeTenant(institutionId: value, campusId: campus);
+                        }
+                      },
+                    ),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      key: ValueKey(
+                        '${_selectedInstitution ?? ''}:${_selectedCampus ?? ''}',
+                      ),
+                      initialValue: _selectedCampus,
+                      decoration: const InputDecoration(
+                        labelText: 'Sede',
+                        border: OutlineInputBorder(),
+                      ),
+                      items:
+                          (_selectedInstitutionOption?.campuses ??
+                                  const <String>[])
+                              .map(
+                                (campus) => DropdownMenuItem(
+                                  value: campus,
+                                  child: Text(
+                                    campus,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (value) {
+                        if (value == null || _selectedInstitution == null) {
+                          return;
+                        }
+                        _changeTenant(
+                          institutionId: _selectedInstitution!,
+                          campusId: value,
+                        );
+                      },
+                    ),
+                  ];
+                  if (constraints.maxWidth < 560) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        selectors.first,
+                        const SizedBox(height: 12),
+                        selectors.last,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: selectors.first),
+                      const SizedBox(width: 12),
+                      Expanded(child: selectors.last),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            DropdownButtonFormField<String>(
+              key: ValueKey(
+                '${_selectedInstitution ?? ''}:${_selectedCampus ?? ''}:'
+                '${_selectedAcademicYearId ?? ''}',
+              ),
+              initialValue: _selectedAcademicYearId,
+              decoration: const InputDecoration(
+                labelText: 'Año lectivo',
+                border: OutlineInputBorder(),
+              ),
+              items: _academicYears
+                  .map(
+                    (item) => DropdownMenuItem(
+                      value: item.id,
+                      child: Text('${item.year} · ${item.statusLabel}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _isLoading ? null : _changeAcademicYear,
             ),
+            if (!_canWriteCurrentYear && _selectedAcademicYear != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Consulta histórica: este horario es de solo lectura.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChoiceChip(
+                  avatar: const Icon(Icons.school_outlined),
+                  label: const Text('Por grupo'),
+                  selected: _scheduleView == 'group',
+                  onSelected: (_) => _changeScheduleView('group'),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.person_search_outlined),
+                  label: const Text('Por docente'),
+                  selected: _scheduleView == 'teacher',
+                  onSelected: (_) => _changeScheduleView('teacher'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_scheduleView == 'group')
+              AdminGradeDropdown(
+                selectedGroupId: _selectedGroupId,
+                onChanged: _loadSchedulesForGroup,
+                availableGroups: _availableGroups,
+              )
+            else
+              SearchableScheduleSelector(
+                label: 'Docente',
+                hint: 'Selecciona un docente',
+                searchHint: 'Buscar por nombre, documento o correo',
+                emptyMessage: 'No se encontraron docentes.',
+                selectedId: _selectedTeacherId,
+                options: _teachers
+                    .map(
+                      (teacher) => ScheduleSelectorOption(
+                        id: teacher.id,
+                        label: '${teacher.firstName} ${teacher.lastName}'
+                            .trim(),
+                        searchText:
+                            '${teacher.document} ${teacher.institutionalEmail}',
+                      ),
+                    )
+                    .toList(),
+                onChanged: _loadSchedulesForTeacher,
+              ),
+            if (_loadError != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppPalette.primary.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Text(
+                  _loadError!,
+                  style: TextStyle(
+                    color: AppPalette.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             if (_isLoading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
-            else if (_selectedGrade == null)
-              const Expanded(
+            else if ((_scheduleView == 'group' && _selectedGroupId == null) ||
+                (_scheduleView == 'teacher' && _selectedTeacherId == null))
+              Expanded(
                 child: Center(
-                  child: Text('Selecciona un grado para ver el horario'),
+                  child: Text(
+                    _scheduleView == 'group'
+                        ? 'Selecciona un grupo para ver el horario'
+                        : 'Selecciona un docente para ver sus clases',
+                  ),
                 ),
               )
             else if (isDesktop)
@@ -354,11 +712,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        title: const Text('Schedule management'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        title: const Text('Gestión de horarios'),
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
         leading: const BackToDashboardButton(),
       ),
@@ -370,51 +728,50 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           // overlay con spinner
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 160),
-            child:
-                _blocking
-                    ? Container(
-                      key: const ValueKey('overlay'),
-                      color: Colors.black.withValues(alpha: 0.35),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
+            child: _blocking
+                ? Container(
+                    key: const ValueKey('overlay'),
+                    color: AppPalette.onSurface.withValues(alpha: 0.35),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppPalette.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppPalette.onSurface.withValues(
+                                alpha: 0.08,
                               ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(
-                                width: 36,
-                                height: 36,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 3,
-                                ),
+                              blurRadius: 24,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: CircularProgressIndicator(strokeWidth: 3),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _blockingText,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                _blockingText,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                    )
-                    : const SizedBox.shrink(),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -430,10 +787,9 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
           controller: _webScrollController,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children:
-                _daysOfWeek
-                    .map((day) => Expanded(child: _buildDayColumn(day)))
-                    .toList(),
+            children: _daysOfWeek
+                .map((day) => Expanded(child: _buildDayColumn(day)))
+                .toList(),
           ),
         ),
       ),
@@ -448,24 +804,23 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children:
-                  _daysOfWeek.map((day) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: () => setState(() => _selectedDay = day),
-                        child: Text(StringExtension(day).capitalize()),
+              children: _daysOfWeek.map((day) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    );
-                  }).toList(),
+                      elevation: 0,
+                    ),
+                    onPressed: () => setState(() => _selectedDay = day),
+                    child: Text(StringExtension(day).capitalize()),
+                  ),
+                );
+              }).toList(),
             ),
           ),
           const SizedBox(height: 16),
@@ -487,12 +842,18 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     return AdminDayColumn(
       day: day,
       subjects: subjects,
-      canCreate: _selectedGrade != null && _permite('horarios.crear'),
-      canEdit: _permite('horarios.editar'),
-      canDelete: _permite('horarios.eliminar'),
+      canCreate:
+          _scheduleView == 'group' &&
+          _selectedGroupId != null &&
+          _teachers.isNotEmpty &&
+          _canWriteCurrentYear &&
+          _permite('horarios.crear'),
+      canEdit: _canWriteCurrentYear && _permite('horarios.editar'),
+      canDelete: _canWriteCurrentYear && _permite('horarios.eliminar'),
       onAddSubject: () => _showCreateDialog(day),
       onEditSubject: _showEditDialog,
       onDeleteSubject: _showDeleteConfirmationDialog,
+      showGroupName: _scheduleView == 'teacher',
     );
   }
 }
@@ -502,4 +863,8 @@ extension StringExtension on String {
     if (isEmpty) return this;
     return "${this[0].toUpperCase()}${substring(1)}";
   }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

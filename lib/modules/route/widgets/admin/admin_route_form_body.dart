@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
@@ -63,28 +64,28 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.red.withValues(alpha: .25)),
+      borderSide: BorderSide(color: AppPalette.error.withValues(alpha: .25)),
     ),
-    focusedBorder: const OutlineInputBorder(
+    focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
-      borderSide: BorderSide(color: Colors.redAccent, width: 1.4),
+      borderSide: BorderSide(color: AppPalette.primary, width: 1.4),
     ),
     isDense: true,
   );
 
   BoxDecoration _box() => BoxDecoration(
     borderRadius: BorderRadius.circular(14),
-    border: Border.all(color: Colors.red.withValues(alpha: .15)),
+    border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Colors.red.withValues(alpha: .06), Colors.white],
+      colors: [AppPalette.error.withValues(alpha: .06), AppPalette.surface],
     ),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withValues(alpha: 0.06),
+        color: AppPalette.onSurface.withValues(alpha: 0.06),
         blurRadius: 12,
-        offset: const Offset(0, 6),
+        offset: Offset(0, 6),
       ),
     ],
   );
@@ -97,38 +98,34 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: EdgeInsets.symmetric(vertical: 6),
             child: Semantics(
               label: 'Nombre de la ruta',
               textField: true,
               child: TextFormField(
                 controller: widget.nameController,
-                validator:
-                    (v) =>
-                        (v == null || v.trim().isEmpty)
-                            ? 'Campo obligatorio'
-                            : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Campo obligatorio'
+                    : null,
                 decoration: _input('Nombre de la ruta'),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: EdgeInsets.symmetric(vertical: 6),
             child: Semantics(
               label: 'Dirección de inicio',
               textField: true,
               child: TextFormField(
                 controller: widget.startAddressController,
-                validator:
-                    (v) =>
-                        (v == null || v.trim().isEmpty)
-                            ? 'Campo obligatorio'
-                            : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Campo obligatorio'
+                    : null,
                 decoration: _input('Dirección de inicio'),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
 
           _fechaRow(
             context,
@@ -155,7 +152,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
             widget.onEndTimeChanged,
           ),
 
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
 
           Align(
             alignment: Alignment.centerLeft,
@@ -163,30 +160,30 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
               'Estudiantes asignados (orden de recogida)',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: Colors.redAccent.shade200,
+                color: AppPalette.primary.withValues(alpha: .65),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _typeAheadStudents(),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _studentList(),
 
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
               'Gestionador asignado',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: Colors.redAccent.shade200,
+                color: AppPalette.primary.withValues(alpha: .65),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _typeAheadManager(),
 
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
               if (widget.formKey.currentState?.validate() ?? false) {
@@ -208,20 +205,20 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
                       content: Text(
                         'Faltan campos obligatorios: ${missing.join(', ')}',
                       ),
-                      backgroundColor: Colors.redAccent,
+                      backgroundColor: AppPalette.primary,
                     ),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text('Formulario completo y válido'),
-                      backgroundColor: Colors.green,
+                      backgroundColor: AppPalette.success,
                     ),
                   );
                 }
               }
             },
-            child: const Text('Validar formulario'),
+            child: Text('Validar formulario'),
           ),
         ],
       ),
@@ -235,14 +232,14 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     void Function(DateTime) onChanged,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: _box(),
       child: Row(
         children: [
           Expanded(child: Text('$label: ${FormatUtils.formatearFecha(fecha)}')),
           IconButton(
-            icon: const Icon(Icons.calendar_today, color: Colors.redAccent),
+            icon: Icon(Icons.calendar_today, color: AppPalette.primary),
             onPressed: () async {
               final sel = await showDatePicker(
                 context: context,
@@ -265,14 +262,14 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     void Function(TimeOfDay) onChanged,
   ) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: EdgeInsets.symmetric(vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: _box(),
       child: Row(
         children: [
           Expanded(child: Text('$label: ${FormatUtils.formatearHora(hora)}')),
           IconButton(
-            icon: const Icon(Icons.access_time, color: Colors.redAccent),
+            icon: Icon(Icons.access_time, color: AppPalette.primary),
             onPressed: () async {
               final sel = await showTimePicker(
                 context: context,
@@ -289,7 +286,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
   Widget _typeAheadStudents() {
     return Container(
       decoration: _box(),
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(8),
       child: TypeAheadField<DocumentSnapshot<Map<String, dynamic>>>(
         builder: (context, controller, focusNode) {
           return TextField(
@@ -333,24 +330,23 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
       height: 220,
       decoration: _box(),
       child: ReorderableListView(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        onReorder: widget.onReorderStudent,
-        children:
-            widget.orderedStudents
-                .map(
-                  (e) => ListTile(
-                    key: ValueKey(e['id']),
-                    title: Text(e['nombre']),
-                    trailing: IconButton(
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                        color: Colors.redAccent,
-                      ),
-                      onPressed: () => widget.onRemoveStudent(e['id']),
-                    ),
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        onReorderItem: widget.onReorderStudent,
+        children: widget.orderedStudents
+            .map(
+              (e) => ListTile(
+                key: ValueKey(e['id']),
+                title: Text(e['nombre']),
+                trailing: IconButton(
+                  icon: Icon(
+                    Icons.remove_circle_outline,
+                    color: AppPalette.primary,
                   ),
-                )
-                .toList(),
+                  onPressed: () => widget.onRemoveStudent(e['id']),
+                ),
+              ),
+            )
+            .toList(),
       ),
     );
   }
@@ -358,7 +354,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
   Widget _typeAheadManager() {
     return Container(
       decoration: _box(),
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(8),
       child: TypeAheadField<DocumentSnapshot<Map<String, dynamic>>>(
         builder: (context, controller, focusNode) {
           // guardo referencia al controller interno para poder actualizar el texto
@@ -373,11 +369,8 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
           return TextFormField(
             controller: controller,
             focusNode: focusNode,
-            validator:
-                (v) =>
-                    (v == null || v.trim().isEmpty)
-                        ? 'Campo obligatorio'
-                        : null,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Campo obligatorio' : null,
             decoration: _input('Buscar gestionador'),
           );
         },

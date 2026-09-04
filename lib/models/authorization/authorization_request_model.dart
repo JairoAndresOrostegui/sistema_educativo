@@ -34,7 +34,8 @@ class AuthorizationRequest {
   final String campusId;
   final String studentId;
   final String studentFullName;
-  final String grade;
+  final String groupId;
+  final String groupName;
   final String requesterId;
   final String requesterFullName;
   final bool allDay;
@@ -48,6 +49,7 @@ class AuthorizationRequest {
   final String? adminNote;
   final String? evidence;
   final String? resubmissionOfRequestId;
+  final bool requiresRequesterEdit;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -57,7 +59,8 @@ class AuthorizationRequest {
     required this.campusId,
     required this.studentId,
     required this.studentFullName,
-    required this.grade,
+    required this.groupId,
+    required this.groupName,
     required this.requesterId,
     required this.requesterFullName,
     required this.allDay,
@@ -71,6 +74,7 @@ class AuthorizationRequest {
     this.adminNote,
     this.evidence,
     this.resubmissionOfRequestId,
+    this.requiresRequesterEdit = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -89,7 +93,8 @@ class AuthorizationRequest {
       campusId: (m['campusId'] ?? '').toString(),
       studentId: (m['studentId'] ?? '').toString(),
       studentFullName: (m['studentFullName'] ?? '').toString(),
-      grade: (m['grade'] ?? '').toString(),
+      groupId: (m['groupId'] ?? '').toString(),
+      groupName: (m['groupName'] ?? '').toString(),
       requesterId: (m['requesterId'] ?? '').toString(),
       requesterFullName: (m['requesterFullName'] ?? '').toString(),
       allDay: m['allDay'] == true,
@@ -98,25 +103,23 @@ class AuthorizationRequest {
       dateTo: _toDt(m['dateTo']),
       startTime: _toDt(m['startTime']),
       endTime: _toDt(m['endTime']),
-      reason:
-          (m['reason'] ?? '').toString().isEmpty
-              ? null
-              : m['reason'].toString(),
+      reason: (m['reason'] ?? '').toString().isEmpty
+          ? null
+          : m['reason'].toString(),
       status: authorizationStatusFromString(
         (m['status'] ?? 'pending').toString(),
       ),
-      adminNote:
-          (m['adminNote'] ?? '').toString().isEmpty
-              ? null
-              : m['adminNote'].toString(),
-      evidence:
-          (m['evidence'] ?? '').toString().isEmpty
-              ? null
-              : m['evidence'].toString(),
+      adminNote: (m['adminNote'] ?? '').toString().isEmpty
+          ? null
+          : m['adminNote'].toString(),
+      evidence: (m['evidence'] ?? '').toString().isEmpty
+          ? null
+          : m['evidence'].toString(),
       resubmissionOfRequestId:
           (m['resubmissionOfRequestId'] ?? '').toString().isEmpty
-              ? null
-              : m['resubmissionOfRequestId'].toString(),
+          ? null
+          : m['resubmissionOfRequestId'].toString(),
+      requiresRequesterEdit: m['requiresRequesterEdit'] == true,
       createdAt: _toDt(m['createdAt']),
       updatedAt: _toDt(m['updatedAt']),
     );
@@ -128,7 +131,8 @@ class AuthorizationRequest {
       'campusId': campusId,
       'studentId': studentId,
       'studentFullName': studentFullName,
-      'grade': grade,
+      'groupId': groupId,
+      'groupName': groupName,
       'requesterId': requesterId,
       'requesterFullName': requesterFullName,
       'allDay': allDay,
@@ -142,6 +146,7 @@ class AuthorizationRequest {
       'adminNote': adminNote,
       'evidence': evidence,
       'resubmissionOfRequestId': resubmissionOfRequestId,
+      'requiresRequesterEdit': requiresRequesterEdit,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
     };
@@ -153,7 +158,8 @@ class AuthorizationRequest {
     String? campusId,
     String? studentId,
     String? studentFullName,
-    String? grade,
+    String? groupId,
+    String? groupName,
     String? requesterId,
     String? requesterFullName,
     bool? allDay,
@@ -167,6 +173,7 @@ class AuthorizationRequest {
     String? adminNote,
     String? evidence,
     String? resubmissionOfRequestId,
+    bool? requiresRequesterEdit,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -176,7 +183,8 @@ class AuthorizationRequest {
       campusId: campusId ?? this.campusId,
       studentId: studentId ?? this.studentId,
       studentFullName: studentFullName ?? this.studentFullName,
-      grade: grade ?? this.grade,
+      groupId: groupId ?? this.groupId,
+      groupName: groupName ?? this.groupName,
       requesterId: requesterId ?? this.requesterId,
       requesterFullName: requesterFullName ?? this.requesterFullName,
       allDay: allDay ?? this.allDay,
@@ -191,6 +199,8 @@ class AuthorizationRequest {
       evidence: evidence ?? this.evidence,
       resubmissionOfRequestId:
           resubmissionOfRequestId ?? this.resubmissionOfRequestId,
+      requiresRequesterEdit:
+          requiresRequesterEdit ?? this.requiresRequesterEdit,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

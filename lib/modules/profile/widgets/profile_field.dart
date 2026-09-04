@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
@@ -28,11 +29,11 @@ class ProfileField extends StatelessWidget {
   Widget build(BuildContext context) {
     final defaultTitle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       fontWeight: FontWeight.w700,
-      color: Colors.black87,
+      color: AppPalette.onSurface.withValues(alpha: .87),
     );
     final defaultValue = Theme.of(context).textTheme.bodyMedium?.copyWith(
       fontWeight: FontWeight.w500,
-      color: Colors.black87,
+      color: AppPalette.onSurface.withValues(alpha: .87),
     );
 
     return Padding(
@@ -49,7 +50,7 @@ class ProfileField extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('$title:', style: titleStyle ?? defaultTitle),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 SelectableText(
                   value.isEmpty ? '-' : value,
                   style: valueStyle ?? defaultValue,
@@ -71,7 +72,7 @@ class ProfileField extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: 16),
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,

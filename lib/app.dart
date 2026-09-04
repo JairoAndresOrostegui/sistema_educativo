@@ -1,7 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
+import 'config/theme_config.dart';
 
 import 'modules/auth/guards/admin_dashboard_guard.dart';
 import 'modules/auth/guards/student_dashboard_guard.dart';
@@ -9,6 +12,7 @@ import 'modules/auth/guards/teacher_dashboard_guard.dart';
 import 'modules/auth/screens/access_denied_page.dart';
 import 'modules/auth/screens/loginScreenV2.dart';
 import 'modules/auth/services/auth_service_v2.dart';
+import 'modules/auth/utils/auth_access_policy.dart';
 import 'modules/authorization/screens/admin_authorization_screen.dart';
 import 'modules/authorization/screens/student_authorization_screen.dart';
 import 'modules/authorization/screens/teacher_authorization_screen.dart';
@@ -29,7 +33,11 @@ import 'modules/schedule/screens/teacher_schedule_screen.dart';
 import 'modules/enrollment/screens/enrollment_form_screen.dart';
 import 'modules/enrollment/screens/admin_enrollment_screen.dart';
 import 'modules/user/screens/admin_users_screen.dart';
+import 'modules/website/screens/public_website_screen.dart';
+import 'modules/website/screens/website_editor_screen.dart';
+import 'modules/website/screens/website_submissions_screen.dart';
 import 'providers/user_provider_v2.dart';
+import 'utils/app_navigator.dart';
 
 class AppRouter extends StatefulWidget {
   const AppRouter({super.key});
@@ -51,88 +59,82 @@ class _AppRouterState extends State<AppRouter> {
   }
 
   GoRouter _buildRouter(UserProviderV2 userProvider) {
-    String homeForRole(String? role) {
-      switch (role) {
-        case 'Administrador':
-          return '/admin_dashboard';
-        case 'Docente':
-          return '/teacher_dashboard';
-        case 'Estudiante':
-        case 'Familiar':
-          return '/student_dashboard';
-        default:
-          return '/access_denied';
-      }
-    }
-
-    bool allowedForRole(String? role, String path) {
-      const commons = {'/profile', '/logout', '/access_denied'};
-      if (commons.contains(path)) return true;
-
-      switch (role) {
-        case 'Administrador':
-          return {
-            '/admin_dashboard',
-            '/admin_user',
-            '/management_route',
-            '/management_schedule',
-            '/management_document',
-            '/view_history',
-            '/admin_authorization',
-            '/enrollment',
-            '/admin_parameters',
-            '/admin_qr',
-          }.contains(path);
-        case 'Docente':
-          return {
-            '/teacher_dashboard',
-            '/execute_route',
-            '/teacher_schedule',
-            '/teacher_document',
-            '/teacher_authorization',
-            '/messages',
-          }.contains(path);
-        case 'Estudiante':
-        case 'Familiar':
-          return {
-            '/student_dashboard',
-            '/my_route',
-            '/my_schedule',
-            '/student_document',
-            '/student_authorization',
-            '/enrollment',
-            '/student_qr',
-            '/messages',
-          }.contains(path);
-        default:
-          return false;
-      }
-    }
-
     return GoRouter(
-      initialLocation: '/login',
+      navigatorKey: appNavigatorKey,
+      initialLocation: kIsWeb ? '/' : '/login',
       refreshListenable: userProvider,
       errorBuilder: (context, state) => const AccessDeniedPage(),
       redirect: (context, state) {
         final user = userProvider.user;
         final currentPath = state.uri.path;
         final loggingIn = currentPath == '/login';
-        const publicPaths = {'/login', '/enrollment_public'};
+        const publicWebsitePaths = {
+          '/',
+          '/about',
+          '/admissions',
+          '/learning',
+          '/news-events',
+          '/parents',
+        };
+        const publicPaths = {
+          ...publicWebsitePaths,
+          '/login',
+          '/enrollment_public',
+        };
+
+        if (!kIsWeb && publicWebsitePaths.contains(currentPath)) {
+          return '/login';
+        }
+        if (publicWebsitePaths.contains(currentPath)) return null;
 
         if (user == null) {
           return publicPaths.contains(currentPath) ? null : '/login';
         }
 
-        final home = homeForRole(user.role);
+        final home = AuthAccessPolicy.homeForRole(user.role);
         if (loggingIn) return home;
 
-        if (!allowedForRole(user.role, currentPath)) {
+        if (!AuthAccessPolicy.isPathAllowed(
+          role: user.role,
+          isSuperadmin: user.isSuperadmin,
+          permissions: user.permissions,
+          path: currentPath,
+          isWeb: kIsWeb,
+        )) {
           return '/access_denied';
         }
 
         return null;
       },
       routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => const PublicWebsiteScreen(slug: 'home'),
+        ),
+        GoRoute(
+          path: '/about',
+          builder: (context, state) => const PublicWebsiteScreen(slug: 'about'),
+        ),
+        GoRoute(
+          path: '/admissions',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'admissions'),
+        ),
+        GoRoute(
+          path: '/learning',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'learning'),
+        ),
+        GoRoute(
+          path: '/news-events',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'news-events'),
+        ),
+        GoRoute(
+          path: '/parents',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'parents'),
+        ),
         GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
@@ -193,6 +195,14 @@ class _AppRouterState extends State<AppRouter> {
           path: '/admin_qr',
           builder: (context, state) => const AdminQrScreen(),
         ),
+        GoRoute(
+          path: '/website_admin',
+          builder: (context, state) => const WebsiteEditorScreen(),
+        ),
+        GoRoute(
+          path: '/website_messages',
+          builder: (context, state) => const WebsiteSubmissionsScreen(),
+        ),
         // Docente
         GoRoute(
           path: '/teacher_dashboard',
@@ -240,8 +250,11 @@ class _AppRouterState extends State<AppRouter> {
           builder: (context, state) {
             final user = context.read<UserProviderV2>().user;
             final role = (user?.role ?? '').trim().toLowerCase();
-            final isAdmin = (user?.isSuperadmin ?? false) || role == 'administrador';
-            if (isAdmin) return const AdminEnrollmentScreen();
+            final isAdmin =
+                (user?.isSuperadmin ?? false) || role == 'administrador';
+            if (isAdmin || role == 'docente') {
+              return const AdminEnrollmentScreen();
+            }
             return const EnrollmentFormScreen();
           },
         ),
@@ -265,7 +278,7 @@ class _AppRouterState extends State<AppRouter> {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Sistema Educativo',
-      theme: ThemeData(primarySwatch: Colors.indigo),
+      theme: ThemeProvider.themeData,
       routerConfig: router,
     );
   }
@@ -315,5 +328,3 @@ class _LogoutRedirectState extends State<_LogoutRedirect> {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
-
-

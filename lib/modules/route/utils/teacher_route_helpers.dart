@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../models/route/student_route_model.dart';
+import '../../../../utils/notification_tokens.dart';
 
 String normAddress(String s) => s.trim().toLowerCase();
 
@@ -56,19 +57,6 @@ EstudianteRutaDiaria? firstPendingOutsideGroup(
   return null;
 }
 
-List<String> _extractTokens(Map<String, dynamic> data) {
-  final out = <String>[];
-  final t1 = data['fcmToken'];
-  if (t1 is String && t1.trim().isNotEmpty) out.add(t1.trim());
-  final tN = data['fcmTokens'];
-  if (tN is List) {
-    out.addAll(
-      tN.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty),
-    );
-  }
-  return out;
-}
-
 Iterable<List<T>> _chunks<T>(List<T> list, int size) sync* {
   for (var i = 0; i < list.length; i += size) {
     yield list.sublist(i, i + size > list.length ? list.length : i + size);
@@ -85,28 +73,26 @@ Future<List<String>> collectTokensForActors({
   final tokens = <String>{};
 
   for (final chunk in _chunks(studentIds, 10)) {
-    final snap =
-        await users
-            .where(FieldPath.documentId, whereIn: chunk)
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .get();
+    final snap = await users
+        .where(FieldPath.documentId, whereIn: chunk)
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .get();
     for (final d in snap.docs) {
-      tokens.addAll(_extractTokens(d.data()));
+      tokens.addAll(extractNotificationTokens(d.data()));
     }
   }
 
   for (final chunk in _chunks(studentIds, 10)) {
-    final famSnap =
-        await users
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Familiar')
-            .where('status', isEqualTo: 'activo')
-            .where('studentIds', arrayContainsAny: chunk)
-            .get();
+    final famSnap = await users
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Familiar')
+        .where('status', isEqualTo: 'activo')
+        .where('studentIds', arrayContainsAny: chunk)
+        .get();
     for (final d in famSnap.docs) {
-      tokens.addAll(_extractTokens(d.data()));
+      tokens.addAll(extractNotificationTokens(d.data()));
     }
   }
 

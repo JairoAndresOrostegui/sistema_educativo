@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
@@ -7,6 +8,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/format_utils.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../user/services/active_student_service.dart';
 
 extension _Cap on String {
   String cap() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
@@ -64,12 +66,14 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   Future<void> _fetchSchedules({
     required String institutionId,
     required String campusId,
-    required String grade,
+    required String groupId,
+    String? studentId,
   }) async {
-    final data = await _service.getSchedulesForGrade(
+    final data = await _service.getSchedulesForGroup(
       institutionId: institutionId,
       campusId: campusId,
-      grade: grade,
+      groupId: groupId,
+      studentId: studentId,
     );
     for (final d in data.keys) {
       data[d]!.sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -94,14 +98,14 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
       // Rol Estudiante
       if (user.role == 'Estudiante') {
-        if (user.grade == null || user.grade!.isEmpty) {
+        if (user.groupId == null || user.groupId!.isEmpty) {
           if (mounted) setState(() => _loading = false);
           return;
         }
         await _fetchSchedules(
           institutionId: user.institution,
           campusId: user.campus,
-          grade: user.grade!,
+          groupId: user.groupId!,
         );
         if (mounted) setState(() => _loading = false);
         return;
@@ -109,19 +113,24 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
       // Rol Familiar
       if (user.role == 'Familiar') {
-        final ids = user.studentIds ?? const <String>[];
-        if (ids.isEmpty) {
+        if ((user.studentIds ?? const <String>[]).isEmpty) {
           if (mounted) setState(() => _loading = false);
           return;
         }
 
-        final kids = await _service.getUsersByIds(
-          userIds: ids,
-          institutionId: user.institution,
-          campusId: user.campus,
-        );
+        final kids = await _service.getLinkedChildren();
 
         if (!mounted) return;
+        if (kids.isEmpty) {
+          setState(() {
+            _children = [];
+            _activeStudentId = null;
+            _byDay = {};
+            _selectedDay = _days.first;
+            _loading = false;
+          });
+          return;
+        }
 
         String initialId =
             user.activeStudentId ?? (kids.isNotEmpty ? kids.first.id : '');
@@ -131,15 +140,20 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
         _children = kids;
         _activeStudentId = initialId;
+        await ActiveStudentService().select(
+          userProvider: context.read<UserProviderV2>(),
+          studentId: initialId,
+        );
 
         final sel = _children.firstWhere((e) => e.id == _activeStudentId);
-        final grade = sel.grade ?? '';
+        final groupId = sel.groupId ?? '';
 
-        if (grade.isNotEmpty) {
+        if (groupId.isNotEmpty) {
           await _fetchSchedules(
             institutionId: user.institution,
             campusId: user.campus,
-            grade: grade,
+            groupId: groupId,
+            studentId: initialId,
           );
         } else {
           _byDay = {};
@@ -152,12 +166,18 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
       if (mounted) setState(() => _loading = false);
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No fue posible cargar el horario.')),
+        );
+      }
     }
   }
 
   Future<void> _onStudentChanged(String newId) async {
     if (_activeStudentId == newId) return;
+    final previousId = _activeStudentId;
     setState(() {
       _activeStudentId = newId;
       _loading = true;
@@ -165,18 +185,32 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
     final userProv = context.read<UserProviderV2>();
     final u = userProv.user;
-    if (u != null) {
-      userProv.setUser(u.copyWith(activeStudentId: newId));
+    if (u == null) return;
+    try {
+      await ActiveStudentService().select(
+        userProvider: userProv,
+        studentId: newId,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _activeStudentId = previousId;
+        _loading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No fue posible cambiar de estudiante.')),
+      );
+      return;
     }
 
-    final user = context.read<UserProviderV2>().user;
     final sel = _children.firstWhere((e) => e.id == newId);
-    final grade = sel.grade ?? '';
-    if (grade.isNotEmpty) {
+    final groupId = sel.groupId ?? '';
+    if (groupId.isNotEmpty) {
       await _fetchSchedules(
-        institutionId: user!.institution,
-        campusId: user.campus,
-        grade: grade,
+        institutionId: u.institution,
+        campusId: u.campus,
+        groupId: groupId,
+        studentId: newId,
       );
     } else {
       setState(() {
@@ -220,89 +254,84 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.red,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         title: const Text('Mi horario'),
         centerTitle: true,
         leading: const BackToDashboardButton(),
       ),
       body: SafeArea(
-        child:
-            _loading
-                ? const Center(child: CircularProgressIndicator())
-                : Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      if (user.role == 'Familiar' && _children.isNotEmpty)
-                        Align(
-                          alignment: Alignment.center,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 520),
-                            child: Semantics(
-                              label: 'Seleccionar estudiante',
-                              hint: 'Cambia el estudiante para ver su horario',
-                              enabled: true,
-                              focusable: true,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  children: [
+                    if (user.role == 'Familiar' && _children.isNotEmpty)
+                      Align(
+                        alignment: Alignment.center,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          child: Semantics(
+                            label: 'Seleccionar estudiante',
+                            hint: 'Cambia el estudiante para ver su horario',
+                            enabled: true,
+                            focusable: true,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppPalette.primary.withValues(
+                                    alpha: .15,
+                                  ),
                                 ),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.red.withValues(alpha: .15),
-                                  ),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                    colors: [
-                                      Colors.red.withValues(alpha: .06),
-                                      Colors.white,
-                                    ],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.03),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
+                                color: AppPalette.surfaceContainer,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppPalette.onSurface.withValues(
+                                      alpha: 0.03,
                                     ),
-                                  ],
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _activeStudentId,
-                                    isExpanded: true,
-                                    hint: const Text('Estudiante'),
-                                    items:
-                                        _children
-                                            .map(
-                                              (e) => DropdownMenuItem<String>(
-                                                value: e.id,
-                                                child: Text(
-                                                  '${e.firstName} ${e.lastName} • ${e.grade ?? '-'}',
-                                                ),
-                                              ),
-                                            )
-                                            .toList(),
-                                    onChanged: (v) {
-                                      if (v != null) _onStudentChanged(v);
-                                    },
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
                                   ),
+                                ],
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _activeStudentId,
+                                  isExpanded: true,
+                                  hint: const Text('Estudiante'),
+                                  items: _children
+                                      .map(
+                                        (e) => DropdownMenuItem<String>(
+                                          value: e.id,
+                                          child: Text(
+                                            '${e.firstName} ${e.lastName} • ${e.groupName ?? '-'}',
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) {
+                                    if (v != null) _onStudentChanged(v);
+                                  },
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: _isWide ? _buildWeeklyGrid() : _buildDailyView(),
                       ),
-                    ],
-                  ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: _isWide ? _buildWeeklyGrid() : _buildDailyView(),
+                    ),
+                  ],
                 ),
+              ),
       ),
     );
   }
@@ -316,30 +345,29 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           scrollDirection: Axis.horizontal,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children:
-                _days.map((d) {
-                  final sel = d == _selectedDay;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Semantics(
-                      label: 'Día ${_displayDay(d)}',
-                      button: true,
-                      selected: sel,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: () => setState(() => _selectedDay = d),
-                        child: Text(_displayDay(d)),
+            children: _days.map((d) {
+              final sel = d == _selectedDay;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Semantics(
+                  label: 'Día ${_displayDay(d)}',
+                  button: true,
+                  selected: sel,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      elevation: 0,
                     ),
-                  );
-                }).toList(),
+                    onPressed: () => setState(() => _selectedDay = d),
+                    child: Text(_displayDay(d)),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         ),
         const SizedBox(height: 12),
@@ -369,20 +397,16 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         controller: _webScrollController,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children:
-              _days
-                  .map(
-                    (d) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                        child: _DayColumn(
-                          day: d,
-                          subjects: _byDay[d] ?? const [],
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+          children: _days
+              .map(
+                (d) => Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                    child: _DayColumn(day: d, subjects: _byDay[d] ?? const []),
+                  ),
+                ),
+              )
+              .toList(),
         ),
       ),
     );
@@ -428,16 +452,18 @@ class _DayColumn extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(color: Colors.red.withValues(alpha: .08)),
+            decoration: BoxDecoration(
+              color: AppPalette.primary.withValues(alpha: .08),
+            ),
             child: Semantics(
               header: true,
               label: 'Horario de ${_displayDay(day)}',
               child: Center(
                 child: Text(
                   _displayDay(day),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: Colors.redAccent,
+                    color: AppPalette.primary,
                   ),
                 ),
               ),
@@ -480,15 +506,8 @@ class _SubjectCard extends StatelessWidget {
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withValues(alpha: .15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Colors.red.withValues(alpha: .08),
-            Theme.of(context).colorScheme.surface,
-          ],
-        ),
+        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
+        color: AppPalette.surfaceContainer,
       ),
       child: Semantics(
         container: true,
@@ -522,15 +541,15 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: .12),
+        color: AppPalette.primary.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.red.withValues(alpha: .25)),
+        border: Border.all(color: AppPalette.primary.withValues(alpha: .25)),
       ),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w700,
-          color: Colors.red,
+          color: AppPalette.primary,
           fontSize: 12,
         ),
       ),

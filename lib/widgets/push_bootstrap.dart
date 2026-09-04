@@ -22,14 +22,21 @@ class _PushBootstrapState extends State<PushBootstrap> {
 
     await initializePush(
       webVapidKey: widget.webVapidKey,
-      onNewToken: (t) => saveUserFcmToken(userId: userId, token: t),
+      onNewToken: (t) async {
+        await saveUserNotificationToken(userId: userId, token: t);
+        if (!mounted) return;
+        context.read<UserProviderV2>().updateNotificationToken(t);
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<UserProviderV2>().user;
-    if (user != null) {
+    if (user == null) {
+      _initedForUserId = null;
+      clearPushTokenHandler();
+    } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _ensureInitForUser(user.id);
       });

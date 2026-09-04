@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -42,7 +43,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
         now.year,
         now.month,
         now.day,
-      ).subtract(const Duration(days: 29)),
+      ).subtract(Duration(days: 29)),
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
     _aplicarFiltros(recargar: true);
@@ -59,8 +60,9 @@ class _GestionRutasViewState extends State<GestionRutasView> {
     }
 
     final page = await _service.obtenerHistorialRutasAdmin(
-      routeNameContains:
-          _nombreContiene.trim().isEmpty ? null : _nombreContiene.trim(),
+      routeNameContains: _nombreContiene.trim().isEmpty
+          ? null
+          : _nombreContiene.trim(),
       action: _accion,
       rango: _rango,
       limite: _porPagina,
@@ -70,8 +72,9 @@ class _GestionRutasViewState extends State<GestionRutasView> {
     final total = await _service.contarTotal(
       action: _accion,
       rango: _rango,
-      routeNameContains:
-          _nombreContiene.trim().isEmpty ? null : _nombreContiene.trim(),
+      routeNameContains: _nombreContiene.trim().isEmpty
+          ? null
+          : _nombreContiene.trim(),
     );
 
     setState(() {
@@ -117,7 +120,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
             now.year,
             now.month,
             now.day,
-          ).subtract(const Duration(days: 29)),
+          ).subtract(Duration(days: 29)),
           end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
         );
 
@@ -128,15 +131,14 @@ class _GestionRutasViewState extends State<GestionRutasView> {
       initialDateRange: initial,
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
-      builder:
-          (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: Theme.of(
-                ctx,
-              ).colorScheme.copyWith(primary: Colors.redAccent),
-            ),
-            child: child!,
-          ),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(
+            ctx,
+          ).colorScheme.copyWith(primary: AppPalette.primary),
+        ),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
@@ -182,42 +184,40 @@ class _GestionRutasViewState extends State<GestionRutasView> {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la versión web.')),
         ),
       );
     }
     final df = DateFormat('yyyy-MM-dd');
-    final rangoTexto =
-        _rango == null
-            ? ''
-            : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
+    final rangoTexto = _rango == null
+        ? ''
+        : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Resumen superior
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: AppPalette.surface,
+                  border: Border.all(
+                    color: AppPalette.error.withValues(alpha: .15),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: AppPalette.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
@@ -226,7 +226,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                   child: Text('Total registros: $_total'),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Filtros
               Wrap(
@@ -236,7 +236,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                   SizedBox(
                     width: 280,
                     child: TextFormField(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Nombre de la ruta (contiene)',
                         border: OutlineInputBorder(),
                       ),
@@ -253,7 +253,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                     width: 220,
                     child: DropdownButtonFormField<String>(
                       initialValue: _accion,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: null,
                           child: Text('Todas las acciones'),
@@ -277,7 +277,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                           _filtrosPendientes = true;
                         });
                       },
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Acción',
                         border: OutlineInputBorder(),
                       ),
@@ -287,7 +287,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                     width: 280,
                     child: TextFormField(
                       readOnly: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Rango de fechas',
                         border: OutlineInputBorder(),
                       ),
@@ -296,12 +296,12 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.filter_alt),
+                    icon: Icon(Icons.filter_alt),
                     onPressed: () => _aplicarFiltros(recargar: true),
-                    label: const Text('Filtrar'),
+                    label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.surface,
                     ),
                   ),
                   TextButton(
@@ -315,7 +315,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                             now.year,
                             now.month,
                             now.day,
-                          ).subtract(const Duration(days: 29)),
+                          ).subtract(Duration(days: 29)),
                           end: DateTime(
                             now.year,
                             now.month,
@@ -330,11 +330,11 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                       });
                       _aplicarFiltros(recargar: true);
                     },
-                    child: const Text('Limpiar'),
+                    child: Text('Limpiar'),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
 
               // Exportar (solo Web)
               if (kIsWeb && _items.isNotEmpty)
@@ -347,88 +347,86 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                     children: [
                       ElevatedButton.icon(
                         onPressed: _exportarExcel,
-                        icon: const Icon(Icons.table_view),
-                        label: const Text('Exportar Excel'),
+                        icon: Icon(Icons.table_view),
+                        label: Text('Exportar Excel'),
                       ),
                       ElevatedButton.icon(
                         onPressed: _exportarPDF,
-                        icon: const Icon(Icons.picture_as_pdf),
-                        label: const Text('Exportar PDF'),
+                        icon: Icon(Icons.picture_as_pdf),
+                        label: Text('Exportar PDF'),
                       ),
                     ],
                   ),
                 ),
-              if (kIsWeb && _items.isNotEmpty) const SizedBox(height: 12),
+              if (kIsWeb && _items.isNotEmpty) SizedBox(height: 12),
 
               // Lista
               Expanded(
-                child:
-                    _cargando
-                        ? const Center(child: CircularProgressIndicator())
-                        : _items.isEmpty
-                        ? const Center(child: Text('No hay registros'))
-                        : ListView.builder(
-                          itemCount: _items.length,
-                          itemBuilder: (_, i) {
-                            final r = _items[i];
-                            final fecha = r['fecha'] as DateTime?;
-                            final fechaTexto =
-                                fecha != null
-                                    ? DateFormat(
-                                      'yyyy-MM-dd HH:mm:ss',
-                                    ).format(fecha)
-                                    : '-';
-                            final detalles =
-                                r['detalles']; // Map<String, dynamic>?
+                child: _cargando
+                    ? Center(child: CircularProgressIndicator())
+                    : _items.isEmpty
+                    ? Center(child: Text('No hay registros'))
+                    : ListView.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (_, i) {
+                          final r = _items[i];
+                          final fecha = r['fecha'] as DateTime?;
+                          final fechaTexto = fecha != null
+                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                              : '-';
+                          final detalles =
+                              r['detalles']; // Map<String, dynamic>?
 
-                            return Semantics(
-                              label: 'Registro de log de rutas',
-                              child: Card(
-                                color: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  side: BorderSide(
-                                    color: Colors.red.withValues(alpha: .12),
+                          return Semantics(
+                            label: 'Registro de log de rutas',
+                            child: Card(
+                              color: AppPalette.surface,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: AppPalette.error.withValues(
+                                    alpha: .12,
                                   ),
-                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: ExpansionTile(
-                                  tilePadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  childrenPadding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    0,
-                                    16,
-                                    12,
-                                  ),
-                                  title: Text(
-                                    '${r['nombreRuta'] ?? ''} — ${_labelAccion(r['accion'])}',
-                                  ),
-                                  subtitle: Text(
-                                    'Por: ${r['nombreAdmin'] ?? ''} • $fechaTexto',
-                                  ),
-                                  children: [
-                                    if (detalles is Map<String, dynamic> &&
-                                        detalles.isNotEmpty)
-                                      _DetallesList(detalles: detalles),
-                                    if (detalles == null ||
-                                        (detalles is Map && detalles.isEmpty))
-                                      const Text('Sin detalles de cambios.'),
-                                  ],
-                                ),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            );
-                          },
-                        ),
+                              margin: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: ExpansionTile(
+                                tilePadding: EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                childrenPadding: EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  12,
+                                ),
+                                title: Text(
+                                  '${r['nombreRuta'] ?? ''} — ${_labelAccion(r['accion'])}',
+                                ),
+                                subtitle: Text(
+                                  'Por: ${r['nombreAdmin'] ?? ''} • $fechaTexto',
+                                ),
+                                children: [
+                                  if (detalles is Map<String, dynamic> &&
+                                      detalles.isNotEmpty)
+                                    _DetallesList(detalles: detalles),
+                                  if (detalles == null ||
+                                      (detalles is Map && detalles.isEmpty))
+                                    Text('Sin detalles de cambios.'),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
 
               // Paginación
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -441,16 +439,16 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _pageIndex == 0 || _cargando
-                                ? null
-                                : _paginaAnterior,
+                        icon: Icon(Icons.chevron_left),
+                        onPressed: _pageIndex == 0 || _cargando
+                            ? null
+                            : _paginaAnterior,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed:
-                            !_hasNext || _cargando ? null : _siguientePagina,
+                        icon: Icon(Icons.chevron_right),
+                        onPressed: !_hasNext || _cargando
+                            ? null
+                            : _siguientePagina,
                       ),
                     ],
                   ),
@@ -484,39 +482,35 @@ class _DetallesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la versión web.')),
         ),
       );
     }
     final keys = detalles.keys.toList()..sort();
-    if (keys.isEmpty) return const SizedBox.shrink();
+    if (keys.isEmpty) return SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children:
-          keys.map((k) {
-            final v = detalles[k];
-            return Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$k: ',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  Expanded(
-                    child: Text(
-                      v is String ? v : v?.toString() ?? '',
-                      softWrap: true,
-                    ),
-                  ),
-                ],
+      children: keys.map((k) {
+        final v = detalles[k];
+        return Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$k: ', style: TextStyle(fontWeight: FontWeight.w700)),
+              Expanded(
+                child: Text(
+                  v is String ? v : v?.toString() ?? '',
+                  softWrap: true,
+                ),
               ),
-            );
-          }).toList(),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

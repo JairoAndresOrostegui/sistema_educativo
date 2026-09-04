@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/route_model.dart';
@@ -25,42 +26,41 @@ class TeacherRouteHeader extends StatelessWidget {
     return Column(
       children: [
         DropdownButtonFormField<RouteModel>(
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Selecciona una ruta',
             border: OutlineInputBorder(),
           ),
           initialValue: selected,
-          items:
-              routes
-                  .map(
-                    (r) => DropdownMenuItem<RouteModel>(
-                      value: r,
-                      child: Text(r.name),
-                    ),
-                  )
-                  .toList(),
+          items: routes
+              .map(
+                (r) =>
+                    DropdownMenuItem<RouteModel>(value: r, child: Text(r.name)),
+              )
+              .toList(),
           onChanged: onRouteChanged,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (showGrouping)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppPalette.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.withValues(alpha: .15)),
+              border: Border.all(
+                color: AppPalette.error.withValues(alpha: .15),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: .03),
+                  color: AppPalette.onSurface.withValues(alpha: .03),
                   blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Agrupar por misma dirección (solo notificaciones de aviso)',
                     style: TextStyle(fontWeight: FontWeight.w600),

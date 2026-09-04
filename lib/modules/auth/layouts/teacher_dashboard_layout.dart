@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
-import 'dashboard_layout.dart';
+
 import '../../../providers/user_provider_v2.dart';
+import '../../authorization/services/authorization_service.dart';
+import '../../messaging/services/messaging_service.dart';
+import 'dashboard_layout.dart';
 
 class DocenteDashboardLayout extends StatefulWidget {
   const DocenteDashboardLayout({super.key});
@@ -13,6 +19,8 @@ class DocenteDashboardLayout extends StatefulWidget {
 class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
+  StreamSubscription<int>? _pendingAuthSub;
+  StreamSubscription<int>? _messageUnreadSub;
 
   @override
   void initState() {
@@ -36,6 +44,18 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
         route: '/profile',
       ),
     ];
+
+    if (user.isSuperadmin ||
+        perms.contains('usuarios.ver') ||
+        perms.contains('usuarios.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Gesti\u00f3n de usuarios',
+          icon: Icons.group,
+          route: '/admin_user',
+        ),
+      );
+    }
 
     if (user.isSuperadmin || perms.contains('rutas.ver')) {
       items.add(
@@ -77,30 +97,103 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
-    items.add(
-      const MenuItemData(
-        label: 'Mensajería',
-        icon: Icons.chat_bubble_outline,
-        route: '/messages',
-      ),
-    );
+    if (user.isSuperadmin ||
+        perms.contains('matricula.ver') ||
+        perms.contains('matricula.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Matrículas',
+          icon: Icons.assignment_ind,
+          route: '/enrollment',
+        ),
+      );
+    }
+
+    if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Mensajeria',
+          icon: Icons.chat_bubble_outline,
+          route: '/messages',
+        ),
+      );
+    }
 
     setState(() {
       _menuItems = items;
       isLoading = false;
     });
+    if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
+      _messageUnreadSub?.cancel();
+      _messageUnreadSub = MessagingService().watchUnreadCount(user).listen((
+        count,
+      ) {
+        if (!mounted) return;
+        setState(
+          () => _menuItems = _menuItems
+              .map(
+                (item) => item.route == '/messages'
+                    ? MenuItemData(
+                        label: item.label,
+                        icon: item.icon,
+                        route: item.route,
+                        badgeCount: count,
+                      )
+                    : item,
+              )
+              .toList(),
+        );
+      });
+    }
+
+    if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
+      final groupId = (user.groupId ?? '').trim();
+      if (groupId.isNotEmpty) {
+        _pendingAuthSub?.cancel();
+        _pendingAuthSub = AuthorizationService()
+            .watchPendingCountForGroup(
+              institutionId: user.institution,
+              campusId: user.campus,
+              groupId: groupId,
+            )
+            .listen((count) {
+              if (!mounted) return;
+              setState(() {
+                _menuItems = _menuItems
+                    .map(
+                      (m) => m.route == '/teacher_authorization'
+                          ? MenuItemData(
+                              label: m.label,
+                              icon: m.icon,
+                              route: m.route,
+                              badgeCount: count,
+                            )
+                          : m,
+                    )
+                    .toList();
+              });
+            });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _pendingAuthSub?.cancel();
+    _messageUnreadSub?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? const Scaffold(
-          body: SafeArea(
-            child: Center(
-              child: CircularProgressIndicator(color: Colors.redAccent),
+        ? Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: CircularProgressIndicator(color: AppPalette.primary),
+              ),
             ),
-          ),
-        )
+          )
         : DashboardLayout(menuItems: _menuItems);
   }
 }

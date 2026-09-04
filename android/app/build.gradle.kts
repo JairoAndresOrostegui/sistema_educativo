@@ -29,9 +29,9 @@ fun requiredKeystoreProperty(name: String): String {
 
 android {
     namespace = "co.edu.liceobilinguerodolfollinas.sistemaeducativo"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
 
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -80,5 +80,5 @@ flutter {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

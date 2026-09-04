@@ -1,7 +1,9 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -13,6 +15,7 @@ import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../widgets/student_authorization_dialog.dart';
 import '../widgets/teacher_authorization_dialog.dart';
+import '../../user/services/active_student_service.dart';
 
 class AuthorizationStudentScreen extends StatefulWidget {
   const AuthorizationStudentScreen({super.key});
@@ -25,9 +28,9 @@ class AuthorizationStudentScreen extends StatefulWidget {
 class _AuthorizationStudentScreenState
     extends State<AuthorizationStudentScreen> {
   final _svc = AuthorizationService();
+  StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
-  bool _isSuperadmin = false;
   List<String> _perms = [];
   late String _institutionId;
   late String _campusId;
@@ -46,14 +49,12 @@ class _AuthorizationStudentScreenState
 
   bool get _canView {
     if (_logged == null) return false;
-    return _isSuperadmin || _perms.contains('autorizaciones.ver');
+    return _logged!.role == 'Familiar' && _perms.contains('autorizaciones.ver');
   }
 
   bool get _canCreate {
     if (_logged == null) return false;
-    return _isSuperadmin ||
-        (_logged!.role == 'Familiar' &&
-            _perms.contains('autorizaciones.crear'));
+    return _logged!.role == 'Familiar' && _perms.contains('autorizaciones.ver');
   }
 
   @override
@@ -67,7 +68,6 @@ class _AuthorizationStudentScreenState
     if (u == null) return;
 
     _logged = u;
-    _isSuperadmin = u.isSuperadmin;
     _perms = u.permissions;
     _institutionId = u.institution;
     _campusId = u.campus;
@@ -77,50 +77,51 @@ class _AuthorizationStudentScreenState
       return;
     }
 
-    if (u.role == 'Estudiante') {
-      _activeStudentId = u.id;
-      await _reload();
-      return;
-    }
-
     if (u.role == 'Familiar') {
       final kids = await _svc.getChildrenForFamily(
         institutionId: _institutionId,
         campusId: _campusId,
         studentIds: u.studentIds ?? const <String>[],
       );
-      _children =
-          kids
-              .map(
-                (e) =>
-                    _ChildLite(id: e.id, fullName: e.fullName, grade: e.grade),
-              )
-              .toList();
+      _children = kids
+          .map(
+            (e) => _ChildLite(
+              id: e.id,
+              fullName: e.fullName,
+              groupId: e.groupId,
+              groupName: e.groupName,
+            ),
+          )
+          .toList();
 
       if (_children.isNotEmpty) {
         final currentActive = (u.activeStudentId ?? '').trim();
         final exists = _children.any((c) => c.id == currentActive);
         _activeStudentId = exists ? currentActive : _children.first.id;
 
-        if (!exists) {
+        if (!mounted) return;
+        try {
+          await ActiveStudentService().select(
+            userProvider: context.read<UserProviderV2>(),
+            studentId: _activeStudentId!,
+          );
+        } catch (_) {
           if (!mounted) return;
-          final prov = context.read<UserProviderV2>();
-          final userNow = prov.user;
-          if (userNow != null) {
-            prov.setUser(userNow.copyWith(activeStudentId: _activeStudentId));
-          }
+          await DialogUtils.showError(
+            context: context,
+            title: 'No fue posible seleccionar al estudiante',
+            message: 'Verifica la conexión e inténtalo nuevamente.',
+          );
+          return;
         }
       }
 
-      await _reload();
+      _subscribeToItems();
       return;
     }
 
     setState(() {}); // otros roles: solo para completar ciclo
   }
-
-  DocumentSnapshot<Map<String, dynamic>>? get _cursor =>
-      _cursors[_pageIndex] as DocumentSnapshot<Map<String, dynamic>>?;
 
   Future<void> _reload() async {
     if (_activeStudentId == null) {
@@ -139,62 +140,76 @@ class _AuthorizationStudentScreenState
         ..add(null);
       _pageIndex = 0;
     });
-    await _loadPage();
+    _subscribeToItems();
   }
 
-  Future<void> _loadPage() async {
+  void _subscribeToItems() {
     if (_activeStudentId == null) {
       setState(() => _loading = false);
       return;
     }
-    final page = await _svc.listForStudent(
-      institutionId: _institutionId,
-      campusId: _campusId,
-      studentId: _activeStudentId!,
-      limit: _perPage,
-      startAfter: _cursor,
-    );
-    setState(() {
-      _items.addAll(page.items);
-      _hasNext = page.hasNext;
-      if (page.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(page.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = page.lastDoc;
-        }
-      }
-      _loading = false;
-    });
+    _itemsSub?.cancel();
+    _itemsSub = _svc
+        .watchForStudent(
+          institutionId: _institutionId,
+          campusId: _campusId,
+          studentId: _activeStudentId!,
+          limit: _perPage,
+        )
+        .listen(
+          (items) {
+            if (!mounted) return;
+            setState(() {
+              _items
+                ..clear()
+                ..addAll(items);
+              _hasNext = false;
+              _loading = false;
+            });
+          },
+          onError: (Object error) async {
+            if (!mounted) return;
+            await DialogUtils.showError(
+              context: context,
+              title: 'Error',
+              message: error.toString(),
+            );
+            if (mounted) setState(() => _loading = false);
+          },
+        );
   }
 
   Future<void> _nextPage() async {
-    if (!_hasNext || _loading) return;
-    setState(() {
-      _pageIndex += 1;
-      _loading = true;
-    });
-    await _loadPage();
+    return;
   }
 
   Future<void> _prevPage() async {
-    if (_pageIndex == 0 || _loading) return;
-    setState(() {
-      _pageIndex -= 1;
-      _loading = true;
-    });
-    await _loadPage();
+    return;
   }
 
-  void _onStudentChanged(String newId) async {
+  Future<void> _onStudentChanged(String newId) async {
     if (_activeStudentId == newId) return;
+    final previousId = _activeStudentId;
     setState(() {
       _activeStudentId = newId;
       _loading = true;
     });
     final prov = context.read<UserProviderV2>();
-    final u = prov.user;
-    if (u != null) prov.setUser(u.copyWith(activeStudentId: newId));
+    try {
+      await ActiveStudentService().select(userProvider: prov, studentId: newId);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _activeStudentId = previousId;
+        _loading = false;
+      });
+      await DialogUtils.showError(
+        context: context,
+        title: 'No fue posible cambiar de estudiante',
+        message: 'Verifica la conexión e inténtalo nuevamente.',
+      );
+      return;
+    }
     await _reload();
   }
 
@@ -224,13 +239,13 @@ class _AuthorizationStudentScreenState
   Color _statusColor(AuthorizationStatus s) {
     switch (s) {
       case AuthorizationStatus.pending:
-        return Colors.orange;
+        return AppPalette.warning;
       case AuthorizationStatus.approved:
-        return Colors.green;
+        return AppPalette.success;
       case AuthorizationStatus.rejected:
-        return Colors.redAccent;
+        return AppPalette.primary;
       case AuthorizationStatus.finished:
-        return Colors.grey;
+        return AppPalette.outline;
     }
   }
 
@@ -248,20 +263,18 @@ class _AuthorizationStudentScreenState
     }
     final res = await showDialog<CreateAuthorizationResult>(
       context: ctx,
-      builder:
-          (_) => AuthorizationCreateDialog(
-            children:
-                _children
-                    .map(
-                      (e) => StudentChoice(
-                        id: e.id,
-                        fullName: e.fullName,
-                        grade: e.grade,
-                      ),
-                    )
-                    .toList(),
-            initialStudentId: _activeStudentId,
-          ),
+      builder: (_) => AuthorizationCreateDialog(
+        children: _children
+            .map(
+              (e) => StudentChoice(
+                id: e.id,
+                fullName: e.fullName,
+                groupName: e.groupName,
+              ),
+            )
+            .toList(),
+        initialStudentId: _activeStudentId,
+      ),
     );
     if (res == null) return;
 
@@ -277,7 +290,8 @@ class _AuthorizationStudentScreenState
         campusId: _campusId,
         studentId: kid.id,
         studentFullName: kid.fullName,
-        grade: kid.grade,
+        groupId: kid.groupId,
+        groupName: kid.groupName,
         requesterId: '',
         requesterFullName: '',
         allDay: res.allDay,
@@ -296,12 +310,81 @@ class _AuthorizationStudentScreenState
       );
       await _svc.createRequest(request: req, requester: requester);
       if (!mounted) return;
-      await _reload();
-      if (!mounted) return;
       await DialogUtils.showSuccess(
         context: ctx,
         title: 'Exito',
         message: 'Solicitud enviada.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: ctx,
+        title: 'Error',
+        message: e.toString(),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _onEditPressed(AuthorizationRequest request) async {
+    final ctx = context;
+    final requester = context.read<UserProviderV2>().user;
+    if (requester == null || _children.isEmpty) return;
+
+    final res = await showDialog<CreateAuthorizationResult>(
+      context: ctx,
+      builder: (_) => AuthorizationCreateDialog(
+        children: _children
+            .map(
+              (e) => StudentChoice(
+                id: e.id,
+                fullName: e.fullName,
+                groupName: e.groupName,
+              ),
+            )
+            .toList(),
+        initialStudentId: request.studentId,
+        initialValue: CreateAuthorizationResult(
+          studentId: request.studentId,
+          allDay: request.allDay,
+          multiDay: request.multiDay,
+          dateFrom: request.dateFrom,
+          dateTo: request.dateTo,
+          startTime: request.startTime,
+          endTime: request.endTime,
+          reason: request.reason ?? '',
+        ),
+      ),
+    );
+    if (res == null || _busy) return;
+
+    setState(() => _busy = true);
+    try {
+      final kid = _children.firstWhere((c) => c.id == res.studentId);
+      final updated = request.copyWith(
+        studentId: kid.id,
+        studentFullName: kid.fullName,
+        groupId: kid.groupId,
+        groupName: kid.groupName,
+        allDay: res.allDay,
+        multiDay: res.multiDay,
+        dateFrom: res.dateFrom,
+        dateTo: res.dateTo,
+        startTime: res.startTime,
+        endTime: res.endTime,
+        reason: res.reason,
+      );
+      await _svc.resubmitRequest(
+        id: request.id,
+        updated: updated,
+        requester: requester,
+      );
+      if (!mounted) return;
+      await DialogUtils.showSuccess(
+        context: ctx,
+        title: 'Exito',
+        message: 'Solicitud reenviada.',
       );
     } catch (e) {
       if (!mounted) return;
@@ -327,36 +410,35 @@ class _AuthorizationStudentScreenState
     if (!_canView) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Authorizations'),
+          title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.redAccent,
+          backgroundColor: AppPalette.surface,
+          foregroundColor: AppPalette.primary,
           centerTitle: true,
         ),
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
-        backgroundColor: Colors.white,
+        backgroundColor: AppPalette.surface,
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
         title: const Text('Autorizaciones'),
         leading: const BackToDashboardButton(),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
       ),
-      floatingActionButton:
-          _canCreate
-              ? FloatingActionButton.extended(
-                onPressed: _busy ? null : _onCreatePressed,
-                icon: const Icon(Icons.add),
-                label: const Text('Nueva'),
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-              )
-              : null,
+      floatingActionButton: _canCreate
+          ? FloatingActionButton.extended(
+              onPressed: _busy ? null : _onCreatePressed,
+              icon: const Icon(Icons.add),
+              label: const Text('Nueva'),
+              backgroundColor: AppPalette.primary,
+              foregroundColor: AppPalette.surface,
+            )
+          : null,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -372,19 +454,12 @@ class _AuthorizationStudentScreenState
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.red.withValues(alpha: .15),
+                          color: AppPalette.primary.withValues(alpha: .15),
                         ),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            Colors.red.withValues(alpha: .06),
-                            Colors.white,
-                          ],
-                        ),
+                        color: AppPalette.surfaceContainer,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
+                            color: AppPalette.onSurface.withValues(alpha: 0.03),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -395,15 +470,14 @@ class _AuthorizationStudentScreenState
                           value: _activeStudentId,
                           isExpanded: true,
                           hint: const Text('Estudiante'),
-                          items:
-                              _children
-                                  .map(
-                                    (e) => DropdownMenuItem<String>(
-                                      value: e.id,
-                                      child: Text('${e.fullName} • ${e.grade}'),
-                                    ),
-                                  )
-                                  .toList(),
+                          items: _children
+                              .map(
+                                (e) => DropdownMenuItem<String>(
+                                  value: e.id,
+                                  child: Text('${e.fullName} • ${e.groupName}'),
+                                ),
+                              )
+                              .toList(),
                           onChanged: (v) {
                             if (v != null) _onStudentChanged(v);
                           },
@@ -420,12 +494,14 @@ class _AuthorizationStudentScreenState
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: AppPalette.surface,
+                  border: Border.all(
+                    color: AppPalette.primary.withValues(alpha: .15),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: AppPalette.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -437,116 +513,122 @@ class _AuthorizationStudentScreenState
               ),
               const SizedBox(height: 12),
               Expanded(
-                child:
-                    _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _items.isEmpty
-                        ? const Center(child: Text('No hay solicitudes'))
-                        : ListView.builder(
-                          itemCount: _items.length,
-                          itemBuilder: (_, i) {
-                            final r = _items[i];
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _items.isEmpty
+                    ? const Center(child: Text('No hay solicitudes'))
+                    : ListView.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (_, i) {
+                          final r = _items[i];
 
-                            // estado (visual en español)
-                            final statusText = _statusLabelEs(r.status);
-                            final statusColor = _statusColor(r.status);
+                          // estado (visual en español)
+                          final statusText = _statusLabelEs(r.status);
+                          final statusColor = _statusColor(r.status);
 
-                            final chip = Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                          final chip = Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: .12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: statusColor.withValues(alpha: .25),
                               ),
+                            ),
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+
+                          final dateLine = r.multiDay
+                              ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
+                              : _fmtD(r.dateFrom);
+                          final timeLine = r.allDay
+                              ? 'Todo el día'
+                              : r.endTime != null
+                              ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
+                              : _fmtT(r.startTime);
+                          final sub = [
+                            'Fecha: $dateLine',
+                            'Hora: $timeLine',
+                            if ((r.reason ?? '').toString().trim().isNotEmpty)
+                              'Motivo: ${_firstWords(r.reason!, 40)}',
+                          ].join('\n');
+
+                          return Card(
+                            elevation: 0,
+                            color: AppPalette.transparent,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 6,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Container(
                               decoration: BoxDecoration(
-                                color: statusColor.withValues(alpha: .12),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: statusColor.withValues(alpha: .25),
-                                ),
-                              ),
-                              child: Text(
-                                statusText,
-                                style: TextStyle(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            );
-
-                            final dateLine =
-                                r.multiDay
-                                    ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
-                                    : _fmtD(r.dateFrom);
-                            final timeLine =
-                                r.allDay
-                                    ? 'Todo el día'
-                                    : r.endTime != null
-                                    ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
-                                    : _fmtT(r.startTime);
-                            final sub = [
-                              'Fecha: $dateLine',
-                              'Hora: $timeLine',
-                              if ((r.reason ?? '').toString().trim().isNotEmpty)
-                                'Motivo: ${_firstWords(r.reason!, 40)}',
-                            ].join('\n');
-
-                            return Card(
-                              elevation: 0,
-                              color: Colors.transparent,
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 6,
-                              ),
-                              shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.red.withValues(alpha: .12),
-                                  ),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                    colors: [
-                                      Colors.red.withValues(alpha: .06),
-                                      Colors.white,
-                                    ],
+                                border: Border.all(
+                                  color: AppPalette.primary.withValues(
+                                    alpha: .12,
                                   ),
                                 ),
-                                child: ListTile(
-                                  leading: const Icon(
-                                    Icons.assignment_turned_in,
-                                    color: Colors.redAccent,
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '${r.studentFullName} — ${r.grade}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                color: AppPalette.surfaceContainer,
+                              ),
+                              child: ListTile(
+                                leading: Icon(
+                                  Icons.assignment_turned_in,
+                                  color: AppPalette.primary,
+                                ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${r.studentFullName} — ${r.groupName}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    chip,
+                                  ],
+                                ),
+                                subtitle: Text(sub),
+                                trailing:
+                                    session.role == 'Familiar' &&
+                                        r.requesterId == session.id &&
+                                        r.status ==
+                                            AuthorizationStatus.pending &&
+                                        r.requiresRequesterEdit
+                                    ? IconButton(
+                                        tooltip: 'Corregir y reenviar',
+                                        icon: Icon(
+                                          Icons.edit,
+                                          color: AppPalette.primary,
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      chip,
-                                    ],
-                                  ),
-                                  subtitle: Text(sub),
-                                  onTap:
-                                      () => showDialog(
-                                        context: context,
-                                        builder:
-                                            (_) => AuthorizationDetailsDialog(
-                                              request: r,
-                                            ),
-                                      ),
+                                        onPressed: _busy
+                                            ? null
+                                            : () => _onEditPressed(r),
+                                      )
+                                    : null,
+                                onTap: () => showDialog(
+                                  context: context,
+                                  builder: (_) =>
+                                      AuthorizationDetailsDialog(request: r),
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
+                      ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -557,8 +639,9 @@ class _AuthorizationStudentScreenState
                     children: [
                       IconButton(
                         icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _pageIndex == 0 || _loading ? null : _prevPage,
+                        onPressed: _pageIndex == 0 || _loading
+                            ? null
+                            : _prevPage,
                       ),
                       IconButton(
                         icon: const Icon(Icons.chevron_right),
@@ -574,15 +657,23 @@ class _AuthorizationStudentScreenState
       ),
     );
   }
+
+  @override
+  void dispose() {
+    _itemsSub?.cancel();
+    super.dispose();
+  }
 }
 
 class _ChildLite {
   final String id;
   final String fullName;
-  final String grade;
+  final String groupId;
+  final String groupName;
   const _ChildLite({
     required this.id,
     required this.fullName,
-    required this.grade,
+    required this.groupId,
+    required this.groupName,
   });
 }

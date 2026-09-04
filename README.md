@@ -1,286 +1,128 @@
-# Sistema Educativo - Guia de Usuario
+# Sistema Educativo Rodolfo Llinás
 
-Aplicacion para gestion escolar con acceso por roles:
-- Administrador
-- Docente
-- Estudiante
-- Familiar
+Aplicación Flutter para la gestión multiinstitución y multisede de preescolar, primaria y bachillerato. Incluye autenticación por roles, usuarios, grupos académicos, matrículas, autorizaciones, horarios, archivos, mensajería, rutas, QR, auditoría y sitio web público.
 
-Incluye modulos de matricula, rutas, horarios, documentos, autorizaciones, QR, perfil e historial administrativo.
+## Documentación
 
-## 1. Ingreso al sistema
+- [Manual de usuario](docs/MANUAL_USUARIO.md): funciones, roles, reglas y flujos por módulo.
+- [Guía de desarrollo](docs/GUIA_DESARROLLO.md): arquitectura, seguridad, datos, estilos, migraciones y despliegue.
+- [Reglas permanentes](AGENTS.md): decisiones obligatorias para futuras sesiones y módulos.
 
-1. Abra la aplicacion (web o app movil).
-2. Ingrese correo y contrasena.
-3. Si olvido la contrasena, use la opcion `Olvidaste tu contrasena?`.
-4. Al iniciar sesion, el sistema muestra el panel segun su rol.
+## Decisiones centrales
 
-Notas importantes:
-- Si su cuenta no esta activa o no tiene permisos, no podra entrar a ciertos modulos.
-- El menu puede cambiar segun permisos asignados por el administrador.
+- Administrador normal: solo su institución y sede.
+- Superadministrador: único actor con alcance entre sedes.
+- Grupos académicos independientes por sede mediante `groupId`; se permiten Cuarto A, Cuarto B, etc.
+- Familiar: selector de hijo activo en todo módulo relacionado con estudiantes.
+- Estudiante: correo ficticio sin verificación y sin acceso a Autorizaciones.
+- Escrituras sensibles: Cloud Functions, validación backend y auditoría.
+- Archivos: 1 GiB por institución, 25 MiB por documento y limpieza exclusiva del superadministrador después de 60 días.
+- Tema: color y tipografía obtenidos de `website/config`; no se agregan colores de marca dentro de pantallas.
+- Sitio público: constructor visual v5 con Header, Footer y páginas independientes, organizados en filas, columnas y componentes dinámicos.
+- El proyecto Firebase actual funciona como QA. Producción tendrá infraestructura separada.
 
-## 2. Que ve cada rol
+## Preparación local
 
-### Administrador
-Menu posible:
-- Perfil
-- Gestion de usuarios
-- Parametros
-- Matriculas
-- Gestion de rutas
-- Horario escolar
-- Documentos
-- Historial administrativo
-- Autorizaciones
-- QR
-
-### Docente
-Menu posible:
-- Perfil
-- Ruta escolar
-- Horario escolar
-- Documentos
-- Autorizaciones
-
-### Estudiante / Familiar
-Menu posible:
-- Perfil
-- Matricula (si esta habilitada y aplica)
-- Mis rutas
-- Horario escolar
-- Documentos
-- Autorizaciones
-- QR (familiar habilitado)
-
-## 3. Modulos y uso paso a paso
-
-### 3.1 Perfil
-Permite ver y actualizar datos basicos y foto de perfil.
-
-Flujo:
-1. Entre a `Perfil`.
-2. Actualice la imagen o datos permitidos.
-3. Guarde cambios.
-
-### 3.2 Matriculas
-Hay dos flujos principales:
-- Flujo administrativo (aprobacion y gestion)
-- Flujo de familia/estudiante (formulario de pre-matricula)
-
-#### Flujo familia/estudiante
-1. Abra `Matricula`.
-2. Busque o escriba el documento del estudiante.
-3. Complete el formulario por secciones.
-4. Guarde la informacion.
-
-Tambien existe flujo por enlace publico (`/enrollment_public`) para registro sin inicio de sesion.
-
-Comportamiento:
-- Si ya existe matricula activa del ano en curso, el formulario puede bloquearse.
-- El sistema puede precargar datos por documento.
-- Familiar puede seleccionar hijo cuando tiene varios vinculados.
-
-#### Flujo administrador
-1. Abra `Matriculas`.
-2. Revise pestanas por estado:
-   - Pendientes
-   - Pre-matriculado
-   - Matriculados
-   - Rechazados
-   - Retirados
-3. Abra cada registro y elija accion:
-   - Editar
-   - Aprobar (pasa a `matriculado`)
-   - Rechazar (solicita motivo)
-   - Retirar (para registros ya matriculados)
-4. Al aprobar, se puede generar PDF del registro.
-
-Estados de matricula:
-- `prematriculado`: registro inicial
-- `pendiente_revision`: en validacion administrativa
-- `matriculado`: aprobado
-- `rechazado`: rechazado por revision
-- `desmatriculado`: retirado
-
-### 3.3 Gestion de usuarios (Administrador)
-Permite crear, editar, consultar y eliminar usuarios.
-
-Flujo recomendado:
-1. Entre a `Gestion de usuarios`.
-2. Cree o edite usuario con rol, grado y permisos.
-3. Verifique que el estado quede activo.
-4. Use eliminar solo cuando aplique (evitar borrar usuarios en uso).
-
-### 3.4 Parametros (Administrador)
-Permite configurar catalogos operativos del sistema.
-
-Ejemplos de parametros:
-- Tipos de documento
-- Roles
-- Permisos
-- Variables de matricula (ejemplo: ano activo, habilitacion para familias)
-
-Flujo:
-1. Abra `Parametros`.
-2. Filtre por clave si necesita.
-3. Cree o edite valores.
-4. Defina orden y estado activo/inactivo.
-
-Recomendacion:
-- Mantenga consistentes los valores de permisos antes de crear usuarios.
-
-### 3.5 Horario escolar
-Permite gestionar y consultar materias por grado.
-
-Administrador:
-1. Abra `Horario escolar`.
-2. Seleccione grado.
-3. Cree, edite o elimine materias.
-
-Docente:
-- Consulta su horario asignado.
-
-Estudiante/Familiar:
-- Consulta el horario del estudiante.
-- Familiar puede cambiar estudiante activo cuando corresponde.
-
-### 3.6 Rutas escolares
-Permite planear y ejecutar rutas de transporte.
-
-Administrador:
-- Crea y administra rutas base.
-- Asigna responsables y datos de ruta.
-
-Docente/encargado de ruta:
-1. Abra `Ruta escolar`.
-2. Seleccione ruta asignada.
-3. Inicie ruta del dia.
-4. Marque estados de estudiantes (recogido, no recogido, etc.).
-5. Envie avisos de llegada y tiempo estimado.
-6. Finalice ruta.
-
-Estudiante/Familiar:
-- Consulta `Mi ruta de hoy` con estado y seguimiento.
-
-### 3.7 Documentos
-Permite publicar y consultar archivos por grado.
-
-Administrador/Docente:
-1. Abra `Documentos`.
-2. Seleccione grado.
-3. Cargue archivo (ejemplo: PDF, Word, Excel).
-4. Elimine archivos cuando sea necesario.
-
-Estudiante/Familiar:
-1. Abra `Documentos`.
-2. Busque por listado.
-3. Descargue archivo.
-
-### 3.8 Autorizaciones
-Gestiona solicitudes y respuestas de autorizacion de estudiantes.
-
-Flujo general:
-1. Crear solicitud (segun rol y permisos).
-2. Revisar y responder (aprobar/rechazar).
-3. Estado actualizado para todos los actores.
-
-Estados habituales:
-- Pendiente
-- Aprobada
-- Rechazada
-- Finalizada
-
-### 3.9 QR
-Permite mostrar o administrar codigo QR de usuario.
-
-Administrador:
-- Gestiona QR por usuario.
-
-Familiar/estudiante habilitado:
-- Visualiza su QR en el modulo correspondiente.
-
-### 3.10 Historial administrativo (Web)
-Modulo de auditoria para administracion.
-
-Incluye consultas y exportes de historicos de:
-- Rutas
-- Usuarios
-- Horarios
-- Archivos
-- Registros diarios y logs
-
-Nota:
-- Este modulo esta orientado a uso web administrativo.
-
-## 4. Notificaciones
-
-El sistema envia notificaciones push para eventos como:
-- Novedades de autorizaciones
-- Publicacion de documentos
-- Eventos de ruta y avisos
-
-Recomendaciones:
-- Acepte permisos de notificacion en el dispositivo/navegador.
-- Mantenga sesion iniciada en el dispositivo que usara para recibir alertas.
-
-## 5. Buenas practicas de uso
-
-- Cierre sesion al terminar, sobre todo en equipos compartidos.
-- Verifique siempre grado, documento y rol antes de guardar.
-- En matriculas, complete campos obligatorios antes de avanzar.
-- Evite crear usuarios duplicados con el mismo documento/correo.
-
-## 6. Solucion de problemas comunes
-
-### No puedo iniciar sesion
-- Verifique correo y contrasena.
-- Use recuperacion de contrasena.
-- Valide con administracion que su cuenta este activa.
-
-### No veo un modulo en el menu
-- Su usuario no tiene ese permiso o rol.
-- Solicite habilitacion al administrador.
-
-### No me llegan notificaciones
-- Revise permisos de notificacion del navegador o celular.
-- Cierre sesion e inicie nuevamente para refrescar token.
-
-### No puedo editar una matricula
-- Puede estar en estado bloqueado para su rol.
-- Si es administrador, revise estado y permisos de matricula.
-
-## 7. Guia rapida de primer arranque (Administrador)
-
-Orden sugerido para dejar operativo el sistema:
-1. Crear/validar parametros base.
-2. Crear usuarios administrativos y operativos.
-3. Configurar grados, permisos y ano de matricula.
-4. Cargar horarios iniciales.
-5. Configurar rutas.
-6. Validar flujo de documentos y autorizaciones.
-7. Probar matricula con un usuario familiar.
-
-## 8. Soporte interno
-
-Si necesita ajustes funcionales (nuevos permisos, campos o reglas), registre el requerimiento con:
-- Modulo afectado
-- Rol afectado
-- Pasos para reproducir
-- Resultado esperado
-- Evidencia (captura y fecha)
-
----
-
-## Anexo tecnico corto (para despliegue local)
-
-Requisitos:
-- Flutter SDK compatible con `sdk: ^3.7.2`
-- Proyecto Firebase configurado
-
-Comandos:
-```bash
+```powershell
 flutter pub get
+Set-Location functions
+npm ci
+Set-Location ..
 flutter run -d chrome
 ```
 
-Tambien puede ejecutar en Android/iOS segun dispositivo disponible.
+La configuración Firebase de las plataformas está en `lib/config/firebase_options.dart`, Android y Web. No agregue credenciales privadas al repositorio.
+
+## Calidad
+
+```powershell
+dart format lib test
+flutter analyze
+flutter test
+Set-Location functions
+npm run lint
+npm run test:rules
+npm run test:auth
+npm run test:users
+npm run test:enrollment
+npm run test:authorization
+npm run test:schedule
+```
+
+La prueba integral de continuidad docente se ejecuta exclusivamente contra QA.
+Crea cuentas y carga identificadas, comprueba traslado y reversión, y verifica
+que todo dato de prueba sea eliminado al finalizar:
+
+```powershell
+Set-Location functions
+node scripts/smoke_teacher_transfer_qa.js
+```
+
+Para simular y preparar 2027 como borrador en Piedecuesta, sin cambiar el año
+activo, use:
+
+```powershell
+Set-Location functions
+node scripts/smoke_prepare_academic_year_qa.js
+node scripts/smoke_prepare_academic_year_qa.js --apply
+```
+
+Las pruebas de Functions y reglas usan los emuladores definidos en `firebase.test.json`.
+
+## Migración a grupos académicos
+
+La migración es seca por defecto:
+
+```powershell
+Set-Location functions
+node scripts/migrate_academic_groups.js
+```
+
+Para aplicarla, configure credenciales administrativas del proyecto QA, valide primero el resumen y ejecute:
+
+```powershell
+node scripts/migrate_academic_groups.js --apply
+```
+
+La migración crea una sección A para los niveles actuales de cada sede, cambia las referencias a `groupId/groupName`, reorganiza objetos de Archivos, recalcula cuota y elimina los parámetros antiguos de grado. Nuevas secciones se administran como grupos independientes.
+
+## Despliegue QA
+
+Antes del primer despliegue del constructor web v5, simule, aplique y verifique la migración del sitio:
+
+```powershell
+Set-Location functions
+node scripts/migrate_website_builder_v5.js --firebase-cli-auth
+node scripts/migrate_website_builder_v5.js --firebase-cli-auth --apply
+node scripts/migrate_website_builder_v5.js --firebase-cli-auth --verify
+Set-Location ..
+```
+
+La ejecución real conserva un respaldo en `migration_backups` y reemplaza atómicamente los bloques anteriores por filas, columnas y componentes.
+
+Antes del despliegue de Mensajería por canales, simule, aplique y verifique la
+migración desde `functions`:
+
+```powershell
+Set-Location functions
+node scripts/migrate_messaging_channels.js --firebase-cli-auth
+node scripts/migrate_messaging_channels.js --firebase-cli-auth --apply
+node scripts/migrate_messaging_channels.js --firebase-cli-auth --verify
+Set-Location ..
+```
+
+Esta migración crea el chat general de cada grupo y mueve las conversaciones
+privadas anteriores; la aplicación no conserva lectura dual del esquema viejo.
+
+```powershell
+flutter build web
+firebase use default
+firebase deploy --only firestore,storage,functions,hosting
+```
+
+Las reglas permanentes de arquitectura están en [AGENTS.md](AGENTS.md). Todo
+módulo operativo usa el año lectivo universal y todo módulo con responsabilidad
+docente debe registrarse en
+[docs/REGISTRO_CARGA_DOCENTE.md](docs/REGISTRO_CARGA_DOCENTE.md).
+
+Antes de desplegar confirme que `default` apunta al proyecto QA esperado y que todas las pruebas anteriores finalizaron correctamente.

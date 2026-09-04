@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/student_route_model.dart';
@@ -40,11 +41,8 @@ class TeacherRouteStudentCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          student.nombre,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
+        Text(student.nombre, style: TextStyle(fontWeight: FontWeight.w700)),
+        SizedBox(height: 8),
         TextFormField(
           enabled: rutaPendiente,
           initialValue: addressValue,
@@ -52,15 +50,14 @@ class TeacherRouteStudentCard extends StatelessWidget {
           onFieldSubmitted: onAddressSubmit,
           decoration: InputDecoration(
             labelText: 'Direccion',
-            border: const OutlineInputBorder(),
-            suffixIcon:
-                rutaPendiente
-                    ? IconButton(
-                      tooltip: 'Guardar direccion',
-                      icon: const Icon(Icons.save),
-                      onPressed: () => onAddressSubmit(addressValue),
-                    )
-                    : null,
+            border: OutlineInputBorder(),
+            suffixIcon: rutaPendiente
+                ? IconButton(
+                    tooltip: 'Guardar direccion',
+                    icon: Icon(Icons.save),
+                    onPressed: () => onAddressSubmit(addressValue),
+                  )
+                : null,
           ),
         ),
         Row(
@@ -69,11 +66,11 @@ class TeacherRouteStudentCard extends StatelessWidget {
               value: esActivo,
               onChanged: rutaPendiente ? onActiveChanged : null,
             ),
-            const Text('Activo hoy'),
+            Text('Activo hoy'),
           ],
         ),
         if (rutaActiva) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -83,31 +80,30 @@ class TeacherRouteStudentCard extends StatelessWidget {
                   recogido ? Icons.check_circle : Icons.directions_bus,
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      recogido ? Colors.green : Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
+                  backgroundColor: recogido
+                      ? AppPalette.success
+                      : Theme.of(context).primaryColor,
+                  foregroundColor: AppPalette.surface,
                 ),
                 onPressed: esAnulado ? null : onToggleRecogido,
-                label: Text(
-                  recogido ? 'Recogido' : 'Marcar como recogido',
-                ),
+                label: Text(recogido ? 'Recogido' : 'Marcar como recogido'),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.notification_important),
-                label: const Text('Aviso de llegada'),
+                icon: Icon(Icons.notification_important),
+                label: Text('Aviso de llegada'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      student.avisoEnviado ? Colors.green : Colors.amber,
-                  foregroundColor: Colors.white,
+                  backgroundColor: student.avisoEnviado
+                      ? AppPalette.success
+                      : AppPalette.warning,
+                  foregroundColor: AppPalette.surface,
                 ),
                 onPressed: () async {
                   final confirm = await DialogUtils.showConfirmationDialog(
                     context,
                     title: 'Enviar aviso de llegada',
-                    content:
-                        student.avisoEnviado
-                            ? 'Ya se ha enviado un aviso anteriormente.\n¿Deseas reenviarlo?'
-                            : '¿Deseas enviar el aviso de llegada a este estudiante?',
+                    content: student.avisoEnviado
+                        ? 'Ya se ha enviado un aviso anteriormente.\n¿Deseas reenviarlo?'
+                        : '¿Deseas enviar el aviso de llegada a este estudiante?',
                   );
                   if (confirm == true) {
                     onSendArrival();
@@ -118,8 +114,10 @@ class TeacherRouteStudentCard extends StatelessWidget {
                 icon: Icon(esAnulado ? Icons.block : Icons.cancel),
                 label: Text(esAnulado ? 'Anulado' : 'Anular'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: esAnulado ? Colors.red : Colors.orange,
-                  foregroundColor: Colors.white,
+                  backgroundColor: esAnulado
+                      ? AppPalette.error
+                      : AppPalette.warning,
+                  foregroundColor: AppPalette.surface,
                 ),
                 onPressed: recogido ? null : onToggleAnulado,
               ),
@@ -127,9 +125,9 @@ class TeacherRouteStudentCard extends StatelessWidget {
           ),
         ],
         if (showDivider) ...[
-          const SizedBox(height: 12),
-          const Divider(height: 1),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
+          Divider(height: 1),
+          SizedBox(height: 12),
         ],
       ],
     );

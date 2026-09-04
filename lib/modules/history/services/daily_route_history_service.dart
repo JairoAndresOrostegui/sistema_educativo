@@ -64,11 +64,13 @@ class RutaHistoryService {
       final studentsCol = doc.reference.collection(studentsCollectionEn);
       final stSnap = await studentsCol.get();
       if (stSnap.docs.isNotEmpty) {
-        data['estudiantes'] =
-            stSnap.docs.map((e) => _toEsStudent(e.data())).toList();
+        data['estudiantes'] = stSnap.docs
+            .map((e) => _toEsStudent(e.data()))
+            .toList();
       } else {
-        final stSnapEs =
-            await doc.reference.collection(studentsCollectionEs).get();
+        final stSnapEs = await doc.reference
+            .collection(studentsCollectionEs)
+            .get();
         data['estudiantes'] = stSnapEs.docs.map((e) => e.data()).toList();
       }
 

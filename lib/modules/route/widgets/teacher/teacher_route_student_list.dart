@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/student_route_model.dart';
@@ -46,21 +47,26 @@ class TeacherRouteStudentList extends StatelessWidget {
           final addr = group.first.direccion.trim();
 
           return Container(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
-            padding: const EdgeInsets.all(16.0),
+            margin: EdgeInsets.symmetric(vertical: 8.0),
+            padding: EdgeInsets.all(16.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.red.withValues(alpha: .15)),
+              border: Border.all(
+                color: AppPalette.error.withValues(alpha: .15),
+              ),
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
-                colors: [Colors.red.withValues(alpha: .06), Colors.white],
+                colors: [
+                  AppPalette.error.withValues(alpha: .06),
+                  AppPalette.surface,
+                ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
+                  color: AppPalette.onSurface.withValues(alpha: 0.03),
                   blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
@@ -70,12 +76,12 @@ class TeacherRouteStudentList extends StatelessWidget {
                 if (addr.isNotEmpty) ...[
                   Text(
                     addr,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: Colors.black87,
+                      color: AppPalette.onSurface.withValues(alpha: .87),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                 ],
                 ...List.generate(group.length, (i) {
                   final s = group[i];
@@ -84,7 +90,8 @@ class TeacherRouteStudentList extends StatelessWidget {
                     rutaPendiente: rutaPendiente,
                     rutaActiva: rutaActiva,
                     addressValue: addressForStudent(s),
-                    onAddressDraftChanged: (v) => onAddressDraftChanged(s.id, v),
+                    onAddressDraftChanged: (v) =>
+                        onAddressDraftChanged(s.id, v),
                     onAddressSubmit: (v) => onAddressSubmit(s.id, v),
                     onActiveChanged: (val) => onActiveChanged(s.id, val),
                     onToggleRecogido: () => onToggleRecogido(s),
@@ -106,21 +113,24 @@ class TeacherRouteStudentList extends StatelessWidget {
       itemBuilder: (_, i) {
         final s = students[i];
         return Container(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          padding: const EdgeInsets.all(16.0),
+          margin: EdgeInsets.symmetric(vertical: 8.0),
+          padding: EdgeInsets.all(16.0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.red.withValues(alpha: .15)),
+            border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [Colors.red.withValues(alpha: .06), Colors.white],
+              colors: [
+                AppPalette.error.withValues(alpha: .06),
+                AppPalette.surface,
+              ],
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
+                color: AppPalette.onSurface.withValues(alpha: 0.03),
                 blurRadius: 8,
-                offset: const Offset(0, 2),
+                offset: Offset(0, 2),
               ),
             ],
           ),

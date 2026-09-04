@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/validators.dart';
@@ -26,34 +27,29 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
   Widget build(BuildContext context) {
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.red.withValues(alpha: .25)),
+      borderSide: BorderSide(color: AppPalette.primary.withValues(alpha: .25)),
     );
     final focusedBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Colors.redAccent, width: 1.4),
+      borderSide: BorderSide(color: AppPalette.primary, width: 1.4),
     );
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.red.withValues(alpha: .15)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: const [
-                Color(0xFFFFF1F0),
-                Color(0xFFFFFFFF),
-              ],
+            border: Border.all(
+              color: AppPalette.primary.withValues(alpha: .15),
             ),
+            color: AppPalette.surfaceContainer,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: AppPalette.onSurface.withValues(alpha: 0.06),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -65,18 +61,19 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
+                Text(
                   'Recuperar contraseña',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: Colors.redAccent,
+                    color: AppPalette.primary,
                   ),
                 ),
                 const SizedBox(height: 14),
                 Semantics(
-                  label: 'Campo de correo electronico para recuperar contrasena',
+                  label:
+                      'Campo de correo electronico para recuperar contrasena',
                   hint: 'Ingrese su correo institucional',
                   textField: true,
                   enabled: true,
@@ -89,10 +86,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                       border: inputBorder,
                       enabledBorder: inputBorder,
                       focusedBorder: focusedBorder,
-                      prefixIcon: const Icon(
-                        Icons.email,
-                        color: Colors.redAccent,
-                      ),
+                      prefixIcon: Icon(Icons.email, color: AppPalette.primary),
                       isDense: true,
                     ),
                     validator: (value) {
@@ -114,21 +108,24 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                       label: 'Boton para cancelar recuperacion de contrasena',
                       button: true,
                       child: TextButton(
-                        onPressed: _loading ? null : () => Navigator.pop(context),
+                        onPressed: _loading
+                            ? null
+                            : () => Navigator.pop(context),
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
+                          foregroundColor: AppPalette.primary,
                         ),
                         child: const Text('Cancelar'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Semantics(
-                      label: 'Boton para enviar correo de recuperacion de contrasena',
+                      label:
+                          'Boton para enviar correo de recuperacion de contrasena',
                       button: true,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppPalette.primary,
+                          foregroundColor: AppPalette.surface,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -136,12 +133,12 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                         ),
                         onPressed: _loading ? null : _enviarCorreo,
                         child: _loading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: AppPalette.surface,
                                 ),
                               )
                             : const Text('Enviar'),
@@ -197,5 +194,3 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
     );
   }
 }
-
-

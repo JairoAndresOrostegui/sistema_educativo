@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 import 'package:sistema_educativo/models/user/user_model_v2.dart';
 import 'package:sistema_educativo/providers/user_provider_v2.dart';
@@ -7,6 +8,8 @@ import '../../../utils/navigation_utils.dart';
 import '../services/user_service_v2.dart';
 import '../widgets/admin/admin_photo_widget.dart';
 import '../widgets/admin/admin_user_form_widget.dart';
+import '../widgets/admin/teacher_bulk_import_dialog.dart';
+import '../widgets/admin/teacher_transfer_dialog.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -20,7 +23,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   String _textoBusqueda = '';
   List<userModelv2> usuarios = [];
   bool isLoading = true;
-  String nombreCompleto = '';
   bool esSuperadminActual = false;
   List<String> funcionalidadesActual = [];
   late String institutionId;
@@ -51,7 +53,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final user = userProvider.user!;
     esSuperadminActual = user.isSuperadmin;
     funcionalidadesActual = user.permissions;
-    nombreCompleto = '${user.firstName} ${user.lastName}';
     institutionId = user.institution;
     campusId = user.campus;
   }
@@ -64,6 +65,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       usuarios = await _userService.obtenerTodos(
         institutionId: institutionId,
         campusId: campusId,
+        isSuperadmin: esSuperadminActual,
       );
     } catch (e) {
       if (mounted) {
@@ -85,197 +87,223 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        title: const Text('Users management'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        title: const Text('Gestión de usuarios'),
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: AppPalette.transparent,
         elevation: 1,
         leading: const BackToDashboardButton(),
+        actions: [
+          if (esSuperadminActual ||
+              funcionalidadesActual.contains('usuarios.editar'))
+            IconButton(
+              tooltip: 'Continuidad docente',
+              onPressed: _mostrarTrasladoDocente,
+              icon: const Icon(Icons.swap_horiz),
+            ),
+          if (esSuperadminActual)
+            IconButton(
+              tooltip: 'Importar docentes',
+              onPressed: _mostrarImportacionDocentes,
+              icon: const Icon(Icons.upload_file),
+            ),
+        ],
       ),
       floatingActionButton:
           (esSuperadminActual ||
-                  funcionalidadesActual.contains('usuarios.crear'))
-              ? FloatingActionButton(
-                onPressed: () => _mostrarFormulario(),
-                child: const Icon(Icons.add),
-              )
-              : null,
+              funcionalidadesActual.contains('usuarios.crear'))
+          ? FloatingActionButton(
+              onPressed: () => _mostrarFormulario(),
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: SafeArea(
-        child:
-            isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: Colors.red.withValues(alpha: .15),
-                          ),
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.red.withValues(alpha: .06),
-                              Colors.white,
-                            ],
-                          ),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppPalette.primary.withValues(alpha: .15),
                         ),
-                        child: TextField(
-                          controller: _busquedaController,
-                          decoration: const InputDecoration(
-                            hintText: 'Buscar usuario...',
-                            prefixIcon: Icon(
-                              Icons.search,
-                              color: Colors.redAccent,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
+                        color: AppPalette.surfaceContainer,
+                      ),
+                      child: TextField(
+                        controller: _busquedaController,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar usuario...',
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: AppPalette.primary,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
                           ),
                         ),
                       ),
                     ),
-                    Expanded(
-                      child:
-                          usuarios.isEmpty
-                              ? const Center(
-                                child: Text('No hay usuarios disponibles'),
-                              )
-                              : ListView.builder(
-                                padding: EdgeInsets.only(
-                                  bottom:
-                                      96 +
-                                      MediaQuery.of(context).padding.bottom,
-                                ),
-                                itemCount: usuarios.length,
-                                itemBuilder: (context, index) {
-                                  final user = usuarios[index];
-                                  final fullName =
-                                      '${user.firstName} ${user.lastName}'
-                                          .toLowerCase();
-                                  final correo =
-                                      user.personalEmail.toLowerCase();
+                  ),
+                  Expanded(
+                    child: usuarios.isEmpty
+                        ? const Center(
+                            child: Text('No hay usuarios disponibles'),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.only(
+                              bottom:
+                                  96 + MediaQuery.of(context).padding.bottom,
+                            ),
+                            itemCount: usuarios.length,
+                            itemBuilder: (context, index) {
+                              final user = usuarios[index];
+                              final fullName =
+                                  '${user.firstName} ${user.lastName}'
+                                      .toLowerCase();
+                              final correo = user.personalEmail.toLowerCase();
 
-                                  if (_textoBusqueda.isNotEmpty &&
-                                      !fullName.contains(_textoBusqueda) &&
-                                      !correo.contains(_textoBusqueda)) {
-                                    return const SizedBox.shrink();
-                                  }
+                              if (_textoBusqueda.isNotEmpty &&
+                                  !fullName.contains(_textoBusqueda) &&
+                                  !correo.contains(_textoBusqueda)) {
+                                return const SizedBox.shrink();
+                              }
 
-                                  final puedeEditar =
-                                      esSuperadminActual ||
+                              final puedeEditar =
+                                  user.status != 'eliminado' &&
+                                  (esSuperadminActual ||
+                                      (user.role != 'Administrador' &&
+                                          !user.isSuperadmin)) &&
+                                  (esSuperadminActual ||
                                       funcionalidadesActual.contains(
                                         'usuarios.editar',
-                                      );
-                                  final puedeEliminar =
-                                      esSuperadminActual ||
-                                      funcionalidadesActual.contains(
-                                        'usuarios.eliminar',
-                                      );
+                                      ));
+                              final puedeEliminar =
+                                  esSuperadminActual ||
+                                  funcionalidadesActual.contains(
+                                    'usuarios.eliminar',
+                                  );
 
-                                  // No permitir que un admin se elimine a sí mismo
-                                  final isSelf = logged.id == user.id;
-                                  final isAdminUser =
-                                      user.role == 'Administrador';
-                                  final puedeEliminarEste =
-                                      puedeEliminar && !(isSelf && isAdminUser);
+                              // No permitir que un admin se elimine a sí mismo
+                              final isSelf = logged.id == user.id;
+                              final isAdminUser = user.role == 'Administrador';
+                              final puedeEliminarEste =
+                                  puedeEliminar &&
+                                  !isSelf &&
+                                  (esSuperadminActual || !isAdminUser);
 
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: Colors.red.withValues(
-                                            alpha: .15,
-                                          ),
-                                        ),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight,
-                                          colors: [
-                                            Colors.red.withValues(alpha: .06),
-                                            Colors.white,
-                                          ],
-                                        ),
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: AppPalette.primary.withValues(
+                                        alpha: .15,
                                       ),
-                                      child: ListTile(
-                                        leading: Semantics(
-                                          label: 'Foto de perfil',
-                                          enabled: true,
-                                          focusable: true,
-                                          child: ProfilePhotoWidget(
-                                            imageUrl: user.photoUrl ?? '',
-                                            enableHoverEdit: false,
-                                            radius: 24,
-                                            iconSize: 48,
-                                          ),
-                                        ),
-                                        title: Text(
-                                          '${user.firstName} ${user.lastName}',
-                                        ),
-                                        subtitle: Text(
-                                          '${user.personalEmail} - ${user.status.toUpperCase()}',
-                                        ),
-                                        trailing:
-                                            isMobile
-                                                ? null
-                                                : Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
+                                    ),
+                                    color: AppPalette.surfaceContainer,
+                                  ),
+                                  child: ListTile(
+                                    leading: Semantics(
+                                      label: 'Foto de perfil',
+                                      enabled: true,
+                                      focusable: true,
+                                      child: ProfilePhotoWidget(
+                                        imageUrl: user.photoUrl ?? '',
+                                        enableHoverEdit: false,
+                                        radius: 24,
+                                        iconSize: 48,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      '${user.firstName} ${user.lastName}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    subtitle: Text(
+                                      '${user.personalEmail} - ${user.status.toUpperCase()}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: isMobile
+                                        ? (puedeEditar || puedeEliminarEste
+                                              ? PopupMenuButton<String>(
+                                                  tooltip:
+                                                      'Acciones del usuario',
+                                                  onSelected: (action) {
+                                                    if (action == 'edit') {
+                                                      _mostrarFormulario(
+                                                        usuario: user,
+                                                      );
+                                                    } else if (action ==
+                                                        'delete') {
+                                                      _eliminarUsuario(user);
+                                                    }
+                                                  },
+                                                  itemBuilder: (context) => [
                                                     if (puedeEditar)
-                                                      IconButton(
-                                                        tooltip: 'Editar',
-                                                        icon: const Icon(
-                                                          Icons.edit,
-                                                          color: Colors.green,
-                                                        ),
-                                                        onPressed:
-                                                            () =>
-                                                                _mostrarFormulario(
-                                                                  usuario: user,
-                                                                ),
+                                                      const PopupMenuItem(
+                                                        value: 'edit',
+                                                        child: Text('Editar'),
                                                       ),
                                                     if (puedeEliminarEste)
-                                                      IconButton(
-                                                        tooltip: 'Eliminar',
-                                                        icon: const Icon(
-                                                          Icons.delete,
-                                                          color: Colors.red,
-                                                        ),
-                                                        onPressed:
-                                                            () =>
-                                                                _eliminarUsuario(
-                                                                  user,
-                                                                ),
+                                                      const PopupMenuItem(
+                                                        value: 'delete',
+                                                        child: Text('Eliminar'),
                                                       ),
                                                   ],
+                                                )
+                                              : null)
+                                        : Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (puedeEditar)
+                                                IconButton(
+                                                  tooltip: 'Editar',
+                                                  icon: Icon(
+                                                    Icons.edit,
+                                                    color: AppPalette.success,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _mostrarFormulario(
+                                                        usuario: user,
+                                                      ),
                                                 ),
-                                        onTap:
-                                            () => _mostrarFormulario(
-                                              usuario: user,
-                                              soloLectura: !puedeEditar,
-                                            ),
-                                      ),
+                                              if (puedeEliminarEste)
+                                                IconButton(
+                                                  tooltip: 'Eliminar',
+                                                  icon: Icon(
+                                                    Icons.delete,
+                                                    color: AppPalette.primary,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _eliminarUsuario(user),
+                                                ),
+                                            ],
+                                          ),
+                                    onTap: () => _mostrarFormulario(
+                                      usuario: user,
+                                      soloLectura: !puedeEditar,
                                     ),
-                                  );
-                                },
-                              ),
-                    ),
-                  ],
-                ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -296,45 +324,149 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       return;
     }
 
-    final confirmacion = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Confirmar eliminacion'),
-            content: Text(
-              'Estas seguro de que deseas eliminar a ${usuario.firstName} ${usuario.lastName}?\n'
-              'Esta accion eliminara su cuenta del sistema y no se puede deshacer.',
+    try {
+      final impact = await _userService.obtenerImpactoEliminacion(usuario.id);
+      if (!mounted) return;
+
+      final selectedMode = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            esSuperadminActual ? 'Eliminacion definitiva' : 'Retirar usuario',
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${usuario.firstName} ${usuario.lastName} tiene '
+                    '${impact.linkedRecords} registros institucionales '
+                    'relacionados.',
+                  ),
+                  const SizedBox(height: 12),
+                  if (!esSuperadminActual && impact.linkedRecords > 0)
+                    const Text(
+                      'Recomendacion: dejalo inactivo. No podra iniciar '
+                      'sesion y se conservara visible para administrar '
+                      'su informacion institucional.',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  if (esSuperadminActual)
+                    const Text(
+                      'La eliminacion definitiva resolvera estas '
+                      'relaciones y conservara el registro de auditoria. '
+                      'Esta decision quedara bajo tu responsabilidad.',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  const SizedBox(height: 12),
+                  ...impact.items.where((item) => item.count > 0).map((item) {
+                    final action = switch (item.action) {
+                      'delete' => 'se eliminaran',
+                      'unlink' => 'se desvincularan',
+                      _ => 'se conservaran como auditoria',
+                    };
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('- ${item.label}: ${item.count} ($action)'),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            if (!esSuperadminActual)
+              FilledButton.tonal(
+                onPressed: () => Navigator.pop(dialogContext, 'inactive'),
+                child: const Text('Dejar inactivo'),
+              ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+              ),
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                esSuperadminActual ? 'permanent' : 'soft',
+              ),
+              child: Text(
+                esSuperadminActual ? 'Continuar' : 'Retirar del listado',
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedMode == null || !mounted) return;
+      if (selectedMode == 'permanent') {
+        final confirmation = TextEditingController();
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Ultima confirmacion'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Escribe ELIMINAR para confirmar la eliminacion '
+                  'definitiva y en cascada.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmation,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirmacion',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text('Cancelar'),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Eliminar'),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppPalette.primary,
+                ),
+                onPressed: () => Navigator.pop(
+                  dialogContext,
+                  confirmation.text.trim() == 'ELIMINAR',
+                ),
+                child: const Text('Eliminar definitivamente'),
               ),
             ],
           ),
-    );
+        );
+        confirmation.dispose();
+        if (confirmed != true) return;
+      }
 
-    if (confirmacion != true) return;
-
-    try {
-      await _userService.registrarHistorial(
-        usuario: usuario,
-        accion: 'eliminado',
-        realizadoPor: nombreCompleto,
-      );
-      await _userService.eliminar(usuario);
+      await _userService.eliminar(usuario, mode: selectedMode);
       await _cargarUsuarios();
 
       if (mounted) {
         await DialogUtils.showSuccess(
           context: context,
-          title: 'Usuario eliminado',
-          message: 'Se elimino el usuario correctamente.',
+          title: selectedMode == 'inactive'
+              ? 'Usuario inactivo'
+              : selectedMode == 'soft'
+              ? 'Usuario retirado'
+              : 'Usuario eliminado',
+          message: selectedMode == 'inactive'
+              ? 'El usuario ya no puede iniciar sesion.'
+              : selectedMode == 'soft'
+              ? 'Solo el superadministrador podra verlo desde ahora.'
+              : 'La cascada termino y se conservo su auditoria.',
         );
       }
     } catch (e) {
@@ -354,12 +486,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }) async {
     final bool? resultado = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AdminUserFormWidget(
-            usuario: usuario,
-            soloLectura: soloLectura,
-            onSuccess: () {},
-          ),
+      builder: (ctx) => AdminUserFormWidget(
+        usuario: usuario,
+        soloLectura: soloLectura,
+        onSuccess: () {},
+      ),
     );
 
     if (resultado == true) {
@@ -370,6 +501,44 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           context: context,
           title: 'Usuario guardado',
           message: 'El usuario se guardo correctamente.',
+        );
+      }
+    }
+  }
+
+  Future<void> _mostrarImportacionDocentes() async {
+    final bool? shouldRefresh = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => const TeacherBulkImportDialog(),
+    );
+
+    if (shouldRefresh == true) {
+      if (!mounted) return;
+      await _cargarUsuarios();
+    }
+  }
+
+  Future<void> _mostrarTrasladoDocente() async {
+    final logged = context.read<UserProviderV2>().user!;
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => TeacherTransferDialog(
+        users: usuarios,
+        institutionId: logged.institution,
+        campusId: logged.campus,
+        isSuperadmin: logged.isSuperadmin,
+      ),
+    );
+    if (changed == true) {
+      await _cargarUsuarios();
+      if (mounted) {
+        await DialogUtils.showSuccess(
+          context: context,
+          title: 'Carga trasladada',
+          message:
+              'El docente saliente quedó inactivo y la responsabilidad '
+              'vigente pasó al reemplazo.',
         );
       }
     }

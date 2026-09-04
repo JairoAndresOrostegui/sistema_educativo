@@ -7,7 +7,6 @@ import 'app.dart';
 import 'config/firebase_options.dart';
 import 'config/theme_config.dart';
 import 'providers/user_provider_v2.dart';
-import 'utils/firebase_utils.dart';
 import 'utils/push_notifications.dart';
 import 'widgets/push_bootstrap.dart';
 
@@ -29,15 +28,11 @@ void main() async {
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   try {
-    await ThemeProvider.cargarConfiguracion(
-      'desarrolloytecnologiasantander.com',
-    );
+    await ThemeProvider.cargarConfiguracion();
   } catch (e) {
     debugPrint('Error al cargar configuracion de tema: $e');
-    ThemeProvider.config = ThemeConfig.fromMap({});
+    ThemeProvider.usarConfiguracionPredeterminada();
   }
-
-  await fRequestPermission();
 
   runApp(
     ChangeNotifierProvider(

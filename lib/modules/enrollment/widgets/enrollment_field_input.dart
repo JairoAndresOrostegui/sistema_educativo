@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../models/enrollment_field.dart';
 
@@ -36,116 +37,123 @@ class EnrollmentFieldInput extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                field.label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
+              Text(field.label, style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: MouseRegion(
-                      cursor:
-                          readOnly
-                              ? SystemMouseCursors.basic
-                              : SystemMouseCursors.click,
+                      cursor: readOnly
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap:
-                            readOnly
-                                ? null
-                                : () {
-                                  controller.text = 'true';
-                                  onChanged('true');
-                                },
+                        onTap: readOnly
+                            ? null
+                            : () {
+                                controller.text = 'true';
+                                onChanged('true');
+                              },
                         child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
-                          border: Border.all(
-                            color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
-                            width: 2,
+                          padding: EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              current
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: current ? Colors.white : Colors.grey[400],
-                              size: 24,
+                          decoration: BoxDecoration(
+                            color: current
+                                ? AppPalette.info
+                                : AppPalette.surface,
+                            border: Border.all(
+                              color: current
+                                  ? AppPalette.info
+                                  : AppPalette.outline,
+                              width: 2,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Si',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color:
-                                    current ? Colors.white : Colors.grey[600],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                current
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: current
+                                    ? AppPalette.surface
+                                    : AppPalette.outline,
+                                size: 24,
                               ),
-                            ),
-                          ],
-                        ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Sí',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: current
+                                      ? AppPalette.surface
+                                      : AppPalette.outline,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: MouseRegion(
-                      cursor:
-                          readOnly
-                              ? SystemMouseCursors.basic
-                              : SystemMouseCursors.click,
+                      cursor: readOnly
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap:
-                            readOnly
-                                ? null
-                                : () {
-                                  controller.text = 'false';
-                                  onChanged('false');
-                                },
+                        onTap: readOnly
+                            ? null
+                            : () {
+                                controller.text = 'false';
+                                onChanged('false');
+                              },
                         child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
-                          border: Border.all(
-                            color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
-                            width: 2,
+                          padding: EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              !current
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: !current ? Colors.white : Colors.grey[400],
-                              size: 24,
+                          decoration: BoxDecoration(
+                            color: !current
+                                ? AppPalette.info
+                                : AppPalette.surface,
+                            border: Border.all(
+                              color: !current
+                                  ? AppPalette.info
+                                  : AppPalette.outline,
+                              width: 2,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'No',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color:
-                                    !current ? Colors.white : Colors.grey[600],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                !current
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: !current
+                                    ? AppPalette.surface
+                                    : AppPalette.outline,
+                                size: 24,
                               ),
-                            ),
-                          ],
-                        ),
+                              SizedBox(width: 8),
+                              Text(
+                                'No',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: !current
+                                      ? AppPalette.surface
+                                      : AppPalette.outline,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -161,116 +169,123 @@ class EnrollmentFieldInput extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                field.label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
+              Text(field.label, style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: MouseRegion(
-                      cursor:
-                          readOnly
-                              ? SystemMouseCursors.basic
-                              : SystemMouseCursors.click,
+                      cursor: readOnly
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap:
-                            readOnly
-                                ? null
-                                : () {
-                                  controller.text = 'true';
-                                  onChanged('true');
-                                },
+                        onTap: readOnly
+                            ? null
+                            : () {
+                                controller.text = 'true';
+                                onChanged('true');
+                              },
                         child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
-                          border: Border.all(
-                            color: current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
-                            width: 2,
+                          padding: EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              current
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: current ? Colors.white : Colors.grey[400],
-                              size: 24,
+                          decoration: BoxDecoration(
+                            color: current
+                                ? AppPalette.info
+                                : AppPalette.surface,
+                            border: Border.all(
+                              color: current
+                                  ? AppPalette.info
+                                  : AppPalette.outline,
+                              width: 2,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Si',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color:
-                                    current ? Colors.white : Colors.grey[600],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                current
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: current
+                                    ? AppPalette.surface
+                                    : AppPalette.outline,
+                                size: 24,
                               ),
-                            ),
-                          ],
-                        ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Sí',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: current
+                                      ? AppPalette.surface
+                                      : AppPalette.outline,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: MouseRegion(
-                      cursor:
-                          readOnly
-                              ? SystemMouseCursors.basic
-                              : SystemMouseCursors.click,
+                      cursor: readOnly
+                          ? SystemMouseCursors.basic
+                          : SystemMouseCursors.click,
                       child: GestureDetector(
-                        onTap:
-                            readOnly
-                                ? null
-                                : () {
-                                  controller.text = 'false';
-                                  onChanged('false');
-                                },
+                        onTap: readOnly
+                            ? null
+                            : () {
+                                controller.text = 'false';
+                                onChanged('false');
+                              },
                         child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.white,
-                          border: Border.all(
-                            color: !current ? const Color.fromARGB(255, 29, 49, 179) : Colors.grey[300]!,
-                            width: 2,
+                          padding: EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              !current
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: !current ? Colors.white : Colors.grey[400],
-                              size: 24,
+                          decoration: BoxDecoration(
+                            color: !current
+                                ? AppPalette.info
+                                : AppPalette.surface,
+                            border: Border.all(
+                              color: !current
+                                  ? AppPalette.info
+                                  : AppPalette.outline,
+                              width: 2,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'No',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                                color:
-                                    !current ? Colors.white : Colors.grey[600],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                !current
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: !current
+                                    ? AppPalette.surface
+                                    : AppPalette.outline,
+                                size: 24,
                               ),
-                            ),
-                          ],
-                        ),
+                              SizedBox(width: 8),
+                              Text(
+                                'No',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: !current
+                                      ? AppPalette.surface
+                                      : AppPalette.outline,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -286,13 +301,12 @@ class EnrollmentFieldInput extends StatelessWidget {
             Expanded(child: Text(field.label)),
             Switch.adaptive(
               value: current,
-              onChanged:
-                  readOnly
-                      ? null
-                      : (v) {
-                        controller.text = v.toString();
-                        onChanged(v.toString());
-                      },
+              onChanged: readOnly
+                  ? null
+                  : (v) {
+                      controller.text = v.toString();
+                      onChanged(v.toString());
+                    },
             ),
           ],
         );
@@ -300,83 +314,77 @@ class EnrollmentFieldInput extends StatelessWidget {
         final distinctOptions = LinkedHashSet<String>.from(options);
         // Special UI for servicioTransporteTipo: two toggle buttons
         if (field.name == 'servicioTransporteTipo') {
-          final opts =
-              [
-                'medio_tiempo',
-                'tiempo_completo',
-              ].where((o) => distinctOptions.contains(o)).toList();
+          final opts = [
+            'medio_tiempo',
+            'tiempo_completo',
+          ].where((o) => distinctOptions.contains(o)).toList();
           final current = controller.text;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                field.label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
+              Text(field.label, style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(height: 12),
               Row(
                 children: [
                   for (int i = 0; i < opts.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 12),
+                    if (i > 0) SizedBox(width: 12),
                     Expanded(
                       child: MouseRegion(
-                        cursor:
-                            readOnly
-                                ? SystemMouseCursors.basic
-                                : SystemMouseCursors.click,
+                        cursor: readOnly
+                            ? SystemMouseCursors.basic
+                            : SystemMouseCursors.click,
                         child: GestureDetector(
-                          onTap:
-                              readOnly
-                                  ? null
-                                  : () {
-                                    controller.text = opts[i];
-                                    onChanged(opts[i]);
-                                  },
+                          onTap: readOnly
+                              ? null
+                              : () {
+                                  controller.text = opts[i];
+                                  onChanged(opts[i]);
+                                },
                           child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 16,
-                          ),
-                          decoration: BoxDecoration(
-                            color: current == opts[i]
-                                ? const Color.fromARGB(255, 29, 49, 179)
-                                : Colors.white,
-                            border: Border.all(
-                              color: current == opts[i]
-                                  ? const Color.fromARGB(255, 29, 49, 179)
-                                  : Colors.grey[300]!,
-                              width: 2,
+                            padding: EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 16,
                             ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                current == opts[i]
-                                    ? Icons.check_circle
-                                    : Icons.radio_button_unchecked,
+                            decoration: BoxDecoration(
+                              color: current == opts[i]
+                                  ? AppPalette.info
+                                  : AppPalette.surface,
+                              border: Border.all(
                                 color: current == opts[i]
-                                    ? Colors.white
-                                    : Colors.grey[400],
-                                size: 24,
+                                    ? AppPalette.info
+                                    : AppPalette.outline,
+                                width: 2,
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  labelForValue(opts[i]),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                    color: current == opts[i]
-                                        ? Colors.white
-                                        : Colors.grey[600],
-                                  ),
-                                  textAlign: TextAlign.center,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  current == opts[i]
+                                      ? Icons.check_circle
+                                      : Icons.radio_button_unchecked,
+                                  color: current == opts[i]
+                                      ? AppPalette.surface
+                                      : AppPalette.outline,
+                                  size: 24,
                                 ),
-                              ),
-                            ],
-                          ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    labelForValue(opts[i]),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                      color: current == opts[i]
+                                          ? AppPalette.surface
+                                          : AppPalette.outline,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -390,25 +398,22 @@ class EnrollmentFieldInput extends StatelessWidget {
 
         // Special UI for acudientePrincipal: radio buttons
         if (field.name == 'acudientePrincipal') {
-          final opts =
-              [
-                'padre',
-                'madre',
-              ].where((o) => distinctOptions.contains(o)).toList();
+          final opts = [
+            'padre',
+            'madre',
+          ].where((o) => distinctOptions.contains(o)).toList();
           final current = controller.text;
           void onRadioChanged(String? v) {
             if (readOnly || v == null) return;
             controller.text = v;
             onChanged(v);
           }
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                field.label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
+              Text(field.label, style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(height: 8),
               RadioGroup<String>(
                 groupValue: current,
                 onChanged: onRadioChanged,
@@ -437,14 +442,12 @@ class EnrollmentFieldInput extends StatelessWidget {
             controller.text = v;
             onChanged(v);
           }
+
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                field.label,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 8),
+              Text(field.label, style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(height: 8),
               RadioGroup<String>(
                 groupValue: current,
                 onChanged: onRadioChanged,
@@ -466,30 +469,33 @@ class EnrollmentFieldInput extends StatelessWidget {
         }
 
         final raw = controller.text;
-        final current =
-            raw.isEmpty || !distinctOptions.contains(raw) ? null : raw;
+        final current = raw.isEmpty || !distinctOptions.contains(raw)
+            ? null
+            : raw;
         return DropdownButtonFormField<String>(
+          isExpanded: true,
           decoration: _decoration(field.label, required),
           initialValue: current,
-          items:
-              distinctOptions
-                  .map(
-                    (o) => DropdownMenuItem<String>(
-                      value: o,
-                      child: Text(labelForValue(o)),
-                    ),
-                  )
-                  .toList(),
-          onChanged:
-              readOnly
-                  ? null
-                  : (v) {
-                    controller.text = v ?? '';
-                    if (v != null) onChanged(v);
-                  },
-          validator:
-              (v) =>
-                  (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
+          items: distinctOptions
+              .map(
+                (o) => DropdownMenuItem<String>(
+                  value: o,
+                  child: Text(
+                    labelForValue(o),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: readOnly
+              ? null
+              : (v) {
+                  controller.text = v ?? '';
+                  if (v != null) onChanged(v);
+                },
+          validator: (v) =>
+              (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
         );
       case 'date':
       case 'datetime':
@@ -499,11 +505,10 @@ class EnrollmentFieldInput extends StatelessWidget {
           decoration: _decoration(
             field.label,
             required,
-          ).copyWith(suffixIcon: const Icon(Icons.calendar_today)),
+          ).copyWith(suffixIcon: Icon(Icons.calendar_today)),
           onTap: () => onPickDate(field.type == 'datetime'),
-          validator:
-              (v) =>
-                  (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
+          validator: (v) =>
+              (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
         );
       case 'int':
         return TextFormField(
@@ -528,9 +533,8 @@ class EnrollmentFieldInput extends StatelessWidget {
           decoration: _decoration(field.label, required),
           readOnly: readOnly,
           onChanged: onChanged,
-          validator:
-              (v) =>
-                  (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
+          validator: (v) =>
+              (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
         );
       case 'string':
       default:
@@ -539,9 +543,8 @@ class EnrollmentFieldInput extends StatelessWidget {
           decoration: _decoration(field.label, required),
           readOnly: readOnly,
           onChanged: onChanged,
-          validator:
-              (v) =>
-                  (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
+          validator: (v) =>
+              (required && (v == null || v.isEmpty)) ? 'Requerido' : null,
         );
     }
   }

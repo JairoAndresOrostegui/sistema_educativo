@@ -17,8 +17,9 @@ class AdminUserFormController {
     required Future<void> Function(String title, String message) onError,
   }) async {
     final correoPersonalNormalizado = correoPersonal.trim().toLowerCase();
-    final correoInstitucionalNormalizado =
-        correoInstitucional.trim().toLowerCase();
+    final correoInstitucionalNormalizado = correoInstitucional
+        .trim()
+        .toLowerCase();
 
     // Documento mínimo
     if (documento.trim().length < 6) {
@@ -86,6 +87,7 @@ class AdminUserFormController {
     required userModelv2 usuarioLogueado,
   }) async {
     final uid = await _service.crearUsuarioDesdeAdmin(
+      usuario: usuario,
       email: usuario.institutionalEmail,
       password: usuario.document,
       nombres: usuario.firstName,
@@ -94,26 +96,23 @@ class AdminUserFormController {
       documento: usuario.document,
     );
 
-    String? nuevaFotoUrl;
     if (fotoBytes != null) {
-      nuevaFotoUrl = await _profileService.subirFotoPerfil(
-        bytes: fotoBytes,
-        uid: uid,
-        fileName: fotoNombre,
-      );
+      try {
+        await _profileService.subirFotoPerfil(
+          bytes: fotoBytes,
+          uid: uid,
+          fileName: fotoNombre,
+        );
+      } catch (_) {
+        // La cuenta y el perfil ya quedaron creados atomicamente. La foto se
+        // puede reintentar al editar sin dejar un usuario huerfano.
+      }
     }
-
-    final usuarioConUid = usuario.copyWith(id: uid, photoUrl: nuevaFotoUrl);
-    await _service.guardarUsuario(usuarioConUid);
-    await _service.registrarHistorial(
-      usuario: usuarioConUid,
-      accion: 'creado',
-      realizadoPor: '${usuarioLogueado.firstName} ${usuarioLogueado.lastName}',
-    );
   }
 
   Future<void> guardarExistente({
     required userModelv2 usuario,
+    required String estadoAnterior,
     required Uint8List? fotoBytes,
     String? fotoNombre,
     required userModelv2 usuarioLogueado,
@@ -127,14 +126,14 @@ class AdminUserFormController {
       );
     }
 
+    final cambioEstado = usuario.status != estadoAnterior;
     final usuarioEditado = usuario.copyWith(
       photoUrl: nuevaFotoUrl ?? usuario.photoUrl,
+      status: estadoAnterior,
     );
     await _service.guardarUsuario(usuarioEditado);
-    await _service.registrarHistorial(
-      usuario: usuarioEditado,
-      accion: 'editado',
-      realizadoPor: '${usuarioLogueado.firstName} ${usuarioLogueado.lastName}',
-    );
+    if (cambioEstado) {
+      await _service.actualizarEstado(uid: usuario.id, status: usuario.status);
+    }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -45,11 +46,11 @@ class AccessDeniedPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
         title: const Text('Acceso denegado'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
       ),
       body: SafeArea(
@@ -59,7 +60,7 @@ class AccessDeniedPage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.block, size: 80, color: Colors.redAccent),
+                Icon(Icons.block, size: 80, color: AppPalette.primary),
                 const SizedBox(height: 16),
                 const Text(
                   'No tienes permiso para acceder a esta sección o tu sesión ha expirado.',

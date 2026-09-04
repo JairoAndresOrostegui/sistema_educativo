@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -17,7 +18,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
   final _service = UserLogsService();
 
   String? _role;
-  String _gradeEquals = ''; // local (igual)
+  String _groupEquals = ''; // local (igual)
   String _nameContains = ''; // local (contiene)
   DateTimeRange? _rango;
 
@@ -41,7 +42,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
         now.year,
         now.month,
         now.day,
-      ).subtract(const Duration(days: 14)),
+      ).subtract(Duration(days: 14)),
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
     _aplicarFiltros(recargar: true);
@@ -120,7 +121,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
             now.year,
             now.month,
             now.day,
-          ).subtract(const Duration(days: 14)),
+          ).subtract(Duration(days: 14)),
           end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
         );
 
@@ -131,15 +132,14 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       initialDateRange: initial,
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
-      builder:
-          (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: Theme.of(
-                ctx,
-              ).colorScheme.copyWith(primary: Colors.redAccent),
-            ),
-            child: child!,
-          ),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(
+            ctx,
+          ).colorScheme.copyWith(primary: AppPalette.primary),
+        ),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
@@ -184,8 +184,8 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
 
   List<Map<String, dynamic>> _filtradoLocal(List<Map<String, dynamic>> base) {
     return base.where((r) {
-      if (_gradeEquals.trim().isNotEmpty) {
-        if ((r['grade'] ?? '').toString().trim() != _gradeEquals.trim()) {
+      if (_groupEquals.trim().isNotEmpty) {
+        if ((r['groupName'] ?? '').toString().trim() != _groupEquals.trim()) {
           return false;
         }
       }
@@ -196,44 +196,42 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la versión web.')),
         ),
       );
     }
     final df = DateFormat('yyyy-MM-dd');
-    final rangoTexto =
-        _rango == null
-            ? ''
-            : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
+    final rangoTexto = _rango == null
+        ? ''
+        : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     final itemsFiltradosLocal = _filtradoLocal(_items);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Resumen
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: AppPalette.surface,
+                  border: Border.all(
+                    color: AppPalette.error.withValues(alpha: .15),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: AppPalette.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
@@ -242,7 +240,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   child: Text('Total logs: $_total'),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Filtros
               Wrap(
@@ -253,7 +251,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                     width: 220,
                     child: DropdownButtonFormField<String>(
                       initialValue: _role,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: null,
                           child: Text('Todos los roles'),
@@ -275,12 +273,11 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                           child: Text('Estudiante'),
                         ),
                       ],
-                      onChanged:
-                          (v) => setState(() {
-                            _role = v;
-                            _filtrosPendientes = true;
-                          }),
-                      decoration: const InputDecoration(
+                      onChanged: (v) => setState(() {
+                        _role = v;
+                        _filtrosPendientes = true;
+                      }),
+                      decoration: InputDecoration(
                         labelText: 'Rol',
                         border: OutlineInputBorder(),
                       ),
@@ -289,36 +286,34 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   SizedBox(
                     width: 240,
                     child: TextFormField(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Nombre (contiene, local)',
                         border: OutlineInputBorder(),
                       ),
-                      onChanged:
-                          (v) => setState(() {
-                            _nameContains = v;
-                            _filtrosPendientes = true;
-                          }),
+                      onChanged: (v) => setState(() {
+                        _nameContains = v;
+                        _filtrosPendientes = true;
+                      }),
                     ),
                   ),
                   SizedBox(
                     width: 200,
                     child: TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Grado (igual, local)',
+                      decoration: InputDecoration(
+                        labelText: 'Grupo (igual, local)',
                         border: OutlineInputBorder(),
                       ),
-                      onChanged:
-                          (v) => setState(() {
-                            _gradeEquals = v;
-                            _filtrosPendientes = true;
-                          }),
+                      onChanged: (v) => setState(() {
+                        _groupEquals = v;
+                        _filtrosPendientes = true;
+                      }),
                     ),
                   ),
                   SizedBox(
                     width: 280,
                     child: TextFormField(
                       readOnly: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Rango de fechas',
                         border: OutlineInputBorder(),
                       ),
@@ -327,12 +322,12 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.filter_alt),
+                    icon: Icon(Icons.filter_alt),
                     onPressed: () => _aplicarFiltros(recargar: true),
-                    label: const Text('Filtrar'),
+                    label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.surface,
                     ),
                   ),
                   TextButton(
@@ -340,14 +335,14 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                       final now = DateTime.now();
                       setState(() {
                         _role = null;
-                        _gradeEquals = '';
+                        _groupEquals = '';
                         _nameContains = '';
                         _rango = DateTimeRange(
                           start: DateTime(
                             now.year,
                             now.month,
                             now.day,
-                          ).subtract(const Duration(days: 14)),
+                          ).subtract(Duration(days: 14)),
                           end: DateTime(
                             now.year,
                             now.month,
@@ -362,11 +357,11 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                       });
                       _aplicarFiltros(recargar: true);
                     },
-                    child: const Text('Limpiar'),
+                    child: Text('Limpiar'),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Exportar (solo Web)
               if (kIsWeb && itemsFiltradosLocal.isNotEmpty)
@@ -375,82 +370,80 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   children: [
                     ElevatedButton.icon(
                       onPressed: _exportarExcel,
-                      icon: const Icon(Icons.table_view),
-                      label: const Text('Exportar Excel'),
+                      icon: Icon(Icons.table_view),
+                      label: Text('Exportar Excel'),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _exportarPDF,
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: const Text('Exportar PDF'),
+                      icon: Icon(Icons.picture_as_pdf),
+                      label: Text('Exportar PDF'),
                     ),
                   ],
                 ),
               if (kIsWeb && itemsFiltradosLocal.isNotEmpty)
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
               // Lista
               Expanded(
-                child:
-                    _cargando
-                        ? const Center(child: CircularProgressIndicator())
-                        : itemsFiltradosLocal.isEmpty
-                        ? const Center(child: Text('No hay registros'))
-                        : ListView.builder(
-                          itemCount: itemsFiltradosLocal.length,
-                          itemBuilder: (_, i) {
-                            final r = itemsFiltradosLocal[i];
+                child: _cargando
+                    ? Center(child: CircularProgressIndicator())
+                    : itemsFiltradosLocal.isEmpty
+                    ? Center(child: Text('No hay registros'))
+                    : ListView.builder(
+                        itemCount: itemsFiltradosLocal.length,
+                        itemBuilder: (_, i) {
+                          final r = itemsFiltradosLocal[i];
 
-                            final fecha = r['timestamp'] as DateTime?;
-                            final fechaTexto =
-                                fecha != null
-                                    ? DateFormat(
-                                      'yyyy-MM-dd HH:mm:ss',
-                                    ).format(fecha)
-                                    : '-';
+                          final fecha = r['timestamp'] as DateTime?;
+                          final fechaTexto = fecha != null
+                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                              : '-';
 
-                            final nombre = (r['fullName'] ?? '').toString();
-                            final rol = (r['role'] ?? '').toString();
-                            final evento = (r['event'] ?? '').toString();
-                            final campus = (r['campus'] ?? '').toString();
-                            final inst = (r['institution'] ?? '').toString();
-                            final grado = (r['grade'] ?? '').toString();
+                          final nombre = (r['fullName'] ?? '').toString();
+                          final rol = (r['role'] ?? '').toString();
+                          final evento = (r['event'] ?? '').toString();
+                          final campus = (r['campus'] ?? '').toString();
+                          final inst = (r['institution'] ?? '').toString();
+                          final grupo = (r['groupName'] ?? '').toString();
 
-                            final header = '$nombre — $evento';
-                            final sub = [
-                              'Rol: $rol',
-                              if (grado.isNotEmpty) 'Grado: $grado',
-                              if (campus.isNotEmpty) 'Campus: $campus',
-                              if (inst.isNotEmpty) 'Institución: $inst',
-                              'Fecha: $fechaTexto',
-                            ].join('\n');
+                          final header = '$nombre — $evento';
+                          final sub = [
+                            'Rol: $rol',
+                            if (grupo.isNotEmpty) 'Grupo: $grupo',
+                            if (campus.isNotEmpty) 'Campus: $campus',
+                            if (inst.isNotEmpty) 'Institución: $inst',
+                            'Fecha: $fechaTexto',
+                          ].join('\n');
 
-                            return Semantics(
-                              label: 'Log de usuario',
-                              child: Card(
-                                color: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  side: BorderSide(
-                                    color: Colors.red.withValues(alpha: .12),
+                          return Semantics(
+                            label: 'Log de usuario',
+                            child: Card(
+                              color: AppPalette.surface,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: AppPalette.error.withValues(
+                                    alpha: .12,
                                   ),
-                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: ListTile(
-                                  title: Text('👤 $header'),
-                                  subtitle: Text(sub),
-                                ),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            );
-                          },
-                        ),
+                              margin: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: ListTile(
+                                title: Text('👤 $header'),
+                                subtitle: Text(sub),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
 
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -458,16 +451,16 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _pageIndex == 0 || _cargando
-                                ? null
-                                : _paginaAnterior,
+                        icon: Icon(Icons.chevron_left),
+                        onPressed: _pageIndex == 0 || _cargando
+                            ? null
+                            : _paginaAnterior,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed:
-                            !_hasNext || _cargando ? null : _siguientePagina,
+                        icon: Icon(Icons.chevron_right),
+                        onPressed: !_hasNext || _cargando
+                            ? null
+                            : _siguientePagina,
                       ),
                     ],
                   ),

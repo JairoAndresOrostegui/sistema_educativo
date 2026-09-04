@@ -9,6 +9,8 @@ import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../services/messaging_service.dart';
 
+enum _ChannelView { groups, private }
+
 class MessagingScreen extends StatefulWidget {
   const MessagingScreen({super.key});
 
@@ -17,27 +19,26 @@ class MessagingScreen extends StatefulWidget {
 }
 
 class _MessagingScreenState extends State<MessagingScreen> {
-  final _svc = MessagingService();
-  final _messageCtrl = TextEditingController();
-
-  userModelv2? _logged;
+  final _service = MessagingService();
+  final _messageController = TextEditingController();
+  userModelv2? _user;
+  List<MessagingChildContext> _children = const [];
+  String? _activeStudentId;
+  String? _selectedChannelId;
+  MessageContact? _draftContact;
+  _ChannelView _view = _ChannelView.groups;
   bool _loading = true;
-  bool _loadingContacts = true;
   bool _sending = false;
 
-  List<MessageContact> _contacts = [];
-  List<MessagingChildContext> _children = [];
-
-  String? _selectedThreadId;
-  MessageContact? _draftContact;
-  String? _activeStudentId;
-
-  bool get _canUseModule {
-    final role = (_logged?.role ?? '').trim();
-    return role == 'Docente' || role == 'Estudiante' || role == 'Familiar';
+  bool get _isFamily => _user?.role == 'Familiar';
+  bool get _isAdmin =>
+      _user?.isSuperadmin == true || _user?.role == 'Administrador';
+  bool get _allowed {
+    final permissions =
+        _user?.permissions.map((item) => item.toLowerCase()).toSet() ?? {};
+    return _user?.isSuperadmin == true ||
+        permissions.contains('mensajeria.ver');
   }
-
-  bool get _isFamily => (_logged?.role ?? '').trim() == 'Familiar';
 
   @override
   void initState() {
@@ -47,268 +48,225 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   @override
   void dispose() {
-    _messageCtrl.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
   Future<void> _bootstrap() async {
-    final userProvider = context.read<UserProviderV2>();
-    final user = userProvider.user;
-    if (user == null) return;
-
-    _logged = user;
-    if (!_canUseModule) {
-      setState(() => _loading = false);
+    final provider = context.read<UserProviderV2>();
+    _user = provider.user;
+    if (_user == null || !_allowed) {
+      if (mounted) setState(() => _loading = false);
       return;
     }
-
     if (_isFamily) {
-      _children = await _svc.getFamilyChildren(user);
+      _children = await _service.getFamilyChildren(_user!);
       if (_children.isNotEmpty) {
-        final currentActive = (user.activeStudentId ?? '').trim();
-        final exists = _children.any((c) => c.id == currentActive);
-        _activeStudentId = exists ? currentActive : _children.first.id;
-        if (_activeStudentId != null) {
-          userProvider.setActiveStudentId(_activeStudentId!);
-        }
+        final preferred = (_user!.activeStudentId ?? '').trim();
+        _activeStudentId = _children.any((child) => child.id == preferred)
+            ? preferred
+            : _children.first.id;
+        provider.setActiveStudentId(_activeStudentId!);
       }
-    } else if ((user.role).trim() == 'Estudiante') {
-      _activeStudentId = user.id;
+    } else if (_user!.role == 'Estudiante') {
+      _activeStudentId = _user!.id;
     }
-
-    await _loadContacts();
-    if (!mounted) return;
-    setState(() => _loading = false);
+    if (_isAdmin) {
+      try {
+        await _service.syncAcademicChannels(
+          institutionId: _user!.institution,
+          campusId: _user!.campus,
+        );
+      } catch (_) {
+        // La sincronización automática de backend seguirá disponible.
+      }
+    }
+    if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _loadContacts() async {
-    final user = _logged;
-    if (user == null) return;
-
-    setState(() => _loadingContacts = true);
-    final contacts = await _svc.getAvailableContacts(
-      user: user,
-      studentContextId: _activeStudentId,
-    );
-    if (!mounted) return;
-
+  Future<void> _selectChannel(MessageThreadSummary channel) async {
     setState(() {
-      _contacts = contacts;
-      _loadingContacts = false;
-    });
-  }
-
-  void _onSelectThread(MessageThreadSummary thread) {
-    setState(() {
-      _selectedThreadId = thread.id;
+      _selectedChannelId = channel.id;
       _draftContact = null;
     });
-  }
-
-  void _onStudentChanged(String studentId) async {
-    if (_activeStudentId == studentId) return;
-    setState(() {
-      _activeStudentId = studentId;
-      _draftContact = null;
-      _loadingContacts = true;
-    });
-    context.read<UserProviderV2>().setActiveStudentId(studentId);
-    await _loadContacts();
-  }
-
-  Future<void> _onNewMessage(List<MessageThreadSummary> threads) async {
-    if (_loadingContacts) return;
-    if (_contacts.isEmpty) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Sin destinatarios',
-        message: 'No hay contactos disponibles para este usuario.',
-      );
-      return;
-    }
-
-    final picked = await showDialog<MessageContact>(
-      context: context,
-      builder: (_) => _SearchableContactPickerDialog(contacts: _contacts),
-    );
-    if (picked == null) return;
-
-    final existing = threads.where((t) {
-      final peerId = t.peerIdFor(_logged!.id);
-      return peerId == picked.id &&
-          (t.contextStudentId ?? '') == (picked.studentContextId ?? '');
-    }).cast<MessageThreadSummary?>().firstWhere((e) => e != null, orElse: () => null);
-
-    setState(() {
-      _selectedThreadId = existing?.id;
-      _draftContact = existing == null ? picked : null;
-    });
-  }
-
-  Future<void> _sendMessage(MessageThreadSummary? activeThread) async {
-    final user = _logged;
-    if (user == null || _sending) return;
-
-    final text = _messageCtrl.text.trim();
-    if (text.isEmpty) return;
-
-    final threadRecipientId = activeThread?.peerIdFor(user.id);
-    final recipientId = threadRecipientId ?? _draftContact?.id;
-    if (recipientId == null) {
-      await DialogUtils.showError(
-        context: context,
-        title: 'Sin destinatario',
-        message: 'Selecciona una conversación o crea un mensaje nuevo.',
-      );
-      return;
-    }
-
-    setState(() => _sending = true);
-
     try {
-      if (activeThread == null && (_draftContact?.isGroup ?? false)) {
-        final targetGrade = _draftContact?.targetGrade ?? '';
-        final sentCount = await _svc.sendMessageToGrade(
-          sender: user,
-          grade: targetGrade,
-          body: text,
-        );
+      await _service.markRead(channel.id);
+    } catch (_) {
+      // La lectura no impide consultar una conversación ya autorizada.
+    }
+  }
 
-        _messageCtrl.clear();
-        if (!mounted) return;
-        setState(() {
-          _selectedThreadId = null;
-          _draftContact = null;
-        });
-        await DialogUtils.showSuccess(
-          context: context,
-          title: 'Enviado',
-          message:
-              'Mensaje enviado a $sentCount estudiantes del grado $targetGrade.',
-        );
-        return;
-      }
-
-      final threadContextId = activeThread?.contextStudentId ?? _draftContact?.studentContextId;
-      final threadContextName =
-          activeThread?.contextStudentName ?? _draftContact?.studentContextName;
-      final threadContextGrade =
-          activeThread?.contextStudentGrade ?? _draftContact?.studentContextGrade;
-
-      final newThreadId = await _svc.sendMessage(
-        sender: user,
-        recipientId: recipientId,
-        threadId: activeThread?.id,
-        body: text,
-        studentContextId: threadContextId,
-        studentContextName: threadContextName,
-        studentContextGrade: threadContextGrade,
+  Future<void> _newPrivateMessage() async {
+    try {
+      final contacts = await _service.getAvailableContacts(
+        studentContextId: _activeStudentId,
       );
+      if (!mounted) return;
+      final contact = await showDialog<MessageContact>(
+        context: context,
+        builder: (_) => _ContactPicker(contacts: contacts),
+      );
+      if (contact == null) return;
+      setState(() {
+        _view = _ChannelView.private;
+        _selectedChannelId = null;
+        _draftContact = contact;
+      });
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible cargar contactos',
+          message: error.toString(),
+        );
+      }
+    }
+  }
 
-      _messageCtrl.clear();
+  Future<void> _send(MessageThreadSummary? channel) async {
+    if (_sending || _user == null) return;
+    final body = _messageController.text.trim();
+    if (body.isEmpty || channel == null && _draftContact == null) return;
+    setState(() => _sending = true);
+    try {
+      final channelId = await _service.sendMessage(
+        body: body,
+        channelId: channel?.id,
+        recipientId: _draftContact?.id,
+        studentContextId: _draftContact?.studentContextId ?? _activeStudentId,
+      );
+      _messageController.clear();
       if (!mounted) return;
       setState(() {
-        _selectedThreadId = newThreadId;
+        _selectedChannelId = channelId;
         _draftContact = null;
       });
-    } catch (e) {
-      if (!mounted) return;
-      await DialogUtils.showError(
-        context: context,
-        title: 'Error',
-        message: e.toString(),
-      );
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No se envió el mensaje',
+          message: error.toString(),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
-  String _formatDate(DateTime? value) {
-    if (value == null) return '-';
-    return DateFormat('yyyy-MM-dd HH:mm').format(value);
-  }
-
-  MessageThreadSummary? _resolveActiveThread(List<MessageThreadSummary> threads) {
-    if (_selectedThreadId == null) return null;
-    return threads.where((t) => t.id == _selectedThreadId).cast<MessageThreadSummary?>().firstWhere(
-      (t) => t != null,
-      orElse: () => null,
-    );
-  }
-
-  String _subtitleForThread(MessageThreadSummary thread, String currentUserId) {
-    final contextName = thread.contextStudentName;
-    final contextGrade = thread.contextStudentGrade;
-    final peerRole = thread.peerRoleFor(currentUserId);
-
-    if ((contextName ?? '').trim().isNotEmpty) {
-      final gradeText = (contextGrade ?? '').trim();
-      if (gradeText.isNotEmpty) {
-        return '$peerRole • $contextName • $gradeText';
+  Future<void> _toggleMute(MessageThreadSummary channel) async {
+    try {
+      await _service.setMuted(channel.id, !channel.mutedByAdmin);
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible cambiar el canal',
+          message: error.toString(),
+        );
       }
-      return '$peerRole • $contextName';
     }
-    return peerRole;
+  }
+
+  Future<void> _createServiceChannel(
+    List<MessageThreadSummary> channels,
+  ) async {
+    final result = await showDialog<_ServiceChannelDraft>(
+      context: context,
+      builder: (_) => _ServiceChannelDialog(
+        groups: channels.where((channel) => channel.isAcademicGroup).toList(),
+      ),
+    );
+    if (result == null) return;
+    try {
+      final id = await _service.createServiceChannel(
+        title: result.title,
+        category: result.category,
+        audienceType: result.audienceType,
+        groupIds: result.groupIds,
+      );
+      if (mounted) setState(() => _selectedChannelId = id);
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No se creó el canal',
+          message: error.toString(),
+        );
+      }
+    }
+  }
+
+  void _changeChild(String id) {
+    context.read<UserProviderV2>().setActiveStudentId(id);
+    setState(() {
+      _activeStudentId = id;
+      _selectedChannelId = null;
+      _draftContact = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = context.watch<UserProviderV2>().user;
-    if (session == null) {
-      return const Scaffold(
-        body: SafeArea(child: Center(child: Text('No hay sesión activa.'))),
-      );
-    }
-
+    final scheme = Theme.of(context).colorScheme;
     if (_loading) {
-      return const Scaffold(
-        body: SafeArea(
-          child: Center(child: CircularProgressIndicator(color: Colors.redAccent)),
-        ),
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator(color: scheme.primary)),
       );
     }
-
-    if (!_canUseModule) {
+    if (_user == null || !_allowed) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Mensajería'),
           leading: const BackToDashboardButton(),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.redAccent,
+          title: const Text('Mensajería'),
           centerTitle: true,
         ),
-        backgroundColor: Colors.white,
-        body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
+        body: const Center(child: Text('Acceso denegado.')),
       );
     }
-
     return StreamBuilder<List<MessageThreadSummary>>(
-      stream: _svc.watchThreadsForUser(
-        institutionId: session.institution,
-        campusId: session.campus,
-        userId: session.id,
-      ),
+      stream: _service.watchChannels(_user!),
       builder: (context, snapshot) {
-        final threads = snapshot.data ?? const <MessageThreadSummary>[];
-        final activeThread = _resolveActiveThread(threads);
-        final currentTitle =
-            activeThread != null
-                ? activeThread.peerNameFor(session.id)
-                : _draftContact?.fullName ?? 'Selecciona una conversación';
-
+        final channels = snapshot.data ?? const <MessageThreadSummary>[];
+        final selected = channels.cast<MessageThreadSummary?>().firstWhere(
+          (channel) => channel?.id == _selectedChannelId,
+          orElse: () => null,
+        );
+        final visible = channels
+            .where(
+              (channel) => _view == _ChannelView.private
+                  ? channel.isPrivate
+                  : !channel.isPrivate,
+            )
+            .toList();
+        final groupUnread = channels
+            .where((channel) => !channel.isPrivate)
+            .fold<int>(
+              0,
+              (total, channel) => total + channel.unreadCountFor(_user!.id),
+            );
+        final privateUnread = channels
+            .where((channel) => channel.isPrivate)
+            .fold<int>(
+              0,
+              (total, channel) => total + channel.unreadCountFor(_user!.id),
+            );
         return Scaffold(
-          backgroundColor: Colors.white,
           appBar: AppBar(
-            title: const Text('Mensajería'),
             leading: const BackToDashboardButton(),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.redAccent,
+            title: const Text('Mensajería'),
             centerTitle: true,
             actions: [
+              if (_isAdmin)
+                IconButton(
+                  tooltip: 'Crear canal de servicio',
+                  onPressed: () => _createServiceChannel(channels),
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
               IconButton(
-                onPressed: () => _onNewMessage(threads),
-                icon: const Icon(Icons.edit_square),
-                tooltip: 'Nuevo mensaje',
+                tooltip: 'Mensaje particular',
+                onPressed: _newPrivateMessage,
+                icon: const Icon(Icons.edit_outlined),
               ),
             ],
           ),
@@ -318,106 +276,93 @@ class _MessagingScreenState extends State<MessagingScreen> {
               child: Column(
                 children: [
                   if (_isFamily && _children.isNotEmpty) ...[
-                    _FamilyChildSelector(
-                      children: _children,
-                      activeStudentId: _activeStudentId,
-                      onChanged: _onStudentChanged,
+                    DropdownButtonFormField<String>(
+                      initialValue: _activeStudentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Ver mensajes de',
+                        prefixIcon: Icon(Icons.family_restroom_outlined),
+                      ),
+                      items: _children
+                          .map(
+                            (child) => DropdownMenuItem(
+                              value: child.id,
+                              child: Text(
+                                '${child.fullName} • ${child.groupName}',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (id) {
+                        if (id != null) _changeChild(id);
+                      },
                     ),
                     const SizedBox(height: 12),
                   ],
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.red.withValues(alpha: .15)),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: .03),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+                  SegmentedButton<_ChannelView>(
+                    segments: [
+                      ButtonSegment(
+                        value: _ChannelView.groups,
+                        icon: const Icon(Icons.groups_outlined),
+                        label: Text(
+                          'Grupos y servicios${groupUnread > 0 ? ' ($groupUnread)' : ''}',
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Conversaciones: ${threads.length} • $currentTitle',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                      ),
+                      ButtonSegment(
+                        value: _ChannelView.private,
+                        icon: const Icon(Icons.person_outline),
+                        label: Text(
+                          'Particulares${privateUnread > 0 ? ' ($privateUnread)' : ''}',
                         ),
-                        if (_loadingContacts)
-                          const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                      ],
-                    ),
+                      ),
+                    ],
+                    selected: {_view},
+                    onSelectionChanged: (value) => setState(() {
+                      _view = value.first;
+                      _selectedChannelId = null;
+                      _draftContact = null;
+                    }),
                   ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final isWide = constraints.maxWidth >= 900;
-                        if (isWide) {
+                        final list = _ChannelList(
+                          channels: visible,
+                          userId: _user!.id,
+                          selectedId: selected?.id,
+                          onSelected: _selectChannel,
+                        );
+                        final chat = _ChatPanel(
+                          channel: selected,
+                          draftContact: _draftContact,
+                          user: _user!,
+                          controller: _messageController,
+                          sending: _sending,
+                          messages: selected == null
+                              ? null
+                              : _service.watchMessages(selected.id),
+                          onSend: () => _send(selected),
+                          onToggleMute:
+                              _isAdmin &&
+                                  selected != null &&
+                                  !selected.isPrivate
+                              ? () => _toggleMute(selected)
+                              : null,
+                        );
+                        if (constraints.maxWidth >= 850) {
                           return Row(
                             children: [
-                              SizedBox(
-                                width: 320,
-                                child: _ThreadsPane(
-                                  threads: threads,
-                                  currentUserId: session.id,
-                                  selectedThreadId: activeThread?.id,
-                                  subtitleBuilder: (t) => _subtitleForThread(t, session.id),
-                                  onTap: _onSelectThread,
-                                ),
-                              ),
+                              SizedBox(width: 330, child: list),
                               const SizedBox(width: 12),
-                              Expanded(
-                                child: _ChatPane(
-                                  thread: activeThread,
-                                  draftContact: _draftContact,
-                                  currentUserId: session.id,
-                                  messageCtrl: _messageCtrl,
-                                  sending: _sending,
-                                  stream: activeThread == null ? null : _svc.watchMessages(activeThread.id),
-                                  formatDate: _formatDate,
-                                  onSend: () => _sendMessage(activeThread),
-                                ),
-                              ),
+                              Expanded(child: chat),
                             ],
                           );
                         }
-
                         return Column(
                           children: [
-                            SizedBox(
-                              height: 220,
-                              child: _ThreadsPane(
-                                threads: threads,
-                                currentUserId: session.id,
-                                selectedThreadId: activeThread?.id,
-                                subtitleBuilder: (t) => _subtitleForThread(t, session.id),
-                                onTap: _onSelectThread,
-                              ),
-                            ),
+                            SizedBox(height: 210, child: list),
                             const SizedBox(height: 12),
-                            Expanded(
-                              child: _ChatPane(
-                                thread: activeThread,
-                                draftContact: _draftContact,
-                                currentUserId: session.id,
-                                messageCtrl: _messageCtrl,
-                                sending: _sending,
-                                stream: activeThread == null ? null : _svc.watchMessages(activeThread.id),
-                                formatDate: _formatDate,
-                                onSend: () => _sendMessage(activeThread),
-                              ),
-                            ),
+                            Expanded(child: chat),
                           ],
                         );
                       },
@@ -433,329 +378,270 @@ class _MessagingScreenState extends State<MessagingScreen> {
   }
 }
 
-class _FamilyChildSelector extends StatelessWidget {
-  const _FamilyChildSelector({
-    required this.children,
-    required this.activeStudentId,
-    required this.onChanged,
+IconData _channelIcon(String key) => switch (key) {
+  'school' => Icons.school_outlined,
+  'cafeteria' => Icons.lunch_dining_outlined,
+  'restaurant' => Icons.restaurant_outlined,
+  'route' => Icons.directions_bus_outlined,
+  'community' => Icons.campaign_outlined,
+  _ => Icons.person_outline,
+};
+
+class _ChannelList extends StatelessWidget {
+  const _ChannelList({
+    required this.channels,
+    required this.userId,
+    required this.selectedId,
+    required this.onSelected,
   });
-
-  final List<MessagingChildContext> children;
-  final String? activeStudentId;
-  final ValueChanged<String> onChanged;
-
+  final List<MessageThreadSummary> channels;
+  final String userId;
+  final String? selectedId;
+  final ValueChanged<MessageThreadSummary> onSelected;
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.red.withValues(alpha: .15)),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Colors.red.withValues(alpha: .06), Colors.white],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: activeStudentId,
-              isExpanded: true,
-              hint: const Text('Estudiante'),
-              items:
-                  children
-                      .map(
-                        (e) => DropdownMenuItem<String>(
-                          value: e.id,
-                          child: Text('${e.fullName} • ${e.grade}'),
-                        ),
-                      )
-                      .toList(),
-              onChanged: (v) {
-                if (v != null) onChanged(v);
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: channels.isEmpty
+          ? const Center(child: Text('No hay conversaciones en esta sección.'))
+          : ListView.builder(
+              padding: const EdgeInsets.all(6),
+              itemCount: channels.length,
+              itemBuilder: (context, index) {
+                final channel = channels[index];
+                final count = channel.unreadCountFor(userId);
+                final selected = channel.id == selectedId;
+                return Card(
+                  color: selected ? scheme.primaryContainer : scheme.surface,
+                  elevation: 0,
+                  child: ListTile(
+                    onTap: () => onSelected(channel),
+                    leading: CircleAvatar(
+                      backgroundColor: scheme.secondaryContainer,
+                      child: Icon(
+                        _channelIcon(channel.iconKey),
+                        color: scheme.onSecondaryContainer,
+                      ),
+                    ),
+                    title: Text(
+                      channel.displayTitleFor(userId),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      [
+                        channel.subtitleFor(userId),
+                        if ((channel.lastMessage ?? '').isNotEmpty)
+                          channel.lastMessage!,
+                      ].where((value) => value.isNotEmpty).join('\n'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: count == 0 ? null : Badge(label: Text('$count')),
+                  ),
+                );
               },
             ),
-          ),
-        ),
-      ),
     );
   }
 }
 
-class _ThreadsPane extends StatelessWidget {
-  const _ThreadsPane({
-    required this.threads,
-    required this.currentUserId,
-    required this.selectedThreadId,
-    required this.subtitleBuilder,
-    required this.onTap,
-  });
-
-  final List<MessageThreadSummary> threads;
-  final String currentUserId;
-  final String? selectedThreadId;
-  final String Function(MessageThreadSummary thread) subtitleBuilder;
-  final ValueChanged<MessageThreadSummary> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withValues(alpha: .12)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .04), Colors.white],
-        ),
-      ),
-      child:
-          threads.isEmpty
-              ? const Center(child: Text('No hay conversaciones'))
-              : ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: threads.length,
-                itemBuilder: (_, i) {
-                  final thread = threads[i];
-                  final selected = thread.id == selectedThreadId;
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color:
-                            selected
-                                ? Colors.redAccent
-                                : Colors.red.withValues(alpha: .10),
-                      ),
-                      color:
-                          selected
-                              ? Colors.red.withValues(alpha: .08)
-                              : Colors.transparent,
-                    ),
-                    child: ListTile(
-                      onTap: () => onTap(thread),
-                      leading: const Icon(Icons.chat_bubble_outline, color: Colors.redAccent),
-                      title: Text(
-                        thread.peerNameFor(currentUserId),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        [
-                          subtitleBuilder(thread),
-                          if ((thread.lastMessage ?? '').trim().isNotEmpty) thread.lastMessage!,
-                        ].where((e) => e.trim().isNotEmpty).join('\n'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  );
-                },
-              ),
-    );
-  }
-}
-
-class _ChatPane extends StatelessWidget {
-  const _ChatPane({
-    required this.thread,
+class _ChatPanel extends StatelessWidget {
+  const _ChatPanel({
+    required this.channel,
     required this.draftContact,
-    required this.currentUserId,
-    required this.messageCtrl,
+    required this.user,
+    required this.controller,
     required this.sending,
-    required this.stream,
-    required this.formatDate,
+    required this.messages,
     required this.onSend,
+    required this.onToggleMute,
   });
-
-  final MessageThreadSummary? thread;
+  final MessageThreadSummary? channel;
   final MessageContact? draftContact;
-  final String currentUserId;
-  final TextEditingController messageCtrl;
+  final userModelv2 user;
+  final TextEditingController controller;
   final bool sending;
-  final Stream<List<MessageItem>>? stream;
-  final String Function(DateTime? value) formatDate;
+  final Stream<List<MessageItem>>? messages;
   final VoidCallback onSend;
-
+  final VoidCallback? onToggleMute;
   @override
   Widget build(BuildContext context) {
-    final title = thread?.peerNameFor(currentUserId) ?? draftContact?.fullName;
-    final subtitle = [
-      if ((thread?.peerRoleFor(currentUserId) ?? draftContact?.role ?? '').trim().isNotEmpty)
-        thread?.peerRoleFor(currentUserId) ?? draftContact!.role,
-      if ((thread?.contextStudentName ?? draftContact?.studentContextName ?? '').trim().isNotEmpty)
-        'Contexto: ${thread?.contextStudentName ?? draftContact!.studentContextName}',
-    ].join(' • ');
-
-    return Container(
+    final scheme = Theme.of(context).colorScheme;
+    final title = channel?.displayTitleFor(user.id) ?? draftContact?.fullName;
+    final isAdmin = user.isSuperadmin || user.role == 'Administrador';
+    final blocked = channel?.mutedByAdmin == true && !isAdmin;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withValues(alpha: .12)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .04), Colors.white],
-        ),
+        color: scheme.surface,
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              border: Border(
-                bottom: BorderSide(color: Colors.red.withValues(alpha: .10)),
-              ),
+          ListTile(
+            leading: Icon(
+              _channelIcon(channel?.iconKey ?? 'private'),
+              color: scheme.primary,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title ?? 'Sin conversación seleccionada',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                ),
-                if (subtitle.trim().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      subtitle,
-                      style: TextStyle(color: Colors.black.withValues(alpha: .65)),
+            title: Text(title ?? 'Selecciona una conversación'),
+            subtitle: channel == null
+                ? null
+                : Text(
+                    [
+                      channel!.subtitleFor(user.id),
+                      if (channel!.mutedByAdmin)
+                        'Solo administración puede escribir',
+                    ].where((value) => value.isNotEmpty).join(' • '),
+                  ),
+            trailing: onToggleMute == null
+                ? null
+                : IconButton(
+                    tooltip: channel!.mutedByAdmin
+                        ? 'Permitir mensajes'
+                        : 'Silenciar grupo',
+                    onPressed: onToggleMute,
+                    icon: Icon(
+                      channel!.mutedByAdmin
+                          ? Icons.volume_up_outlined
+                          : Icons.volume_off_outlined,
                     ),
                   ),
-              ],
-            ),
           ),
+          Divider(height: 1, color: scheme.outlineVariant),
           Expanded(
-            child:
-                stream == null
-                    ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('Selecciona una conversación o crea una nueva.'),
-                      ),
-                    )
-                    : StreamBuilder<List<MessageItem>>(
-                      stream: stream,
-                      builder: (context, snapshot) {
-                        final messages = snapshot.data ?? const <MessageItem>[];
-                        if (messages.isEmpty) {
-                          return const Center(child: Text('Aún no hay mensajes.'));
-                        }
-                        return ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: messages.length,
-                          itemBuilder: (_, i) {
-                            final msg = messages[i];
-                            final mine = msg.senderId == currentUserId;
-                            return Align(
-                              alignment:
-                                  mine ? Alignment.centerRight : Alignment.centerLeft,
-                              child: Container(
-                                constraints: const BoxConstraints(maxWidth: 420),
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      mine
-                                          ? Colors.redAccent
-                                          : Colors.red.withValues(alpha: .08),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      mine
-                                          ? CrossAxisAlignment.end
-                                          : CrossAxisAlignment.start,
-                                  children: [
-                                    if (!mine)
-                                      Padding(
-                                        padding: const EdgeInsets.only(bottom: 4),
-                                        child: Text(
-                                          msg.senderName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    Text(
-                                      msg.body,
-                                      style: TextStyle(
-                                        color: mine ? Colors.white : Colors.black87,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      formatDate(msg.createdAt),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color:
-                                            mine
-                                                ? Colors.white.withValues(alpha: .85)
-                                                : Colors.black.withValues(alpha: .55),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
+            child: messages == null
+                ? const Center(
+                    child: Text(
+                      'Selecciona un canal o inicia un mensaje particular.',
                     ),
+                  )
+                : StreamBuilder<List<MessageItem>>(
+                    stream: messages,
+                    builder: (context, snapshot) {
+                      final items = snapshot.data ?? const <MessageItem>[];
+                      if (items.isEmpty) {
+                        return const Center(
+                          child: Text('Aún no hay mensajes.'),
+                        );
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final message = items[index];
+                          final mine = message.senderId == user.id;
+                          final readCount =
+                              channel?.readCountForSequence(
+                                message.sequence,
+                                excludingUserId: message.senderId,
+                              ) ??
+                              0;
+                          final audience =
+                              ((channel?.memberUserIds.length ?? 1) - 1).clamp(
+                                0,
+                                9999,
+                              );
+                          return Align(
+                            alignment: mine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 520),
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: mine
+                                    ? scheme.primaryContainer
+                                    : scheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: mine
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (!mine)
+                                    Text(
+                                      '${message.senderName} • ${message.senderRole}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelMedium,
+                                    ),
+                                  SelectableText(message.body),
+                                  const SizedBox(height: 3),
+                                  if (mine &&
+                                      (isAdmin || user.role == 'Docente'))
+                                    _ReadReceipt(
+                                      channel: channel!,
+                                      message: message,
+                                      readCount: readCount,
+                                      audience: audience,
+                                    )
+                                  else
+                                    Text(
+                                      message.createdAt == null
+                                          ? ''
+                                          : DateFormat(
+                                              'dd/MM/yyyy HH:mm',
+                                            ).format(message.createdAt!),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Colors.red.withValues(alpha: .10)),
-              ),
-            ),
+          Divider(height: 1, color: scheme.outlineVariant),
+          Padding(
+            padding: const EdgeInsets.all(10),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: messageCtrl,
+                    controller: controller,
+                    enabled: title != null && !blocked,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Escribe un mensaje',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      hintText: blocked
+                          ? 'Este grupo está silenciado'
+                          : 'Escribe un mensaje',
+                      prefixIcon: const Icon(Icons.message_outlined),
                     ),
                     onSubmitted: (_) => onSend(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: sending ? null : onSend,
-                  style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-                  child:
-                      sending
-                          ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                          : const Icon(Icons.send),
+                IconButton.filled(
+                  tooltip: 'Enviar',
+                  onPressed: sending || title == null || blocked
+                      ? null
+                      : onSend,
+                  icon: sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_outlined),
                 ),
               ],
             ),
@@ -766,137 +652,142 @@ class _ChatPane extends StatelessWidget {
   }
 }
 
-// ignore: unused_element
-class _ContactPickerDialog extends StatelessWidget {
-  const _ContactPickerDialog({required this.contacts});
+class _ReadReceipt extends StatelessWidget {
+  const _ReadReceipt({
+    required this.channel,
+    required this.message,
+    required this.readCount,
+    required this.audience,
+  });
 
-  final List<MessageContact> contacts;
+  final MessageThreadSummary channel;
+  final MessageItem message;
+  final int readCount;
+  final int audience;
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Nuevo mensaje'),
-      content: SizedBox(
-        width: 420,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: contacts.length,
-          itemBuilder: (_, i) {
-            final c = contacts[i];
-            final meta = [
-              c.role,
-              if ((c.grade ?? '').trim().isNotEmpty) c.grade!,
-              if ((c.studentContextName ?? '').trim().isNotEmpty) c.studentContextName!,
-            ].join(' • ');
-            return ListTile(
-              leading: const Icon(Icons.person_outline, color: Colors.redAccent),
-              title: Text(c.fullName),
-              subtitle: Text(meta),
-              onTap: () => Navigator.pop(context, c),
-            );
-          },
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    return InkWell(
+      onTap: () => _showReaders(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Text(
+          '${message.createdAt == null ? '' : DateFormat('dd/MM/yyyy HH:mm').format(message.createdAt!)}'
+          ' • Leído por $readCount de $audience',
+          style: style,
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+    );
+  }
+
+  Future<void> _showReaders(BuildContext context) async {
+    final readers =
+        channel.readSequences.entries
+            .where(
+              (entry) =>
+                  entry.key != message.senderId &&
+                  entry.value >= message.sequence,
+            )
+            .toList()
+          ..sort((a, b) {
+            final aDate = channel.readAtByUser[a.key] ?? DateTime(1900);
+            final bDate = channel.readAtByUser[b.key] ?? DateTime(1900);
+            return bDate.compareTo(aDate);
+          });
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lecturas del mensaje'),
+        content: SizedBox(
+          width: 460,
+          child: readers.isEmpty
+              ? const Text('Ningún destinatario lo ha leído todavía.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: readers.length,
+                  itemBuilder: (context, index) {
+                    final reader = readers[index];
+                    final date = channel.readAtByUser[reader.key];
+                    return ListTile(
+                      leading: const Icon(Icons.done_all_outlined),
+                      title: Text(channel.memberNames[reader.key] ?? 'Usuario'),
+                      subtitle: Text(
+                        [
+                          channel.memberRoles[reader.key] ?? '',
+                          if (date != null)
+                            DateFormat('dd/MM/yyyy HH:mm').format(date),
+                        ].where((value) => value.isNotEmpty).join(' • '),
+                      ),
+                    );
+                  },
+                ),
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _SearchableContactPickerDialog extends StatefulWidget {
-  const _SearchableContactPickerDialog({required this.contacts});
-
+class _ContactPicker extends StatefulWidget {
+  const _ContactPicker({required this.contacts});
   final List<MessageContact> contacts;
-
   @override
-  State<_SearchableContactPickerDialog> createState() =>
-      _SearchableContactPickerDialogState();
+  State<_ContactPicker> createState() => _ContactPickerState();
 }
 
-class _SearchableContactPickerDialogState
-    extends State<_SearchableContactPickerDialog> {
-  final _searchCtrl = TextEditingController();
+class _ContactPickerState extends State<_ContactPicker> {
   String _query = '';
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  List<MessageContact> get _visibleContacts {
-    final query = _query.trim().toLowerCase();
-    if (query.isEmpty) {
-      return widget.contacts.take(5).toList();
-    }
-
-    return widget.contacts.where((c) {
-      final haystack = [
-        c.fullName,
-        c.role,
-        c.grade ?? '',
-        c.targetGrade ?? '',
-        c.studentContextName ?? '',
-      ].join(' ').toLowerCase();
-      return haystack.contains(query);
-    }).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final contacts = _visibleContacts;
-
+    final filtered = widget.contacts
+        .where(
+          (contact) =>
+              '${contact.fullName} ${contact.role} ${contact.groupName ?? ''}'
+                  .toLowerCase()
+                  .contains(_query.toLowerCase()),
+        )
+        .toList();
     return AlertDialog(
-      title: const Text('Nuevo mensaje'),
+      title: const Text('Mensaje particular'),
       content: SizedBox(
-        width: 460,
+        width: 480,
+        height: 430,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: _searchCtrl,
+              autofocus: true,
               decoration: const InputDecoration(
-                hintText: 'Buscar por grado o estudiante',
                 prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
+                hintText: 'Buscar persona',
               ),
               onChanged: (value) => setState(() => _query = value),
             ),
-            const SizedBox(height: 12),
-            Flexible(
-              child: contacts.isEmpty
-                  ? const Center(
-                      child: Text('No se encontraron destinatarios.'),
-                    )
+            const SizedBox(height: 8),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(child: Text('No hay contactos disponibles.'))
                   : ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: contacts.length,
-                      itemBuilder: (_, i) {
-                        final c = contacts[i];
-                        final meta = [
-                          c.role,
-                          if (c.isGroup &&
-                              (c.targetGrade ?? '').trim().isNotEmpty)
-                            'Envio masivo',
-                          if ((c.grade ?? '').trim().isNotEmpty) c.grade!,
-                          if ((c.studentContextName ?? '').trim().isNotEmpty)
-                            c.studentContextName!,
-                        ].join(' • ');
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final contact = filtered[index];
                         return ListTile(
-                          leading: Icon(
-                            c.isGroup
-                                ? Icons.groups_outlined
-                                : Icons.person_outline,
-                            color: Colors.redAccent,
+                          leading: const Icon(Icons.person_outline),
+                          title: Text(contact.fullName),
+                          subtitle: Text(
+                            [
+                              contact.role,
+                              contact.groupName ?? '',
+                            ].where((value) => value.isNotEmpty).join(' • '),
                           ),
-                          title: Text(c.fullName),
-                          subtitle: Text(meta),
-                          onTap: () => Navigator.pop(context, c),
+                          onTap: () => Navigator.pop(context, contact),
                         );
                       },
                     ),
@@ -905,14 +796,6 @@ class _SearchableContactPickerDialogState
         ),
       ),
       actions: [
-        if (_query.trim().isEmpty && widget.contacts.length > 5)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text(
-              'Mostrando 5 de ${widget.contacts.length}',
-              style: TextStyle(color: Colors.black.withValues(alpha: .6)),
-            ),
-          ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancelar'),
@@ -920,4 +803,118 @@ class _SearchableContactPickerDialogState
       ],
     );
   }
+}
+
+class _ServiceChannelDraft {
+  const _ServiceChannelDraft(
+    this.title,
+    this.category,
+    this.audienceType,
+    this.groupIds,
+  );
+  final String title, category, audienceType;
+  final List<String> groupIds;
+}
+
+class _ServiceChannelDialog extends StatefulWidget {
+  const _ServiceChannelDialog({required this.groups});
+  final List<MessageThreadSummary> groups;
+  @override
+  State<_ServiceChannelDialog> createState() => _ServiceChannelDialogState();
+}
+
+class _ServiceChannelDialogState extends State<_ServiceChannelDialog> {
+  final _title = TextEditingController();
+  String _category = 'cafeteria';
+  String _audience = 'all';
+  final Set<String> _groups = {};
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Nuevo canal de servicio'),
+    content: SizedBox(
+      width: 520,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(labelText: 'Nombre del canal'),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _category,
+              decoration: const InputDecoration(labelText: 'Tipo e icono'),
+              items: const [
+                DropdownMenuItem(value: 'cafeteria', child: Text('Lonchera')),
+                DropdownMenuItem(
+                  value: 'restaurant',
+                  child: Text('Restaurante'),
+                ),
+                DropdownMenuItem(value: 'route', child: Text('Ruta escolar')),
+                DropdownMenuItem(value: 'community', child: Text('Comunidad')),
+                DropdownMenuItem(value: 'other', child: Text('Otro')),
+              ],
+              onChanged: (value) => setState(() => _category = value!),
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'all', label: Text('Toda la sede')),
+                ButtonSegment(value: 'groups', label: Text('Algunos grupos')),
+              ],
+              selected: {_audience},
+              onSelectionChanged: (value) =>
+                  setState(() => _audience = value.first),
+            ),
+            if (_audience == 'groups') ...[
+              const SizedBox(height: 12),
+              ...widget.groups.map(
+                (group) => CheckboxListTile(
+                  value: _groups.contains(group.groupId),
+                  title: Text(group.groupName ?? group.title),
+                  onChanged: (selected) => setState(() {
+                    if (selected == true) {
+                      _groups.add(group.groupId!);
+                    } else {
+                      _groups.remove(group.groupId);
+                    }
+                  }),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancelar'),
+      ),
+      FilledButton(
+        onPressed:
+            _title.text.trim().isEmpty ||
+                _audience == 'groups' && _groups.isEmpty
+            ? null
+            : () => Navigator.pop(
+                context,
+                _ServiceChannelDraft(
+                  _title.text.trim(),
+                  _category,
+                  _audience,
+                  _groups.toList(),
+                ),
+              ),
+        child: const Text('Crear canal'),
+      ),
+    ],
+  );
 }

@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   String? _currentUserId;
 
   bool _isFamily = false;
-  List<_StudentRef> _students = const [];
+  List<_StudentRef> _students = [];
   String? _selectedStudentId;
 
   String? _dailyRouteId;
@@ -54,12 +55,11 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
     await _loadRoleAndStudents(_currentUserId!);
 
-    _selectedStudentId ??=
-        _isFamily
-            ? (session.activeStudentId?.isNotEmpty == true
-                ? session.activeStudentId
-                : (_students.isNotEmpty ? _students.first.id : null))
-            : _currentUserId;
+    _selectedStudentId ??= _isFamily
+        ? (session.activeStudentId?.isNotEmpty == true
+              ? session.activeStudentId
+              : (_students.isNotEmpty ? _students.first.id : null))
+        : _currentUserId;
 
     if (_selectedStudentId != null) {
       final ruta = await _myRouteService.getMyDailyRoute(
@@ -79,19 +79,18 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
     if (session.role == 'Familiar') {
       _isFamily = true;
-      final ids = session.studentIds ?? const <String>[];
+      final ids = session.studentIds ?? <String>[];
 
       if (ids.isNotEmpty) {
-        final users = FirebaseFirestore.instance.collection('users');
+        final users = FirebaseFirestore.instance.collection('user_directory');
         final List<_StudentRef> list = [];
 
         for (final chunk in _chunks(ids, 10)) {
-          final snap =
-              await users
-                  .where('institution', isEqualTo: _institutionId)
-                  .where('campus', isEqualTo: _campusId)
-                  .where(FieldPath.documentId, whereIn: chunk)
-                  .get();
+          final snap = await users
+              .where('institution', isEqualTo: _institutionId)
+              .where('campus', isEqualTo: _campusId)
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get();
 
           for (final d in snap.docs) {
             final u = d.data();
@@ -103,11 +102,11 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
         }
         _students = list;
       } else {
-        _students = const [];
+        _students = [];
       }
     } else {
       _isFamily = false;
-      _students = const [];
+      _students = [];
     }
   }
 
@@ -185,19 +184,19 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   Widget build(BuildContext context) {
     if (kIsWeb) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppPalette.surface,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: AppPalette.surface,
           centerTitle: true,
-          title: const Text(
+          title: Text(
             'Mi Ruta de Hoy',
-            style: TextStyle(color: Colors.red),
+            style: TextStyle(color: AppPalette.error),
             semanticsLabel: 'Mi Ruta de Hoy',
           ),
-          leading: const BackToDashboardButton(),
-          iconTheme: const IconThemeData(color: Colors.red),
+          leading: BackToDashboardButton(),
+          iconTheme: IconThemeData(color: AppPalette.error),
         ),
-        body: const Center(
+        body: Center(
           child: Padding(
             padding: EdgeInsets.all(16),
             child: Text(
@@ -214,7 +213,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     }
 
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_currentUserId == null) {
@@ -222,43 +221,40 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
         body: Center(
           child: Semantics(
             label: 'Usuario no autenticado. No se puede mostrar la ruta.',
-            child: const Text('Usuario no autenticado.'),
+            child: Text('Usuario no autenticado.'),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
-        title: const Text('Mi Ruta de Hoy'),
-        leading: const BackToDashboardButton(),
-        iconTheme: const IconThemeData(color: Colors.redAccent),
+        title: Text('Mi Ruta de Hoy'),
+        leading: BackToDashboardButton(),
+        iconTheme: IconThemeData(color: AppPalette.primary),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             children: [
               if (_isFamily)
                 DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Selecciona estudiante',
                     border: OutlineInputBorder(),
                   ),
                   initialValue: _selectedStudentId,
-                  items:
-                      _students
-                          .map(
-                            (s) => DropdownMenuItem(
-                              value: s.id,
-                              child: Text(s.name),
-                            ),
-                          )
-                          .toList(),
+                  items: _students
+                      .map(
+                        (s) =>
+                            DropdownMenuItem(value: s.id, child: Text(s.name)),
+                      )
+                      .toList(),
                   onChanged: (id) async {
                     if (id == null) return;
                     setState(() {
@@ -280,33 +276,30 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                   },
                 ),
 
-              if (_isFamily) const SizedBox(height: 12),
+              if (_isFamily) SizedBox(height: 12),
 
               Expanded(
-                child:
-                    (_selectedStudentId == null)
-                        ? const Center(
-                          child: Text('No hay estudiantes vinculados.'),
-                        )
-                        : (_dailyRouteId == null)
-                        ? const Center(
-                          child: Text(
-                            'No hay ruta activa para hoy o no estás asignado.',
-                          ),
-                        )
-                        : RouteLiveView(
-                          dailyRouteId: _dailyRouteId!,
-                          studentId: _selectedStudentId!,
-                          onMapCreated: _onMapCreated,
-                          teacherPosition: _teacherPosition,
-                          updateTeacherPosition: _updateTeacherPosition,
-                          str: _str,
-                          boolf: _bool,
-                          intf: _int,
-                          ts: _ts,
-                          mapf: _map,
-                          normalizeStatus: _normalizeStatus,
+                child: (_selectedStudentId == null)
+                    ? Center(child: Text('No hay estudiantes vinculados.'))
+                    : (_dailyRouteId == null)
+                    ? Center(
+                        child: Text(
+                          'No hay ruta activa para hoy o no estás asignado.',
                         ),
+                      )
+                    : RouteLiveView(
+                        dailyRouteId: _dailyRouteId!,
+                        studentId: _selectedStudentId!,
+                        onMapCreated: _onMapCreated,
+                        teacherPosition: _teacherPosition,
+                        updateTeacherPosition: _updateTeacherPosition,
+                        str: _str,
+                        boolf: _bool,
+                        intf: _int,
+                        ts: _ts,
+                        mapf: _map,
+                        normalizeStatus: _normalizeStatus,
+                      ),
               ),
             ],
           ),
@@ -316,10 +309,8 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   }
 }
 
-
-
 class _StudentRef {
   final String id;
   final String name;
-  const _StudentRef({required this.id, required this.name});
+  _StudentRef({required this.id, required this.name});
 }

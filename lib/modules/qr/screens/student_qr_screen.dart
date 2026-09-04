@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -16,51 +17,53 @@ class StudentQrScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR'),
-        leading: const BackToDashboardButton(),
+        title: Text('QR'),
+        leading: BackToDashboardButton(),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24),
           child: enabled
               ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${user?.firstName ?? ''} ${user?.lastName ?? ''}'.trim(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${user?.firstName ?? ''} ${user?.lastName ?? ''}'.trim(),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    user?.document ?? '',
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 20),
-                  QrImageView(
-                    data: payload,
-                    size: 240,
-                    backgroundColor: Colors.white,
-                    errorStateBuilder: (context, error) {
-                      return const Text(
-                        'No se pudo generar el QR.',
-                        style: TextStyle(color: Colors.redAccent),
-                      );
-                    },
-                  ),
-                ],
-              )
-              : const Text(
-                'QR no disponible. Solicite al administrador.',
-                textAlign: TextAlign.center,
-              ),
+                    SizedBox(height: 6),
+                    Text(
+                      user?.document ?? '',
+                      style: TextStyle(
+                        color: AppPalette.onSurface.withValues(alpha: .54),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    QrImageView(
+                      data: payload,
+                      size: 240,
+                      backgroundColor: AppPalette.surface,
+                      errorStateBuilder: (context, error) {
+                        return Text(
+                          'No se pudo generar el QR.',
+                          style: TextStyle(color: AppPalette.primary),
+                        );
+                      },
+                    ),
+                  ],
+                )
+              : Text(
+                  'QR no disponible. Solicite al administrador.',
+                  textAlign: TextAlign.center,
+                ),
         ),
       ),
     );

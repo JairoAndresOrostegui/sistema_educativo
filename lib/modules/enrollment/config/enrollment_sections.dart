@@ -19,7 +19,7 @@ const List<EnrollmentSection> enrollmentSections = [
       'direccionAlumno',
       'telefonoAlumno',
       'epsEstudiante',
-      'gradoAspirado',
+      'groupId',
       'sedeAspirada',
     ],
   ),

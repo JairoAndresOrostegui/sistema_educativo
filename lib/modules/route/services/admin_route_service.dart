@@ -1,17 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../../models/route/route_model.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class RouteService {
-  final _routes = FirebaseFirestore.instance.collection('routes');
-  final _users = FirebaseFirestore.instance.collection('users');
+  final _db = FirebaseFirestore.instance;
+  late final _routes = _db.collection('routes');
+  late final _users = _db.collection('users');
 
   Future<List<RouteModel>> obtenerTodasLasRutas({
     required String institutionId,
     required String campusId,
   }) async {
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
     final q = _routes
         .where('institution', isEqualTo: institutionId)
-        .where('campus', isEqualTo: campusId);
+        .where('campus', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: academicYear.id);
     final query = await q.get();
     return query.docs.map((doc) => RouteModel.fromFirestore(doc)).toList();
   }
@@ -24,6 +33,15 @@ class RouteService {
     required String campusId,
   }) async {
     final ruta = await obtenerRutaPorId(id);
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    final raw = await _routes.doc(id).get();
+    if (raw.data()?['academicYearId'] != academicYear.id) {
+      throw StateError('Las rutas históricas son de solo lectura.');
+    }
     await _routes.doc(id).delete();
     if (ruta != null) {
       await registrarHistorialRuta(
@@ -50,9 +68,18 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
-    final data =
-        ruta.toMap()
-          ..addAll({'institution': institutionId, 'campus': campusId});
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    final data = ruta.toMap()
+      ..addAll({
+        'institution': institutionId,
+        'campus': campusId,
+        'academicYearId': academicYear.id,
+        'academicYear': academicYear.year,
+      });
 
     if (id == null) {
       final docRef = await _routes.add(data);
@@ -67,6 +94,10 @@ class RouteService {
       );
     } else {
       final anterior = await obtenerRutaPorId(id);
+      final raw = await _routes.doc(id).get();
+      if (raw.data()?['academicYearId'] != academicYear.id) {
+        throw StateError('Las rutas históricas son de solo lectura.');
+      }
       await _routes.doc(id).update(data);
       final actualizada = ruta.copyWithId(id);
 
@@ -124,13 +155,12 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
-    final snapshot =
-        await _users
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Estudiante')
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final snapshot = await _users
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', isEqualTo: 'Estudiante')
+        .where('status', isEqualTo: 'activo')
+        .get();
     return snapshot.docs;
   }
 
@@ -139,13 +169,12 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
-    final snapshot =
-        await _users
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', whereIn: ['Docente', 'Administrador'])
-            .where('status', isEqualTo: 'activo')
-            .get();
+    final snapshot = await _users
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
+        .where('role', whereIn: ['Docente', 'Administrador'])
+        .where('status', isEqualTo: 'activo')
+        .get();
     return snapshot.docs;
   }
 
@@ -154,10 +183,16 @@ class RouteService {
     required String institutionId,
     required String campusId,
   }) async {
+    final academicYear = await loadActiveAcademicYear(
+      firestore: _db,
+      institutionId: institutionId,
+      campusId: campusId,
+    );
     Query<Map<String, dynamic>> q1 = _routes
         .where('gestionador', isEqualTo: userId)
         .where('institution', isEqualTo: institutionId)
-        .where('campus', isEqualTo: campusId);
+        .where('campus', isEqualTo: campusId)
+        .where('academicYearId', isEqualTo: academicYear.id);
     final snapEs = await q1.get();
 
     List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs = snapEs.docs;
@@ -165,7 +200,8 @@ class RouteService {
       final q2 = _routes
           .where('manager', isEqualTo: userId)
           .where('institution', isEqualTo: institutionId)
-          .where('campus', isEqualTo: campusId);
+          .where('campus', isEqualTo: campusId)
+          .where('academicYearId', isEqualTo: academicYear.id);
       final snapEn = await q2.get();
       allDocs = snapEn.docs;
     }
@@ -182,16 +218,17 @@ class RouteService {
     required String campusId,
     Map<String, dynamic>? cambios,
   }) async {
-    await FirebaseFirestore.instance.collection('routes_admin_history').add({
-      'routeId': ruta.id,
-      'routeName': ruta.name,
-      'action': _mapActionToEnglish(accion),
-      'performedBy': performedBy,
-      'adminName': adminName,
-      'institution': institutionId,
-      'campus': campusId,
-      'date': FieldValue.serverTimestamp(),
-      if (cambios != null) 'details': cambios,
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'registrarAuditoria',
+    );
+    await callable.call({
+      'type': 'route_history',
+      'payload': {
+        'routeId': ruta.id,
+        'routeName': ruta.name,
+        'action': _mapActionToEnglish(accion),
+        'changes': ?cambios,
+      },
     });
   }
 

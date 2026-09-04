@@ -1,9 +1,12 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../models/parameter_entry.dart';
 import '../services/parameter_admin_service.dart';
+import '../widgets/academic_groups_admin_panel.dart';
+import '../widgets/academic_years_admin_panel.dart';
 
 class AdminParametersScreen extends StatefulWidget {
   const AdminParametersScreen({super.key});
@@ -96,18 +99,18 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Eliminar parametro'),
+        title: Text('Eliminar parametro'),
         content: Text(
           'Eliminaras "${entry.etiqueta}" de la clave "${entry.clave}". Esta accion no se puede deshacer.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Eliminar'),
+            child: Text('Eliminar'),
           ),
         ],
       ),
@@ -133,54 +136,52 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Parámetros'),
-        leading: const BackToDashboardButton(),
+        title: Text('Parámetros'),
+        leading: BackToDashboardButton(),
         actions: [
           IconButton(
             onPressed: _load,
             tooltip: 'Refrescar',
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _saving ? null : () => _openForm(),
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo'),
-        backgroundColor: Colors.redAccent,
-        foregroundColor: Colors.white,
+        icon: Icon(Icons.add),
+        label: Text('Nuevo'),
+        backgroundColor: AppPalette.primary,
+        foregroundColor: AppPalette.surface,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(16),
                 children: [
+                  AcademicYearsAdminPanel(),
+                  SizedBox(height: 16),
+                  AcademicGroupsAdminPanel(),
+                  SizedBox(height: 16),
                   Row(
                     children: [
-                      const Text(
+                      Text(
                         'Filtrar por clave:',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           initialValue: _filtroClave,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Clave',
                             border: OutlineInputBorder(),
                           ),
                           items: [
-                            const DropdownMenuItem(
-                              value: null,
-                              child: Text('Todas'),
-                            ),
+                            DropdownMenuItem(value: null, child: Text('Todas')),
                             ..._claves.map(
-                              (c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(c),
-                              ),
+                              (c) => DropdownMenuItem(value: c, child: Text(c)),
                             ),
                           ],
                           onChanged: (v) {
@@ -191,9 +192,9 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   if (_items.isEmpty)
-                    const Card(
+                    Card(
                       child: ListTile(
                         title: Text('Sin parámetros'),
                         subtitle: Text('Crea uno nuevo para empezar.'),
@@ -202,7 +203,7 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                   else
                     ..._items.map(
                       (e) => Card(
-                        margin: const EdgeInsets.only(bottom: 10),
+                        margin: EdgeInsets.only(bottom: 10),
                         child: ListTile(
                           title: Text('${e.etiqueta} (${e.valor})'),
                           subtitle: Text(
@@ -213,20 +214,25 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                             children: [
                               IconButton(
                                 tooltip: 'Editar',
-                                onPressed: _saving ? null : () => _openForm(entry: e),
-                                icon: const Icon(Icons.edit),
+                                onPressed: _saving
+                                    ? null
+                                    : () => _openForm(entry: e),
+                                icon: Icon(Icons.edit),
                               ),
                               IconButton(
                                 tooltip: 'Eliminar',
                                 onPressed: _saving ? null : () => _delete(e),
-                                icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                icon: Icon(
+                                  Icons.delete,
+                                  color: AppPalette.primary,
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ),
                     ),
-                  const SizedBox(height: 80),
+                  SizedBox(height: 80),
                 ],
               ),
             ),
@@ -283,7 +289,9 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
     _claveController = TextEditingController(text: entry?.clave ?? '');
     _etiquetaController = TextEditingController(text: entry?.etiqueta ?? '');
     _valorController = TextEditingController(text: entry?.valor ?? '');
-    _ordenController = TextEditingController(text: entry?.orden.toString() ?? '1');
+    _ordenController = TextEditingController(
+      text: entry?.orden.toString() ?? '1',
+    );
     _activo = entry?.activo ?? true;
   }
 
@@ -313,26 +321,27 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
                 TextFormField(
                   controller: _claveController,
                   readOnly: true,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Clave',
                     border: OutlineInputBorder(),
                   ),
                 )
               else
                 DropdownButtonFormField<String>(
-                  initialValue: _usandoClaveNueva ? '_nueva_' : (_claveSeleccionada?.isEmpty ?? true ? null : _claveSeleccionada),
-                  decoration: const InputDecoration(
+                  initialValue: _usandoClaveNueva
+                      ? '_nueva_'
+                      : (_claveSeleccionada?.isEmpty ?? true
+                            ? null
+                            : _claveSeleccionada),
+                  decoration: InputDecoration(
                     labelText: 'Clave',
                     border: OutlineInputBorder(),
                   ),
                   items: [
                     ...clavesDisponibles.map(
-                      (c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c),
-                      ),
+                      (c) => DropdownMenuItem(value: c, child: Text(c)),
                     ),
-                    const DropdownMenuItem(
+                    DropdownMenuItem(
                       value: '_nueva_',
                       child: Text('Otra (escribir)'),
                     ),
@@ -353,51 +362,59 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
                     }
                   },
                   validator: (v) {
-                    final clave = _usandoClaveNueva ? _claveController.text.trim() : (v ?? '');
+                    final clave = _usandoClaveNueva
+                        ? _claveController.text.trim()
+                        : (v ?? '');
                     if (clave.isEmpty) return 'Requerido';
-                    if (clave == 'grade') return 'La clave "grade" no es editable';
+                    if (clave == 'grade') {
+                      return 'La clave "grade" no es editable';
+                    }
                     return null;
                   },
                 ),
               if (!esEdicion && _usandoClaveNueva)
                 Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: EdgeInsets.only(top: 10),
                   child: TextFormField(
                     controller: _claveController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Nueva clave',
                       border: OutlineInputBorder(),
                     ),
                     validator: (v) {
                       if ((v ?? '').trim().isEmpty) return 'Requerido';
-                      if (v == 'grade') return 'La clave "grade" no es editable';
+                      if (v == 'grade') {
+                        return 'La clave "grade" no es editable';
+                      }
                       return null;
                     },
                   ),
                 ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               TextFormField(
                 controller: _etiquetaController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Etiqueta (texto mostrado)',
                   border: OutlineInputBorder(),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               TextFormField(
                 controller: _valorController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Valor (se guarda en BD)',
                   border: OutlineInputBorder(),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Requerido' : null,
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               TextFormField(
                 controller: _ordenController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Orden',
                   border: OutlineInputBorder(),
                 ),
@@ -407,9 +424,9 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
                   return null;
                 },
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               SwitchListTile(
-                title: const Text('Activo'),
+                title: Text('Activo'),
                 value: _activo,
                 onChanged: (v) => setState(() => _activo = v),
               ),
@@ -420,7 +437,7 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancelar'),
+          child: Text('Cancelar'),
         ),
         ElevatedButton(
           onPressed: () async {
@@ -447,8 +464,8 @@ class _ParameterFormDialogState extends State<_ParameterFormDialog> {
             await widget.onSubmit(data);
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.redAccent,
-            foregroundColor: Colors.white,
+            backgroundColor: AppPalette.primary,
+            foregroundColor: AppPalette.surface,
           ),
           child: Text(widget.entry == null ? 'Crear' : 'Guardar'),
         ),

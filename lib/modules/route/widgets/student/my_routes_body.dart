@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -49,18 +50,17 @@ Future<void> mostrarFormularioRuta({
     }
   }
 
-  final mapped =
-      (rutaModel?.students ?? []).map<Map<String, dynamic>>((id) {
-        final m = students.where((e) => e.id == id).toList();
-        if (m.isNotEmpty) {
-          final d = m.first.data() ?? {};
-          return {
-            'id': id,
-            'nombre': '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}',
-          };
-        }
-        return {'id': id, 'nombre': '(Desconocido)'};
-      }).toList();
+  final mapped = (rutaModel?.students ?? []).map<Map<String, dynamic>>((id) {
+    final m = students.where((e) => e.id == id).toList();
+    if (m.isNotEmpty) {
+      final d = m.first.data() ?? {};
+      return {
+        'id': id,
+        'nombre': '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}',
+      };
+    }
+    return {'id': id, 'nombre': '(Desconocido)'};
+  }).toList();
 
   final orderedStudents = ValueNotifier<List<Map<String, dynamic>>>(mapped);
 
@@ -69,12 +69,12 @@ Future<void> mostrarFormularioRuta({
     context: context,
     builder: (ctx) {
       return AlertDialog(
-        backgroundColor: Colors.white,
-        contentPadding: const EdgeInsets.all(16),
+        backgroundColor: AppPalette.surface,
+        contentPadding: EdgeInsets.all(16),
         title: Center(
           child: Text(
             rutaModel == null ? 'Crear ruta' : 'Editar ruta',
-            style: const TextStyle(color: Colors.redAccent),
+            style: TextStyle(color: AppPalette.primary),
           ),
         ),
         content: SafeArea(
@@ -91,7 +91,7 @@ Future<void> mostrarFormularioRuta({
                       child: SingleChildScrollView(
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.only(bottom: 8),
                         child: AdminRouteFormBody(
                           formKey: formKey,
                           nameController: nameController,
@@ -101,33 +101,30 @@ Future<void> mostrarFormularioRuta({
                           endDate: endDate,
                           startTime: startTime,
                           endTime: endTime,
-                          onStartDateChanged:
-                              (v) => setState(() => startDate = v),
+                          onStartDateChanged: (v) =>
+                              setState(() => startDate = v),
                           onEndDateChanged: (v) => setState(() => endDate = v),
-                          onStartTimeChanged:
-                              (v) => setState(() => startTime = v),
+                          onStartTimeChanged: (v) =>
+                              setState(() => startTime = v),
                           onEndTimeChanged: (v) => setState(() => endTime = v),
                           orderedStudents: orderedStudents.value,
                           availableStudents: students,
                           availableManagers: managers,
-                          onAddStudent:
-                              (st) =>
-                                  setState(() => orderedStudents.value.add(st)),
+                          onAddStudent: (st) =>
+                              setState(() => orderedStudents.value.add(st)),
                           onReorderStudent: (oldIndex, newIndex) {
                             setState(() {
-                              if (newIndex > oldIndex) newIndex--;
                               final st = orderedStudents.value.removeAt(
                                 oldIndex,
                               );
                               orderedStudents.value.insert(newIndex, st);
                             });
                           },
-                          onRemoveStudent:
-                              (id) => setState(
-                                () => orderedStudents.value.removeWhere(
-                                  (e) => e['id'] == id,
-                                ),
-                              ),
+                          onRemoveStudent: (id) => setState(
+                            () => orderedStudents.value.removeWhere(
+                              (e) => e['id'] == id,
+                            ),
+                          ),
                           onSelectManager: (doc) {
                             managerId.value = doc.id;
                             final d = doc.data() ?? {};
@@ -138,7 +135,7 @@ Future<void> mostrarFormularioRuta({
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     SafeArea(
                       top: false,
                       child: Semantics(
@@ -157,10 +154,9 @@ Future<void> mostrarFormularioRuta({
                               startTime: startTime,
                               endTime: endTime,
                               manager: managerId.value,
-                              students:
-                                  orderedStudents.value
-                                      .map((e) => e['id'] as String)
-                                      .toList(),
+                              students: orderedStudents.value
+                                  .map((e) => e['id'] as String)
+                                  .toList(),
                             );
 
                             try {
@@ -192,19 +188,19 @@ Future<void> mostrarFormularioRuta({
                             } catch (_) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text('Error al guardar la ruta.'),
-                                    backgroundColor: Colors.redAccent,
+                                    backgroundColor: AppPalette.primary,
                                   ),
                                 );
                               }
                             }
                           },
-                          icon: const Icon(Icons.save),
-                          label: const Text('Guardar'),
+                          icon: Icon(Icons.save),
+                          label: Text('Guardar'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                            foregroundColor: Colors.white,
+                            backgroundColor: AppPalette.primary,
+                            foregroundColor: AppPalette.surface,
                           ),
                         ),
                       ),

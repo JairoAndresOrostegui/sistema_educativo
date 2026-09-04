@@ -1,41 +1,40 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/enrollment_model.dart';
+import '../../../utils/active_academic_year_context.dart';
 
 class EnrollmentService {
   final FirebaseFirestore _db;
+  final FirebaseFunctions _functions;
 
-  EnrollmentService({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
+  EnrollmentService({FirebaseFirestore? db, FirebaseFunctions? functions})
+    : _db = db ?? FirebaseFirestore.instance,
+      _functions = functions ?? FirebaseFunctions.instance;
 
-  CollectionReference<Map<String, dynamic>> get _col => _db.collection('enrollments');
+  CollectionReference<Map<String, dynamic>> get _col =>
+      _db.collection('enrollments');
 
   Future<String> createEnrollment({
     required Map<String, dynamic> data,
     required String estado,
-    required String createdByRole,
-    String? createdByUserId,
+    required String institution,
+    required String campus,
     String? token,
-    String? fuente,
     String? vinculaUsuarioId,
     int? anioMatricula,
   }) async {
-    final payload = {
-      'estado': estado,
-      'createdByRole': createdByRole,
-      'createdByUserId': createdByUserId,
+    final result = await _functions.httpsCallable('crearMatricula').call({
+      'data': data,
+      'institution': institution.trim(),
+      'campus': campus.trim(),
       'token': token,
-      'fuente': fuente,
       'vinculaUsuarioId': vinculaUsuarioId,
       'anioMatricula': anioMatricula,
-      'data': data,
-      'fechaDiligenciamiento': FieldValue.serverTimestamp(),
-      if (estado == 'matriculado')
-        'fechaMatricula': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    final doc = await _col.add(payload);
-    return doc.id;
+      'matricularAhora': estado == 'matriculado',
+    });
+    final response = Map<String, dynamic>.from(result.data as Map);
+    return response['id']?.toString() ?? '';
   }
 
   Future<void> updateEnrollment({
@@ -47,17 +46,37 @@ class EnrollmentService {
     String? token,
     int? anioMatricula,
     String? vinculaUsuarioId,
+    String? institution,
+    String? campus,
   }) async {
-    await _col.doc(id).update({
+    final action = switch (estado) {
+      'matriculado' => 'approve',
+      'rechazado' => 'reject',
+      'desmatriculado' => 'withdraw',
+      _ => 'save_review',
+    };
+    await transitionEnrollment(
+      id: id,
+      action: action,
+      data: data,
+      observation: rechazoMotivo,
+      linkedStudentId: vinculaUsuarioId,
+    );
+  }
+
+  Future<void> transitionEnrollment({
+    required String id,
+    required String action,
+    Map<String, dynamic>? data,
+    String? observation,
+    String? linkedStudentId,
+  }) async {
+    await _functions.httpsCallable('actualizarMatricula').call({
+      'id': id,
+      'action': action,
       'data': data,
-      'estado': estado,
-      'token': token,
-      'anioMatricula': anioMatricula,
-      'vinculaUsuarioId': vinculaUsuarioId,
-      'revisadoPor': revisadoPor,
-      'rechazoMotivo': rechazoMotivo,
-      if (estado == 'matriculado') 'fechaMatricula': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'observation': observation,
+      'vinculaUsuarioId': linkedStudentId,
     });
   }
 
@@ -67,72 +86,126 @@ class EnrollmentService {
     return Enrollment.fromDoc(doc);
   }
 
+  Future<List<Map<String, dynamic>>> listHistory(String enrollmentId) async {
+    final snapshot = await _db
+        .collection('enrollment_history')
+        .where('enrollmentId', isEqualTo: enrollmentId)
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snapshot.docs
+        .map((document) => {'id': document.id, ...document.data()})
+        .toList();
+  }
+
   Future<Enrollment?> getByToken(String token) async {
     final snap = await _col.where('token', isEqualTo: token).limit(1).get();
     if (snap.docs.isEmpty) return null;
     return Enrollment.fromDoc(snap.docs.first);
   }
 
-  Future<Enrollment?> getByDocument(String document) async {
-    final snap = await _col.where('data.numeroIdentidad', isEqualTo: document).limit(1).get();
-    if (snap.docs.isEmpty) return null;
-    return Enrollment.fromDoc(snap.docs.first);
-  }
-
-  Future<bool> existsByDocumentAndYear({
-    required String document,
-    required int anioMatricula,
+  Future<List<Enrollment>> listByEstado(
+    String estado, {
+    int limit = 50,
+    String? institution,
+    String? campus,
+    String? groupId,
   }) async {
-    final snap = await _col
-        .where('data.numeroIdentidad', isEqualTo: document)
-        .where('anioMatricula', isEqualTo: anioMatricula)
-        .limit(1)
-        .get();
-    return snap.docs.isNotEmpty;
-  }
-
-  Future<List<Enrollment>> listFinalizedByDocumentBeforeYear({
-    required String document,
-    required int anioMatricula,
-  }) async {
-    final snap = await _col
-        .where('data.numeroIdentidad', isEqualTo: document)
-        .where('anioMatricula', isLessThan: anioMatricula)
-        .where('estado', whereIn: ['matriculado', 'finalizado'])
-        .orderBy('anioMatricula')
-        .get();
-    return snap.docs.map(Enrollment.fromDoc).toList();
-  }
-
-  Future<List<Enrollment>> listByEstado(String estado, {int limit = 50}) async {
-    final snap = await _col
-        .where('estado', isEqualTo: estado)
+    Query<Map<String, dynamic>> query = _col.where('estado', isEqualTo: estado);
+    query = await _activeYearQuery(query, institution, campus);
+    if (institution != null && institution.isNotEmpty) {
+      query = query.where('institution', isEqualTo: institution);
+    }
+    if (campus != null && campus.isNotEmpty) {
+      query = query.where('campus', isEqualTo: campus);
+    }
+    if (groupId != null && groupId.isNotEmpty) {
+      query = query.where('data.groupId', isEqualTo: groupId);
+    }
+    final snap = await query
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .get();
     return snap.docs.map(Enrollment.fromDoc).toList();
   }
 
-  Future<List<Enrollment>> listByEstados(List<String> estados, {int limit = 50}) async {
+  Future<List<Enrollment>> listByEstados(
+    List<String> estados, {
+    int limit = 50,
+    String? institution,
+    String? campus,
+    String? groupId,
+  }) async {
     if (estados.isEmpty) return [];
-    final snap = await _col
-        .where('estado', whereIn: estados.length > 10 ? estados.sublist(0, 10) : estados)
+    Query<Map<String, dynamic>> query = _col.where(
+      'estado',
+      whereIn: estados.length > 10 ? estados.sublist(0, 10) : estados,
+    );
+    query = await _activeYearQuery(query, institution, campus);
+    if ((institution ?? '').isNotEmpty) {
+      query = query.where('institution', isEqualTo: institution);
+    }
+    if ((campus ?? '').isNotEmpty) {
+      query = query.where('campus', isEqualTo: campus);
+    }
+    if ((groupId ?? '').isNotEmpty) {
+      query = query.where('data.groupId', isEqualTo: groupId);
+    }
+    final snap = await query
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .get();
     return snap.docs.map(Enrollment.fromDoc).toList();
   }
 
-  Future<int> countByEstados(List<String> estados) async {
+  Future<int> countByEstados(
+    List<String> estados, {
+    String? institution,
+    String? campus,
+    String? groupId,
+  }) async {
     if (estados.isEmpty) return 0;
     Query<Map<String, dynamic>> query = _col;
     if (estados.length == 1) {
       query = query.where('estado', isEqualTo: estados.first);
     } else {
-      query = query.where('estado', whereIn: estados.length > 10 ? estados.sublist(0, 10) : estados);
+      query = query.where(
+        'estado',
+        whereIn: estados.length > 10 ? estados.sublist(0, 10) : estados,
+      );
+    }
+    query = await _activeYearQuery(query, institution, campus);
+    if ((institution ?? '').isNotEmpty) {
+      query = query.where('institution', isEqualTo: institution);
+    }
+    if ((campus ?? '').isNotEmpty) {
+      query = query.where('campus', isEqualTo: campus);
+    }
+    if ((groupId ?? '').isNotEmpty) {
+      query = query.where('data.groupId', isEqualTo: groupId);
     }
     final snap = await query.get();
     return snap.size;
+  }
+
+  Future<Query<Map<String, dynamic>>> _activeYearQuery(
+    Query<Map<String, dynamic>> query,
+    String? institution,
+    String? campus,
+  ) async {
+    if ((institution ?? '').isNotEmpty && (campus ?? '').isNotEmpty) {
+      final year = await loadActiveAcademicYear(
+        firestore: _db,
+        institutionId: institution!,
+        campusId: campus!,
+      );
+      return query.where('academicYearId', isEqualTo: year.id);
+    }
+    final ids = await loadAllActiveAcademicYearIds(firestore: _db);
+    if (ids.isEmpty) return query.where('academicYearId', isEqualTo: 'none');
+    if (ids.length > 30) {
+      throw StateError('Hay demasiadas sedes para una consulta transversal.');
+    }
+    return query.where('academicYearId', whereIn: ids);
   }
 
   Future<bool> hasEnrollmentForUser({
@@ -141,7 +214,10 @@ class EnrollmentService {
     int? anioMatricula,
   }) async {
     if (estados.isEmpty) return false;
-    Query<Map<String, dynamic>> query = _col.where('createdByUserId', isEqualTo: userId);
+    Query<Map<String, dynamic>> query = _col.where(
+      'createdByUserId',
+      isEqualTo: userId,
+    );
     if (anioMatricula != null) {
       query = query.where('anioMatricula', isEqualTo: anioMatricula);
     }

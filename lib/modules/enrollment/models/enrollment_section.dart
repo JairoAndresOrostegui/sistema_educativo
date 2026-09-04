@@ -4,10 +4,7 @@ class EnrollmentSection {
   final String title;
   final List<String> fieldNames;
 
-  const EnrollmentSection({
-    required this.title,
-    required this.fieldNames,
-  });
+  const EnrollmentSection({required this.title, required this.fieldNames});
 
   Iterable<EnrollmentField> fieldsFrom(Iterable<EnrollmentField> all) {
     final nameSet = fieldNames.toSet();

@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Enrollment {
   final String id;
-  final String estado; // prematriculado | pendiente_revision | rechazado | matriculado
+  final String
+  estado; // prematriculado | pendiente_revision | rechazado | matriculado
   final String createdByRole; // admin | padre | publico
   final String? createdByUserId;
   final String? token; // para links públicos opcionales
@@ -15,6 +16,8 @@ class Enrollment {
   final DateTime? fechaDiligenciamiento;
   final String? revisadoPor; // uid admin que aprobó/rechazó
   final String? rechazoMotivo;
+  final String institution;
+  final String campus;
 
   Enrollment({
     required this.id,
@@ -31,6 +34,8 @@ class Enrollment {
     this.fechaDiligenciamiento,
     this.revisadoPor,
     this.rechazoMotivo,
+    required this.institution,
+    required this.campus,
   });
 
   factory Enrollment.fromDoc(DocumentSnapshot doc) {
@@ -43,10 +48,15 @@ class Enrollment {
       token: data['token'] as String?,
       fuente: data['fuente'] as String?,
       vinculaUsuarioId: data['vinculaUsuarioId'] as String?,
-      anioMatricula: data['anioMatricula'] is int ? data['anioMatricula'] as int : null,
-      fechaDiligenciamiento: (data['fechaDiligenciamiento'] as Timestamp?)?.toDate(),
+      anioMatricula: data['anioMatricula'] is int
+          ? data['anioMatricula'] as int
+          : null,
+      fechaDiligenciamiento: (data['fechaDiligenciamiento'] as Timestamp?)
+          ?.toDate(),
       revisadoPor: data['revisadoPor'] as String?,
       rechazoMotivo: data['rechazoMotivo'] as String?,
+      institution: (data['institution'] ?? '').toString(),
+      campus: (data['campus'] ?? '').toString(),
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),

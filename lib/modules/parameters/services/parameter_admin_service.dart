@@ -5,9 +5,11 @@ import '../models/parameter_entry.dart';
 class ParameterAdminService {
   final FirebaseFirestore _db;
 
-  ParameterAdminService({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
+  ParameterAdminService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
 
-  CollectionReference<Map<String, dynamic>> get _col => _db.collection('parameters');
+  CollectionReference<Map<String, dynamic>> get _col =>
+      _db.collection('parameters');
 
   Future<List<ParameterEntry>> list({String? clave}) async {
     Query<Map<String, dynamic>> query = _col;
@@ -15,7 +17,10 @@ class ParameterAdminService {
       query = query.where('clave', isEqualTo: clave);
     }
     final snap = await query.orderBy('clave').orderBy('orden').limit(500).get();
-    return snap.docs.map(ParameterEntry.fromDoc).where((p) => p.clave != 'grade').toList();
+    return snap.docs
+        .map(ParameterEntry.fromDoc)
+        .where((p) => p.clave != 'grade')
+        .toList();
   }
 
   Future<List<String>> listClaves() async {

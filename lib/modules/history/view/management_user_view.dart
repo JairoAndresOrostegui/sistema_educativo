@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
   String? _accionSel;
   DateTimeRange? _rango;
 
-  static const int _pageSize = 100;
+  static final int _pageSize = 100;
 
   Set<String> _roles = {};
   Set<String> _acciones = {};
@@ -99,7 +100,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
   }
 
   String _norm(String s) {
-    const rep = {
+    final rep = {
       'á': 'a',
       'é': 'e',
       'í': 'i',
@@ -122,16 +123,11 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
     return sb.toString().toLowerCase();
   }
 
-
   Future<void> _pickRange() async {
     final now = DateTime.now();
     final ini =
         _rango?.start ??
-        DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ).subtract(const Duration(days: 7));
+        DateTime(now.year, now.month, now.day).subtract(Duration(days: 7));
     final end = _rango?.end ?? now;
     final picked = await showDateRangePicker(
       context: context,
@@ -148,7 +144,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
   @override
   Widget build(BuildContext context) {
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la versión web.')),
         ),
@@ -157,56 +153,53 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
 
     // MISMO FORMATO VISUAL DE FECHAS QUE "Documentos"
     final df = DateFormat('yyyy-MM-dd');
-    final rangoTexto =
-        _rango == null
-            ? ''
-            : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
+    final rangoTexto = _rango == null
+        ? ''
+        : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     final needle = _norm(_query);
-    final filtered =
-        _items.where((u) {
-          if (_rolSel != null && _rolSel!.isNotEmpty) {
-            if ((u['rol'] ?? '') != _rolSel) return false;
-          }
-          if (_accionSel != null && _accionSel!.isNotEmpty) {
-            if ((u['accion'] ?? '') != _accionSel) return false;
-          }
-          if (needle.isNotEmpty) {
-            final haystack = _norm(
-              '${(u["nombres"] ?? "")} '
-              '${(u["apellidos"] ?? "")} '
-              '${(u["rol"] ?? "")} '
-              '${(u["accion"] ?? "")} '
-              '${(u["realizadoPor"] ?? "")}',
-            );
-            if (!haystack.contains(needle)) return false;
-          }
-          return true;
-        }).toList();
+    final filtered = _items.where((u) {
+      if (_rolSel != null && _rolSel!.isNotEmpty) {
+        if ((u['rol'] ?? '') != _rolSel) return false;
+      }
+      if (_accionSel != null && _accionSel!.isNotEmpty) {
+        if ((u['accion'] ?? '') != _accionSel) return false;
+      }
+      if (needle.isNotEmpty) {
+        final haystack = _norm(
+          '${(u["nombres"] ?? "")} '
+          '${(u["apellidos"] ?? "")} '
+          '${(u["rol"] ?? "")} '
+          '${(u["accion"] ?? "")} '
+          '${(u["realizadoPor"] ?? "")}',
+        );
+        if (!haystack.contains(needle)) return false;
+      }
+      return true;
+    }).toList();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: AppPalette.surface,
+                  border: Border.all(
+                    color: AppPalette.error.withValues(alpha: .15),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: AppPalette.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
@@ -220,12 +213,12 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     ),
                     Text(
                       'Mostrando: ${filtered.length}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -233,7 +226,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                   SizedBox(
                     width: 320,
                     child: TextFormField(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText:
                             'Buscar (nombre, apellido, rol, acción, autor)',
                         border: OutlineInputBorder(),
@@ -246,7 +239,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     child: DropdownButtonFormField<String?>(
                       initialValue: _rolSel,
                       items: <DropdownMenuItem<String?>>[
-                        const DropdownMenuItem<String?>(
+                        DropdownMenuItem<String?>(
                           value: null,
                           child: Text('Todos los roles'),
                         ),
@@ -258,7 +251,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                         ),
                       ],
                       isDense: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Rol',
                         border: OutlineInputBorder(),
                       ),
@@ -270,7 +263,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     child: DropdownButtonFormField<String?>(
                       initialValue: _accionSel,
                       items: <DropdownMenuItem<String?>>[
-                        const DropdownMenuItem<String?>(
+                        DropdownMenuItem<String?>(
                           value: null,
                           child: Text('Todas las acciones'),
                         ),
@@ -282,7 +275,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                         ),
                       ],
                       isDense: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Acción',
                         border: OutlineInputBorder(),
                       ),
@@ -295,7 +288,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     width: 280,
                     child: TextFormField(
                       readOnly: true,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Rango de fechas',
                         border: OutlineInputBorder(),
                       ),
@@ -306,11 +299,11 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
 
                   ElevatedButton.icon(
                     onPressed: _reload,
-                    icon: const Icon(Icons.filter_alt),
-                    label: const Text('Aplicar filtros'),
+                    icon: Icon(Icons.filter_alt),
+                    label: Text('Aplicar filtros'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.surface,
                     ),
                   ),
                   TextButton(
@@ -323,98 +316,93 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                       });
                       _reload();
                     },
-                    child: const Text('Limpiar'),
+                    child: Text('Limpiar'),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               if (kIsWeb && filtered.isNotEmpty) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     ElevatedButton.icon(
                       onPressed: () => UserHistoryUtils.exportarExcel(filtered),
-                      icon: const Icon(Icons.table_view),
-                      label: const Text('Exportar Excel'),
+                      icon: Icon(Icons.table_view),
+                      label: Text('Exportar Excel'),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () => UserHistoryUtils.exportarPDF(filtered),
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: const Text('Exportar PDF'),
+                      icon: Icon(Icons.picture_as_pdf),
+                      label: Text('Exportar PDF'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
               ],
               Expanded(
-                child:
-                    _loading && _items.isEmpty
-                        ? const Center(child: CircularProgressIndicator())
-                        : filtered.isEmpty
-                        ? const Center(child: Text('No hay registros'))
-                        : ListView.builder(
-                          itemCount: filtered.length + (_hasNext ? 1 : 0),
-                          itemBuilder: (_, i) {
-                            if (_hasNext && i == filtered.length) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                child: Center(
-                                  child:
-                                      _loading
-                                          ? const CircularProgressIndicator()
-                                          : OutlinedButton.icon(
-                                            onPressed: _loadMore,
-                                            icon: const Icon(Icons.expand_more),
-                                            label: const Text('Cargar más'),
-                                          ),
-                                ),
-                              );
-                            }
-
-                            final r = filtered[i];
-                            final fecha = r['fecha'] as DateTime?;
-                            final fechaTexto =
-                                fecha != null
-                                    ? DateFormat(
-                                      'yyyy-MM-dd HH:mm:ss',
-                                    ).format(fecha)
-                                    : '-';
-
-                            final titulo =
-                                '${(r['nombres'] ?? '')} ${(r['apellidos'] ?? '')} - ${(r['accion'] ?? '')}';
-
-                            final subtitulo = [
-                              'Rol: ${(r['rol'] ?? '')}',
-                              'Realizado por: ${(r['realizadoPor'] ?? '')}',
-                              'Fecha: $fechaTexto',
-                            ].join('\n');
-
-                            return Semantics(
-                              label: 'Registro de log de usuario',
-                              child: Card(
-                                color: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  side: BorderSide(
-                                    color: Colors.red.withValues(alpha: .12),
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: ListTile(
-                                  title: Text(titulo),
-                                  subtitle: Text(subtitulo),
-                                ),
+                child: _loading && _items.isEmpty
+                    ? Center(child: CircularProgressIndicator())
+                    : filtered.isEmpty
+                    ? Center(child: Text('No hay registros'))
+                    : ListView.builder(
+                        itemCount: filtered.length + (_hasNext ? 1 : 0),
+                        itemBuilder: (_, i) {
+                          if (_hasNext && i == filtered.length) {
+                            return Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                child: _loading
+                                    ? CircularProgressIndicator()
+                                    : OutlinedButton.icon(
+                                        onPressed: _loadMore,
+                                        icon: Icon(Icons.expand_more),
+                                        label: Text('Cargar más'),
+                                      ),
                               ),
                             );
-                          },
-                        ),
+                          }
+
+                          final r = filtered[i];
+                          final fecha = r['fecha'] as DateTime?;
+                          final fechaTexto = fecha != null
+                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                              : '-';
+
+                          final titulo =
+                              '${(r['nombres'] ?? '')} ${(r['apellidos'] ?? '')} - ${(r['accion'] ?? '')}';
+
+                          final subtitulo = [
+                            'Rol: ${(r['rol'] ?? '')}',
+                            'Realizado por: ${(r['realizadoPor'] ?? '')}',
+                            'Fecha: $fechaTexto',
+                          ].join('\n');
+
+                          return Semantics(
+                            label: 'Registro de log de usuario',
+                            child: Card(
+                              color: AppPalette.surface,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(
+                                  color: AppPalette.error.withValues(
+                                    alpha: .12,
+                                  ),
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              margin: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: ListTile(
+                                title: Text(titulo),
+                                subtitle: Text(subtitulo),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           ),

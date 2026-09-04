@@ -1,10 +1,104 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function active() {
+      return signedIn() && me().status == 'activo';
+    }
+
+    function admin() {
+      return active() && (me().isSuperadmin == true || me().role == 'Administrador');
+    }
+
+    function canEditWebsite() {
+      return active() &&
+        (me().isSuperadmin == true ||
+         (me().permissions is list && me().permissions.hasAny(['sitio_web.editar'])));
+    }
+
+    function sameTenantUser(userId) {
+      let target = firestore.get(/databases/(default)/documents/users/$(userId)).data;
+      return active() &&
+        (me().isSuperadmin == true ||
+         (target.institution == me().institution && target.campus == me().campus));
+    }
+
+    function safeUpload(maxBytes) {
+      return request.resource != null && request.resource.size <= maxBytes;
+    }
+
+    function hasPermission(permission) {
+      return active() &&
+        (me().isSuperadmin == true ||
+         (me().permissions is list && me().permissions.hasAny([permission])));
+    }
+
+    function fileRecord(fileId) {
+      return firestore.get(
+        /databases/(default)/documents/files/$(fileId)
+      ).data;
+    }
+
+    function canReadFile(file) {
+      return active() && file.status == 'active' &&
+        (me().isSuperadmin == true ||
+         (file.institutionId == me().institution &&
+          file.campusId == me().campus &&
+          ((me().role == 'Administrador' &&
+            (hasPermission('archivos.ver') ||
+             hasPermission('archivos.crear') ||
+             hasPermission('archivos.eliminar'))) ||
+           (file.recipientUserIds is list &&
+            request.auth.uid in file.recipientUserIds &&
+            ((me().role == 'Docente' && hasPermission('archivos.ver')) ||
+             (me().role == 'Estudiante' && hasPermission('archivos.ver')) ||
+             (me().role == 'Familiar' && hasPermission('archivos.ver') &&
+              me().activeStudentId is string && me().studentIds is list &&
+              me().activeStudentId in me().studentIds &&
+              file.targetStudentIds is list &&
+              me().activeStudentId in file.targetStudentIds))))));
+    }
+
+    match /fotos_perfil/{userId}/{fileName} {
+      allow read: if active();
+      allow create, update: if ((active() && request.auth.uid == userId) ||
+        (admin() && sameTenantUser(userId))) &&
+        safeUpload(5 * 1024 * 1024) &&
+        request.resource.contentType.matches('image/(jpeg|jpg|pjpeg|png)');
+      allow delete: if (active() && request.auth.uid == userId) ||
+        (admin() && sameTenantUser(userId));
+    }
+
+    match /files/{fileId}/{fileName} {
+      allow read: if canReadFile(fileRecord(fileId));
+      allow create: if active() && request.resource.metadata.fileId == fileId &&
+        request.resource.metadata.uploadedBy == request.auth.uid &&
+        fileRecord(fileId).status == 'uploading' &&
+        fileRecord(fileId).uploadedBy == request.auth.uid &&
+        fileRecord(fileId).storagePath ==
+          'files/' + fileId + '/' + fileName &&
+        request.resource.size == fileRecord(fileId).expectedSize &&
+        request.resource.contentType == fileRecord(fileId).contentType &&
+        safeUpload(25 * 1024 * 1024);
+      allow update, delete: if false;
+    }
+
+    match /website/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if canEditWebsite() &&
+        safeUpload(10 * 1024 * 1024) &&
+        request.resource.contentType.matches('image/(jpeg|jpg|pjpeg|png)');
+      allow delete: if canEditWebsite();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

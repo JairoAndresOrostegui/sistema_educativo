@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,11 +12,11 @@ import '../../../utils/notification_service.dart';
 import '../services/admin_route_service.dart';
 import '../services/daily_route_service.dart';
 import '../services/location_service.dart';
+import '../utils/teacher_route_helpers.dart';
 import '../widgets/teacher/teacher_route_form_dialog.dart';
 import '../widgets/teacher/teacher_route_header.dart';
 import '../widgets/teacher/teacher_route_student_list.dart';
 import '../widgets/teacher/teacher_route_controls.dart';
-import '../utils/teacher_route_helpers.dart';
 
 class ManageRouteScreen extends StatefulWidget {
   const ManageRouteScreen({super.key});
@@ -49,16 +50,8 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
     return _addressDrafts[s.id] ?? s.direccion;
   }
 
-  Future<List<String>> _tokensForActors(List<String> studentIds) async {
-    final user = context.read<UserProviderV2>().user;
-    if (user == null) return [];
-    return collectTokensForActors(
-      db: FirebaseFirestore.instance,
-      institutionId: user.institution,
-      campusId: user.campus,
-      studentIds: studentIds,
-    );
-  }
+  List<String> _recipientsForActors(List<String> studentIds) =>
+      studentIds.where((id) => id.trim().isNotEmpty).toSet().toList();
 
   @override
   void initState() {
@@ -152,7 +145,6 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
     }
   }
 
-  
   Future<void> _reloadPreservingScroll() async {
     final offset = _listController.hasClients ? _listController.offset : 0.0;
     if (_rutaSeleccionada == null) return;
@@ -209,20 +201,22 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
     if (trimmed.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La dirección no puede estar vacía')),
+          SnackBar(content: Text('La dirección no puede estar vacía')),
         );
       }
       return;
     }
 
     // evita escrituras innecesarias
-    final current =
-        _estudiantesDia.firstWhere((s) => s.id == studentId).direccion.trim();
+    final current = _estudiantesDia
+        .firstWhere((s) => s.id == studentId)
+        .direccion
+        .trim();
     if (current == trimmed) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('La dirección es la misma.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('La dirección es la misma.')));
       }
       return;
     }
@@ -234,7 +228,7 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Dirección actualizada')));
+        ).showSnackBar(SnackBar(content: Text('Dirección actualizada')));
       }
     } catch (e) {
       if (mounted) {
@@ -277,10 +271,12 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
       // 3) Notifica inicio a activos
       final activeStudents = _estudiantesDia.where((e) => e.activo).toList();
       for (final e in activeStudents) {
-        final tokens = await _tokensForActors([e.id]);
-        if (tokens.isNotEmpty) {
+        final recipients = _recipientsForActors([e.id]);
+        if (recipients.isNotEmpty) {
           await enviarNotificacion(
-            tokens: tokens,
+            notificationType: 'route',
+            studentIds: recipients,
+            includeFamilies: true,
             titulo: '🚌 Ruta escolar iniciada',
             cuerpo: 'Ruta en camino para ${e.nombre}.',
           );
@@ -300,18 +296,19 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
           '¿Cuántos minutos faltan para el próximo estudiante?',
         );
 
-        final targets =
-            _groupSameAddress
-                ? sameAddressGroup(first, _estudiantesDia)
-                : <EstudianteRutaDiaria>[first];
+        final targets = _groupSameAddress
+            ? sameAddressGroup(first, _estudiantesDia)
+            : <EstudianteRutaDiaria>[first];
 
-        final tokens = await _tokensForActors(
+        final recipients = _recipientsForActors(
           targets.map((e) => e.id).toList(),
         );
 
-        if (tokens.isNotEmpty && estimatedMinutes != null) {
+        if (recipients.isNotEmpty && estimatedMinutes != null) {
           await enviarNotificacion(
-            tokens: tokens,
+            notificationType: 'route',
+            studentIds: recipients,
+            includeFamilies: true,
             titulo: '⏱ Tiempo estimado de llegada',
             cuerpo: 'La ruta llegará en aproximadamente $estimatedMinutes min.',
           );
@@ -330,10 +327,12 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
     if (_rutaDiaActual == null) return;
     try {
       for (final e in _estudiantesDia.where((e) => e.activo)) {
-        final tokens = await _tokensForActors([e.id]);
-        if (tokens.isNotEmpty) {
+        final recipients = _recipientsForActors([e.id]);
+        if (recipients.isNotEmpty) {
           await enviarNotificacion(
-            tokens: tokens,
+            notificationType: 'route',
+            studentIds: recipients,
+            includeFamilies: true,
             titulo: '🏁 Ruta finalizada',
             cuerpo: 'La ruta de ${e.nombre} ha finalizado por hoy.',
           );
@@ -376,10 +375,12 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
       });
 
       if (!estudiante.recogido) {
-        final tokens = await _tokensForActors([estudiante.id]);
-        if (tokens.isNotEmpty) {
+        final recipients = _recipientsForActors([estudiante.id]);
+        if (recipients.isNotEmpty) {
           await enviarNotificacion(
-            tokens: tokens,
+            notificationType: 'route',
+            studentIds: recipients,
+            includeFamilies: true,
             titulo: '✅ Estudiante recogido',
             cuerpo: 'Hemos recogido a ${estudiante.nombre}.',
           );
@@ -401,23 +402,23 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
           '¿Cuántos minutos faltan para recoger a ${next.nombre}?',
         );
 
-        final targets =
-            _groupSameAddress
-                ? sameAddressGroup(next, _estudiantesDia)
-                : <EstudianteRutaDiaria>[next];
+        final targets = _groupSameAddress
+            ? sameAddressGroup(next, _estudiantesDia)
+            : <EstudianteRutaDiaria>[next];
 
-        final tokensNext = await _tokensForActors(
+        final recipientsNext = _recipientsForActors(
           targets.map((e) => e.id).toList(),
         );
 
-        if (tokensNext.isNotEmpty) {
+        if (recipientsNext.isNotEmpty) {
           await enviarNotificacion(
-            tokens: tokensNext,
+            notificationType: 'route',
+            studentIds: recipientsNext,
+            includeFamilies: true,
             titulo: '🚌 La ruta está cerca',
-            cuerpo:
-                (estimatedMinutes != null)
-                    ? 'La ruta llegará en aproximadamente $estimatedMinutes min.'
-                    : 'Hora estimada no disponible.',
+            cuerpo: (estimatedMinutes != null)
+                ? 'La ruta llegará en aproximadamente $estimatedMinutes min.'
+                : 'Hora estimada no disponible.',
           );
         }
       }
@@ -435,10 +436,12 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
   Future<void> _onSendArrivalNotice(EstudianteRutaDiaria estudiante) async {
     if (_rutaDiaActual?.estado != EstadoRuta.activa) return;
     try {
-      final tokens = await _tokensForActors([estudiante.id]);
-      if (tokens.isNotEmpty) {
+      final recipients = _recipientsForActors([estudiante.id]);
+      if (recipients.isNotEmpty) {
         await enviarNotificacion(
-          tokens: tokens,
+          notificationType: 'route',
+          studentIds: recipients,
+          includeFamilies: true,
           titulo: '🚪 Aviso de ruta escolar',
           cuerpo: 'El transporte de ${estudiante.nombre} ya está esperándote.',
         );
@@ -449,9 +452,7 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Notificación de aviso de llegada enviada'),
-          ),
+          SnackBar(content: Text('Notificación de aviso de llegada enviada')),
         );
       }
     } catch (e) {
@@ -469,10 +470,9 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
     final confirm = await DialogUtils.showConfirmationDialog(
       context,
       title: estudiante.anulado ? 'Reactivar estudiante' : 'Anular estudiante',
-      content:
-          estudiante.anulado
-              ? '¿Deseas reactivar la recogida de este estudiante?'
-              : '¿Estás seguro de que deseas anular la recogida de este estudiante?',
+      content: estudiante.anulado
+          ? '¿Deseas reactivar la recogida de este estudiante?'
+          : '¿Estás seguro de que deseas anular la recogida de este estudiante?',
     );
     if (confirm != true) return;
 
@@ -486,10 +486,12 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
       });
 
       if (nuevoEstadoAnulado) {
-        final tokens = await _tokensForActors([estudiante.id]);
-        if (tokens.isNotEmpty) {
+        final recipients = _recipientsForActors([estudiante.id]);
+        if (recipients.isNotEmpty) {
           await enviarNotificacion(
-            tokens: tokens,
+            notificationType: 'route',
+            studentIds: recipients,
+            includeFamilies: true,
             titulo: '🚫 Cancelación de recogida',
             cuerpo: 'Se canceló la recogida de ${estudiante.nombre} para hoy.',
           );
@@ -511,23 +513,23 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
           '¿Cuántos minutos faltan para el próximo estudiante?',
         );
 
-        final targets =
-            _groupSameAddress
-                ? sameAddressGroup(next, _estudiantesDia)
-                : <EstudianteRutaDiaria>[next];
+        final targets = _groupSameAddress
+            ? sameAddressGroup(next, _estudiantesDia)
+            : <EstudianteRutaDiaria>[next];
 
-        final tokensNext = await _tokensForActors(
+        final recipientsNext = _recipientsForActors(
           targets.map((e) => e.id).toList(),
         );
 
-        if (tokensNext.isNotEmpty) {
+        if (recipientsNext.isNotEmpty) {
           await enviarNotificacion(
-            tokens: tokensNext,
+            notificationType: 'route',
+            studentIds: recipientsNext,
+            includeFamilies: true,
             titulo: '🚌 La ruta está cerca',
-            cuerpo:
-                (estimatedMinutes != null)
-                    ? 'La ruta llegará en aproximadamente $estimatedMinutes min.'
-                    : 'Hora estimada no disponible.',
+            cuerpo: (estimatedMinutes != null)
+                ? 'La ruta llegará en aproximadamente $estimatedMinutes min.'
+                : 'Hora estimada no disponible.',
           );
         }
       }
@@ -545,22 +547,22 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.primary,
         centerTitle: true,
-        title: const Text('School route management'),
-        iconTheme: const IconThemeData(color: Colors.redAccent),
-        leading: const BackToDashboardButton(),
+        title: Text('School route management'),
+        iconTheme: IconThemeData(color: AppPalette.primary),
+        leading: BackToDashboardButton(),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             children: [
               TeacherRouteHeader(
@@ -571,11 +573,10 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
                 },
                 showGrouping: _rutaDiaActual != null,
                 groupSameAddress: _groupSameAddress,
-                onToggleGrouping: (v) =>
-                    setState(() => _groupSameAddress = v),
+                onToggleGrouping: (v) => setState(() => _groupSameAddress = v),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Lista de estudiantes (agrupada si está ON)
               if (_rutaDiaActual != null)
@@ -598,7 +599,6 @@ class _ManageRouteScreenState extends State<ManageRouteScreen> {
                     onToggleAnulado: _onToggleAnulado,
                   ),
                 ),
-
 
               // Botones de iniciar/finalizar
               TeacherRouteControls(

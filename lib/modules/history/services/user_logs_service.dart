@@ -5,7 +5,11 @@ class UserLogsPage {
   final List<Map<String, dynamic>> items;
   final bool hasNext;
   final DocumentSnapshot<Map<String, dynamic>>? lastDoc;
-  UserLogsPage({required this.items, required this.hasNext, required this.lastDoc});
+  UserLogsPage({
+    required this.items,
+    required this.hasNext,
+    required this.lastDoc,
+  });
 }
 
 class UserLogsService {
@@ -19,17 +23,17 @@ class UserLogsService {
     String? event,
     String? campus,
     String? institution,
-    String? platform, // filtro local (no hace query si no tienes índice en env.platform)
+    String?
+    platform, // filtro local (no hace query si no tienes índice en env.platform)
     String? nameContains, // filtro local (contiene)
     DateTimeRange? rango,
     required int limit,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    Query<Map<String, dynamic>> q =
-        _db
-            .collection(userLogsCollection)
-            .orderBy('timestamp', descending: true)
-            .limit(limit);
+    Query<Map<String, dynamic>> q = _db
+        .collection(userLogsCollection)
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
 
     if (role != null && role.trim().isNotEmpty) {
       q = q.where('role', isEqualTo: role.trim());
@@ -45,8 +49,14 @@ class UserLogsService {
     }
     if (rango != null) {
       q = q
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
+          .where(
+            'timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
+          )
+          .where(
+            'timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
+          );
     }
     if (startAfter != null) {
       q = q.startAfterDocument(startAfter);
@@ -61,7 +71,9 @@ class UserLogsService {
       final data = d.data();
       final ts = (data['timestamp'] as Timestamp?)?.toDate();
 
-      final env = (data['env'] is Map<String, dynamic>) ? data['env'] as Map<String, dynamic> : <String, dynamic>{};
+      final env = (data['env'] is Map<String, dynamic>)
+          ? data['env'] as Map<String, dynamic>
+          : <String, dynamic>{};
 
       final map = {
         'id': d.id,
@@ -72,7 +84,8 @@ class UserLogsService {
         'userId': (data['userId'] ?? '').toString(),
         'campus': (data['campus'] ?? '').toString(),
         'institution': (data['institution'] ?? '').toString(),
-        'grade': (data['grade'] ?? '').toString(),
+        'groupId': (data['groupId'] ?? '').toString(),
+        'groupName': (data['groupName'] ?? '').toString(),
         // ENV
         'platform': (env['platform'] ?? '').toString(),
         'browserName': (env['browserName'] ?? '').toString(),
@@ -86,12 +99,15 @@ class UserLogsService {
       // Filtros locales (no requieren índices)
       if (platform != null &&
           platform.trim().isNotEmpty &&
-          map['platform'].toString().toLowerCase() != platform.trim().toLowerCase()) {
+          map['platform'].toString().toLowerCase() !=
+              platform.trim().toLowerCase()) {
         continue;
       }
       if (nameContains != null &&
           nameContains.trim().isNotEmpty &&
-          !map['fullName'].toString().toLowerCase().contains(nameContains.trim().toLowerCase())) {
+          !map['fullName'].toString().toLowerCase().contains(
+            nameContains.trim().toLowerCase(),
+          )) {
         continue;
       }
 
@@ -128,8 +144,14 @@ class UserLogsService {
     }
     if (rango != null) {
       q = q
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
+          .where(
+            'timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
+          )
+          .where(
+            'timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
+          );
     }
 
     // Si tu SDK soporta agregaciones: usa q.count().get()

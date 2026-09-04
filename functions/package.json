@@ -3,6 +3,14 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "eslint .",
+    "test:rules": "firebase emulators:exec --config ../firebase.test.json --only firestore,storage \"mocha --reporter spec test/firestore.rules.test.js test/storage.rules.test.js\"",
+    "test:auth": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-auth-test --only firestore,functions \"mocha --timeout 30000 test/auth.function.test.js\"",
+    "test:users": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-users-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/users.function.test.js\"",
+    "test:enrollment": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-enrollment-test --only auth,firestore,functions \"mocha --timeout 60000 test/enrollment.function.test.js\"",
+    "test:authorization": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-authorization-test --only auth,firestore,functions \"mocha --timeout 60000 test/authorization.function.test.js\"",
+    "test:schedule": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-schedule-test --only auth,firestore,functions \"mocha --timeout 60000 test/schedule.function.test.js\"",
+    "test:files": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-file-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/file.function.test.js\"",
+    "test:messaging": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-messaging-test --only auth,firestore,functions \"mocha --timeout 60000 test/messaging.function.test.js\"",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
@@ -14,13 +22,16 @@
   },
   "main": "index.js",
   "dependencies": {
-    "firebase-admin": "^12.6.0",
-    "firebase-functions": "^6.0.1"
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.2"
   },
   "devDependencies": {
-    "eslint": "^8.15.0",
+    "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^5.0.1",
+    "eslint": "^10.8.1",
     "eslint-config-google": "^0.14.0",
-    "firebase-functions-test": "^3.1.0"
+    "globals": "^17.9.0",
+    "mocha": "^11.8.0"
   },
   "private": true
 }

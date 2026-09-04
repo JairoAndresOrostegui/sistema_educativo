@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import '../utils/history_types.dart';
 
@@ -17,19 +18,17 @@ class HistorySelectorWidget extends StatelessWidget {
       label: 'Selector de historial',
       child: DropdownButtonFormField<HistoryType>(
         initialValue: selected,
-        items:
-            HistoryType.values
-                .map(
-                  (type) =>
-                      DropdownMenuItem(value: type, child: Text(type.label)),
-                )
-                .toList(),
+        items: HistoryType.values
+            .map(
+              (type) => DropdownMenuItem(value: type, child: Text(type.label)),
+            )
+            .toList(),
         decoration: InputDecoration(
           labelText: 'Selecciona un historial',
-          border: const OutlineInputBorder(),
+          border: OutlineInputBorder(),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(
-              color: Colors.redAccent.withValues(alpha: .8),
+              color: AppPalette.primary.withValues(alpha: .8),
             ),
           ),
         ),

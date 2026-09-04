@@ -22,7 +22,7 @@ class ExportUtilsPlatform {
       TextCellValue('Evento'),
       TextCellValue('Campus'),
       TextCellValue('Institucion'),
-      TextCellValue('Grado'),
+      TextCellValue('Grupo'),
       TextCellValue('Fecha'),
     ]);
 
@@ -59,7 +59,7 @@ class ExportUtilsPlatform {
         TextCellValue((log['event'] ?? '').toString()),
         TextCellValue((log['campus'] ?? '').toString()),
         TextCellValue((log['institution'] ?? '').toString()),
-        TextCellValue((log['grade'] ?? '').toString()),
+        TextCellValue((log['groupName'] ?? '').toString()),
         TextCellValue(fechaTexto),
       ]);
     }
@@ -71,10 +71,9 @@ class ExportUtilsPlatform {
     final bytes = excel.encode();
     if (bytes == null) return;
 
-    final blob = html.Blob(
-      [bytes],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
+    final blob = html.Blob([
+      bytes,
+    ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     final url = html.Url.createObjectUrlFromBlob(blob);
     html.AnchorElement(href: url)
       ..download = 'HistorialLogsUsuarios.xlsx'
@@ -82,4 +81,3 @@ class ExportUtilsPlatform {
     html.Url.revokeObjectUrl(url);
   }
 }
-  

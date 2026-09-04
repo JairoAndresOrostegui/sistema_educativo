@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
@@ -27,36 +28,34 @@ class AuthorizationDetailsDialog extends StatelessWidget {
   Color _statusColor(AuthorizationStatus s) {
     switch (s) {
       case AuthorizationStatus.pending:
-        return Colors.orange;
+        return AppPalette.warning;
       case AuthorizationStatus.approved:
-        return Colors.green;
+        return AppPalette.success;
       case AuthorizationStatus.rejected:
-        return Colors.redAccent;
+        return AppPalette.primary;
       case AuthorizationStatus.finished:
-        return Colors.blueGrey;
+        return AppPalette.info;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final sc = _statusColor(request.status);
-    final dateLine =
-        request.multiDay
-            ? '${_fmtD(request.dateFrom)} → ${_fmtD(request.dateTo)}'
-            : _fmtD(request.dateFrom);
-    final timeLine =
-        request.allDay
-            ? 'Todo el día'
-            : request.endTime != null
-            ? '${_fmtT(request.startTime)} - ${_fmtT(request.endTime)}'
-            : _fmtT(request.startTime);
+    final dateLine = request.multiDay
+        ? '${_fmtD(request.dateFrom)} → ${_fmtD(request.dateTo)}'
+        : _fmtD(request.dateFrom);
+    final timeLine = request.allDay
+        ? 'Todo el día'
+        : request.endTime != null
+        ? '${_fmtT(request.startTime)} - ${_fmtT(request.endTime)}'
+        : _fmtT(request.startTime);
 
     return AlertDialog(
       title: Center(
         child: Text(
           'Detalle de autorización',
-          style: const TextStyle(
-            color: Colors.redAccent,
+          style: TextStyle(
+            color: AppPalette.primary,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -99,7 +98,7 @@ class AuthorizationDetailsDialog extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                Expanded(child: Text(request.grade)),
+                Expanded(child: Text(request.groupName)),
               ],
             ),
             const SizedBox(height: 6),
@@ -148,7 +147,11 @@ class AuthorizationDetailsDialog extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Nota del administrador',
+                  request.status == AuthorizationStatus.rejected
+                      ? 'Motivo del rechazo'
+                      : request.requiresRequesterEdit
+                      ? 'Motivo para correccion'
+                      : 'Nota del administrador',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -163,7 +166,7 @@ class AuthorizationDetailsDialog extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Evidencia',
+                  'Observacion de cierre',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),

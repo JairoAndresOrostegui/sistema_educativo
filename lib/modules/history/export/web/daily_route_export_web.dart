@@ -29,10 +29,9 @@ class ExportUtilsPlatform {
     for (final r in rutas) {
       final inicio = r['horaInicio']?.toDate();
       final fin = r['horaFin']?.toDate();
-      final duracion =
-          (inicio != null && fin != null)
-              ? fin.difference(inicio).inMinutes.toString()
-              : '';
+      final duracion = (inicio != null && fin != null)
+          ? fin.difference(inicio).inMinutes.toString()
+          : '';
 
       sheet.appendRow([
         TextCellValue(r['nombreRuta'] ?? ''),

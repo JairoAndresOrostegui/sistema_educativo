@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProfilePhotoWidget extends StatelessWidget {
@@ -34,28 +35,31 @@ class ProfilePhotoWidget extends StatelessWidget {
             children: [
               imageUrl != null && imageUrl!.isNotEmpty
                   ? CircleAvatar(
-                    radius: radius,
-                    backgroundImage: NetworkImage(imageUrl!),
-                  )
+                      radius: radius,
+                      backgroundImage: NetworkImage(imageUrl!),
+                    )
                   : Icon(
-                    Icons.account_circle,
-                    size: iconSize,
-                    color: const Color.fromARGB(255, 31, 155, 212),
-                  ),
+                      Icons.account_circle,
+                      size: iconSize,
+                      color: AppPalette.info,
+                    ),
               if (kIsWeb && enableHoverEdit)
                 Positioned.fill(
                   child: AnimatedOpacity(
                     opacity: onTap != null ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
+                    duration: Duration(milliseconds: 200),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(100),
+                        color: AppPalette.onSurface.withAlpha(100),
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Text(
                           'Editar foto',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
+                          style: TextStyle(
+                            color: AppPalette.surface,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ),
