@@ -49,6 +49,15 @@ npm run test:authorization
 npm run test:schedule
 ```
 
+La prueba integral de continuidad docente se ejecuta exclusivamente contra QA.
+Crea cuentas y carga identificadas, comprueba traslado y reversión, y verifica
+que todo dato de prueba sea eliminado al finalizar:
+
+```powershell
+Set-Location functions
+node scripts/smoke_teacher_transfer_qa.js
+```
+
 Las pruebas de Functions y reglas usan los emuladores definidos en `firebase.test.json`.
 
 ## Migración a grupos académicos
