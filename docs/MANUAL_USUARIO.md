@@ -107,9 +107,13 @@ leer o escribir contenido nuevo, pero nunca cambia la autoría de sus mensajes
 históricos.
 
 **Particulares** permite buscar únicamente contactos autorizados. Un
-estudiante puede conversar con compañeros de su grupo, docentes que le dictan
-y administración. Un familiar conversa con docentes del hijo seleccionado y
-administración. El docente accede a estudiantes y familiares de los grupos
+estudiante puede conversar por privado con docentes que le dictan y
+administración; con otros estudiantes solo conversa en el chat general.
+Un familiar conversa con docentes del hijo seleccionado, administración y
+familiares que tengan algún hijo activo en el mismo grupo del hijo elegido.
+Para responder, el otro familiar selecciona su propio hijo de ese grupo.
+Un retiro o cambio que termine el vínculo compartido bloquea nuevos envíos,
+incluidos los chats anteriores. El docente accede a estudiantes y familiares de los grupos
 donde dicta. El familiar siempre debe seleccionar primero el hijo activo.
 
 El número sobre el icono y en cada conversación muestra mensajes no leídos.

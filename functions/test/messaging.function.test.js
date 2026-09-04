@@ -171,17 +171,22 @@ describe("mensajeria institucional", () => {
 
   it("limita privados y crea canales de servicio", async () => {
     const studentToken = await signIn("student-1@colegio.test");
-    const privateMessage = await callFunction("enviarMensajeCanal", {
+    assertError(await callFunction("enviarMensajeCanal", {
       recipientId: "student-2", body: "Trabajo en grupo",
-    }, studentToken);
-    assert.equal(privateMessage.body.result.success, true);
-    await db.collection("users").doc("student-2").update({
-      groupId: "group-5a", groupName: "Quinto A",
+    }, studentToken), "PERMISSION_DENIED");
+    const yearId = await seedAcademicYear(db, "inst-1", "campus-1");
+    await db.collection("message_channels").doc("old-student-private").set({
+      channelType: "private", status: "active", postingPolicy: "members",
+      institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: yearId, memberUserIds: ["student-1", "student-2"],
     });
     assertError(await callFunction("enviarMensajeCanal", {
-      channelId: privateMessage.body.result.channelId,
-      body: "Ya no estamos en el mismo grupo",
+      channelId: "old-student-private", body: "Privado anterior",
     }, studentToken), "PERMISSION_DENIED");
+    const contacts = await callFunction(
+        "listarDestinatariosMensajeria", {}, studentToken);
+    assert.ok(contacts.body.result.contacts.every((item) =>
+      item.role !== "Estudiante"));
     assertError(await callFunction("enviarMensajeCanal", {
       recipientId: "student-other", body: "Fuera del grupo",
     }, studentToken), "PERMISSION_DENIED");
@@ -197,4 +202,66 @@ describe("mensajeria institucional", () => {
     assert.equal(channel.postingPolicy, "announcements");
     assert.ok(channel.memberUserIds.includes("family"));
   });
+
+  it("permite familiares del mismo grupo y revalida vinculos al responder",
+      async () => {
+        const first = await signIn("family@colegio.test");
+        const second = await signIn(await seedUser("family-2", "Familiar", {
+          studentIds: ["student-2"], activeStudentId: "student-2",
+        }));
+        await seedUser("family-other", "Familiar", {
+          studentIds: ["student-other"], activeStudentId: "student-other",
+        });
+        const list = await callFunction("listarDestinatariosMensajeria", {
+          studentContextId: "student-1",
+        }, first);
+        assert.ok(list.body.result.contacts.some((item) =>
+          item.id === "family-2"));
+        assert.ok(!list.body.result.contacts.some((item) =>
+          ["family-other", "family"].includes(item.id)));
+        assertError(await callFunction("enviarMensajeCanal", {
+          recipientId: "family-other", studentContextId: "student-1",
+          body: "Hola",
+        }, first), "PERMISSION_DENIED");
+        const sent = await callFunction("enviarMensajeCanal", {
+          recipientId: "family-2", studentContextId: "student-1", body: "Hola",
+        }, first);
+        assert.equal(sent.body.result.success, true);
+        const channelId = sent.body.result.channelId;
+        const reply = await callFunction("enviarMensajeCanal", {
+          channelId, body: "Respuesta con mi propio hijo activo",
+        }, second);
+        assert.equal(reply.body.result.success, true);
+        const reopened = await callFunction("enviarMensajeCanal", {
+          recipientId: "family", studentContextId: "student-2",
+          body: "Otro mensaje",
+        }, second);
+        assert.equal(reopened.body.result.channelId, channelId);
+        assert.equal((await db.collection("message_channels").doc(channelId)
+            .get()).data().messageSequence, 3);
+        await db.collection("users").doc("student-2").update({
+          status: "inactivo",
+        });
+        assertError(await callFunction("enviarMensajeCanal", {
+          channelId, body: "Ya no hay hijos activos compartiendo grupo",
+        }, first), "PERMISSION_DENIED");
+        await db.collection("users").doc("student-2").update({
+          status: "activo", groupId: "group-5a",
+        });
+        assertError(await callFunction("enviarMensajeCanal", {
+          channelId, body: "Cambio de grupo",
+        }, first), "PERMISSION_DENIED");
+        await db.collection("users").doc("family-2").update({
+          studentIds: ["student-2", "student-1"],
+        });
+        assert.equal((await callFunction("enviarMensajeCanal", {
+          channelId, body: "Otro hijo vinculado conserva el grupo compartido",
+        }, first)).body.result.success, true);
+        await db.collection("users").doc("family-2").update({
+          campus: "campus-2",
+        });
+        assertError(await callFunction("enviarMensajeCanal", {
+          channelId, body: "Otra sede",
+        }, first), "PERMISSION_DENIED");
+      });
 });

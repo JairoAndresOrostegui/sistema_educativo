@@ -55,6 +55,14 @@ docentes vigentes. Las Functions recalculan miembros desde usuarios,
 matrículas, horarios y dirección de grupo; el cliente nunca decide la
 audiencia ni escribe mensajes, lecturas o silencios directamente.
 
+Los privados entre estudiantes están prohibidos, incluso en canales creados
+antes de esta regla. Contactos y envíos aplican la misma política. Los privados
+entre familiares se identifican por pareja, año y `familyGroupId`: el hijo
+activo del remitente y algún hijo activo vinculado al destinatario deben
+pertenecer a ese grupo vigente y a la misma institución/sede. Se revalida en
+cada envío y cada familiar responde con su propio contexto de hijo. Reabrir
+un privado conserva secuencias, lecturas e historial.
+
 `messageSequence` aumenta en transacción y `readSequences/readAtByUser`
 permiten obtener el número exacto de mensajes pendientes y los acuses de
 lectura sin crear una escritura por destinatario al enviar. `mutedByAdmin`

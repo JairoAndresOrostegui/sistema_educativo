@@ -39,9 +39,13 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 
 - Cada grupo académico tiene un único chat general con estudiantes activos,
   familiares vinculados, docente líder y docentes que dictan en el grupo.
-- Estudiantes pueden conversar con compañeros solo dentro de su propio grupo.
-  Familiares no contactan estudiantes ajenos; usan el hijo activo para
-  conversar con sus docentes o administración.
+- Estudiantes solo conversan con otros estudiantes en el chat general del
+  grupo; nunca por privado, aunque compartan grupo o exista un chat anterior.
+- Familiares pueden conversar por privado con otros familiares si el hijo
+  activo seleccionado comparte grupo vigente con algún hijo activo vinculado
+  al destinatario, dentro de la misma institución y sede. Cada envío revalida
+  estos vínculos. También contactan docentes del hijo activo y administración;
+  nunca estudiantes ajenos.
 - Matrícula, retiro, cambio de grupo, estado de usuario, horario y traslado
   docente sincronizan la membresía automáticamente sin reescribir la autoría.
 - Administración puede silenciar un canal colectivo: queda en solo anuncios,

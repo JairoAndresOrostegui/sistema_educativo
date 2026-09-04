@@ -1929,8 +1929,6 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
   }
   if (caller.role === "Estudiante") {
     if (recipient.role === "Administrador") return {student: null};
-    if (recipient.role === "Estudiante" && caller.groupId &&
-        caller.groupId === recipient.groupId) return {student: null};
     if (recipient.role === "Docente" &&
         (await teacherGroups(recipient.uid)).has(caller.groupId)) {
       return {student: null};
@@ -1969,6 +1967,21 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
       throw new HttpsError("failed-precondition", "El hijo no esta activo.");
     }
     if (recipient.role === "Administrador") return {student: contextStudent};
+    if (recipient.role === "Familiar" && recipient.uid !== caller.uid &&
+        contextStudent.role === "Estudiante" && contextStudent.groupId) {
+      const group = await db.collection("academic_groups")
+          .doc(contextStudent.groupId).get();
+      const children = await usersByIds(db.collection("users"),
+          Array.isArray(recipient.studentIds) ? recipient.studentIds : []);
+      if (group.exists && group.data().active === true &&
+          group.data().academicYearId === year.id &&
+          sameTenant(caller, group.data()) && children.some((item) => {
+        const child = item.data();
+        return child.role === "Estudiante" && child.status === "activo" &&
+              sameTenant(caller, child) &&
+              child.groupId === contextStudent.groupId;
+      })) return {student: contextStudent, familyGroupId: contextStudent.groupId};
+    }
     if (recipient.role === "Docente" &&
         (await teacherGroups(recipient.uid)).has(contextStudent.groupId)) {
       return {student: contextStudent};
@@ -5456,8 +5469,7 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
         .where("groupId", "==", caller.groupId).get();
     const teacherIds = new Set(teachers.docs.map((item) => item.data().teacherId));
     allowed = all.filter((item) => item.uid !== caller.uid &&
-      (item.role === "Administrador" || teacherIds.has(item.uid) ||
-       item.role === "Estudiante" && item.groupId === caller.groupId));
+      (item.role === "Administrador" || teacherIds.has(item.uid)));
     studentContextId = "";
   } else if (caller.role === "Docente") {
     const groups = await fileTeacherGroupIds(caller);
@@ -5489,8 +5501,16 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
         .where("academicYearId", "==", year.id)
         .where("groupId", "==", child.groupId).get();
     const teacherIds = new Set(teachers.docs.map((item) => item.data().teacherId));
-    allowed = all.filter((item) =>
-      item.role === "Administrador" || teacherIds.has(item.uid));
+    const group = child.groupId ? await db.collection("academic_groups")
+        .doc(child.groupId).get() : null;
+    const classmates = new Set(group?.exists && group.data().active === true &&
+      group.data().academicYearId === year.id && sameTenant(caller, group.data()) ?
+      all.filter((item) => item.role === "Estudiante" &&
+        item.groupId === child.groupId).map((item) => item.uid) : []);
+    allowed = all.filter((item) => item.uid !== caller.uid &&
+      (item.role === "Administrador" || teacherIds.has(item.uid) ||
+       item.role === "Familiar" && Array.isArray(item.studentIds) &&
+       item.studentIds.some((id) => classmates.has(id))));
   }
   return {contacts: allowed.map((item) => ({
     id: item.uid,
@@ -5524,8 +5544,9 @@ exports.enviarMensajeCanal = onCall(async (request) => {
         caller, recipient, studentContextId, year,
     );
     const pair = [caller.uid, recipientId].sort();
+    const conversationContext = context.familyGroupId || studentContextId || "";
     const deterministicId = `private_${crypto.createHash("sha256")
-        .update(`${year.id}\u0000${pair.join("\u0000")}\u0000${studentContextId || ""}`)
+        .update(`${year.id}\u0000${pair.join("\u0000")}\u0000${conversationContext}`)
         .digest("hex")}`;
     // Reutiliza una conversacion migrada aunque su id anterior no fuera
     // deterministico. Evita mostrar dos privados para las mismas personas.
@@ -5539,36 +5560,42 @@ exports.enviarMensajeCanal = onCall(async (request) => {
         data.campusId === caller.campus &&
         data.academicYearId === year.id &&
         members.length === 2 && members.includes(recipientId) &&
-        (data.contextStudentId || null) === studentContextId;
+        (context.familyGroupId ? data.familyGroupId === context.familyGroupId :
+          (data.contextStudentId || null) === studentContextId);
     });
     channelId = matching?.id || deterministicId;
     const members = new Map([[caller.uid, caller], [recipientId, recipient]]);
     const contextStudent = context.student;
-    await db.collection("message_channels").doc(channelId).set({
-      channelType: "private",
-      category: "private",
-      iconKey: "private",
-      title: "Conversacion privada",
-      institutionId: caller.institution,
-      campusId: caller.campus,
-      academicYearId: year.id,
-      academicYear: year.year,
-      status: "active",
-      postingPolicy: "members",
-      mutedByAdmin: false,
-      contextStudentId: studentContextId,
-      contextStudentName: contextStudent ?
+    const privateRef = db.collection("message_channels").doc(channelId);
+    await db.runTransaction(async (transaction) => {
+      if ((await transaction.get(privateRef)).exists) return;
+      transaction.create(privateRef, {
+        channelType: "private",
+        category: "private",
+        iconKey: "private",
+        title: "Conversacion privada",
+        institutionId: caller.institution,
+        campusId: caller.campus,
+        academicYearId: year.id,
+        academicYear: year.year,
+        status: "active",
+        postingPolicy: "members",
+        mutedByAdmin: false,
+        contextStudentId: studentContextId,
+        familyGroupId: context.familyGroupId || null,
+        contextStudentName: contextStudent ?
         `${contextStudent.firstName || ""} ${contextStudent.lastName || ""}`.trim() : null,
-      contextStudentGroupId: contextStudent?.groupId || null,
-      contextStudentGroupName: contextStudent?.groupName || null,
-      messageSequence: 0,
-      readSequences: {},
-      readAtByUser: {},
-      ...materializedMessageMembers(members),
-      createdBy: caller.uid,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
+        contextStudentGroupId: contextStudent?.groupId || null,
+        contextStudentGroupName: contextStudent?.groupName || null,
+        messageSequence: 0,
+        readSequences: {},
+        readAtByUser: {},
+        ...materializedMessageMembers(members),
+        createdBy: caller.uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
   }
   const channelRef = db.collection("message_channels").doc(channelId);
   const currentChannelSnapshot = await channelRef.get();
@@ -5586,12 +5613,18 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     if (!peerSnapshot.exists) {
       throw new HttpsError("failed-precondition", "El destinatario ya no existe.");
     }
-    await validatePrivateMessage(
+    const context = await validatePrivateMessage(
         caller,
         {uid: peerSnapshot.id, ...peerSnapshot.data()},
-        currentChannel.contextStudentId || null,
+        currentChannel.familyGroupId ? caller.activeStudentId :
+          currentChannel.contextStudentId || null,
         year,
     );
+    if (currentChannel.familyGroupId &&
+        context.familyGroupId !== currentChannel.familyGroupId) {
+      throw new HttpsError("permission-denied",
+          "Selecciona un hijo activo del grupo compartido para conversar.");
+    }
   }
   const messageRef = channelRef.collection("messages").doc();
   let recipients = [];
