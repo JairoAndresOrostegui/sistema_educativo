@@ -2,7 +2,10 @@
 
 const {setGlobalOptions} = require("firebase-functions/v2");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onDocumentWritten, onDocumentCreated} =
+  require("firebase-functions/v2/firestore");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {createPushQueue} = require("./push_queue");
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {
@@ -22,6 +25,113 @@ const db = getFirestore();
 const auth = getAuth();
 const messaging = getMessaging();
 const storage = getStorage();
+const pushTransport = process.env.FUNCTIONS_EMULATOR === "true" ? {
+  sendEachForMulticast: async () => {
+    throw Object.assign(new Error("FCM sin emulador; envio externo bloqueado"),
+        {code: "messaging/server-unavailable"});
+  },
+} : messaging;
+const pushQueue = createPushQueue(db, pushTransport, async (job, tokens) => {
+  const caller = {institution: job.institutionId, campus: job.campusId};
+  const valid = await filterTenantTokens(caller, tokens);
+  if (job.message.data?.channelId) {
+    const snapshot = await db.collection("message_channels")
+        .doc(job.message.data.channelId).get();
+    const channel = snapshot.data();
+    if (!channel || channel.status !== "active") return [];
+    const current = await resolveAudienceTokens(caller,
+        {userIds: channel.memberUserIds || []}, true);
+    const allowed = new Set(current);
+    return valid.filter((token) => allowed.has(token));
+  }
+  return valid;
+});
+
+exports.procesarNotificacionPendiente = onDocumentCreated({
+  document: "push_jobs/{jobId}", retry: true,
+}, async (event) => {
+  if (event.data) await pushQueue.process(event.data.ref);
+});
+
+exports.encolarNotificacionMensaje = onDocumentCreated({
+  document: "push_events/{eventId}", retry: true,
+}, async (event) => {
+  const value = event.data?.data();
+  if (!value) return;
+  const caller = {institution: value.institutionId, campus: value.campusId};
+  const tokens = await resolveAudienceTokens(caller,
+      {userIds: value.recipientIds}, true);
+  const channelId = value.channelId;
+  const appUrl = process.env.PUBLIC_APP_URL ||
+      "https://sistema-educativo-rl.web.app";
+  await pushQueue.enqueue({
+    notification: {title: `Nuevo mensaje de ${value.senderName}`,
+      body: value.body.slice(0, 120)},
+    data: {type: "messaging", channelId}, tokens,
+    webpush: {fcmOptions: {link:
+      `${appUrl}/#/messages?channelId=${encodeURIComponent(channelId)}`}},
+  }, {institutionId: value.institutionId, campusId: value.campusId,
+    academicYearId: value.academicYearId, type: "messaging"},
+  event.params.eventId);
+  await event.data.ref.update({queuedAt: FieldValue.serverTimestamp()});
+});
+
+exports.reintentarNotificacionesPendientes = onSchedule(
+    "every 5 minutes", async () => {
+      const pending = await db.collection("push_jobs")
+          .where("dueAt", "<=", Timestamp.now())
+          .orderBy("dueAt").limit(20).get();
+      for (const item of pending.docs) await pushQueue.process(item.ref);
+    });
+
+exports.consultarEstadoNotificaciones = onCall(async (request) => {
+  const caller = await getCaller(request);
+  if (caller.isSuperadmin !== true) {
+    throw new HttpsError("permission-denied", "Solo el superadministrador.");
+  }
+  let query = db.collection("push_jobs").orderBy("createdAt", "desc");
+  if (request.data?.beforeId) {
+    const id = requiredString(request.data.beforeId, "cursor", 128);
+    const cursor = await db.collection("push_jobs").doc(id).get();
+    if (!cursor.exists) {
+      throw new HttpsError("invalid-argument", "Cursor invalido");
+    }
+    query = query.startAfter(cursor);
+  }
+  const snapshot = await query.limit(50).get();
+  return {jobs: snapshot.docs.map((item) => {
+    const value = item.data();
+    return {id: item.id, status: value.status, attempts: value.attempts,
+      institutionId: value.institutionId, campusId: value.campusId,
+      type: value.type, total: value.total, accepted: value.accepted,
+      rejected: value.rejected, skipped: value.skipped,
+      pending: value.pendingTokens.length, lastError: value.lastError || null,
+      createdAt: value.createdAt?.toMillis() || null};
+  })};
+});
+
+exports.reintentarNotificacion = onCall(async (request) => {
+  const caller = await getCaller(request);
+  if (caller.isSuperadmin !== true) {
+    throw new HttpsError("permission-denied", "Solo el superadministrador.");
+  }
+  const id = requiredString(request.data?.id, "notificacion", 128);
+  const ref = db.collection("push_jobs").doc(id);
+  await db.runTransaction(async (tx) => {
+    const value = (await tx.get(ref)).data();
+    if (!value || value.status !== "failed" || !value.pendingTokens.length) {
+      throw new HttpsError("failed-precondition",
+          "No hay fallos reintentables.");
+    }
+    tx.update(ref, {status: "pending", attempts: 0, dueAt: Timestamp.now()});
+    tx.create(db.collection("push_retry_audit").doc(), {
+      jobId: id, institutionId: value.institutionId, campusId: value.campusId,
+      performedBy: caller.uid, createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await pushQueue.process(ref);
+  return {success: true};
+});
 const ALLOWED_ROLES = new Set([
   "Administrador",
   "Docente",
@@ -1000,9 +1110,10 @@ async function notifyEnrollment(enrollment, event) {
     const title = "Matricula actualizada";
     const body = `Estado: ${enrollment.estado}`;
     if (tokens.size) {
-      await messaging.sendEachForMulticast({
-        notification: {title, body},
-        tokens: [...tokens],
+      await pushQueue.enqueue({notification: {title, body},
+        tokens: [...tokens]}, {
+        institutionId: enrollment.institution, campusId: enrollment.campus,
+        academicYearId: enrollment.academicYearId, type: "enrollment",
       });
     }
     await db.collection("enrollment_notification_events").add({
@@ -1504,14 +1615,15 @@ async function notifySchedule(schedule, event) {
       }
     }
     if (tokens.size) {
-      await messaging.sendEachForMulticast({
+      await pushQueue.enqueue({
         notification: {
           title: "Horario actualizado",
           body: `${schedule.groupName}: ${schedule.subject} ` +
             `(${schedule.day})`,
         },
         tokens: [...tokens],
-      });
+      }, {institutionId: schedule.institutionId, campusId: schedule.campusId,
+        academicYearId: schedule.academicYearId, type: "schedule"});
     }
     await db.collection("schedule_notification_events").add({
       subjectId: schedule.id,
@@ -1628,14 +1740,16 @@ async function notifyAuthorization(authorization, event) {
       }
     }
     if (tokens.size) {
-      await messaging.sendEachForMulticast({
+      await pushQueue.enqueue({
         notification: {
           title: event === "created" ?
             "Nueva autorizacion" : "Autorizacion actualizada",
           body: `${authorization.studentFullName}: ${authorization.status}`,
         },
         tokens: [...tokens],
-      });
+      }, {institutionId: authorization.institutionId,
+        campusId: authorization.campusId,
+        academicYearId: authorization.academicYearId, type: "authorization"});
     }
     await db.collection("authorization_notification_events").add({
       authorizationId: authorization.id,
@@ -2027,7 +2141,7 @@ async function enforceNotificationRateLimit(uid) {
  * @param {Object} audience Audiencia solicitada.
  * @return {Promise<string[]>} Tokens autorizados.
  */
-async function resolveAudienceTokens(caller, audience) {
+async function resolveAudienceTokens(caller, audience, internal = false) {
   const users = new Map();
   const base = db.collection("users")
       .where("institution", "==", caller.institution)
@@ -2043,7 +2157,7 @@ async function resolveAudienceTokens(caller, audience) {
         .filter((id) => typeof id === "string"))] : [];
   const roles = Array.isArray(audience.roles) ?
     [...new Set(audience.roles.filter((role) => ALLOWED_ROLES.has(role)))] : [];
-  if (userIds.length > 500 || studentIds.length > 500 || roles.length > 5) {
+  if ((!internal && (userIds.length > 500 || studentIds.length > 500)) || roles.length > 5) {
     throw new HttpsError(
         "invalid-argument",
         "La audiencia es demasiado grande.",
@@ -2130,34 +2244,14 @@ exports.enviarNotificacion = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "No hay tokens validos.");
   }
 
-  let successCount = 0;
-  let failureCount = 0;
-  const invalidTokens = [];
-
-  for (let i = 0; i < cleanTokens.length; i += 500) {
-    const batch = cleanTokens.slice(i, i + 500);
-    const response = await messaging.sendEachForMulticast({
-      notification: {title: titulo, body: cuerpo},
-      android: {priority: "high"},
-      apns: {payload: {aps: {sound: "default"}}},
-      tokens: batch,
-    });
-    successCount += response.successCount;
-    failureCount += response.failureCount;
-    response.responses.forEach((item, index) => {
-      const code = item.error?.code || "";
-      if (code === "messaging/invalid-registration-token" ||
-          code === "messaging/registration-token-not-registered") {
-        invalidTokens.push(batch[index]);
-      }
-    });
-  }
-
-  return {
-    exitosos: successCount,
-    fallidos: failureCount,
-    tokensInvalidos: invalidTokens,
-  };
+  const queued = await pushQueue.enqueue({
+    notification: {title: titulo, body: cuerpo},
+    android: {priority: "high"},
+    apns: {payload: {aps: {sound: "default"}}},
+    tokens: cleanTokens,
+  }, {institutionId: caller.institution, campusId: caller.campus,
+    type: notificationType});
+  return {encolados: queued.queued};
 });
 
 exports.resolverLoginPorDocumento = onCall(async (request) => {
@@ -3953,13 +4047,14 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
       }
     });
     if (tokens.size) {
-      await messaging.sendEachForMulticast({
+      await pushQueue.enqueue({
         notification: {
           title: "Nuevo archivo disponible",
           body: file.message || file.name,
         },
         tokens: [...tokens],
-      });
+      }, {institutionId: file.institutionId, campusId: file.campusId,
+        academicYearId: file.academicYearId, type: "files"});
     }
     await db.collection("file_notification_events").add({
       fileId: id,
@@ -5627,7 +5722,6 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     }
   }
   const messageRef = channelRef.collection("messages").doc();
-  let recipients = [];
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(channelRef);
     if (!snapshot.exists) {
@@ -5662,8 +5756,13 @@ exports.enviarMensajeCanal = onCall(async (request) => {
       [`readAtByUser.${caller.uid}`]: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    recipients = (Array.isArray(channel.memberUserIds) ?
+    const recipients = (Array.isArray(channel.memberUserIds) ?
       channel.memberUserIds : []).filter((uid) => uid !== caller.uid);
+    transaction.create(db.collection("push_events").doc(messageRef.id), {
+      institutionId: caller.institution, campusId: caller.campus,
+      academicYearId: year.id, channelId, senderName, body: body.slice(0, 120),
+      recipientIds: recipients, createdAt: FieldValue.serverTimestamp(),
+    });
   });
   await db.collection("messaging_audit").add({
     action: "message_sent",
@@ -5675,24 +5774,6 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     performedBy: caller.uid,
     createdAt: FieldValue.serverTimestamp(),
   });
-  try {
-    const tokens = await resolveAudienceTokens(caller, {userIds: recipients});
-    if (tokens.length) {
-      const senderName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim();
-      for (let index = 0; index < tokens.length; index += 500) {
-        await messaging.sendEachForMulticast({
-          notification: {
-            title: `Nuevo mensaje de ${senderName}`,
-            body: body.length > 120 ? `${body.slice(0, 120)}...` : body,
-          },
-          data: {type: "messaging", channelId},
-          tokens: tokens.slice(index, index + 500),
-        });
-      }
-    }
-  } catch (error) {
-    console.error("Notificacion de mensaje omitida:", error.code || error);
-  }
   return {success: true, channelId, messageId: messageRef.id};
 });
 

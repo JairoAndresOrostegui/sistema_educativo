@@ -1,5 +1,8 @@
 import 'package:sistema_educativo/config/app_palette.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:go_router/go_router.dart';
+import 'notification_destination.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -14,6 +17,23 @@ final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
 bool _webNotificationVisible = false;
 bool _pushListenersInitialized = false;
 Future<void> Function(String token)? _tokenHandler;
+
+void _openNotification(Map<String, dynamic> data) {
+  final destination = notificationDestination(data);
+  final context = appNavigatorKey.currentContext;
+  if (destination != null && context != null) {
+    GoRouter.of(context).go(destination);
+  }
+}
+
+void _openPayload(String? payload) {
+  if (payload == null) return;
+  try {
+    _openNotification(Map<String, dynamic>.from(jsonDecode(payload) as Map));
+  } catch (_) {
+    /* Una notificación inválida no navega. */
+  }
+}
 
 Future<void> initializePush({
   required Future<void> Function(String token) onNewToken,
@@ -46,16 +66,35 @@ Future<void> initializePush({
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     iOS: DarwinInitializationSettings(),
   );
-  await _fln.initialize(settings: initSettings);
+  await _fln.initialize(
+    settings: initSettings,
+    onDidReceiveNotificationResponse: (response) =>
+        _openPayload(response.payload),
+  );
 
   if (!_pushListenersInitialized) {
     _pushListenersInitialized = true;
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _openNotification(message.data),
+    );
+    final initial = await messaging.getInitialMessage();
+    if (initial != null) _openNotification(initial.data);
+    if (!kIsWeb) {
+      final launch = await _fln.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp == true) {
+        _openPayload(launch?.notificationResponse?.payload);
+      }
+    }
     FirebaseMessaging.onMessage.listen((message) async {
       final title = _resolveTitle(message);
       final body = _resolveBody(message);
 
       if (kIsWeb) {
-        await _showWebNotificationDialog(title: title, body: body);
+        await _showWebNotificationDialog(
+          title: title,
+          body: body,
+          data: message.data,
+        );
         return;
       }
 
@@ -63,6 +102,7 @@ Future<void> initializePush({
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: title,
         body: body,
+        payload: jsonEncode(message.data),
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'high_importance_channel',
@@ -115,6 +155,7 @@ String _resolveBody(RemoteMessage message) {
 Future<void> _showWebNotificationDialog({
   required String title,
   required String body,
+  Map<String, dynamic> data = const {},
 }) async {
   if (_webNotificationVisible) return;
   final context = appNavigatorKey.currentContext;
@@ -203,8 +244,15 @@ Future<void> _showWebNotificationDialog({
                             backgroundColor: AppPalette.primary,
                             foregroundColor: AppPalette.surface,
                           ),
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: Text('Entendido'),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            _openNotification(data);
+                          },
+                          child: Text(
+                            notificationDestination(data) == null
+                                ? 'Entendido'
+                                : 'Abrir conversación',
+                          ),
                         ),
                       ),
                     ],

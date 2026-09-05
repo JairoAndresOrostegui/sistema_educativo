@@ -37,6 +37,15 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 
 ## Mensajería institucional
 
+- Se conserva exactamente un token móvil y uno web por usuario; no ampliar a
+  múltiples dispositivos sin una nueva decisión del colegio.
+- Push usa lotes de hasta 500 dispositivos, cola persistente y reintentos
+  limitados. La aceptación de FCM nunca se presenta como entrega o lectura.
+- El panel de fallos push y el reintento manual son exclusivos del superadmin,
+  validados en backend. Nunca exponer tokens al panel.
+- Rutas -> canales automáticos queda pendiente hasta revisar Rutas y acordar
+  con el usuario audiencia, eventos y reglas. No activarlo anticipadamente.
+
 - Cada grupo académico tiene un único chat general con estudiantes activos,
   familiares vinculados, docente líder y docentes que dictan en el grupo.
 - Estudiantes solo conversan con otros estudiantes en el chat general del

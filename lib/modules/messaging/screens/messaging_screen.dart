@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../../models/messaging/message_models.dart';
 import '../../../models/user/user_model_v2.dart';
@@ -8,11 +9,13 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../services/messaging_service.dart';
+import 'push_status_screen.dart';
 
 enum _ChannelView { groups, private }
 
 class MessagingScreen extends StatefulWidget {
-  const MessagingScreen({super.key});
+  const MessagingScreen({super.key, this.initialChannelId});
+  final String? initialChannelId;
 
   @override
   State<MessagingScreen> createState() => _MessagingScreenState();
@@ -29,6 +32,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
   _ChannelView _view = _ChannelView.groups;
   bool _loading = true;
   bool _sending = false;
+  bool _openedInitial = false;
 
   bool get _isFamily => _user?.role == 'Familiar';
   bool get _isAdmin =>
@@ -43,7 +47,19 @@ class _MessagingScreenState extends State<MessagingScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await _bootstrap();
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _loading = false);
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible cargar Mensajería',
+          message: error.toString(),
+        );
+      }
+    });
   }
 
   @override
@@ -66,6 +82,9 @@ class _MessagingScreenState extends State<MessagingScreen> {
         _activeStudentId = _children.any((child) => child.id == preferred)
             ? preferred
             : _children.first.id;
+        await FirebaseFunctions.instance
+            .httpsCallable('seleccionarHijoActivo')
+            .call({'studentId': _activeStudentId});
         provider.setActiveStudentId(_activeStudentId!);
       }
     } else if (_user!.role == 'Estudiante') {
@@ -197,7 +216,22 @@ class _MessagingScreenState extends State<MessagingScreen> {
     }
   }
 
-  void _changeChild(String id) {
+  Future<void> _changeChild(String id) async {
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('seleccionarHijoActivo')
+          .call({'studentId': id});
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible seleccionar el hijo',
+          message: error.toString(),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
     context.read<UserProviderV2>().setActiveStudentId(id);
     setState(() {
       _activeStudentId = id;
@@ -227,7 +261,53 @@ class _MessagingScreenState extends State<MessagingScreen> {
     return StreamBuilder<List<MessageThreadSummary>>(
       stream: _service.watchChannels(_user!),
       builder: (context, snapshot) {
-        final channels = snapshot.data ?? const <MessageThreadSummary>[];
+        final allChannels = snapshot.data ?? const <MessageThreadSummary>[];
+        if (!_openedInitial &&
+            snapshot.hasData &&
+            widget.initialChannelId != null) {
+          _openedInitial = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            final matches = allChannels.where(
+              (c) => c.id == widget.initialChannelId,
+            );
+            if (matches.isEmpty) {
+              await DialogUtils.showError(
+                context: context,
+                title: 'Conversación no disponible',
+                message: 'No tienes acceso a este canal o ya no está vigente.',
+              );
+              return;
+            }
+            final channel = matches.first;
+            if (_isFamily) {
+              final children = _children.where(channel.belongsToChild);
+              if (children.isEmpty) return;
+              await _changeChild(
+                children.any((c) => c.id == _activeStudentId)
+                    ? _activeStudentId!
+                    : children.first.id,
+              );
+              if (!mounted) return;
+            }
+            setState(
+              () => _view = channel.isPrivate
+                  ? _ChannelView.private
+                  : _ChannelView.groups,
+            );
+            await _selectChannel(channel);
+          });
+        }
+        final activeChildren = _children.where((c) => c.id == _activeStudentId);
+        final channels = !_isFamily
+            ? allChannels
+            : allChannels
+                  .where(
+                    (channel) =>
+                        activeChildren.isNotEmpty &&
+                        channel.belongsToChild(activeChildren.first),
+                  )
+                  .toList();
         final selected = channels.cast<MessageThreadSummary?>().firstWhere(
           (channel) => channel?.id == _selectedChannelId,
           orElse: () => null,
@@ -257,6 +337,16 @@ class _MessagingScreenState extends State<MessagingScreen> {
             title: const Text('Mensajería'),
             centerTitle: true,
             actions: [
+              if (_user?.isSuperadmin == true)
+                IconButton(
+                  tooltip: 'Estado de notificaciones',
+                  icon: const Icon(Icons.notifications_active_outlined),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PushStatusScreen(),
+                    ),
+                  ),
+                ),
               if (_isAdmin)
                 IconButton(
                   tooltip: 'Crear canal de servicio',

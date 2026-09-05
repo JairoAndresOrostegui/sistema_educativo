@@ -88,11 +88,27 @@ class _AppRouterState extends State<AppRouter> {
         if (publicWebsitePaths.contains(currentPath)) return null;
 
         if (user == null) {
-          return publicPaths.contains(currentPath) ? null : '/login';
+          return publicPaths.contains(currentPath)
+              ? null
+              : (currentPath == '/messages'
+                    ? Uri(
+                        path: '/login',
+                        queryParameters: {'next': state.uri.toString()},
+                      ).toString()
+                    : '/login');
         }
 
         final home = AuthAccessPolicy.homeForRole(user.role);
-        if (loggingIn) return home;
+        if (loggingIn) {
+          final next = Uri.tryParse(state.uri.queryParameters['next'] ?? '');
+          if (next != null &&
+              !next.hasScheme &&
+              !next.hasAuthority &&
+              next.path == '/messages') {
+            return next.toString();
+          }
+          return home;
+        }
 
         if (!AuthAccessPolicy.isPathAllowed(
           role: user.role,
@@ -226,7 +242,10 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/messages',
-          builder: (context, state) => const MessagingScreen(),
+          builder: (context, state) => MessagingScreen(
+            key: ValueKey(state.uri.toString()),
+            initialChannelId: state.uri.queryParameters['channelId'],
+          ),
         ),
         // Estudiante / Familiar
         GoRoute(

@@ -123,9 +123,25 @@ quién lo vio y cuándo.
 
 Administración también crea canales de servicio con iconos diferenciados para
 Lonchera, Restaurante, Ruta escolar, Comunidad u Otro. Son canales de anuncios
-para toda la sede o para grupos seleccionados. Las novedades de recorridos se
-originan en Rutas y se comunican por su canal enlazado: Mensajería no duplica
-el estado operativo ni la ubicación de la ruta.
+para toda la sede o para grupos seleccionados. La publicación automática de
+novedades desde Rutas está pendiente de revisión y aprobación; actualmente no
+se conecta automáticamente el recorrido con estos canales.
+
+El selector de hijo filtra los canales y sus contadores dentro de Mensajería.
+Tocar un aviso de mensaje abre su conversación, sujeto a permisos vigentes;
+en familiares se selecciona un hijo activo que corresponda al canal.
+
+### Estado de notificaciones (superadministrador)
+
+En la cabecera de Mensajería, el icono de notificaciones abre el panel global.
+Lista lotes por fecha, módulo, institución y sede, con aceptados por Firebase,
+rechazados, omitidos por pérdida de acceso/dispositivo y pendientes.
+Permite consultar páginas anteriores y reintentar fallos temporales agotados
+con confirmación y auditoría. Nunca muestra tokens ni contenido privado.
+Hay cinco intentos automáticos por ciclo; un reintento manual inicia otro.
+La aceptación por Firebase no confirma que el equipo lo haya mostrado ni que
+la persona lo haya leído. Una interrupción durante una entrega incierta puede
+producir un aviso repetido. Se mantiene un móvil y un navegador por persona.
 
 ## Sitio web
 

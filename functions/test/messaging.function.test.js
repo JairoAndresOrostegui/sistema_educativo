@@ -120,6 +120,35 @@ describe("mensajeria institucional", () => {
 
   after(async () => deleteApp(app));
 
+  it("reserva el panel push y sus reintentos al superadmin", async () => {
+    const adminToken = await signIn(await seedUser("admin", "Administrador"));
+    assertError(await callFunction("consultarEstadoNotificaciones", {},
+        adminToken), "PERMISSION_DENIED");
+    assertError(await callFunction("reintentarNotificacion", {id: "test"},
+        adminToken), "PERMISSION_DENIED");
+    const superToken = await signIn(await seedUser("super", "Administrador",
+        {isSuperadmin: true}));
+    const result = await callFunction("consultarEstadoNotificaciones", {},
+        superToken);
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body.result.jobs, []);
+    await db.collection("push_jobs").doc("failed-job").set({
+      institutionId: "inst-1", campusId: "campus-1", type: "messaging",
+      status: "failed", attempts: 5, total: 1, accepted: 0, rejected: 0,
+      skipped: 0, pendingTokens: ["token-secret-never-exposed"],
+      message: {notification: {body: "private-message-secret"}},
+      createdAt: new Date(),
+    });
+    const jobs = await callFunction("consultarEstadoNotificaciones", {},
+        superToken);
+    assert.equal(jobs.body.result.jobs.length, 1);
+    assert.ok(!JSON.stringify(jobs.body).includes("secret"));
+    const retry = await callFunction("reintentarNotificacion",
+        {id: "failed-job"}, superToken);
+    assert.equal(retry.status, 200);
+    assert.equal((await db.collection("push_retry_audit").get()).size, 1);
+  });
+
   it("sincroniza grupo y limita la conversacion a sus miembros", async () => {
     const adminToken = await signIn(await seedUser("admin", "Administrador"));
     const sync = await callFunction(

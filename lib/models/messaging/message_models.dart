@@ -48,6 +48,8 @@ class MessageThreadSummary {
     this.lastSenderId,
     this.lastSenderName,
     this.lastMessageAt,
+    this.familyGroupId,
+    this.targetGroupIds = const [],
   });
   final String id, channelType, category, iconKey, title, status;
   final List<String> memberUserIds;
@@ -59,6 +61,15 @@ class MessageThreadSummary {
   final String? groupId, groupName, contextStudentId, contextStudentName;
   final String? lastMessage, lastSenderId, lastSenderName;
   final DateTime? lastMessageAt;
+  final String? familyGroupId;
+  final List<String> targetGroupIds;
+  bool belongsToChild(MessagingChildContext child) {
+    if (isAcademicGroup) return groupId == child.groupId;
+    if (isService) return targetGroupIds.contains(child.groupId);
+    if (familyGroupId != null) return familyGroupId == child.groupId;
+    return contextStudentId == child.id;
+  }
+
   bool get isPrivate => channelType == 'private';
   bool get isAcademicGroup => channelType == 'academic_group';
   bool get isService => channelType == 'service';
@@ -131,6 +142,8 @@ class MessageThreadSummary {
       mutedByAdmin: data['mutedByAdmin'] == true,
       status: (data['status'] ?? 'active').toString(),
       groupId: data['groupId']?.toString(),
+      familyGroupId: data['familyGroupId']?.toString(),
+      targetGroupIds: List<String>.from(data['targetGroupIds'] ?? const []),
       groupName: data['groupName']?.toString(),
       contextStudentId: data['contextStudentId']?.toString(),
       contextStudentName: data['contextStudentName']?.toString(),

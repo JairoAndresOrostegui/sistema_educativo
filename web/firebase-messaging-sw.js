@@ -13,6 +13,8 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
+  // FCM muestra automáticamente payloads notification; no duplicarlos.
+  if (payload.notification) return;
   const title = payload.notification?.title || 'Nueva notificacion';
   const options = {
     body:

@@ -49,6 +49,40 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 
 ## Mensajería institucional
 
+### Cola push y apertura
+
+`push_events` guarda el aviso de Mensajería en la misma transacción del mensaje;
+un trigger con reintento materializa `push_jobs` por identificador de evento y
+lote (máximo 500 tokens). Un evento repetido no reinicia lotes ya existentes.
+Archivos, Horarios, Matrículas, Autorizaciones y el envío genérico también usan
+la cola; en esos flujos la encolación todavía ocurre después de la escritura
+principal, no constituye una transacción distribuida con el dato de negocio.
+El evento de negocio no se revierte si falla su notificación.
+
+Los lotes usan una reserva temporal de 10 minutos para evitar procesamiento
+concurrente, cinco intentos con espera creciente y recuperación programada
+cada cinco minutos (hasta 20 lotes por ejecución). Solo se reenvían los tokens
+con errores temporales. Antes de enviar se revalidan usuario activo, sede y
+token vigente; en chats también se comprueba la membresía actual.
+Si FCM acepta y el proceso muere antes de guardar el resultado, la entrega
+puede repetirse: no se promete exactamente una entrega.
+
+Las colecciones push son privadas al backend (denegación por defecto en reglas).
+Las Functions del panel exigen `isSuperadmin`; retornan contadores y códigos,
+nunca tokens, cuerpos ni credenciales. El reintento manual deja
+`push_retry_audit`. No se elimina historial operativo automáticamente.
+El planificador y las escrituras agregan consumo: no prometer costo cero.
+
+`notificationDestination` solo admite destinos de Mensajería; una notificación
+no concede acceso al canal. Las aperturas Android (frente, fondo y arranque)
+y los enlaces web pasan por la navegación autenticada. `PUBLIC_APP_URL` define
+el origen web del despliegue (QA por defecto; ajustar para Hostinger/producción).
+El worker web no vuelve a mostrar payloads `notification` que FCM ya presenta.
+
+Pruebas: `npm run test:push`, `npm run test:messaging`, `flutter test`.
+FCM se simula en pruebas de cola; la recepción real y la apertura con el equipo
+bloqueado requieren comprobación en dispositivos, no se deducen del emulador.
+
 `message_channels` es la única fuente de canales. El canal académico se
 identifica como `academic_{groupId}` y materializa estudiantes, familiares y
 docentes vigentes. Las Functions recalculan miembros desde usuarios,

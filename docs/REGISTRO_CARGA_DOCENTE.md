@@ -28,6 +28,12 @@ asigne responsabilidad, acceso o trabajo vigente a un docente.
 | Matrículas | responsabilidad derivada del grupo | formularios previos |
 | Notificaciones | destinatarios futuros derivados | eventos ya enviados |
 
+Los reintentos push comprueban que el docente siga activo y conserve membresía
+en el canal. No se cambia la autoría ni se trasladan tokens del saliente al
+reemplazo; este último recibe avisos futuros según su acceso vigente.
+La conexión automática de Rutas con canales de servicio está pendiente de
+revisión y decisión del usuario, no es un adaptador ya habilitado.
+
 ## Contrato para módulos futuros
 
 Antes de considerar terminado un módulo nuevo se debe documentar:
