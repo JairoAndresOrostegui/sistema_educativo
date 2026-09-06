@@ -25,8 +25,7 @@ import 'modules/route/screens/admin_route_screen.dart';
 import 'modules/route/screens/student_route_screen.dart';
 import 'modules/route/screens/teacher_route_screen.dart';
 import 'modules/parameters/screens/admin_parameters_screen.dart';
-import 'modules/qr/screens/admin_qr_screen.dart';
-import 'modules/qr/screens/student_qr_screen.dart';
+import 'modules/qr/screens/qr_screen.dart';
 import 'modules/schedule/screens/admin_schedule_screen.dart';
 import 'modules/schedule/screens/student_schedule_screen.dart';
 import 'modules/schedule/screens/teacher_schedule_screen.dart';
@@ -209,7 +208,7 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/admin_qr',
-          builder: (context, state) => const AdminQrScreen(),
+          builder: (context, state) => const QrScreen(manage: true),
         ),
         GoRoute(
           path: '/website_admin',
@@ -281,10 +280,7 @@ class _AppRouterState extends State<AppRouter> {
           path: '/student_authorization',
           builder: (context, state) => const AuthorizationStudentScreen(),
         ),
-        GoRoute(
-          path: '/student_qr',
-          builder: (context, state) => const StudentQrScreen(),
-        ),
+        GoRoute(path: '/my_qr', builder: (context, state) => const QrScreen()),
       ],
     );
   }

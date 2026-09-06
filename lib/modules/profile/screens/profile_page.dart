@@ -1,4 +1,5 @@
 import 'package:sistema_educativo/config/app_palette.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -107,6 +108,13 @@ class _ProfilePageState extends State<ProfilePage> {
       appBar: AppBar(
         centerTitle: true,
         title: Text('Mi perfil'),
+        actions: [
+          IconButton(
+            tooltip: 'Mi identificación QR',
+            icon: const Icon(Icons.qr_code),
+            onPressed: () => context.go('/my_qr'),
+          ),
+        ],
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.primary,
         elevation: 0,

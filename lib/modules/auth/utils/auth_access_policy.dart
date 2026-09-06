@@ -8,6 +8,7 @@ abstract final class AuthAccessPolicy {
 
   static const Set<String> _commonPaths = {
     '/profile',
+    '/my_qr',
     '/logout',
     '/access_denied',
   };
@@ -107,7 +108,6 @@ abstract final class AuthAccessPolicy {
             normalizedRole == 'Familiar' && has('autorizaciones.ver'),
           '/enrollment' => normalizedRole == 'Familiar' && has('matricula.ver'),
           '/messages' => has('mensajeria.ver'),
-          '/student_qr' => normalizedRole == 'Familiar',
           _ => false,
         };
       default:

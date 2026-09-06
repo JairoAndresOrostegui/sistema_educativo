@@ -229,6 +229,20 @@ describe("Reglas Firestore", () => {
 
   after(async () => env.cleanup());
 
+  it("impide fabricar QR o consultar credenciales directamente", async () => {
+    const student = env.authenticatedContext("student").firestore();
+    await assertFails(updateDoc(doc(student, "users/student"), {
+      qrPayload: "inventado", qrEnabled: true,
+    }));
+    for (const uid of ["student", "admin", "superadmin"]) {
+      const db = env.authenticatedContext(uid).firestore();
+      for (const name of ["qr_credentials", "qr_audit", "events"]) {
+        await assertFails(setDoc(doc(db, name, "fake"), {status: "active"}));
+        await assertFails(getDocs(collection(db, name)));
+      }
+    }
+  });
+
   it("impide leer perfiles sin autenticacion", async () => {
     const db = env.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(db, "users/student")));

@@ -25,6 +25,8 @@ const db = getFirestore();
 const auth = getAuth();
 const messaging = getMessaging();
 const storage = getStorage();
+Object.assign(exports, require("./qr_identity").qrFunctions(
+    db, getCaller, requireActiveAcademicYear));
 const pushTransport = process.env.FUNCTIONS_EMULATOR === "true" ? {
   sendEachForMulticast: async () => {
     throw Object.assign(new Error("FCM sin emulador; envio externo bloqueado"),
@@ -150,8 +152,7 @@ const PROFILE_FIELDS = [
   "photoUrl", "status",
   "birthCountry", "birthDepartment", "birthCity", "residenceCountry",
   "residenceDepartment", "residenceCity", "familyRelation", "studentIds",
-  "activeStudentId", "routeAddress", "direccionRuta", "qrPayload",
-  "qrEnabled", "qrUpdatedAt",
+  "activeStudentId", "routeAddress", "direccionRuta",
 ];
 const AUTH_WEB_API_KEY = "AIzaSyBjfpuzVCTvKEMdYGYjMa619SSJ1yL8Jho";
 const EMAIL_VERIFICATION_CONTINUE_URL =
@@ -760,8 +761,12 @@ async function userDeletionContext(targetSnap) {
   const channelMemberships = threads.filter((item) =>
     item.data().channelType !== "private");
   const auditCount = logsSnap.size + historySnap.size;
+  const qrCredential = await db.collection("qr_credentials")
+      .doc(require("./qr_identity").credentialId("user", uid)).get();
 
   const impact = [
+    {key: "qrCredential", label: "Identificador QR",
+      count: qrCredential.exists ? 1 : 0, action: "delete"},
     {key: "enrollments", label: "Matriculas", count: enrollments.length,
       action: "delete"},
     {key: "authorizations", label: "Autorizaciones",
@@ -4600,6 +4605,8 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
     finalBatch.delete(db.collection("user_directory").doc(uid));
     finalBatch.delete(db.collection("notification_rate_limits").doc(uid));
     finalBatch.delete(targetRef);
+    finalBatch.delete(db.collection("qr_credentials").doc(
+        require("./qr_identity").credentialId("user", uid)));
     await finalBatch.commit();
     return {success: true, deletionType: "permanent",
       impact: context.impact};

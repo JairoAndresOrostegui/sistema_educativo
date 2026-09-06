@@ -2,6 +2,7 @@
   "name": "functions",
   "description": "Cloud Functions for Firebase",
   "scripts": {
+    "test:qr": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-qr-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/qr.function.test.js\"",
     "test:push": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-push-test --only firestore \"mocha --timeout 30000 test/push_queue.test.js\"",
     "lint": "eslint .",
     "test:rules": "firebase emulators:exec --config ../firebase.test.json --only firestore,storage \"mocha --reporter spec test/firestore.rules.test.js test/storage.rules.test.js\"",

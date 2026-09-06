@@ -266,9 +266,10 @@ void main() {
       );
     });
 
-    test('el QR de acudiente no se expone al estudiante', () {
-      expect(allowed(role: 'Estudiante', path: '/student_qr'), isFalse);
-      expect(allowed(role: 'Familiar', path: '/student_qr'), isTrue);
+    test('cada rol accede a su propia identificación QR', () {
+      for (final role in AuthAccessPolicy.allowedRoles) {
+        expect(allowed(role: role, path: '/my_qr'), isTrue);
+      }
     });
   });
 }

@@ -87,15 +87,9 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       }
     }
 
-    if (role == 'familiar' &&
-        user.qrEnabled == true &&
-        (user.qrPayload ?? '').isNotEmpty) {
+    if (role == 'familiar' || role == 'estudiante') {
       items.add(
-        const MenuItemData(
-          label: 'QR',
-          icon: Icons.qr_code,
-          route: '/student_qr',
-        ),
+        const MenuItemData(label: 'QR', icon: Icons.qr_code, route: '/my_qr'),
       );
     }
 

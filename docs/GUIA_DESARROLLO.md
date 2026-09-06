@@ -45,6 +45,43 @@ Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensa
 
 ## Familias con varios hijos
 
+### Identificadores QR
+
+`qr_credentials/{sha256(targetType:targetId)}` mantiene una credencial por
+entidad. El payload `LLQ1:` seguido de 32 bytes aleatorios codificados base64url
+es opaco. `tokenHash` permite buscarlo sin consultar perfiles por documento.
+El servidor distingue `user` y `event`; no permite rutas arbitrarias del cliente.
+Las colecciones de credenciales, eventos y auditoría QR no admiten acceso
+directo desde el cliente (denegación por defecto en reglas).
+
+Los usuarios activos obtienen su propio QR desde Perfil; familiares pueden
+obtener el del hijo activo vinculado. Solo administradores con permisos QR,
+o superadministrador, gestionan otras entidades. Cambiar sede invalida la
+credencial hasta que se reemita para el nuevo alcance. Desactivar un usuario
+impide resolverla; la eliminación definitiva borra su credencial en el mismo
+lote final del usuario y conserva la auditoría histórica.
+
+Revocar elimina payload y hash. Reemplazar genera otro secreto y el anterior
+deja de resolverse. Una credencial revocada no se reactiva por solicitarla.
+El vínculo familiar se consulta al resolver, nunca se congela en el QR.
+La credencial identifica la cuenta, no prueba la identidad del portador:
+una fotografía del símbolo se puede copiar. No usar como login o firma digital.
+
+`events` admite inicialmente solo título, sede, año y propósito
+`identification_only`; todavía no contiene asistencia, agenda, responsables ni
+permisos de recogida. El QR de evento solo se resuelve en año activo y sede
+autorizada. El futuro módulo de Eventos debe definir su audiencia y acciones,
+integrar responsabilidades docentes y eliminación de su credencial antes de
+permitir borrar eventos. No implementar eliminación directa del documento.
+
+Migración única QA: `node functions/scripts/migrate_qr_identity.js` (diagnóstico)
+y `--apply` para retirar campos antiguos de perfiles y reemplazar credenciales
+previamente habilitadas. No acepta el JSON antiguo ni deja lectura dual.
+Las nuevas credenciales se generan al solicitarlas, sin exigir carga masiva.
+Validación: `npm run test:qr`, `npm run test:rules`, pruebas Flutter.
+El lector de cámara y las operaciones por escaneo quedan fuera de esta etapa;
+la pantalla actual ofrece validación manual del identificador.
+
 `studentIds` contiene vínculos y `activeStudentId` el contexto actual. Horario, matrícula, autorizaciones, archivos, mensajería y todo módulo futuro por estudiante deben mostrar selector, persistir el hijo activo y volver a validar el vínculo en backend/reglas.
 
 ## Mensajería institucional

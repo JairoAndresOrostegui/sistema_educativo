@@ -68,6 +68,15 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 
 ## Interfaz y calidad
 
+- QR es un identificador opaco, no una firma digital ni autorización de una
+  operación. `qr_credentials` distingue `user` y `event`; nunca codificar
+  documento, rol, hijos u otros datos personales en el símbolo.
+- Emisión, resolución, revocación y reemplazo de QR pasan por backend con
+  auditoría. Resolver exige sesión, estado vigente, alcance y permisos.
+- La credencial de usuario no se traslada entre docentes ni se reinicia por
+  año. Las futuras asistencias/entregas tienen su propia entidad, permisos,
+  confirmación y protección contra duplicados; no inferirlas del escaneo.
+
 - Los colores, tipografía, nombre y logo globales se obtienen de la configuración del sitio en Firestore y se aplican mediante `ThemeData`/`ColorScheme`.
 - Todo módulo revisado o nuevo usa una cabecera uniforme como Perfil: fondo de superficie, título centrado, contraste primario y botón visible para volver al tablero.
 - Los módulos internos usan superficies sólidas, sin degradados. El rojo de marca debe ser sobrio y provenir exclusivamente del tema central.

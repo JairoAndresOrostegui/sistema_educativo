@@ -49,6 +49,7 @@ npm run test:authorization
 npm run test:schedule
 npm run test:messaging
 npm run test:push
+npm run test:qr
 ```
 
 La prueba integral de continuidad docente se ejecuta exclusivamente contra QA.

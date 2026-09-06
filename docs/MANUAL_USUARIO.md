@@ -184,4 +184,29 @@ original. La autoría histórica de mensajes y archivos no cambia.
 
 ## Rutas, QR y módulos en evolución
 
-Rutas gestiona recorridos y estados diarios, sujeto a permisos y sede. QR identifica al estudiante cuando está habilitado. Los permisos de ubicación y el flujo Android deben volver a validarse antes de publicar en Play Store. Toda ampliación futura debe mantener selección de hijo, grupos por sede, seguridad backend, auditoría y tema central.
+### Identificación QR
+
+Todos los roles tienen **Mi identificación QR** desde el icono QR de Perfil.
+Estudiantes y familiares también disponen del acceso en su tablero. Un familiar
+elige su propia identidad o uno de sus hijos activos; son códigos distintos.
+
+En **Identificadores QR**, el administrador autorizado busca usuarios o eventos
+de su sede; el superadministrador puede gestionar entidades de otras sedes.
+Obtener de nuevo un código conserva el mismo mientras esté vigente. **Revocar**
+lo invalida y **Reemplazar** produce uno nuevo, ambos con confirmación y log.
+Un usuario inactivo o eliminado no puede identificarse con un QR antiguo.
+
+**Identificador de evento** crea una referencia con nombre y año activo, no una
+asistencia ni una reunión completa. Su sede se indica en pantalla: corresponde
+a la entidad seleccionada o, sin selección, a la del administrador.
+**Validar código** permite pegar un identificador copiado desde la aplicación.
+La respuesta está limitada por permisos; no muestra perfiles ajenos a usuarios
+normales. Los vínculos de hijos se consultan en la base de datos.
+
+Los QR no contienen documentos ni datos personales y no son firmas digitales.
+Presentar o copiar un QR no autoriza entregar a un estudiante, reclamar bienes
+ni registrar asistencia. El lector de cámara y esas operaciones se incorporarán
+cuando se definan los módulos correspondientes. No publicar el QR en redes.
+Los códigos del esquema anterior deben reemplazarse; ya no son válidos.
+
+Rutas gestiona recorridos y estados diarios, sujeto a permisos y sede. Los permisos de ubicación y el flujo Android deben volver a validarse antes de publicar en Play Store. Toda ampliación futura debe mantener selección de hijo, grupos por sede, seguridad backend, auditoría y tema central.

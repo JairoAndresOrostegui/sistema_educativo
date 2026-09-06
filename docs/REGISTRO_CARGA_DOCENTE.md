@@ -36,6 +36,11 @@ revisión y decisión del usuario, no es un adaptador ya habilitado.
 
 ## Contrato para módulos futuros
 
+QR identifica al docente, no representa carga transferible: su credencial nunca
+se entrega al reemplazo, quien usa la propia. La desactivación del saliente
+bloquea su resolución. Los identificadores de eventos actuales no asignan
+responsables; antes de añadirlos, integrar el evento al contrato de traslado.
+
 Antes de considerar terminado un módulo nuevo se debe documentar:
 
 1. Documentos que representan responsabilidad docente activa.

@@ -186,8 +186,7 @@ service cloud.firestore {
 
       allow update: if active() && request.auth.uid == userId &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'notificationTokens', 'fcmToken', 'fcmTokens', 'photoUrl',
-          'qrPayload', 'qrEnabled', 'qrUpdatedAt'
+          'notificationTokens', 'fcmToken', 'fcmTokens', 'photoUrl'
         ]);
 
       allow update: if teacher() &&
