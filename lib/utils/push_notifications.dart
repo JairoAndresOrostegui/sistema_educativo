@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'notification_destination.dart';
+import 'firebase_utils.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -16,6 +17,7 @@ import '../config/firebase_options.dart';
 final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
 bool _webNotificationVisible = false;
 bool _pushListenersInitialized = false;
+String? _webVapidKey;
 Future<void> Function(String token)? _tokenHandler;
 
 void _openNotification(Map<String, dynamic> data) {
@@ -40,6 +42,7 @@ Future<void> initializePush({
   String? webVapidKey,
 }) async {
   final messaging = FirebaseMessaging.instance;
+  _webVapidKey = webVapidKey;
   _tokenHandler = onNewToken;
 
   final permission = await messaging.requestPermission(
@@ -56,21 +59,23 @@ Future<void> initializePush({
     importance: Importance.high,
   );
 
-  await _fln
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
-      ?.createNotificationChannel(channel);
+  if (!kIsWeb) {
+    await _fln
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(channel);
 
-  final initSettings = InitializationSettings(
-    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    iOS: DarwinInitializationSettings(),
-  );
-  await _fln.initialize(
-    settings: initSettings,
-    onDidReceiveNotificationResponse: (response) =>
-        _openPayload(response.payload),
-  );
+    final initSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    );
+    await _fln.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: (response) =>
+          _openPayload(response.payload),
+    );
+  }
 
   if (!_pushListenersInitialized) {
     _pushListenersInitialized = true;
@@ -130,11 +135,32 @@ Future<void> initializePush({
     token = await messaging.getToken();
   }
   if (token != null && token.isNotEmpty) {
-    await onNewToken(token);
+    await PushDeviceSession.action('enable', token: token);
   }
 }
 
 void clearPushTokenHandler() => _tokenHandler = null;
+void configurePushVapidKey(String? key) => _webVapidKey = key;
+
+Future<bool> enablePushFromHome() async {
+  final permission = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  if (permission.authorizationStatus == AuthorizationStatus.denied ||
+      permission.authorizationStatus == AuthorizationStatus.notDetermined) {
+    return false;
+  }
+  await PushDeviceSession.action('begin');
+  await initializePush(
+    webVapidKey: _webVapidKey,
+    onNewToken: (token) async {
+      await PushDeviceSession.action('refresh', token: token);
+    },
+  );
+  return PushDeviceSession.enabled.value;
+}
 
 String _resolveTitle(RemoteMessage message) {
   final title = message.notification?.title?.trim() ?? '';

@@ -1,5 +1,7 @@
 import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
+import '../widgets/route_history_dialog.dart';
+import '../widgets/route_admin_tools.dart';
 import 'package:provider/provider.dart';
 
 import '../services/admin_route_service.dart';
@@ -115,12 +117,30 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
     return Scaffold(
       backgroundColor: AppPalette.surface,
       appBar: AppBar(
-        title: Text('School route management'),
+        title: Text('Rutas escolares'),
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.primary,
         centerTitle: true,
         leading: BackToDashboardButton(),
         actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Herramientas de ruta',
+            onSelected: (value) =>
+                showRouteAdminTools(context, drivers: value == 'drivers'),
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'drivers', child: Text('Conductores')),
+              if (canEdit)
+                const PopupMenuItem(
+                  value: 'changes',
+                  child: Text('Cambios de parada'),
+                ),
+            ],
+          ),
+          IconButton(
+            tooltip: 'Historial de recogidas',
+            onPressed: () => showRouteHistory(context),
+            icon: const Icon(Icons.history),
+          ),
           if (canCreate)
             IconButton(
               icon: Icon(Icons.add),

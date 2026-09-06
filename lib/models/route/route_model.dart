@@ -11,6 +11,7 @@ class RouteModel {
   final TimeOfDay? startTime;
   final TimeOfDay? endTime;
   final String? manager;
+  final String? driverId;
   final List<String> students;
 
   const RouteModel({
@@ -22,6 +23,7 @@ class RouteModel {
     this.startTime,
     this.endTime,
     this.manager,
+    this.driverId,
     required this.students,
   });
 
@@ -36,6 +38,7 @@ class RouteModel {
       startTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaInicio']),
       endTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaFin']),
       manager: data['gestionador'],
+      driverId: data['driverId'],
       students: List<String>.from(data['estudiantes'] ?? []),
     );
   }
@@ -50,6 +53,7 @@ class RouteModel {
       startTime: startTime,
       endTime: endTime,
       manager: manager,
+      driverId: driverId,
       students: students,
     );
   }
@@ -63,6 +67,7 @@ class RouteModel {
       'horaInicio': FormatUtils.timestampDesdeHora(startTime),
       'horaFin': FormatUtils.timestampDesdeHora(endTime),
       'gestionador': manager,
+      'driverId': driverId,
       'estudiantes': students,
     };
   }

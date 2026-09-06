@@ -10,6 +10,7 @@ import '../../../config/theme_config.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../services/auth_service_v2.dart';
+import '../../../widgets/push_preferences.dart';
 
 class DashboardLayout extends StatefulWidget {
   final List<MenuItemData> menuItems;
@@ -148,6 +149,8 @@ class _DashboardLayoutState extends State<DashboardLayout> {
             // Separador superior + banner
             SliverToBoxAdapter(child: SizedBox(height: 24)),
             SliverToBoxAdapter(child: _greetingBanner(context)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SliverToBoxAdapter(child: PushPreferences()),
             SliverToBoxAdapter(child: SizedBox(height: 16)),
 
             // GRID dentro de un SliverToBoxAdapter (puedes dejar tu Wrap tal cual)

@@ -33,7 +33,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
     if (user == null) return;
 
     final role = user.role.trim().toLowerCase();
-    if (!(user.isSuperadmin || role == 'docente')) return;
+    if (!(user.isSuperadmin || role == 'docente' || role == 'auxiliar')) return;
 
     final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
 

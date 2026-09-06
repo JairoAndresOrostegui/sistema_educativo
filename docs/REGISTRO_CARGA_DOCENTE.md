@@ -34,6 +34,15 @@ reemplazo; este último recibe avisos futuros según su acceso vigente.
 La conexión automática de Rutas con canales de servicio está pendiente de
 revisión y decisión del usuario, no es un adaptador ya habilitado.
 
+Rutas usa ahora `route_history`, `route_push_events` y operaciones idempotentes
+del recorrido. `performedBy` y eventos anteriores no se trasladan. El impacto y
+aplicación del traslado excluyen expresamente `estado == finalizada`.
+Las hojas de vida `route_drivers` no son usuarios ni cargas docentes.
+Auxiliar es una cuenta operativa limitada a Perfil, QR y recorrido asignado;
+no adquiere asignaturas ni permisos docentes por ese rol. El traslado académico
+existente sigue siendo entre docentes; el relevo operativo de auxiliares durante
+un viaje necesita un flujo específico y no debe simularse alterando la autoría.
+
 ## Contrato para módulos futuros
 
 QR identifica al docente, no representa carga transferible: su credencial nunca

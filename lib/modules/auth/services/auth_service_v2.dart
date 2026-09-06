@@ -2,6 +2,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../utils/push_notifications.dart';
 
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/firebase_utils.dart';
@@ -94,6 +96,7 @@ class AuthService {
         // log best-effort; no romper el login
       }
 
+      PushDeviceSession.newLogin(uid);
       return userModel;
     } on FirebaseAuthException catch (e) {
       throw Exception(AuthErrorMapper.mapFirebaseCode(e.code));
@@ -109,6 +112,7 @@ class AuthService {
   }
 
   Future<void> logout(userModelv2 currentUser) async {
+    clearPushTokenHandler();
     try {
       await UserLogService().logEvent(user: currentUser, event: 'logout');
     } catch (_) {}
@@ -116,6 +120,9 @@ class AuthService {
       await clearUserNotificationToken(userId: currentUser.id);
     } catch (_) {}
     await _auth.signOut();
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (_) {}
   }
 
   Future<String> _resolveStudentEmail(String document) async {

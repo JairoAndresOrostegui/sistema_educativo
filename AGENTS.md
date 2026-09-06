@@ -66,6 +66,22 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
   mismo motor. El módulo de origen conserva su estado operativo y Mensajería
   conserva únicamente la comunicación; nunca duplicar colecciones de chat.
 
+## Rutas: decisiones aprobadas
+
+- El conductor es una hoja de vida institucional sin cuenta de acceso; el
+  responsable autenticado es docente, auxiliar o administrador designado.
+- Las paradas y sus direcciones se bloquean al iniciar el recorrido, incluso
+  para administración. Las excepciones familiares se deciden antes del inicio.
+- Hermanos en una misma dirección y recorrido generan un aviso agrupado por
+  parada y destinatario; la asistencia se registra individualmente.
+- Modos manual y automático explícitos. Automático nunca impide avisos manuales
+  de tiempo. Si Maps falla o no está habilitado, informar; no inventar tiempos.
+- Operación, historial y evento push se escriben en backend de forma atómica.
+  FCM no decide si una recogida o cierre quedó guardado.
+- Historial familiar limitado a hijos activos vinculados y seleccionados.
+- Propiedad push por sesión: un móvil y una web. Refresh/logout antiguos no
+  pueden reemplazar ni borrar al último login. Clientes no escriben tokens.
+
 ## Interfaz y calidad
 
 - QR es un identificador opaco, no una firma digital ni autorización de una

@@ -1,5 +1,29 @@
 {
   "indexes": [
+    {"collectionGroup": "routes", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "institution", "order": "ASCENDING"},
+      {"fieldPath": "campus", "order": "ASCENDING"},
+      {"fieldPath": "academicYearId", "order": "ASCENDING"},
+      {"fieldPath": "gestionador", "order": "ASCENDING"}]},
+    {"collectionGroup": "daily_routes", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "institution", "order": "ASCENDING"},
+      {"fieldPath": "campus", "order": "ASCENDING"},
+      {"fieldPath": "academicYearId", "order": "ASCENDING"},
+      {"fieldPath": "estado", "order": "ASCENDING"}]},
+    {"collectionGroup": "route_history", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "institution", "order": "ASCENDING"},
+      {"fieldPath": "campus", "order": "ASCENDING"},
+      {"fieldPath": "createdAt", "order": "DESCENDING"}]},
+    {"collectionGroup": "route_history", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "institution", "order": "ASCENDING"},
+      {"fieldPath": "campus", "order": "ASCENDING"},
+      {"fieldPath": "performedBy", "order": "ASCENDING"},
+      {"fieldPath": "createdAt", "order": "DESCENDING"}]},
+    {"collectionGroup": "route_history", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "institution", "order": "ASCENDING"},
+      {"fieldPath": "campus", "order": "ASCENDING"},
+      {"fieldPath": "studentIds", "arrayConfig": "CONTAINS"},
+      {"fieldPath": "createdAt", "order": "DESCENDING"}]},
     {
       "collectionGroup": "enrollments",
       "queryScope": "COLLECTION",

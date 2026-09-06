@@ -102,6 +102,13 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
           route: '/management_route',
         ),
       );
+      items.add(
+        const MenuItemData(
+          label: 'Mis recorridos',
+          icon: Icons.directions_bus,
+          route: '/execute_route',
+        ),
+      );
     }
 
     if (esSuperadmin ||

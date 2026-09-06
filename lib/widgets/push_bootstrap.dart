@@ -19,15 +19,23 @@ class _PushBootstrapState extends State<PushBootstrap> {
   Future<void> _ensureInitForUser(String userId) async {
     if (_initedForUserId == userId) return;
     _initedForUserId = userId;
+    configurePushVapidKey(widget.webVapidKey);
 
-    await initializePush(
-      webVapidKey: widget.webVapidKey,
-      onNewToken: (t) async {
-        await saveUserNotificationToken(userId: userId, token: t);
-        if (!mounted) return;
-        context.read<UserProviderV2>().updateNotificationToken(t);
-      },
-    );
+    try {
+      await PushDeviceSession.action('begin');
+      await initializePush(
+        webVapidKey: widget.webVapidKey,
+        onNewToken: (t) async {
+          final result = await PushDeviceSession.action('refresh', token: t);
+          if (result['enabled'] != true) return;
+          if (!mounted) return;
+          context.read<UserProviderV2>().updateNotificationToken(t);
+        },
+      );
+    } catch (_) {
+      PushDeviceSession.error.value =
+          'No se pudieron activar los avisos. Usa Notificaciones en Inicio para reintentar.';
+    }
   }
 
   @override

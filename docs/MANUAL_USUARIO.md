@@ -20,6 +20,12 @@ Opera solo su sede y únicamente los módulos/acciones presentes en su matriz de
 
 Opera los módulos asignados y su grupo académico. Los permisos especiales son explícitos y temporales según decisión administrativa. No obtiene acceso transversal por ser docente.
 
+### Auxiliar de ruta
+
+Cuenta adulta con correo verificado. Administración asigna `rutas.ver` y lo
+designa responsable de una ruta. Accede a Perfil, su QR y los recorridos
+asignados; no recibe permisos académicos de docente por ser auxiliar.
+
 ### Familiar
 
 Selecciona uno de sus hijos vinculados y todo módulo muestra el contexto correspondiente. En Autorizaciones, `autorizaciones.ver` le permite consultar y presentar solicitudes; nunca recibe permisos crear, editar o eliminar en la matriz administrativa.
@@ -183,6 +189,34 @@ confirmar. El traslado puede ser temporal o definitivo. En uno temporal,
 original. La autoría histórica de mensajes y archivos no cambia.
 
 ## Rutas, QR y módulos en evolución
+
+### Rutas y recogidas
+
+Admin configura la ruta, su responsable y horarios. En Herramientas puede
+registrar un conductor (sin usuario) y revisar solicitudes de cambio de parada.
+El responsable entra a su ruta asignada, prepara direcciones y participantes,
+e inicia. Desde ese momento no se cambian paradas. Registra a cada estudiante
+como recogido o no recogido con motivo; el aviso se agrupa cuando se completa
+la parada compartida. Para finalizar deben resolverse los estudiantes pendientes.
+
+El familiar selecciona un hijo activo; ve su ruta e historial de recogidas.
+Cuando ya existe el recorrido preparado para hoy, puede solicitar una dirección
+distinta. La dirección anterior sigue vigente hasta aprobación administrativa.
+Una solicitud posterior al inicio se rechaza. Actualmente las solicitudes son
+para el recorrido preparado de hoy; la planificación de días futuros e
+ida/regreso como viajes separados sigue pendiente.
+
+El modo manual permite indicar minutos y avisar llegada. El automático depende
+de Google Maps habilitado, GPS reciente y cuota disponible; si no lo está, el
+sistema lo informa. Ambos permiten avisos manuales. Una estimación no garantiza
+hora exacta ni registra recogida por proximidad. El historial está en el icono
+de reloj de Rutas. El conductor no recibe credenciales.
+
+En Inicio, **Notificaciones en este equipo** controla los avisos del móvil o
+navegador actual sin desactivar el otro. Si negaste permisos, sigue la indicación
+del navegador o abre Ajustes del teléfono. Un equipo sustituido debe iniciar
+sesión nuevamente para recuperar su lugar. No se necesitan ambos dispositivos:
+solo móvil, solo web o ninguno son situaciones válidas.
 
 ### Identificación QR
 

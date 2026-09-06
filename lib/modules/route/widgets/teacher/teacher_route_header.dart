@@ -26,6 +26,7 @@ class TeacherRouteHeader extends StatelessWidget {
     return Column(
       children: [
         DropdownButtonFormField<RouteModel>(
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Selecciona una ruta',
             border: OutlineInputBorder(),
@@ -33,8 +34,10 @@ class TeacherRouteHeader extends StatelessWidget {
           initialValue: selected,
           items: routes
               .map(
-                (r) =>
-                    DropdownMenuItem<RouteModel>(value: r, child: Text(r.name)),
+                (r) => DropdownMenuItem<RouteModel>(
+                  value: r,
+                  child: Text(r.name, overflow: TextOverflow.ellipsis),
+                ),
               )
               .toList(),
           onChanged: onRouteChanged,

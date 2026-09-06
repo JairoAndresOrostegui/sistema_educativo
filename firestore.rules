@@ -186,13 +186,10 @@ service cloud.firestore {
 
       allow update: if active() && request.auth.uid == userId &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'notificationTokens', 'fcmToken', 'fcmTokens', 'photoUrl'
+          'photoUrl'
         ]);
 
-      allow update: if teacher() &&
-        resource.data.institution == me().institution && resource.data.campus == me().campus &&
-        resource.data.role == 'Estudiante' &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['routeAddress', 'direccionRuta']);
+      // Direcciones de ruta se modifican mediante operaciones autorizadas.
 
       // Las bajas y eliminaciones pasan por Cloud Functions para coordinar
       // Firebase Auth, dependencias, Storage y auditoria.
@@ -382,36 +379,34 @@ service cloud.firestore {
 
     match /routes/{id} {
       allow read: if sameTenant(resource.data) &&
-        operationalYearReadable(resource.data);
-      allow create: if admin() && sameTenant(request.resource.data) &&
-        academicYearActive(request.resource.data);
-      allow update: if admin() && sameTenant(resource.data) &&
-        academicYearActive(resource.data) &&
-        request.resource.data.academicYearId == resource.data.academicYearId;
-      allow delete: if admin() && sameTenant(resource.data) &&
-        academicYearActive(resource.data);
+        hasPermission('rutas.ver') &&
+        (admin() || resource.data.gestionador == request.auth.uid);
+      allow write: if false;
     }
 
     match /daily_routes/{routeId} {
-      allow read: if sameTenant(resource.data) &&
-        operationalYearReadable(resource.data);
-      allow create: if teacher() && sameTenant(request.resource.data) &&
-        academicYearActive(request.resource.data) &&
-        request.resource.data.gestionador == request.auth.uid;
-      allow update: if sameTenant(resource.data) &&
-        academicYearActive(resource.data) &&
-        request.resource.data.academicYearId == resource.data.academicYearId &&
-        (admin() || (teacher() && resource.data.gestionador == request.auth.uid));
-      allow delete: if admin() && sameTenant(resource.data) &&
-        academicYearActive(resource.data);
+      function selectedRouteStudent() {
+        return me().role == 'Estudiante' ? request.auth.uid : me().activeStudentId;
+      }
+      function ownRouteStudent(studentId) {
+        return active() && (me().role == 'Estudiante' && request.auth.uid == studentId ||
+          family() && me().activeStudentId == studentId && studentId in me().studentIds &&
+          get(/databases/$(database)/documents/users/$(studentId)).data.status == 'activo' &&
+          sameTenant(get(/databases/$(database)/documents/users/$(studentId)).data));
+      }
+      allow read: if sameTenant(resource.data) && hasPermission('rutas.ver') &&
+        (admin() || resource.data.gestionador == request.auth.uid ||
+          (ownRouteStudent(selectedRouteStudent()) &&
+           exists(/databases/$(database)/documents/daily_routes/$(routeId)/students/$(selectedRouteStudent()))));
+      allow write: if false;
 
       match /students/{studentId} {
         function route() {
           return get(/databases/$(database)/documents/daily_routes/$(routeId)).data;
         }
-        allow read: if sameTenant(route());
-        allow write: if sameTenant(route()) &&
-          (admin() || (teacher() && route().gestionador == request.auth.uid));
+        allow read: if sameTenant(route()) && hasPermission('rutas.ver') &&
+          (admin() || route().gestionador == request.auth.uid || ownRouteStudent(studentId));
+        allow write: if false;
       }
     }
 

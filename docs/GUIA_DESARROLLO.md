@@ -196,6 +196,30 @@ Al publicar, las rutas de imágenes obsoletas y los reintentos anteriores se gua
 
 ## Migraciones
 
+### Revisión de Rutas y dispositivos (septiembre de 2026)
+
+`functions/routes.js` centraliza plantillas, preparación, operación, historial,
+conductores y cambios de parada. Las escrituras directas de Rutas se deniegan.
+`route_push_events` es outbox transaccional; los avisos genéricos de tipo route
+se rechazan. `route_history` no expone otros hijos al familiar.
+Las estimaciones por parada se guardan en el documento de cada estudiante,
+nunca en el padre del recorrido que leen todas las familias.
+
+`push_device_sessions/{uid}` guarda hashes de sesión por slot, no accesibles
+al cliente. `gestionarDispositivoPush` compara sesión y auth_time verificado por
+Firebase. Un empate de segundo entre logins diferentes exige repetir login;
+no se resuelve dejando que una sesión antigua reclame el dispositivo nuevo.
+El botón de Inicio puede solicitar permiso o guiar a Ajustes, no revocar ni
+conceder permisos del sistema operativo por su cuenta.
+
+Migración QA: `node functions/scripts/migrate_route_security.js` (diagnóstico),
+`--apply` (retira campos antiguos de tokens/dirección y registra rol Auxiliar).
+Los registros QR y vínculos de hijos no cambian. No se eliminan rutas históricas.
+`MAPS_ROUTING_ENABLED` permanece desactivado mientras no se habiliten API,
+facturación y permisos restringidos del servidor. El límite actual de cálculos
+es 100/día/proyecto; no equivale a un presupuesto de todas las APIs de Google.
+Ver [REVISION_RUTAS_Y_PUSH.md](REVISION_RUTAS_Y_PUSH.md) para límites pendientes.
+
 No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y normaliza horarios, `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos, `functions/scripts/migrate_messaging_channels.js` convierte conversaciones y crea canales académicos, y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`.
 
 ## Validación y despliegue

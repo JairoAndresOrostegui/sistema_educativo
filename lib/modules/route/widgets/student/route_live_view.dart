@@ -60,6 +60,13 @@ class RouteLiveView extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: service.streamDailyRoute(dailyRouteId),
       builder: (context, routeSnap) {
+        if (routeSnap.hasError) {
+          return const Center(
+            child: Text(
+              'No se pudo consultar esta ruta. Comprueba tu conexión y el hijo seleccionado.',
+            ),
+          );
+        }
         if (!routeSnap.hasData) {
           return Center(child: CircularProgressIndicator());
         }
@@ -88,6 +95,15 @@ class RouteLiveView extends StatelessWidget {
 
         return Column(
           children: [
+            if (status == 'active')
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  data['lastUpdate'] is Timestamp
+                      ? 'Última ubicación: ${TimeOfDay.fromDateTime((data['lastUpdate'] as Timestamp).toDate()).format(context)}. Si no se actualiza, puede haber pérdida de señal.'
+                      : 'Sin ubicación recibida. El recorrido puede continuar en modo manual.',
+                ),
+              ),
             Expanded(
               flex: 2,
               child: Semantics(
@@ -138,6 +154,13 @@ class RouteLiveView extends StatelessWidget {
                   studentId,
                 ),
                 builder: (context, estSnap) {
+                  if (estSnap.hasError) {
+                    return const Center(
+                      child: Text(
+                        'No se pudo consultar la recogida de este estudiante.',
+                      ),
+                    );
+                  }
                   if (!estSnap.hasData) {
                     return Center(child: CircularProgressIndicator());
                   }
@@ -185,54 +208,56 @@ class RouteLiveView extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  routeName,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    routeName,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
+                                    semanticsLabel:
+                                        'Nombre de la ruta: $routeName',
                                   ),
-                                  semanticsLabel:
-                                      'Nombre de la ruta: $routeName',
                                 ),
-                              ),
-                              StatusChip(status: status),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          Semantics(
-                            label: 'Dirección asignada: $address',
-                            child: Text('Dirección: $address'),
-                          ),
-                          SizedBox(height: 6),
-                          Semantics(
-                            label: picked
-                                ? 'Estado de recogida: Sí'
-                                : 'Estado de recogida: No',
-                            child: Text('Recogido: ${picked ? "Sí" : "No"}'),
-                          ),
-                          if (pickedAt != null)
-                            Text(
-                              'Hora de recogida: '
-                              '${TimeOfDay.fromDateTime(pickedAt.toDate()).format(context)}',
+                                StatusChip(status: status),
+                              ],
                             ),
-                          SizedBox(height: 6),
-                          if (notices > 0) Text('Avisos enviados: $notices'),
-                          Spacer(),
-                          Text(
-                            status == 'pending'
-                                ? 'La ruta aún no inicia.'
-                                : status == 'active'
-                                ? 'La ruta está en camino.'
-                                : 'La ruta ha finalizado por hoy.',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ],
+                            SizedBox(height: 8),
+                            Semantics(
+                              label: 'Dirección asignada: $address',
+                              child: Text('Dirección: $address'),
+                            ),
+                            SizedBox(height: 6),
+                            Semantics(
+                              label: picked
+                                  ? 'Estado de recogida: Sí'
+                                  : 'Estado de recogida: No',
+                              child: Text('Recogido: ${picked ? "Sí" : "No"}'),
+                            ),
+                            if (pickedAt != null)
+                              Text(
+                                'Hora de recogida: '
+                                '${TimeOfDay.fromDateTime(pickedAt.toDate()).format(context)}',
+                              ),
+                            SizedBox(height: 6),
+                            if (notices > 0) Text('Avisos enviados: $notices'),
+                            const SizedBox(height: 12),
+                            Text(
+                              status == 'pending'
+                                  ? 'La ruta aún no inicia.'
+                                  : status == 'active'
+                                  ? 'La ruta está en camino.'
+                                  : 'La ruta ha finalizado por hoy.',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );

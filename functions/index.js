@@ -25,6 +25,10 @@ const db = getFirestore();
 const auth = getAuth();
 const messaging = getMessaging();
 const storage = getStorage();
+Object.assign(exports, require("./push_devices")
+    .pushDeviceFunctions(db, getCaller));
+Object.assign(exports, require("./routes")
+    .routeFunctions(db, getCaller, requireActiveAcademicYear));
 Object.assign(exports, require("./qr_identity").qrFunctions(
     db, getCaller, requireActiveAcademicYear));
 const pushTransport = process.env.FUNCTIONS_EMULATOR === "true" ? {
@@ -75,6 +79,22 @@ exports.encolarNotificacionMensaje = onDocumentCreated({
   }, {institutionId: value.institutionId, campusId: value.campusId,
     academicYearId: value.academicYearId, type: "messaging"},
   event.params.eventId);
+  await event.data.ref.update({queuedAt: FieldValue.serverTimestamp()});
+});
+
+exports.encolarNotificacionRuta = onDocumentCreated({
+  document: "route_push_events/{eventId}", retry: true,
+}, async (event) => {
+  const d = event.data?.data();
+  if (!d) return;
+  const tokens = await resolveAudienceTokens(d, {
+    studentIds: d.studentIds, includeFamilies: true,
+  }, true);
+  await pushQueue.enqueue({tokens,
+    notification: {title: d.title, body: d.body},
+    android: {priority: "high"},
+  }, {institutionId: d.institution, campusId: d.campus,
+    academicYearId: d.academicYearId, type: "route"}, event.params.eventId);
   await event.data.ref.update({queuedAt: FieldValue.serverTimestamp()});
 });
 
@@ -137,6 +157,7 @@ exports.reintentarNotificacion = onCall(async (request) => {
 const ALLOWED_ROLES = new Set([
   "Administrador",
   "Docente",
+  "Auxiliar",
   "Estudiante",
   "Familiar",
 ]);
@@ -2215,10 +2236,6 @@ async function resolveAudienceTokens(caller, audience, internal = false) {
       const token = user.notificationTokens?.[slot];
       if (typeof token === "string" && token.length >= 20) tokens.add(token);
     }
-    for (const legacy of [user.fcmToken, user.webPushToken,
-      user.mobilePushToken]) {
-      if (typeof legacy === "string" && legacy.length >= 20) tokens.add(legacy);
-    }
   });
   return [...tokens];
 }
@@ -2229,6 +2246,10 @@ exports.enviarNotificacion = onCall(async (request) => {
   const titulo = requiredString(data.titulo, "titulo", 120);
   const cuerpo = requiredString(data.cuerpo, "cuerpo", 500);
   const notificationType = requiredString(data.notificationType, "tipo", 30);
+  if (notificationType === "route") {
+    throw new HttpsError("permission-denied",
+        "Los avisos de ruta se generan desde el recorrido autorizado.");
+  }
   requireNotificationAccess(caller, notificationType);
   await enforceNotificationRateLimit(caller.uid);
 
@@ -2246,7 +2267,7 @@ exports.enviarNotificacion = onCall(async (request) => {
     await resolveAudienceTokens(caller, data.audience) : [];
   const cleanTokens = [...new Set([...legacyTokens, ...audienceTokens])];
   if (cleanTokens.length === 0) {
-    throw new HttpsError("invalid-argument", "No hay tokens validos.");
+    return {encolados: 0, omitido: "sin_dispositivos"};
   }
 
   const queued = await pushQueue.enqueue({
@@ -4604,6 +4625,7 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
     });
     finalBatch.delete(db.collection("user_directory").doc(uid));
     finalBatch.delete(db.collection("notification_rate_limits").doc(uid));
+    finalBatch.delete(db.collection("push_device_sessions").doc(uid));
     finalBatch.delete(targetRef);
     finalBatch.delete(db.collection("qr_credentials").doc(
         require("./qr_identity").credentialId("user", uid)));
@@ -4895,7 +4917,8 @@ async function teacherTransferContext(caller, sourceId, targetId) {
       data.academicYearId === year.id;
   };
   const scopedRoutes = routes.docs.filter(inScope);
-  const scopedDailyRoutes = dailyRoutes.docs.filter(inScope);
+  const scopedDailyRoutes = dailyRoutes.docs.filter((item) =>
+    inScope(item) && item.data().estado !== "finalizada");
   const scopedThreads = threads.docs.filter(inScope);
   const scopedFiles = uniqueDocuments(
       recipientFiles.docs,

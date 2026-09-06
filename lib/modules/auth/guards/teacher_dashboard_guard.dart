@@ -18,7 +18,8 @@ class TeacherDashboardGuard extends StatelessWidget {
     final status = (user.status).trim().toLowerCase();
     final isActive = status == 'activo';
 
-    final canAccess = user.isSuperadmin || role == 'docente';
+    final canAccess =
+        user.isSuperadmin || role == 'docente' || role == 'auxiliar';
     if (!canAccess || !isActive) return const AccessDeniedPage();
 
     return const DocenteDashboardLayout();

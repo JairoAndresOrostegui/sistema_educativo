@@ -2,6 +2,7 @@ abstract final class AuthAccessPolicy {
   static const Set<String> allowedRoles = {
     'Administrador',
     'Docente',
+    'Auxiliar',
     'Estudiante',
     'Familiar',
   };
@@ -37,6 +38,7 @@ abstract final class AuthAccessPolicy {
       case 'Administrador':
         return '/admin_dashboard';
       case 'Docente':
+      case 'Auxiliar':
         return '/teacher_dashboard';
       case 'Estudiante':
       case 'Familiar':
@@ -68,6 +70,7 @@ abstract final class AuthAccessPolicy {
         return switch (path) {
           '/admin_user' => has('usuarios.ver'),
           '/management_route' => has('rutas.ver'),
+          '/execute_route' => has('rutas.ver'),
           '/management_schedule' =>
             has('horarios.ver') ||
                 has('horarios.crear') ||
@@ -85,6 +88,9 @@ abstract final class AuthAccessPolicy {
           '/website_messages' => isWeb && has('sitio_web.editar'),
           _ => false,
         };
+      case 'Auxiliar':
+        return path == '/teacher_dashboard' ||
+            path == '/execute_route' && has('rutas.ver');
       case 'Docente':
         if (path == '/teacher_dashboard') return true;
         return switch (path) {

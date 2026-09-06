@@ -225,7 +225,7 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/execute_route',
-          builder: (context, state) => const ManageRouteScreen(),
+          builder: (context, state) => const TeacherRouteScreen(),
         ),
         GoRoute(
           path: '/teacher_schedule',

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/admin_route_service.dart';
+import '../../services/daily_route_service.dart';
 import 'admin_route_form_body.dart';
 import '../../../../models/route/route_model.dart';
 import '../../../../providers/user_provider_v2.dart';
@@ -32,6 +33,11 @@ Future<void> mostrarFormularioRuta({
   TimeOfDay? endTime = rutaModel?.endTime;
 
   final managerId = ValueNotifier<String?>(rutaModel?.manager);
+  String? driverId = rutaModel?.driverId;
+  final driverResult = await RouteOperations.call('gestionarConductores', {});
+  final drivers = (driverResult['items'] as List)
+      .where((d) => d['active'] == true || d['id'] == driverId)
+      .toList();
 
   // 🔒 SIEMPRE filtrar por institution/campus
   final students = await RouteService().obtenerEstudiantesDisponibles(
@@ -140,6 +146,25 @@ Future<void> mostrarFormularioRuta({
                       ),
                     ),
                     SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: driverId,
+                      decoration: const InputDecoration(
+                        labelText: 'Conductor (hoja de vida sin usuario)',
+                      ),
+                      items: drivers
+                          .map(
+                            (d) => DropdownMenuItem<String>(
+                              value: d['id'],
+                              child: Text(
+                                d['name'],
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (id) => setState(() => driverId = id),
+                    ),
                     // Botón dentro de SafeArea inferior para que no lo tape el sistema
                     SafeArea(
                       top: false,
@@ -159,6 +184,7 @@ Future<void> mostrarFormularioRuta({
                               startTime: startTime,
                               endTime: endTime,
                               manager: managerId.value,
+                              driverId: driverId,
                               students: orderedStudents.value
                                   .map((e) => e['id'] as String)
                                   .toList(),

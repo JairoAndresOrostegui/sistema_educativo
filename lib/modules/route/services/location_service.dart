@@ -3,10 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'daily_route_service.dart';
 
 class LocationService {
   StreamSubscription<Position>? _positionSub;
-  final FirebaseFirestore _firestore;
 
   static const double _kMinDeltaMeters = 30;
   static const Duration _kMinInterval = Duration(seconds: 8);
@@ -15,11 +15,14 @@ class LocationService {
   GeoPoint? _lastWrittenPoint;
   DateTime? _lastWriteAt;
 
-  LocationService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  LocationService();
 
   Future<bool> requestLocationPermission() async {
-    if (kIsWeb) return true;
+    if (kIsWeb) {
+      final status = await Geolocator.requestPermission();
+      return status == LocationPermission.whileInUse ||
+          status == LocationPermission.always;
+    }
     final status = await Permission.location.request();
     return status.isGranted;
   }
@@ -27,17 +30,17 @@ class LocationService {
   Future<void> startLocationUpdates(String rutaDiaDocId) async {
     final ok = await requestLocationPermission();
     if (!ok) {
-      debugPrint('LocationService: permisos denegados');
-      return;
+      throw StateError(
+        'Permiso de ubicación denegado. Puedes operar manualmente; activa el permiso en Ajustes para compartir posición.',
+      );
     }
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      debugPrint('LocationService: servicio de ubicación desactivado');
-      return;
+      throw StateError('Activa el GPS para compartir la ubicación de la ruta.');
     }
 
-    _positionSub?.cancel();
+    await _positionSub?.cancel();
 
     try {
       final first = await Geolocator.getCurrentPosition(
@@ -58,7 +61,12 @@ class LocationService {
         ? AndroidSettings(
             accuracy: LocationAccuracy.bestForNavigation,
             distanceFilter: 25,
-            intervalDuration: const Duration(seconds: 10),
+            intervalDuration: const Duration(seconds: 30),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'Recorrido escolar activo',
+              notificationText: 'Compartiendo ubicación durante el recorrido.',
+              enableWakeLock: true,
+            ),
           )
         : const LocationSettings(
             accuracy: LocationAccuracy.bestForNavigation,
@@ -104,10 +112,10 @@ class LocationService {
         }
       }
 
-      await _firestore.collection('daily_routes').doc(docId).set({
-        'teacherPosition': point,
-        'lastUpdate': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await RouteOperations.execute(docId, 'position', {
+        'latitude': point.latitude,
+        'longitude': point.longitude,
+      });
 
       _lastWrittenPoint = point;
       _lastWriteAt = now;
