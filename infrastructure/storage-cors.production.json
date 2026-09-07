@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://liceobilinguerodolfollinas.edu.co",
+      "https://www.liceobilinguerodolfollinas.edu.co",
+      "https://sistema-educativo-rl-prod.web.app",
+      "https://sistema-educativo-rl-prod.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "x-goog-generation", "x-goog-metageneration", "x-goog-resumable"],
+    "maxAgeSeconds": 3600
+  }
+]

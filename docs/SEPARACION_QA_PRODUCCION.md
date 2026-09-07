@@ -298,6 +298,18 @@ Cambiar la rama fuente requiere actualizar explícitamente el workflow.
 Para revertir, reconstruir la revisión fuente aprobada y publicar un nuevo commit
 de artefactos; no reescribir el historial ni borrar datos Firebase.
 
-Pendientes: comprobar despliegue efectivo en Hostinger, Maps restringido,
+CORS de producción aplicado al bucket propio con precondición de metageneración:
+`infrastructure/storage-cors.production.json`. Antes no tenía configuración CORS.
+Se verificó GET del logo con Origin del dominio raíz y www: HTTP 200 y
+Access-Control-Allow-Origin correcto; un origen ajeno no recibe esa cabecera.
+No se cambiaron reglas Storage, objetos ni configuración QA.
+
+Diagnóstico pendiente de consola: la traza del JavaScript 9bc55052, línea
+168021, corresponde al contador de autorizaciones. El tablero superadmin pasa
+institución/sede null a watchPendingCountForAdmin, que exige ambas. No atribuir
+ese error ni las fuentes Noto a una pérdida de push sin evidencia del receptor.
+Móvil confirmado por el titular; web aceptado por FCM, visualización sin confirmar.
+
+Pendientes: Maps restringido, contador superadmin de autorizaciones,
 sincronizar canales académicos iniciales sin mensajes de prueba, prueba física
 de acceso/notificaciones, compilación definitiva y publicación de frontend/AAB.
