@@ -7,6 +7,7 @@ plugins {
 
 import java.util.Properties
 import java.io.FileInputStream
+import java.util.Base64
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystoreProperties = Properties()
@@ -67,11 +68,49 @@ android {
             )
         }
     }
+    flavorDimensions += "environment"
+    productFlavors {
+        create("qa") {
+            dimension = "environment"
+            applicationId = "co.edu.liceobilinguerodolfollinas.sistemaeducativo"
+            manifestPlaceholders["mapsApiKey"] = "AIzaSyAumcmbsvpdqMka8oLH-teuIhzsNRxYwE0"
+        }
+        create("prod") {
+            dimension = "environment"
+            applicationId = "com.desarrolloytecnologiasantander.serodolfollinas"
+            manifestPlaceholders["mapsApiKey"] = providers.gradleProperty("PROD_MAPS_API_KEY").orElse("").get()
+        }
+    }
 }
 
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+// Reject a Dart/native mismatch before generating an installable artifact.
+val dartDefines = (project.findProperty("dart-defines") as? String).orEmpty()
+    .split(",").filter { it.isNotBlank() }
+    .map { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }
+val dartEnvironment = dartDefines.firstOrNull { it.startsWith("APP_ENV=") }
+    ?.substringAfter("=") ?: "qa"
+for (requestedTask in gradle.startParameter.taskNames) {
+    val taskName = requestedTask.substringAfterLast(":")
+    val nativeEnvironment = when {
+        taskName.contains("Prod") -> "prod"
+        taskName.contains("Qa") -> "qa"
+        else -> null
+    }
+    if (nativeEnvironment != null && dartEnvironment != nativeEnvironment) {
+        throw GradleException("APP_ENV=$dartEnvironment does not match flavor $nativeEnvironment")
+    }
+}
+androidComponents {
+    beforeVariants(selector().all()) { variant ->
+        variant.enable = variant.productFlavors.any {
+            it.first == "environment" && it.second == dartEnvironment
+        }
     }
 }
 

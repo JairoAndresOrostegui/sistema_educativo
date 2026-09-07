@@ -29,26 +29,5 @@
     "firestore": {"port": 8080},
     "storage": {"port": 9199},
     "ui": {"enabled": false}
-  },
-  "flutter": {
-    "platforms": {
-      "android": {
-        "default": {
-          "projectId": "sistema-educativo-rl",
-          "appId": "1:732639994966:android:7074e9ab68844152e847f7",
-          "fileOutput": "android/app/google-services.json"
-        }
-      },
-      "dart": {
-        "lib/firebase_options.dart": {
-          "projectId": "sistema-educativo-rl",
-          "configurations": {
-            "android": "1:732639994966:android:7074e9ab68844152e847f7",
-            "ios": "1:732639994966:ios:07f1a143c073073fe847f7",
-            "web": "1:732639994966:web:f956df2de00cd133e847f7"
-          }
-        }
-      }
-    }
   }
 }

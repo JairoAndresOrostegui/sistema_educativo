@@ -26,8 +26,9 @@ No cambiar DNS ni reemplazar el sitio público hasta validar el entorno nuevo.
   API de Auth no equivale a configurar proveedores ni importar usuarios.
 - No se han importado cuentas, contraseñas, configuración, archivos ni historial.
 - No se han desplegado Functions, Hosting o reglas en producción.
-- Flutter, Android y worker web actuales aún apuntan a QA. La separación de runtime
-  NO está completada. No generar/publicar un AAB de producción con esa configuración.
+- Separación de runtime implementada mediante `APP_ENV=qa|prod`, sabores Android
+  y configuraciones SDK independientes. QA sigue siendo el valor predeterminado.
+  No publicar aún: falta configurar servicios y migrar los datos.
 
 ## Usuarios aprobados
 
@@ -74,8 +75,8 @@ Una importación fallida se reanuda de forma idempotente, no borrando producció
    con dominios autorizados y proveedores necesarios, y reglas de aplicación.
 3. Configurar certificados Android de carga y distribución; comprobar SHA-1 para
    restricciones Maps y SHA-256 para servicios aplicables. No usar clave Maps de QA.
-4. Separar runtime Flutter/Android/web y worker; también Functions AUTH_WEB_API_KEY,
-   EMAIL_VERIFICATION_CONTINUE_URL y PUBLIC_APP_URL. No hay fallback de prod a QA.
+4. Implementado: selección Flutter/Android/web, worker y configuración backend
+   derivada del proyecto; sin fallback de producción a QA. Validación detallada abajo.
 5. Configurar secretos/VAPID/Maps por entorno; Maps requiere presupuesto independiente.
 6. Validar proyección de datos, importar sin operaciones de prueba, verificar Auth
    y Firestore juntos. No activar cuentas huérfanas.
@@ -106,3 +107,59 @@ Validación del 7 de septiembre: creación terminada, segunda ejecución de solo
 lectura correcta y `npm --prefix functions run lint` aprobado. No se ha probado
 todavía el inicio de sesión ni una compilación contra producción. Tampoco se han
 configurado alertas de presupuesto; Blaze no constituye un límite de gasto.
+
+## Runtime y acceso — continuación del 7 de septiembre
+
+- Android usa `src/qa/google-services.json` y `src/prod/google-services.json`.
+  Se conserva el paquete QA y producción usa el registrado en Play. MainActivity
+  conserva su namespace real y se referencia con nombre completo en el manifiesto.
+- `lib/config/firebase_options.dart` coincide con los SDK nativos de ambos entornos.
+  Se corrigió el identificador Android QA que antes difería del JSON nativo.
+- Gradle valida APP_ENV contra el sabor solicitado y deshabilita el otro sabor;
+  Flutter comprueba que el proyecto nativo coincida antes de cargar datos.
+- Functions obtiene clave pública Auth y URL de continuación/notificaciones según
+  el proyecto de ejecución. Proyectos desconocidos fallan; emuladores usan localhost.
+- El worker QA usa la configuración web correcta y rechaza dominios de producción.
+  `tools/build_web.js` genera la configuración propia de producción dentro de su
+  salida; `tools/verify_production_web.js` comprueba la salida antes de Firebase Hosting.
+- Producción no hereda VAPID ni Maps QA. VAPID producción está pendiente; la
+  compilación web de producción se bloquea si no se proporciona `WEB_VAPID_KEY`.
+  Maps Android producción usa la propiedad Gradle `PROD_MAPS_API_KEY`, pendiente;
+  el APK técnico no es apto todavía para validar mapas ni publicar.
+- Se retiraron metadatos FlutterFire obsoletos de firebase.json; no regenerar una
+  única configuración que sobrescriba ambos entornos.
+
+```powershell
+node tools/build_web.js qa
+# Requiere WEB_VAPID_KEY de producción en el entorno del proceso:
+node tools/build_web.js prod
+flutter build apk --flavor qa --dart-define=APP_ENV=qa --release --target-platform android-arm64
+flutter build apk --flavor prod --dart-define=APP_ENV=prod --release --target-platform android-arm64
+node --test tools/environment.test.js
+npm --prefix functions exec -- mocha functions/test/runtime_environment.test.js
+flutter test test/environment_test.dart --dart-define=APP_ENV=prod
+```
+
+Auth: las 18 cuentas aprobadas tienen hash de contraseña y correo verificado en
+QA. La lectura segura confirma que `signIn.hashConfig` está disponible: es viable
+preparar importación SCRYPT sin cambiar contraseñas. Esto NO confirma todavía una
+migración ni un inicio de sesión en producción. No se exportaron hashes a archivos.
+
+Producción devuelve 404 en la configuración Auth: se solicitó al titular abrir
+Authentication > Comenzar y activar Correo/contraseña. No se usó el endpoint de
+inicialización de Identity Platform para evitar una actualización de producto no
+necesaria. Después ejecutar `node functions/scripts/configure_production_auth.js
+--apply` para añadir y verificar dominios de producción; el script exige Auth ya
+inicializado, no cambia QA ni importa cuentas. Diagnóstico sin secretos:
+`node functions/scripts/production_auth_preflight.js`.
+
+Pruebas: 51 Flutter aprobadas; 3 adicionales con APP_ENV=prod; 4 pruebas unitarias
+backend de aislamiento; 3 pruebas de configuración SDK/worker; 4 pruebas del
+resolvedor de acceso en emuladores. Analyze y lint aprobados. Web QA compilada.
+APK QA y técnico producción compilados, paquete Play y firma de carga verificados.
+La validación adicional del dominio web se probó posteriormente en unitarias;
+regenerar artefactos antes de distribuirlos. No entregar estos APK como versión final.
+Hay avisos del toolchain Android sobre metadata Kotlin 2.3/2.2 y SDK XML: la
+compilación terminó, pero no constituyen una prueba de estabilidad física.
+
+No se desplegó backend/web, no se cambió DNS y no se migraron usuarios ni datos.

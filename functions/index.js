@@ -17,6 +17,7 @@ const {
 const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
 const crypto = require("crypto");
+const {runtimeEnvironment} = require("./runtime_environment");
 
 initializeApp();
 setGlobalOptions({maxInstances: 10, region: "us-central1"});
@@ -68,8 +69,7 @@ exports.encolarNotificacionMensaje = onDocumentCreated({
   const tokens = await resolveAudienceTokens(caller,
       {userIds: value.recipientIds}, true);
   const channelId = value.channelId;
-  const appUrl = process.env.PUBLIC_APP_URL ||
-      "https://sistema-educativo-rl.web.app";
+  const appUrl = runtimeEnvironment().publicAppUrl;
   await pushQueue.enqueue({
     notification: {title: `Nuevo mensaje de ${value.senderName}`,
       body: value.body.slice(0, 120)},
@@ -175,9 +175,6 @@ const PROFILE_FIELDS = [
   "residenceDepartment", "residenceCity", "familyRelation", "studentIds",
   "activeStudentId", "routeAddress", "direccionRuta",
 ];
-const AUTH_WEB_API_KEY = "AIzaSyBjfpuzVCTvKEMdYGYjMa619SSJ1yL8Jho";
-const EMAIL_VERIFICATION_CONTINUE_URL =
-  "https://sistema-educativo-rl.web.app/#/login";
 const RESTRICTED_DELEGATED_PERMISSIONS = new Set([
   "usuarios.crear",
   "usuarios.editar",
@@ -347,6 +344,9 @@ function validEmail(value) {
  * @return {Promise<void>}
  */
 async function sendInstitutionalVerificationEmail(email, password) {
+  const {authWebApiKey: AUTH_WEB_API_KEY,
+    verificationContinueUrl: EMAIL_VERIFICATION_CONTINUE_URL} =
+    runtimeEnvironment();
   const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
   const identityBase = emulatorHost ?
     `http://${emulatorHost}/identitytoolkit.googleapis.com/v1` :

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "325430927285",
+    "project_id": "sistema-educativo-rl-prod",
+    "storage_bucket": "sistema-educativo-rl-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:325430927285:android:2eecce415faf28dee103fc",
+        "android_client_info": {
+          "package_name": "com.desarrolloytecnologiasantander.serodolfollinas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjvzhsUcfEXCZVW6pZxOCVdZsQJmU75rw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

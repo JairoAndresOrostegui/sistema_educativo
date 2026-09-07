@@ -64,6 +64,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 flutter:
+  default-flavor: qa
   uses-material-design: true
   assets:
     - assets/Logo.jpeg

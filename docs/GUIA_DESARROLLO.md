@@ -116,8 +116,9 @@ El planificador y las escrituras agregan consumo: no prometer costo cero.
 
 `notificationDestination` solo admite destinos de Mensajería; una notificación
 no concede acceso al canal. Las aperturas Android (frente, fondo y arranque)
-y los enlaces web pasan por la navegación autenticada. `PUBLIC_APP_URL` define
-el origen web del despliegue (QA por defecto; ajustar para Hostinger/producción).
+y los enlaces web pasan por la navegación autenticada. `runtime_environment.js`
+deriva el origen y la clave Auth del proyecto Firebase; rechaza proyectos
+desconocidos y un `PUBLIC_APP_URL` que no coincida con su entorno.
 El worker web no vuelve a mostrar payloads `notification` que FCM ya presenta.
 
 Pruebas: `npm run test:push`, `npm run test:messaging`, `flutter test`.
@@ -260,3 +261,9 @@ Todo módulo con responsabilidad docente debe cumplir y actualizar el contrato
 de [REGISTRO_CARGA_DOCENTE.md](REGISTRO_CARGA_DOCENTE.md).
 
 QA se despliega con el alias Firebase `default` actual. Producción real debe usar otro proyecto y alias. Nunca reutilizar secretos, bucket o credenciales de QA en producción.
+
+La separación usa `APP_ENV=qa|prod` y sabores Android `qa|prod` que deben coincidir.
+Web se construye con `node tools/build_web.js qa|prod`, incluyendo el worker del
+mismo proyecto. No publicar una compilación web cruda de Flutter como producción.
+Consultar [SEPARACION_QA_PRODUCCION.md](SEPARACION_QA_PRODUCCION.md) antes de generar
+artefactos o desplegar. VAPID y Maps de producción nunca heredan valores de QA.

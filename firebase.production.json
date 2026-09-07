@@ -12,6 +12,7 @@
     "predeploy": ["npm --prefix functions run lint"]
   }],
   "hosting": {
+    "predeploy": ["node tools/verify_production_web.js"],
     "public": "build/web-prod",
     "ignore": ["firebase.production.json", "**/.*", "**/node_modules/**"],
     "rewrites": [{"source": "**", "destination": "/index.html"}]

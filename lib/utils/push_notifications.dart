@@ -45,6 +45,12 @@ Future<void> initializePush({
   _webVapidKey = webVapidKey;
   _tokenHandler = onNewToken;
 
+  if (kIsWeb && (webVapidKey == null || webVapidKey.isEmpty)) {
+    throw StateError(
+      'Falta configurar la clave web de notificaciones de este entorno.',
+    );
+  }
+
   final permission = await messaging.requestPermission(
     alert: true,
     badge: true,
