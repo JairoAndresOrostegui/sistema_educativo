@@ -1,0 +1,39 @@
+name: Publish production web to Hostinger branch
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/portal-web-cms]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'pubspec.*'
+      - 'tools/**'
+      - '.github/workflows/production-web.yml'
+permissions:
+  contents: write
+concurrency:
+  group: production-web
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      WEB_VAPID_KEY: BBmFIxb-Q9Gb54Gm55MgAyPxjcntd5semyUmZ_KEemDUFgy3kebxOxhUAKtDEYEVmgJy4uqJqsp_Q0a4Xab8I9c
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+      - run: node --test tools/environment.test.js
+      - run: node tools/build_web.js prod
+      - run: node tools/publish_production_web.js

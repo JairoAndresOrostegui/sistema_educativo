@@ -278,9 +278,21 @@ node tools/verify_production_web.js
 ```
 
 Es una clave pública destinada al navegador; nunca agregar la clave privada.
-La rama remota `production-web` está creada y vacía, reservada para artefactos
-compilados. No desplegarla todavía sobre el sitio existente en Hostinger.
+La rama remota `production-web` contiene exclusivamente artefactos compilados
+en su raíz para el directorio público de Hostinger. El titular autorizó publicar.
+`tools/publish_production_web.js` verifica el entorno y publica sin force push,
+conservando historial y un `release.json` que identifica el commit fuente.
+La configuración Apache incluye inicio `index.html`, fallback SPA y revalidación
+de archivos de arranque para no retener configuración Firebase antigua.
 
-Pendientes: automatización de publicación Hostinger, Maps restringido,
+El workflow `.github/workflows/production-web.yml` compila y publica ante cambios
+de frontend/herramientas en `agent/portal-web-cms`, después de formato, análisis
+y pruebas. Hostinger debe tener despliegue automático desde `production-web`.
+QA sigue usando su workflow existente en `main`; nunca mezclar ambas ramas.
+Cambiar la rama fuente requiere actualizar explícitamente el workflow.
+Para revertir, reconstruir la revisión fuente aprobada y publicar un nuevo commit
+de artefactos; no reescribir el historial ni borrar datos Firebase.
+
+Pendientes: comprobar despliegue efectivo en Hostinger, Maps restringido,
 sincronizar canales académicos iniciales sin mensajes de prueba, prueba física
 de acceso/notificaciones, compilación definitiva y publicación de frontend/AAB.
