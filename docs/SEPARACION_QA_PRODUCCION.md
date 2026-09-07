@@ -266,6 +266,21 @@ durante un día; esta política no elimina archivos del Storage del colegio.
 Cinco comprobaciones HTTP reales de funciones ya activas rechazaron peticiones
 sin sesión con UNAUTHENTICATED; esto no demuestra el login ni entrega push.
 
-Pendientes: VAPID público propio (solicitado al titular), Maps restringido,
+El titular proporcionó la clave pública VAPID de producción; se comprobó que
+representa un punto válido P-256 sin comprimir. Esto no demuestra todavía la
+entrega de notificaciones ni su asociación al proyecto en Firebase Console.
+Para compilar localmente o configurar la variable de GitHub Actions:
+
+```powershell
+$env:WEB_VAPID_KEY = 'BBmFIxb-Q9Gb54Gm55MgAyPxjcntd5semyUmZ_KEemDUFgy3kebxOxhUAKtDEYEVmgJy4uqJqsp_Q0a4Xab8I9c'
+node tools/build_web.js prod
+node tools/verify_production_web.js
+```
+
+Es una clave pública destinada al navegador; nunca agregar la clave privada.
+La rama remota `production-web` está creada y vacía, reservada para artefactos
+compilados. No desplegarla todavía sobre el sitio existente en Hostinger.
+
+Pendientes: automatización de publicación Hostinger, Maps restringido,
 sincronizar canales académicos iniciales sin mensajes de prueba, prueba física
 de acceso/notificaciones, compilación definitiva y publicación de frontend/AAB.
