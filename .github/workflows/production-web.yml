@@ -34,6 +34,6 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test
       - run: flutter analyze
       - run: flutter test
-      - run: node --test tools/environment.test.js
+      - run: node --test tools/*.test.js
       - run: node tools/build_web.js prod
       - run: node tools/publish_production_web.js

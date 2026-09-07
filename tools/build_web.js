@@ -35,6 +35,7 @@ if (environment === "prod") {
   };
   fs.writeFileSync(path.join(root, output, "firebase-runtime.js"),
       `self.firebaseRuntime = ${JSON.stringify(config, null, 2)};\n`);
+  require("./version_web_assets").versionWebAssets(path.join(root, output));
 }
 fs.writeFileSync(path.join(root, output, "environment.json"),
     JSON.stringify({environment, projectId: environment === "prod" ?

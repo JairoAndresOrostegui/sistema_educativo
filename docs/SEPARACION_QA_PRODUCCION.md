@@ -284,6 +284,11 @@ en su raíz para el directorio público de Hostinger. El titular autorizó publi
 conservando historial y un `release.json` que identifica el commit fuente.
 La configuración Apache incluye inicio `index.html`, fallback SPA y revalidación
 de archivos de arranque para no retener configuración Firebase antigua.
+Incidencia comprobada en Hostinger: la URL sin parámetros de `main.dart.js`
+seguía sirviendo 5.467.079 caracteres antiguos con caché de siete días, mientras
+la URL con parámetro servía los 12.620.901 actuales. Incógnito no evita caché CDN.
+Producción ahora referencia nombres con hash de contenido para el bootstrap y
+el código principal; el verificador impide publicar entradas sin versionar.
 
 El workflow `.github/workflows/production-web.yml` compila y publica ante cambios
 de frontend/herramientas en `agent/portal-web-cms`, después de formato, análisis
