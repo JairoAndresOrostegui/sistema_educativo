@@ -17,7 +17,13 @@ No cambiar DNS ni reemplazar el sitio público hasta validar el entorno nuevo.
 - Alias qa/prod añadidos; default continúa en QA para preservar el flujo existente.
 - firebase.production.json separado, ubicación prevista us-central1,
   salida web build/web-prod para no desplegar accidentalmente build/web de QA.
-- Facturación NO habilitada. Base Firestore NO creada: API aún deshabilitada.
+- Blaze habilitado y comprobado mediante Cloud Billing API.
+- Firestore `(default)` creado en `us-central1`, modo nativo y protección contra
+  eliminación activada; ubicación y protección verificadas mediante lectura posterior.
+- Bucket independiente `sistema-educativo-rl-prod.firebasestorage.app` creado y
+  enlazado a Firebase en `US-CENTRAL1`.
+- APIs Firestore, Firebase Storage e Identity Toolkit habilitadas. Habilitar la
+  API de Auth no equivale a configurar proveedores ni importar usuarios.
 - No se han importado cuentas, contraseñas, configuración, archivos ni historial.
 - No se han desplegado Functions, Hosting o reglas en producción.
 - Flutter, Android y worker web actuales aún apuntan a QA. La separación de runtime
@@ -63,9 +69,9 @@ Una importación fallida se reanuda de forma idempotente, no borrando producció
 
 ## Puertas de avance
 
-1. Titular activa Blaze y elige cuenta de facturación del nuevo proyecto.
-2. Activar API Firestore, crear DB estándar us-central1 con protección de eliminación,
-   bucket propio y Auth con dominios autorizados y proveedores necesarios.
+1. Completado: titular activó Blaze; facturación verificada.
+2. Completado: APIs, DB us-central1 protegida y bucket propio. Pendiente: Auth
+   con dominios autorizados y proveedores necesarios, y reglas de aplicación.
 3. Configurar certificados Android de carga y distribución; comprobar SHA-1 para
    restricciones Maps y SHA-256 para servicios aplicables. No usar clave Maps de QA.
 4. Separar runtime Flutter/Android/web y worker; también Functions AUTH_WEB_API_KEY,
@@ -80,3 +86,23 @@ Una importación fallida se reanuda de forma idempotente, no borrando producció
 
 Crear el proyecto no es publicarlo: pendiente del aviso de Play antes del 19,
 la prueba interna y posteriormente 12 testers durante 14 días de prueba cerrada.
+
+## Aprovisionamiento reproducible
+
+`functions/scripts/provision_production.js` comprueba Blaze, APIs, ubicación de
+Firestore/Storage y protección de eliminación. Sin argumentos es de solo lectura.
+Con `--apply` habilita las tres APIs y crea exclusivamente DB/bucket ausentes en
+el proyecto de producción explícito. No modifica QA, DNS, usuarios ni datos.
+Si una API tarda en propagarse, falla sin borrar recursos y permite reanudar.
+Usa la sesión local de Firebase CLI en memoria, sin exportar credenciales.
+
+```powershell
+node functions/scripts/provision_production.js
+# Solo para aprovisionar recursos ausentes:
+node functions/scripts/provision_production.js --apply
+```
+
+Validación del 7 de septiembre: creación terminada, segunda ejecución de solo
+lectura correcta y `npm --prefix functions run lint` aprobado. No se ha probado
+todavía el inicio de sesión ni una compilación contra producción. Tampoco se han
+configurado alertas de presupuesto; Blaze no constituye un límite de gasto.
