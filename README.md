@@ -4,6 +4,8 @@ Aplicación Flutter para la gestión multiinstitución y multisede de preescolar
 
 ## Documentación
 
+- [Separación QA/producción](docs/SEPARACION_QA_PRODUCCION.md): estado real del entorno nuevo y puertas de migración.
+
 - [Manual de usuario](docs/MANUAL_USUARIO.md): funciones, roles, reglas y flujos por módulo.
 - [Guía de desarrollo](docs/GUIA_DESARROLLO.md): arquitectura, seguridad, datos, estilos, migraciones y despliegue.
 - [Reglas permanentes](AGENTS.md): decisiones obligatorias para futuras sesiones y módulos.
