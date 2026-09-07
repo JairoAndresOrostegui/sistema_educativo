@@ -21,6 +21,13 @@ conjunto solo después de verificar Auth y relaciones. Auditoría en
 limpio; después de iniciar operación real sus comprobaciones de colecciones
 vacías dejarán de ser aplicables y no deben usarse para justificar limpiezas.
 
+La migración de contenido visual usa `migrate_production_assets.js`: copia solo
+objetos referenciados por el sitio y perfiles aprobados, valida generación y
+CRC32C, registra el manifiesto antes de copiar y publica referencias al terminar.
+No reutiliza URLs/tokens de QA ni borra el origen. Verificar con
+`verify_production_assets.js`. Una foto cuyo objeto original falta queda vacía
+y pendiente, nunca se sustituye silenciosamente por la de otra persona.
+
 ## Contrato transversal por módulo
 
 | Área | Modelo / operación | Invariantes |

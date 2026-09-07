@@ -29,7 +29,8 @@ No cambiar DNS ni reemplazar el sitio público hasta validar el entorno nuevo.
 - Migración principal completada y auditada: 18 cuentas Auth y perfiles, 18
   entradas de directorio, 30 grupos, dos años 2026 activos y sus selectores,
   una configuración institucional y 54 parámetros (125 documentos de negocio).
-- No se han desplegado Functions ni Hosting. Imágenes y contenido web pendientes.
+- Sitio/tema y seis páginas copiados a Firestore de producción; siete imágenes
+  copiadas al bucket independiente. Hosting sigue sin publicar.
 - Reglas Firestore/Storage e índices desplegados correctamente en producción,
   después de aprobar las 27 pruebas de reglas en emuladores.
 - Separación de runtime implementada mediante `APP_ENV=qa|prod`, sabores Android
@@ -220,3 +221,51 @@ Tres fotos de perfiles y el logo se dejaron temporalmente vacíos en producción
 se conservan en QA y requieren copia de objetos al bucket nuevo. No se borró nada
 del origen. El sitio/tema y sus imágenes también están pendientes de esa fase.
 No se cambió DNS ni se desplegó el frontend/backend de aplicación todavía.
+
+## Sitio e imágenes — continuación del 7 de septiembre
+
+`migrate_production_assets.js` copió siete imágenes (5.736.496 bytes), las seis
+páginas, website/config, logo institucional y dos fotos de usuarios/directorio.
+No copió todos los objetos de QA ni su cola de imágenes pendientes de eliminar.
+Los objetos del sitio tienen nombres institucionales nuevos, con referencias
+URL/ruta reescritas; se mantienen enlaces externos de redes sociales.
+
+La tercera foto, de Sara Lucía, ya devolvía 404 en el bucket de QA. No se fabricó
+ni reemplazó por otra imagen: su perfil en producción sigue sin foto hasta que
+se vuelva a cargar. La ruta faltante quedó registrada en la auditoría.
+
+Cada copia exige la generación original y un destino ausente, comprueba tamaño
+y CRC32C y genera un token de descarga nuevo. El manifiesto se registra antes de
+copiar en `migration_audit/production_assets_v1`; una interrupción deja copias
+registradas para reanudar. El commit final publica todas las referencias junto
+con fase `complete`, usando versiones de documentos para no pisar cambios.
+No se borraron objetos de QA. Una reejecución comprobó los siete objetos.
+
+Verificaciones:
+
+```powershell
+node functions/scripts/migrate_production_assets.js
+node functions/scripts/verify_production_assets.js
+npm --prefix functions exec -- mocha functions/test/production_assets.test.js
+```
+
+Resultado: 44 documentos revisados sin referencias a Storage QA; siete imágenes
+accesibles mediante sus URLs de producción; cuatro pruebas de alcance y lint
+aprobados. El encabezado de respuesta HTTP se comprobó sin imprimir tokens.
+
+Las 70 funciones quedaron ACTIVE en el proyecto nuevo. El primer intento requirió
+confirmar los reintentos de siete triggers; se verificó previamente que no había
+funciones existentes que pudieran borrarse. El despliegue encontró propagación
+de permisos Eventarc y cuota temporal de mutaciones. El rol oficial del agente
+Eventarc ya existe: no se añadieron privilegios amplios para sortear la espera.
+Estado de solo lectura: `node functions/scripts/production_functions_status.js`.
+La lista se compara contra las 70 funciones actuales de QA sin modificar QA.
+Se reintentaron únicamente las cinco creaciones pendientes y el despliegue
+terminó correctamente. Artifact Registry conserva las imágenes de despliegue
+durante un día; esta política no elimina archivos del Storage del colegio.
+Cinco comprobaciones HTTP reales de funciones ya activas rechazaron peticiones
+sin sesión con UNAUTHENTICATED; esto no demuestra el login ni entrega push.
+
+Pendientes: VAPID público propio (solicitado al titular), Maps restringido,
+sincronizar canales académicos iniciales sin mensajes de prueba, prueba física
+de acceso/notificaciones, compilación definitiva y publicación de frontend/AAB.
