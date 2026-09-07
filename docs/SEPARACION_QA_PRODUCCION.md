@@ -24,8 +24,14 @@ No cambiar DNS ni reemplazar el sitio público hasta validar el entorno nuevo.
   enlazado a Firebase en `US-CENTRAL1`.
 - APIs Firestore, Firebase Storage e Identity Toolkit habilitadas. Habilitar la
   API de Auth no equivale a configurar proveedores ni importar usuarios.
-- No se han importado cuentas, contraseñas, configuración, archivos ni historial.
-- No se han desplegado Functions, Hosting o reglas en producción.
+- Auth inicializado como FIREBASE_AUTH, correo/contraseña habilitado y dominios
+  de producción autorizados; no se actualizó a Identity Platform.
+- Migración principal completada y auditada: 18 cuentas Auth y perfiles, 18
+  entradas de directorio, 30 grupos, dos años 2026 activos y sus selectores,
+  una configuración institucional y 54 parámetros (125 documentos de negocio).
+- No se han desplegado Functions ni Hosting. Imágenes y contenido web pendientes.
+- Reglas Firestore/Storage e índices desplegados correctamente en producción,
+  después de aprobar las 27 pruebas de reglas en emuladores.
 - Separación de runtime implementada mediante `APP_ENV=qa|prod`, sabores Android
   y configuraciones SDK independientes. QA sigue siendo el valor predeterminado.
   No publicar aún: falta configurar servicios y migrar los datos.
@@ -50,7 +56,7 @@ La capacidad docente de Nancy requiere diseño/revisión específica antes de as
 horarios como docente. Jairo contiene una referencia vacía en studentIds; limpiar
 en la proyección de producción sin modificar QA ni inventar vínculos.
 
-## Importación pendiente: lista positiva
+## Importación: lista positiva
 
 Copiar únicamente perfiles aprobados, Auth correspondiente y dependencias
 institucionales revisadas: institución, sedes, grupos/año activo y parámetros
@@ -162,4 +168,55 @@ regenerar artefactos antes de distribuirlos. No entregar estos APK como versión
 Hay avisos del toolchain Android sobre metadata Kotlin 2.3/2.2 y SDK XML: la
 compilación terminó, pero no constituyen una prueba de estabilidad física.
 
-No se desplegó backend/web, no se cambió DNS y no se migraron usuarios ni datos.
+Lo anterior describe la etapa de separación. Estado posterior de migración:
+
+## Migración principal completada — 7 de septiembre de 2026
+
+El titular inicializó Authentication. `configure_production_auth.js --apply`
+habilitó/verificó correo con contraseña y añadió los dominios propios del colegio.
+No hubo envíos de correo, restablecimientos ni contraseñas compartidas.
+
+`migrate_production_core.js` se ejecutó primero sin argumentos (diagnóstico),
+después con `--apply` y nuevamente sin argumentos para comprobar su reentrada.
+`production_projection.js` selecciona únicamente los 18 UID aprobados y campos
+permitidos. El borrador 2027 y sus 15 grupos copiados en QA quedaron excluidos.
+No se copiaron sesiones, tokens, intentos de acceso, QR ni operaciones de prueba.
+
+La cuenta Auth de Sara Lucía tenía un correo diferente del perfil Firestore.
+Se conservó la cuenta Auth original y su contraseña; el correo interno del perfil
+de producción se ajustó al de Auth para que el resolvedor por documento funcione.
+La referencia vacía de hijos de Jairo se retiró en producción; no se inventaron
+vínculos. Nancy sigue administradora y Karen docente de Séptimo A.
+
+Seguridad de la importación:
+
+1. Crea perfiles/directorio inactivos y dependencias en un único commit Firestore.
+2. Importa las cuentas ausentes como deshabilitadas usando SCRYPT y los parámetros
+   originales en memoria, sin exportarlos ni imprimirlos y sin sobrescribir cuentas.
+3. Verifica UID/correo/estado, habilita Auth y finalmente activa todos los perfiles
+   y el directorio en un commit atómico con precondiciones de versión.
+4. Si falla a mitad, los perfiles siguen inactivos: se reanuda desde el estado
+   preparado, no borrando datos. Una concesión temporal de diez minutos y las
+   precondiciones impiden dos ejecutores concurrentes. Cambios en el origen o en
+   los registros preparados detienen la reanudación para revisión.
+
+Registro: `migration_audit/production_core_v1`, fase `complete`, resumen y UID
+aprobados; nunca contiene contraseñas ni hashes de contraseña originales.
+
+Verificación adicional de solo lectura:
+
+```powershell
+node functions/scripts/verify_production_core.js
+npm --prefix functions exec -- mocha functions/test/production_projection.test.js
+```
+
+Resultado: 18 Auth/perfiles/directorio concordantes, 30 grupos y dos años activos;
+15 colecciones operativas vacías; relaciones y ausencia de tokens/URL Storage QA
+validadas. Seis pruebas unitarias de proyección y 27 pruebas de reglas aprobadas;
+lint aprobado. Los errores PERMISSION_DENIED esperados en pruebas negativas no
+son fallos de la migración. Login físico con contraseña todavía no probado.
+
+Tres fotos de perfiles y el logo se dejaron temporalmente vacíos en producción:
+se conservan en QA y requieren copia de objetos al bucket nuevo. No se borró nada
+del origen. El sitio/tema y sus imágenes también están pendientes de esa fase.
+No se cambió DNS ni se desplegó el frontend/backend de aplicación todavía.

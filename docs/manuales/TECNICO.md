@@ -10,6 +10,17 @@ mutaciones; Storage conserva archivos; FCM transporta avisos. Firebase actual es
 QA: sistema-educativo-rl. No usarlo como producción definitiva ni afirmar que el
 APK local está publicado en Google Play.
 
+Producción independiente: `sistema-educativo-rl-prod`. La configuración y el
+estado de puesta en marcha se mantienen en
+[SEPARACION_QA_PRODUCCION](../SEPARACION_QA_PRODUCCION.md). No confundir cuentas
+importadas con un despliegue listo para uso. La migración inicial conserva UID y
+contraseñas mediante SCRYPT en memoria, prepara perfiles inactivos y habilita el
+conjunto solo después de verificar Auth y relaciones. Auditoría en
+`migration_audit/production_core_v1`; no ejecutar borrados para reintentar.
+`node functions/scripts/verify_production_core.js` verifica el estado inicial
+limpio; después de iniciar operación real sus comprobaciones de colecciones
+vacías dejarán de ser aplicables y no deben usarse para justificar limpiezas.
+
 ## Contrato transversal por módulo
 
 | Área | Modelo / operación | Invariantes |
