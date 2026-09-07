@@ -1,9 +1,7 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
-import '../../services/student_route_service.dart';
+import '../route_history_dialog.dart';
 
 class RouteLiveView extends StatelessWidget {
   final String dailyRouteId;
@@ -11,8 +9,6 @@ class RouteLiveView extends StatelessWidget {
   final void Function(GoogleMapController) onMapCreated;
   final LatLng? teacherPosition;
   final void Function(LatLng) updateTeacherPosition;
-
-  // helpers
   final String Function(Map<String, dynamic>, List<String>, [String]) str;
   final bool Function(Map<String, dynamic>, List<String>, [bool]) boolf;
   final int Function(Map<String, dynamic>, List<String>, [int]) intf;
@@ -35,279 +31,158 @@ class RouteLiveView extends StatelessWidget {
     required this.normalizeStatus,
   });
 
-  LatLng? _readTeacherPosition(Map<String, dynamic> data) {
-    final tp = data['teacherPosition'];
-
-    if (tp is GeoPoint) {
-      return LatLng(tp.latitude, tp.longitude);
-    }
-
-    if (tp is Map) {
-      final lat = tp['lat'];
-      final lng = tp['lng'];
-      if (lat is num && lng is num) {
-        return LatLng(lat.toDouble(), lng.toDouble());
-      }
-    }
-
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final service = MyRouteService();
-
-    return StreamBuilder<DocumentSnapshot>(
-      stream: service.streamDailyRoute(dailyRouteId),
-      builder: (context, routeSnap) {
-        if (routeSnap.hasError) {
+    final ref = FirebaseFirestore.instance
+        .collection('daily_routes')
+        .doc(dailyRouteId);
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: ref.snapshots(),
+      builder: (context, route) {
+        if (route.hasError) {
           return const Center(
             child: Text(
-              'No se pudo consultar esta ruta. Comprueba tu conexión y el hijo seleccionado.',
+              'No se pudo consultar el recorrido. Revisa la conexión y el hijo seleccionado.',
             ),
           );
         }
-        if (!routeSnap.hasData) {
-          return Center(child: CircularProgressIndicator());
+        if (!route.hasData) {
+          return const Center(child: CircularProgressIndicator());
         }
-        if (!routeSnap.data!.exists) {
-          return Center(child: Text('Ruta no encontrada.'));
+        final data = route.data!.data();
+        if (data == null) {
+          return const Center(child: Text('Recorrido no disponible.'));
         }
-
-        final data = routeSnap.data!.data() as Map<String, dynamic>;
-
-        final rawStatus = str(data, ['status', 'estado'], 'pending');
-        final status = normalizeStatus(rawStatus);
-
-        final routeName = str(data, [
-          'routeName',
-          'nombreRuta',
-        ], 'Ruta escolar');
-
-        final newPos = _readTeacherPosition(data);
-        if (status == 'active' && newPos != null) {
-          if (teacherPosition == null || teacherPosition != newPos) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              updateTeacherPosition(newPos);
-            });
-          }
-        }
-
-        return Column(
-          children: [
-            if (status == 'active')
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(
-                  data['lastUpdate'] is Timestamp
-                      ? 'Última ubicación: ${TimeOfDay.fromDateTime((data['lastUpdate'] as Timestamp).toDate()).format(context)}. Si no se actualiza, puede haber pérdida de señal.'
-                      : 'Sin ubicación recibida. El recorrido puede continuar en modo manual.',
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          key: ValueKey('$dailyRouteId:$studentId'),
+          stream: ref.collection('students').doc(studentId).snapshots(),
+          builder: (context, stop) {
+            if (stop.hasError) {
+              return const Center(
+                child: Text('No tienes acceso a esta parada.'),
+              );
+            }
+            if (!stop.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final s = stop.data!.data();
+            if (s == null) {
+              return const Center(
+                child: Text('Estudiante no incluido en este recorrido.'),
+              );
+            }
+            final closed = s['recogido'] == true || s['anulado'] == true;
+            final enabled =
+                data['estado'] == 'activa' &&
+                s['activo'] == true &&
+                !closed &&
+                s['mapEnabled'] == true;
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(
+                  data['nombreRuta'] ?? 'Ruta escolar',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-              ),
-            Expanded(
-              flex: 2,
-              child: Semantics(
-                label: status == 'active'
-                    ? 'Mapa mostrando ubicación del bus escolar.'
-                    : status == 'finished'
-                    ? 'La ruta ha finalizado. El mapa ya no está disponible.'
-                    : 'La ruta aún no ha iniciado.',
-                child: status == 'active'
-                    ? GoogleMap(
-                        onMapCreated: onMapCreated,
-                        initialCameraPosition: CameraPosition(
-                          target:
-                              teacherPosition ?? LatLng(7.119349, -73.122742),
-                          zoom: 15,
-                        ),
-                        markers: teacherPosition != null
-                            ? {
-                                Marker(
-                                  markerId: MarkerId('bus'),
-                                  position: teacherPosition!,
-                                  infoWindow: InfoWindow(
-                                    title: 'Ubicación del bus',
-                                  ),
-                                ),
-                              }
-                            : {},
-                      )
-                    : Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text(
-                            status == 'finished'
-                                ? 'La ruta ha finalizado. El mapa ya no está disponible.'
-                                : 'La ruta aún no ha iniciado.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-            Expanded(
-              flex: 1,
-              child: StreamBuilder<DocumentSnapshot>(
-                stream: service.streamStudentDailyRoute(
-                  dailyRouteId,
-                  studentId,
+                Text('Estado: ${data['estado']}'),
+                const SizedBox(height: 12),
+                Text(
+                  s['nombre'] ?? 'Estudiante',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-                builder: (context, estSnap) {
-                  if (estSnap.hasError) {
-                    return const Center(
-                      child: Text(
-                        'No se pudo consultar la recogida de este estudiante.',
-                      ),
-                    );
-                  }
-                  if (!estSnap.hasData) {
-                    return Center(child: CircularProgressIndicator());
-                  }
-                  if (!estSnap.data!.exists) {
-                    return Center(
-                      child: Text('No estás asignado a esta ruta.'),
-                    );
-                  }
-
-                  final est = estSnap.data!.data() as Map<String, dynamic>;
-                  final picked = boolf(est, ['picked', 'recogido'], false);
-                  final address = str(est, [
-                    'address',
-                    'direccion',
-                  ], 'Sin dirección');
-                  final pickedAt = ts(est, ['pickupTime', 'horaRecogida']);
-                  final notices = intf(est, [
-                    'arrivalNotices',
-                    'avisosEnviados',
-                  ], 0);
-
-                  return Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: AppPalette.error.withValues(alpha: .15),
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            AppPalette.error.withValues(alpha: .06),
-                            AppPalette.surface,
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppPalette.onSurface.withValues(alpha: 0.03),
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                Text('Parada: ${s['direccion'] ?? "Sin dirección"}'),
+                Text(
+                  s['recogido'] == true
+                      ? 'Recogida registrada'
+                      : s['anulado'] == true
+                      ? 'No recogido: ${s['observacion'] ?? ""}'
+                      : s['activo'] != true
+                      ? 'No viaja hoy'
+                      : 'Pendiente de recogida',
+                ),
+                const SizedBox(height: 12),
+                if (enabled)
+                  SizedBox(
+                    height: 300,
+                    child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                      stream: ref
+                          .collection('live')
+                          .doc('location')
+                          .snapshots(),
+                      builder: (context, location) {
+                        if (location.hasError) {
+                          return const Center(
+                            child: Text(
+                              'Ubicación no disponible. El acceso puede haber finalizado.',
+                            ),
+                          );
+                        }
+                        final value = location.data?.data();
+                        final point = value?['teacherPosition'];
+                        if (point is! GeoPoint) {
+                          return const Center(
+                            child: Text('Esperando ubicación del responsable.'),
+                          );
+                        }
+                        final position = LatLng(
+                          point.latitude,
+                          point.longitude,
+                        );
+                        final timestamp = value?['lastUpdate'];
+                        return Column(
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    routeName,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                    ),
-                                    semanticsLabel:
-                                        'Nombre de la ruta: $routeName',
-                                  ),
-                                ),
-                                StatusChip(status: status),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                            Semantics(
-                              label: 'Dirección asignada: $address',
-                              child: Text('Dirección: $address'),
-                            ),
-                            SizedBox(height: 6),
-                            Semantics(
-                              label: picked
-                                  ? 'Estado de recogida: Sí'
-                                  : 'Estado de recogida: No',
-                              child: Text('Recogido: ${picked ? "Sí" : "No"}'),
-                            ),
-                            if (pickedAt != null)
-                              Text(
-                                'Hora de recogida: '
-                                '${TimeOfDay.fromDateTime(pickedAt.toDate()).format(context)}',
-                              ),
-                            SizedBox(height: 6),
-                            if (notices > 0) Text('Avisos enviados: $notices'),
-                            const SizedBox(height: 12),
                             Text(
-                              status == 'pending'
-                                  ? 'La ruta aún no inicia.'
-                                  : status == 'active'
-                                  ? 'La ruta está en camino.'
-                                  : 'La ruta ha finalizado por hoy.',
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                              timestamp is Timestamp
+                                  ? 'Actualizada: ${TimeOfDay.fromDateTime(timestamp.toDate()).format(context)}. Puede haber demora por señal.'
+                                  : 'Sin fecha de actualización',
+                            ),
+                            Expanded(
+                              child: GoogleMap(
+                                key: ValueKey('map:$dailyRouteId:$studentId'),
+                                onMapCreated: onMapCreated,
+                                initialCameraPosition: CameraPosition(
+                                  target: position,
+                                  zoom: 15,
+                                ),
+                                markers: {
+                                  Marker(
+                                    markerId: const MarkerId('bus'),
+                                    position: position,
+                                    infoWindow: const InfoWindow(
+                                      title: 'Transporte escolar',
+                                    ),
+                                  ),
+                                },
+                              ),
                             ),
                           ],
-                        ),
+                        );
+                      },
+                    ),
+                  )
+                else
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        closed || data['estado'] == 'finalizada'
+                            ? 'El mapa ya no está disponible. Seguirás recibiendo los avisos generales y el cierre del recorrido.'
+                            : 'El mapa se habilita cuando la llegada estimada es de 10 minutos o menos. Recibirás un aviso; permite las notificaciones en Inicio.',
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      showRouteHistory(context, studentId: studentId),
+                  icon: const Icon(Icons.history),
+                  label: const Text('Avisos e historial de Rutas'),
+                ),
+              ],
+            );
+          },
         );
       },
-    );
-  }
-}
-
-class StatusChip extends StatelessWidget {
-  final String status;
-  const StatusChip({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    late final Color base;
-    late final String label;
-
-    switch (status) {
-      case 'active':
-        base = AppPalette.success;
-        label = 'Activa';
-        break;
-      case 'finished':
-        base = AppPalette.outline;
-        label = 'Finalizada';
-        break;
-      default:
-        base = AppPalette.warning;
-        label = 'Pendiente';
-    }
-
-    return Semantics(
-      label: 'Estado: $label',
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: base.withValues(alpha: .12),
-          border: Border.all(color: base.withValues(alpha: .35)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(color: base, fontWeight: FontWeight.w700),
-        ),
-      ),
     );
   }
 }

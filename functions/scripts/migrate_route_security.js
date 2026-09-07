@@ -38,8 +38,14 @@ async function main() {
   if (apply && missingRole) await role.set({clave: "role", valor: "Auxiliar", etiqueta: "Auxiliar", activo: true, orden: 5});
   const routes = await db.collection("routes").get();
   const runs = await db.collection("daily_routes").get();
+  let legacyLocations = 0;
+  for (const run of runs.docs) {
+    if (!("teacherPosition" in run.data()) && !("lastUpdate" in run.data())) continue;
+    legacyLocations++;
+    if (apply) await run.ref.update({teacherPosition: FieldValue.delete(), lastUpdate: FieldValue.delete()});
+  }
   const missingParents = runs.docs.filter((r) => !routes.docs.some((t) => t.id === r.data().idRuta)).length;
-  console.log(JSON.stringify({apply, profiles, missingRole, routes: routes.size, dailyRoutes: runs.size, missingParents}));
+  console.log(JSON.stringify({apply, profiles, missingRole, routes: routes.size, dailyRoutes: runs.size, missingParents, legacyLocations}));
 }
 main().catch((e) => {
   console.error(e.code || e.message); process.exitCode = 1;

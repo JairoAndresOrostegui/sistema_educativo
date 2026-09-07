@@ -9,7 +9,7 @@ class LocationService {
   StreamSubscription<Position>? _positionSub;
 
   static const double _kMinDeltaMeters = 30;
-  static const Duration _kMinInterval = Duration(seconds: 8);
+  static const Duration _kMinInterval = Duration(seconds: 30);
   static const Duration _kMaxInterval = Duration(seconds: 45);
 
   GeoPoint? _lastWrittenPoint;

@@ -396,9 +396,24 @@ service cloud.firestore {
       }
       allow read: if sameTenant(resource.data) && hasPermission('rutas.ver') &&
         (admin() || resource.data.gestionador == request.auth.uid ||
-          (ownRouteStudent(selectedRouteStudent()) &&
+          (!('teacherPosition' in resource.data) && ownRouteStudent(selectedRouteStudent()) &&
            exists(/databases/$(database)/documents/daily_routes/$(routeId)/students/$(selectedRouteStudent()))));
       allow write: if false;
+
+      match /live/{locationId} {
+        function route() {
+          return get(/databases/$(database)/documents/daily_routes/$(routeId)).data;
+        }
+        function stop() {
+          return get(/databases/$(database)/documents/daily_routes/$(routeId)/students/$(selectedRouteStudent())).data;
+        }
+        allow read: if active() && sameTenant(route()) && hasPermission('rutas.ver') &&
+          route().estado == 'activa' &&
+          (admin() || route().gestionador == request.auth.uid ||
+            (ownRouteStudent(selectedRouteStudent()) && stop().activo == true &&
+             stop().mapEnabled == true && stop().recogido == false && stop().anulado == false));
+        allow write: if false;
+      }
 
       match /students/{studentId} {
         function route() {

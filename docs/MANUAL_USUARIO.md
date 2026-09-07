@@ -1,5 +1,9 @@
 # Manual de usuario
 
+Manuales detallados por rol y operación técnica: [docs/manuales](manuales/README.md).
+Para Rutas, la revisión de ventana GPS/avisos de esos manuales prevalece sobre
+el diagnóstico histórico: ubicación solo en ventana previa, anuncios dentro de Rutas.
+
 ## Acceso y perfiles
 
 Administradores, docentes y familiares ingresan con correo. Los estudiantes ingresan con su documento; internamente el sistema resuelve su correo ficticio de Firebase y nunca les exige verificarlo. Una cuenta inactiva, retirada o eliminándose no puede iniciar sesión.
@@ -130,8 +134,8 @@ quién lo vio y cuándo.
 Administración también crea canales de servicio con iconos diferenciados para
 Lonchera, Restaurante, Ruta escolar, Comunidad u Otro. Son canales de anuncios
 para toda la sede o para grupos seleccionados. La publicación automática de
-novedades desde Rutas está pendiente de revisión y aprobación; actualmente no
-se conecta automáticamente el recorrido con estos canales.
+novedades del recorrido se mantiene dentro de Rutas por decisión del colegio;
+no se conecta automáticamente el recorrido con estos canales.
 
 El selector de hijo filtra los canales y sus contadores dentro de Mensajería.
 Tocar un aviso de mensaje abre su conversación, sujeto a permisos vigentes;

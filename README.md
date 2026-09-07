@@ -130,3 +130,6 @@ docente debe registrarse en
 [docs/REGISTRO_CARGA_DOCENTE.md](docs/REGISTRO_CARGA_DOCENTE.md).
 
 Antes de desplegar confirme que `default` apunta al proyecto QA esperado y que todas las pruebas anteriores finalizaron correctamente.
+# Manuales por perfil
+
+Consulta [manual técnico, administración, docentes, estudiantes y familiares](docs/manuales/README.md).

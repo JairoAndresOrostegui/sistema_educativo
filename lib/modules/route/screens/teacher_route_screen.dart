@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,31 +23,15 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
   String? _error;
   bool _busy = false;
   final _location = LocationService();
-  Timer? _etaTimer;
   @override
   void initState() {
     super.initState();
     _load();
-    _etaTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
-      if (_busy || _dailyId == null) return;
-      final d =
-          (await FirebaseFirestore.instance
-                  .collection('daily_routes')
-                  .doc(_dailyId)
-                  .get())
-              .data();
-      if (mounted && d?['mode'] == 'automatic' && d?['estado'] == 'activa') {
-        await _run(() async {
-          await RouteOperations.call('calcularTiemposRuta', {'id': _dailyId});
-        });
-      }
-    });
   }
 
   @override
   void dispose() {
     _location.stopLocationUpdates();
-    _etaTimer?.cancel();
     super.dispose();
   }
 
@@ -194,7 +177,7 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                           automatic ? 'Cálculo automático' : 'Cálculo manual',
                         ),
                         subtitle: const Text(
-                          'Las paradas se bloquean al iniciar. Puedes enviar avisos manuales en ambos modos.',
+                          'Un cálculo al iniciar; después solo cuando pulses Recalcular. Los avisos manuales funcionan en ambos modos.',
                         ),
                         value: automatic,
                         onChanged: _busy || !(pending || active)
@@ -237,6 +220,64 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                         Wrap(
                           spacing: 8,
                           children: [
+                            if (automatic)
+                              OutlinedButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _run(() async {
+                                        final confirm = await showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text(
+                                              '¿Recalcular tiempos?',
+                                            ),
+                                            content: const Text(
+                                              'Consulta Google Maps y consume cuota. Úsalo ante una demora o novedad importante.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, false),
+                                                child: const Text('Cancelar'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, true),
+                                                child: const Text('Recalcular'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirm == true) {
+                                          await RouteOperations.call(
+                                            'calcularTiemposRuta',
+                                            {'id': _dailyId},
+                                          );
+                                        }
+                                      }),
+                                child: const Text('Recalcular tiempos'),
+                              ),
+                            OutlinedButton(
+                              onPressed: _busy
+                                  ? null
+                                  : () async {
+                                      final message = await _input(
+                                        'Aviso general para las familias del recorrido',
+                                      );
+                                      if (message != null &&
+                                          message.isNotEmpty &&
+                                          mounted) {
+                                        await _run(
+                                          () => RouteOperations.execute(
+                                            _dailyId!,
+                                            'announcement',
+                                            {'reason': message},
+                                          ),
+                                        );
+                                      }
+                                    },
+                              child: const Text('Enviar aviso general'),
+                            ),
                             OutlinedButton(
                               onPressed: _busy
                                   ? null
@@ -379,12 +420,6 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                                                         'pickup',
                                                         {'studentId': s.id},
                                                       );
-                                                      if (automatic) {
-                                                        await RouteOperations.call(
-                                                          'calcularTiemposRuta',
-                                                          {'id': _dailyId},
-                                                        );
-                                                      }
                                                     }),
                                               child: const Text('Recogido'),
                                             ),

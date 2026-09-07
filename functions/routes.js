@@ -39,6 +39,22 @@ function routeFunctions(db, getCaller, activeYear) {
     const year = (await tx.get(db.doc(`academic_years/${ident(d.academicYearId)}`))).data();
     if (!year || year.status !== "active") throw new HttpsError("failed-precondition", "El año está cerrado.");
   }
+  // Opens all due stops, not just the next one. No Maps request here.
+  function openWindows(tx, ref, d, students) {
+    const groups = new Map();
+    for (const s of students) {
+      if (!s.activo || s.recogido || s.anulado || s.mapEnabled ||
+          !s.estimatedArrivalAt || s.estimatedArrivalAt.toMillis() > Date.now() + 600000) continue;
+      tx.update(ref.collection("students").doc(s.id), {mapEnabled: true, approachNotifiedAt: FieldValue.serverTimestamp()});
+      const key = s.direccion.trim().toLocaleLowerCase();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s.id);
+    }
+    for (const [key, ids] of groups) {
+      event(tx, `${ref.id}:approach:${hash(key)}`, {...d, dailyId: ref.id}, ids,
+          "Prepárense para la recogida", "Llegada estimada en 10 minutos o menos. Ya puedes ver el mapa en Rutas. El tiempo puede variar.");
+    }
+  }
   async function child(u, id) {
     ident(id);
     if (u.role === "Familiar" && (!(u.studentIds || []).includes(id) || u.activeStudentId !== id)) fail("Selecciona un hijo vinculado.");
@@ -151,12 +167,21 @@ function routeFunctions(db, getCaller, activeYear) {
       } else if (command === "finish") {
         if (!running || students.some((s) => s.activo && !s.recogido && !s.anulado)) throw new HttpsError("failed-precondition", "Revisa los estudiantes pendientes antes de finalizar.");
         tx.update(ref, {estado: "finalizada", horaFin: FieldValue.serverTimestamp(), teacherPosition: FieldValue.delete()});
+        tx.delete(ref.collection("live").doc("location"));
         affected = students.filter((s) => s.activo).map((s) => s.id);
         event(tx, `${ref.id}:finish`, updated, affected, "Ruta finalizada", "El recorrido escolar ha finalizado.");
       } else if (command === "position") {
         if (!running || !Number.isFinite(data.latitude) || Math.abs(data.latitude) > 90 || !Number.isFinite(data.longitude) || Math.abs(data.longitude) > 180) fail();
         const {GeoPoint} = require("firebase-admin/firestore");
-        tx.update(ref, {teacherPosition: new GeoPoint(data.latitude, data.longitude), lastUpdate: FieldValue.serverTimestamp()});
+        tx.set(ref.collection("live").doc("location"), {institution: d.institution, campus: d.campus,
+          academicYearId: d.academicYearId, academicYear: d.academicYear,
+          teacherPosition: new GeoPoint(data.latitude, data.longitude), lastUpdate: FieldValue.serverTimestamp()});
+        openWindows(tx, ref, d, students);
+      } else if (command === "announcement") {
+        if (!running) fail();
+        const body = text(data.reason, 500);
+        affected = students.filter((s) => s.activo).map((s) => s.id);
+        event(tx, `${ref.id}:announcement:${requestId}`, updated, affected, "Novedad del recorrido", body);
       } else if (command === "address" || command === "active") {
         if (running || !target) throw new HttpsError("failed-precondition", "Las paradas están bloqueadas después de iniciar.");
         const changes = command === "address" ? {direccion: text(data.address, 500)} : {activo: data.active === true};
@@ -169,7 +194,7 @@ function routeFunctions(db, getCaller, activeYear) {
         const group = students.filter((s) => s.activo && s.direccion.trim().toLocaleLowerCase() === target.direccion.trim().toLocaleLowerCase());
         if (command === "pickup" || command === "absent") {
           if (target.recogido || target.anulado) throw new HttpsError("failed-precondition", "La asistencia ya fue registrada.");
-          const changes = command === "pickup" ? {recogido: true, horaRecogida: FieldValue.serverTimestamp()} : {anulado: true, observacion: text(data.reason, 500)};
+          const changes = command === "pickup" ? {recogido: true, mapEnabled: false, horaRecogida: FieldValue.serverTimestamp()} : {anulado: true, mapEnabled: false, observacion: text(data.reason, 500)};
           tx.update(ref.collection("students").doc(target.id), changes);
           Object.assign(target, changes); affected = [target.id];
           // Una notificacion agrupada al cerrar la parada, no una por hermano.
@@ -186,6 +211,15 @@ function routeFunctions(db, getCaller, activeYear) {
             body = `Tiempo aproximado de llegada: ${data.minutes} minutos.`;
           }
           event(tx, `${ref.id}:${requestId}`, updated, affected, "Aviso de ruta escolar", body);
+          const minutes = command === "arrival" ? 0 : data.minutes;
+          for (const s of group.filter((s) => affected.includes(s.id))) {
+            s.estimatedArrivalAt = Timestamp.fromMillis(Date.now() + minutes * 60000);
+            // This explicit notice already alerts the family; avoid a second push.
+            const changes = {estimatedArrivalAt: s.estimatedArrivalAt, estimatedMinutes: minutes,
+              estimatedAt: FieldValue.serverTimestamp()};
+            if (minutes <= 10) changes.mapEnabled = true;
+            tx.update(ref.collection("students").doc(s.id), changes);
+          }
         }
       } else throw new HttpsError("invalid-argument", "Acción no válida.");
       if (command !== "position") audit(tx, u, updated, command, {studentIds: affected, reason: typeof data.reason === "string" ? data.reason.slice(0, 500) : null});
@@ -253,7 +287,8 @@ function routeFunctions(db, getCaller, activeYear) {
     const stops = [...new Set(students.map((s) => s.direccion.trim()))];
     if (!stops.length) return {items: []};
     if (stops.length > 26) throw new HttpsError("failed-precondition", "Este recorrido requiere cálculo por segmentos. Usa modo manual.");
-    if (!d.teacherPosition || !d.lastUpdate || Date.now() - d.lastUpdate.toMillis() > 120000) throw new HttpsError("failed-precondition", "Se necesita una posición reciente del responsable.");
+    const location = (await ref.collection("live").doc("location").get()).data();
+    if (!location?.teacherPosition || !location.lastUpdate || Date.now() - location.lastUpdate.toMillis() > 120000) throw new HttpsError("failed-precondition", "Se necesita una posición reciente del responsable.");
     const quotaRef = db.collection("maps_route_quotas").doc(day());
     await db.runTransaction(async (tx) => {
       const count = Number((await tx.get(quotaRef)).data()?.count || 0);
@@ -266,7 +301,7 @@ function routeFunctions(db, getCaller, activeYear) {
       method: "POST", headers: {"Authorization": `Bearer ${access.access_token}`,
         "X-Goog-User-Project": process.env.GCLOUD_PROJECT,
         "X-Goog-FieldMask": "routes.legs.duration,routes.legs.distanceMeters", "Content-Type": "application/json"},
-      body: JSON.stringify({origin: {location: {latLng: {latitude: d.teacherPosition.latitude, longitude: d.teacherPosition.longitude}}},
+      body: JSON.stringify({origin: {location: {latLng: {latitude: location.teacherPosition.latitude, longitude: location.teacherPosition.longitude}}},
         destination: {address: stops.at(-1)}, intermediates: stops.slice(0, -1).map((address) => ({address})),
         travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", languageCode: "es"}),
       signal: AbortSignal.timeout(15000),
@@ -288,14 +323,17 @@ function routeFunctions(db, getCaller, activeYear) {
       tx.update(ref, {mode: "automatic", estimateUpdatedAt: FieldValue.serverTimestamp()});
       for (const item of items) {
         for (const id of item.studentIds) {
+          const arrival = Timestamp.fromMillis(Date.now() + item.minutes * 60000);
           tx.update(ref.collection("students").doc(id), {
             estimatedMinutes: item.minutes, distanceMeters: item.distanceMeters, estimatedAt: FieldValue.serverTimestamp(),
+            estimatedArrivalAt: arrival,
           });
+          Object.assign(students.find((s) => s.id === id), {estimatedArrivalAt: arrival,
+            mapEnabled: currentStudents.docs.find((s) => s.id === id).data().mapEnabled === true});
         }
       }
       audit(tx, u, {...current, dailyId: ref.id}, "eta_calculated");
-      event(tx, `${ref.id}:auto:${pendingIds.join(":")}`, {...current, dailyId: ref.id}, items[0].studentIds,
-          "La ruta está cerca", `Tiempo estimado: ${items[0].minutes} minutos. Puede variar por tráfico y esperas.`);
+      openWindows(tx, ref, current, students);
     });
     return {items};
   });

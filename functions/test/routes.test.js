@@ -83,4 +83,33 @@ describe("Recorridos seguros", () => {
     await op("start");
     await assert.rejects(call("calcularTiemposRuta", {id: "r_today"}), (e) => e.code === "failed-precondition");
   });
+  it("abre todas las paradas proximas y no duplica avisos con GPS", async () => {
+    await op("start");
+    for (const id of ["s1", "s2"]) {
+      await db.doc(`daily_routes/r_today/students/${id}`).update({
+        direccion: id, estimatedArrivalAt: Timestamp.fromMillis(Date.now() + 9 * 60000),
+      });
+    }
+    await op("position", {latitude: 7, longitude: -73});
+    await op("position", {latitude: 7.01, longitude: -73});
+    for (const id of ["s1", "s2"]) assert.equal((await db.doc(`daily_routes/r_today/students/${id}`).get()).data().mapEnabled, true);
+    assert.equal((await db.collection("route_push_events").get()).size, 3);
+    assert.equal((await db.doc("daily_routes/r_today").get()).data().teacherPosition, undefined);
+    assert.ok((await db.doc("daily_routes/r_today/live/location").get()).data().teacherPosition);
+  });
+  it("ventana manual se conserva con demora y cierra al recoger; anuncios siguen", async () => {
+    await op("start");
+    await op("eta", {studentId: "s1", minutes: 20});
+    await op("position", {latitude: 7, longitude: -73});
+    assert.notEqual((await db.doc("daily_routes/r_today/students/s1").get()).data().mapEnabled, true);
+    await op("eta", {studentId: "s1", minutes: 8});
+    await op("eta", {studentId: "s1", minutes: 25});
+    assert.equal((await db.doc("daily_routes/r_today/students/s1").get()).data().mapEnabled, true);
+    await op("pickup", {studentId: "s1"});
+    assert.equal((await db.doc("daily_routes/r_today/students/s1").get()).data().mapEnabled, false);
+    await op("announcement", {reason: "Demora por tráfico"});
+    const events = (await db.collection("route_push_events").get()).docs.map((d) => d.data());
+    assert.deepEqual(events.find((e) => e.title === "Novedad del recorrido").studentIds.sort(), ["s1", "s2"]);
+    await assert.rejects(op("announcement", {reason: "Ajeno"}, {...teacher, uid: "otro"}));
+  });
 });

@@ -1,5 +1,9 @@
 # Guía de arquitectura y desarrollo
 
+Manual técnico operativo y guías por perfil: [manuales](manuales/README.md).
+Rutas usa ubicación privada y ventanas por estudiante; ver TECNICO.md antes de
+modificar GPS. Sus anuncios operativos permanecen en Rutas, no en un nuevo chat.
+
 ## Propósito
 
 El sistema atiende preescolar, primaria y bachillerato en una o varias instituciones y sedes. Flutter sirve web y Android; Firebase aporta Authentication, Firestore, Cloud Functions, Cloud Storage, Hosting y notificaciones.
@@ -141,10 +145,12 @@ convierte un canal colectivo en solo anuncios; no elimina contenido. Los
 canales `service` son extensibles por categoría e icono y almacenan
 comunicación, no el estado operativo del módulo que los origina.
 
-Al ampliar Rutas, Restaurante, Lonchera u otro módulo, ese módulo conserva sus
+Al ampliar Restaurante, Lonchera u otro módulo con chat, ese módulo conserva sus
 entidades de negocio y publica o enlaza novedades con un canal de servicio.
 No se crea una segunda colección de chats. Toda nueva carga docente debe
 actualizar la sincronización de `REGISTRO_CARGA_DOCENTE.md`.
+Excepción operativa acordada: los avisos del recorrido se gestionan y consultan
+en Rutas, con eventos e historial, no como un chat de servicio.
 
 ## Archivos y Storage
 

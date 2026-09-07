@@ -54,4 +54,19 @@ describe("Regresiones de seguridad Rutas y slots push", () => {
     await assertFails(updateDoc(doc(dbFor("student"), "users/student"), {"notificationTokens.mobile": "forged"}));
     await assertFails(setDoc(doc(dbFor("student"), "push_device_sessions/student"), {mobile: {}}));
   });
+  it("GPS exige ventana del hijo activo y se revoca al recoger", async () => {
+    const patch = async (values) => env.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), "daily_routes/d"), {estado: "activa"});
+      await setDoc(doc(c.firestore(), "daily_routes/d/live/location"), {teacherPosition: "privada"});
+      await updateDoc(doc(c.firestore(), "daily_routes/d/students/student"), {activo: true, anulado: false, ...values});
+    });
+    await patch({mapEnabled: false});
+    await assertFails(getDoc(doc(dbFor("family"), "daily_routes/d/live/location")));
+    await patch({mapEnabled: true});
+    for (const uid of ["family", "student", "teacher", "admin"]) await assertSucceeds(getDoc(doc(dbFor(uid), "daily_routes/d/live/location")));
+    await assertFails(getDoc(doc(dbFor("stranger"), "daily_routes/d/live/location")));
+    await patch({recogido: true});
+    await assertFails(getDoc(doc(dbFor("family"), "daily_routes/d/live/location")));
+    await assertSucceeds(getDoc(doc(dbFor("family"), "daily_routes/d/students/student")));
+  });
 });

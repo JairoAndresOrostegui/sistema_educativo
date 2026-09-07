@@ -43,8 +43,8 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
   limitados. La aceptación de FCM nunca se presenta como entrega o lectura.
 - El panel de fallos push y el reintento manual son exclusivos del superadmin,
   validados en backend. Nunca exponer tokens al panel.
-- Rutas -> canales automáticos queda pendiente hasta revisar Rutas y acordar
-  con el usuario audiencia, eventos y reglas. No activarlo anticipadamente.
+- Decisión septiembre de 2026: avisos del recorrido se operan y consultan en Rutas,
+  no en canales automáticos de Mensajería; no crear otro chat ni forzar cambio de módulo.
 
 - Cada grupo académico tiene un único chat general con estudiantes activos,
   familiares vinculados, docente líder y docentes que dictan en el grupo.
@@ -79,6 +79,12 @@ Estas reglas aplican a todo cambio futuro en este repositorio.
 - Operación, historial y evento push se escriben en backend de forma atómica.
   FCM no decide si una recogida o cierre quedó guardado.
 - Historial familiar limitado a hijos activos vinculados y seleccionados.
+- GPS privado en daily_routes/{id}/live/location, nunca en el padre compartido.
+  Solo familiares/estudiantes con parada pendiente y ventana de <=10 minutos
+  estimados pueden leerlo. Al recoger/no recoger/finalizar se revoca en reglas.
+- La ventana abierta permanece durante demoras. Cálculo inicial y recálculos
+  solo solicitados por responsable; no timer Maps ni cálculo por recogida/GPS.
+- Actualizar los manuales por perfil en docs/manuales al cambiar un flujo.
 - Propiedad push por sesión: un móvil y una web. Refresh/logout antiguos no
   pueden reemplazar ni borrar al último login. Clientes no escriben tokens.
 

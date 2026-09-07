@@ -1,5 +1,36 @@
 # Revisión de Rutas y notificaciones — 6 de septiembre de 2026
 
+## Actualización: ventana GPS y avisos económicos
+
+Implementado acceso a GPS privado por hijo pendiente con ventana estimada <=10
+minutos. Al recoger/no recoger/finalizar se revoca en backend/reglas. Una ventana
+abierta permanece ante demora. GPS no recalcula Maps: solo evalúa estimaciones
+guardadas. Se retiraron recálculos de temporizador y recogida; responsable solicita
+recálculo con confirmación. Avisos generales dentro de Rutas, también para quienes
+ya fueron recogidos, con historial; se descarta conectar el viaje a un chat.
+La posición no se guarda en el padre compartido; migrar campos antiguos antes de
+entregar nuevo cliente. Manuales por perfil en [manuales](manuales/README.md).
+
+Versión APK de esta revisión: 1.0.0+2; hashes y tamaños anteriores de este archivo
+corresponden al entregable anterior. Maps real sigue pendiente de habilitación.
+APK ARM64: 43.5 MB, SHA256
+`e2a7d84faa5e91758f98d732b353efb6cccc7275018c86ed49e693502041d201`.
+Validación de esta entrega: 48 pruebas Flutter, 24 Rutas/push, 27 reglas;
+analyze y lint sin errores. Prueba física aún pendiente del propietario.
+Agrupación por texto de dirección, no paradas con coordenadas ni cercanía automática.
+
+Costos revisados (22 días, 16 espectadores 10 min, 80 min/trayecto, GPS30s,
+cuotas gratuitas agotadas): subtotal Maps + reserva Firestore (8000 lecturas,
+1000 escrituras/trayecto) Android USD0.29/mes ida con cálculo inicial, USD0.73
+con dos recálculos solicitados; web16 espectadores USD2.76/3.20 respectivamente.
+Ida/vuelta duplica esos subtotales. No incluye duración Functions, tráfico,
+almacenamiento/logs/infraestructura compartida, ni Places al registrar direcciones.
+No presentar estos valores como factura total. Mapas gratuitos: RoutesPro5000
+cálculos/mes, web10000 cargas/mes; Firestore50000 lecturas/20000 escrituras al día,
+compartidas con todos los módulos. Medir consumo real antes de prometer costos.
+
+---
+
 Estado: diagnóstico inicial conservado abajo como evidencia; implementación
 de seguridad/manual probada y APK de QA generado. La propuesta fue aprobada con los
 ajustes siguientes. Consultar este encabezado antes de interpretar hallazgos

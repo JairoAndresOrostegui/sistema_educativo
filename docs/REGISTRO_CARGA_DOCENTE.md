@@ -31,8 +31,10 @@ asigne responsabilidad, acceso o trabajo vigente a un docente.
 Los reintentos push comprueban que el docente siga activo y conserve membresía
 en el canal. No se cambia la autoría ni se trasladan tokens del saliente al
 reemplazo; este último recibe avisos futuros según su acceso vigente.
-La conexión automática de Rutas con canales de servicio está pendiente de
-revisión y decisión del usuario, no es un adaptador ya habilitado.
+Los avisos operativos se publican y consultan dentro de Rutas, por decisión del
+colegio. No se agrega una membresía de chat para el viaje. La ubicación privada
+deriva acceso del gestionador actual del recorrido, por lo que el traslado docente
+vigente aplica sin copiar coordenadas, ventanas ni autoría del historial.
 
 Rutas usa ahora `route_history`, `route_push_events` y operaciones idempotentes
 del recorrido. `performedBy` y eventos anteriores no se trasladan. El impacto y

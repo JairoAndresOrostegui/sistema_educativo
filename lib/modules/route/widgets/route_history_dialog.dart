@@ -6,7 +6,7 @@ Future<void> showRouteHistory(BuildContext context, {String? studentId}) async {
   await showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: const Text('Historial de recogidas'),
+      title: const Text('Avisos e historial de Rutas'),
       content: SizedBox(
         width: 600,
         height: 400,
@@ -28,6 +28,11 @@ Future<void> showRouteHistory(BuildContext context, {String? studentId}) async {
             );
             if (items.isEmpty) return const Text('Sin registros.');
             const labels = {
+              'announcement': 'Aviso general del responsable',
+              'address_requested': 'Cambio de parada solicitado',
+              'address_approved': 'Cambio de parada aprobado',
+              'address_rejected': 'Cambio de parada rechazado',
+              'eta_calculated': 'Estimación calculada',
               'pickup': 'Recogido',
               'absent': 'No recogido',
               'start': 'Inicio',
