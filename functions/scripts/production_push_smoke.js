@@ -5,7 +5,9 @@ const {cloudAccess} = require("./cloud_access");
 const {decode, encode} = require("./production_projection");
 const UID = "qhUeXTpqALbKAkVXlXj8pjk0HQT2";
 const BASE = "https://firestore.googleapis.com/v1/projects/sistema-educativo-rl-prod/databases/(default)/documents";
-const RUN = "production-owner-push-20260907";
+const runArgument = process.argv.find((arg) => arg.startsWith("--run="));
+const RUN = runArgument ? runArgument.slice(6) : "production-owner-push-20260907";
+if (!/^production-owner-push-[a-z0-9-]{1,64}$/.test(RUN)) throw new Error("Invalid diagnostic run identifier");
 async function main() {
   const request = await cloudAccess();
   if (process.argv.includes("--send")) {
@@ -21,7 +23,7 @@ async function main() {
       const data = {
         institutionId: user.institution, campusId: user.campus, type: "diagnostic",
         message: {
-          notification: {title: "Llinás · Prueba de producción", body: `Jairo, esta es la prueba en ${slot === "mobile" ? "tu móvil" : "tu navegador"}. Confirma que aparece este aviso.`},
+          notification: {title: "Llinás · Prueba de producción", body: `Jairo, prueba ${RUN.endsWith("-2") ? "2" : "de avisos"} en ${slot === "mobile" ? "tu móvil" : "tu navegador"}. Confirma que aparece este aviso.`},
           android: {priority: "high"},
           webpush: {fcmOptions: {link: "https://liceobilinguerodolfollinas.edu.co/"}},
         },
