@@ -330,3 +330,24 @@ No se ha subido a Play. La clave Android Maps de producción sigue vacía en el
 manifest: este artefacto no valida el mapa de Rutas y no se considera release
 definitiva. No confundir compilación/firma válidas con aprobación de Google.
 Validación del cambio: 54 pruebas Flutter, análisis, lint y 27 pruebas de reglas.
+
+## Maps Android y artefactos versión 4
+
+El titular confirmó SHA-1 Play `B8:FB:16:30:FE:F7:C0:84:B3:C7:B5:76:89:14:D6:5F:F0:EC:C8:EB`.
+Se habilitó exclusivamente `maps-android-backend.googleapis.com` en producción.
+La clave `production-android-maps` está restringida a esa API, al paquete Play
+y a dos certificados: firma Play y carga/local `53:CD:8D:36:12:41:B1:3C:F2:A2:29:CB:BC:A1:EF:F9:26:79:24:6A`.
+No se tocaron claves Firebase existentes, QA ni habilitación de Routes API.
+El cálculo automático permanece deshabilitado; no se realizaron cálculos de pago.
+
+`node functions/scripts/production_android_maps.js --build` verifica restricciones,
+obtiene la clave en memoria y la pasa a Gradle por variable de entorno. No guardar
+la clave en Git ni ejecutar builds de producción sin esa propiedad. `--apply`
+solo prepara el SDK y crea la clave si falta; no amplía restricciones existentes.
+
+APK y AAB 1.0.0 (4) generados con Maps incluido, paquete correcto y firmas verificadas.
+Reemplazan los archivos locales versión 3 indicados arriba, sin publicación en Play.
+SHA256 APK: `529EB3428C4F77479A7CB0802597801C5DA800C327F8F46133C0C2D5D7D88DB4`.
+SHA256 AAB: `916BA35064F7A19A8B3FFC2F07C21F51D810AAC1EE22D038D389F90D07F7E5DE`.
+Falta comprobar visualización real de Maps en el móvil y luego desde instalación Play;
+la validación de firma/configuración no sustituye esa prueba.
