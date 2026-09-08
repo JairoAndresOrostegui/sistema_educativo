@@ -11,10 +11,13 @@ const RESOURCE = BASE.slice(BASE.indexOf("projects/"));
 const SARA_UID = "gJNXZux0NkPheNMmsbOfP1iQdnG3";
 const OWNER_UID = "qhUeXTpqALbKAkVXlXj8pjk0HQT2";
 const ROUTE_ID = "playstore_validation_route_20260908";
-const day = new Intl.DateTimeFormat("en-CA", {
+// Fecha fijada deliberadamente para que una limpieza posterior a medianoche
+// siga apuntando al recorrido creado y no deje una subcoleccion huerfana.
+const FIXTURE_DAY = "2026-09-07";
+const currentDay = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Bogota",
 }).format(new Date());
-const DAILY_ID = `${ROUTE_ID}_${day}`;
+const DAILY_ID = `${ROUTE_ID}_${FIXTURE_DAY}`;
 
 async function optional(request, path) {
   try {
@@ -86,6 +89,9 @@ async function loadContext(request) {
 }
 
 async function apply(request, context) {
+  if (currentDay !== FIXTURE_DAY) {
+    throw new Error("La fecha del fixture expiro; crea una revision nueva");
+  }
   const paths = [
     `routes/${ROUTE_ID}`,
     `daily_routes/${DAILY_ID}`,
@@ -179,7 +185,7 @@ async function apply(request, context) {
       update: {name: `${RESOURCE}/daily_routes/${DAILY_ID}/live/location`, fields: liveFields},
       currentDocument: {exists: false},
     },
-    update(`route_history/${ROUTE_ID}_created_${day}`, audit, false),
+    update(`route_history/${ROUTE_ID}_created_${FIXTURE_DAY}`, audit, false),
   ];
   const cleanPermissions = (context.sara.permissions || []).filter(
       (permission) => !permission.startsWith("autorizaciones."),
@@ -189,7 +195,7 @@ async function apply(request, context) {
       permissions: cleanPermissions,
       updatedAt: now,
     }, ["permissions", "updatedAt"]));
-    writes.push(update(`user_history/${ROUTE_ID}_student_permissions_${day}`, {
+    writes.push(update(`user_history/${ROUTE_ID}_student_permissions_${FIXTURE_DAY}`, {
       usuarioId: SARA_UID,
       nombres: context.sara.firstName || "",
       apellidos: context.sara.lastName || "",
@@ -224,7 +230,7 @@ async function cleanup(request, context) {
     }
     writes.push(remove(paths[index]));
   });
-  const cleanupAuditPath = `route_history/${ROUTE_ID}_cleaned_${day}`;
+  const cleanupAuditPath = `route_history/${ROUTE_ID}_cleaned_${FIXTURE_DAY}`;
   if (!await optional(request, cleanupAuditPath)) {
     writes.push(update(cleanupAuditPath, {
       institution: context.sara.institution,
@@ -256,7 +262,8 @@ async function main() {
   ]);
   console.log(JSON.stringify({
     project: PROJECT,
-    day,
+    fixtureDay: FIXTURE_DAY,
+    currentDay,
     routeId: ROUTE_ID,
     dailyRouteId: DAILY_ID,
     saraHasRoutesPermission: (context.sara.permissions || []).includes("rutas.ver"),
