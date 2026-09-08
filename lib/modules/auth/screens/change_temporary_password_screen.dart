@@ -60,6 +60,15 @@ class _ChangeTemporaryPasswordScreenState
       final current = provider.user!;
       provider.setUser(current.copyWith(mustChangePassword: false));
       context.go(AuthAccessPolicy.homeForRole(current.role));
+    } on TemporaryPasswordChangedSessionException catch (error) {
+      if (!mounted) return;
+      context.read<UserProviderV2>().clearUser();
+      await DialogUtils.showInfo(
+        context: context,
+        title: 'Contraseña cambiada',
+        message: error.toString(),
+      );
+      if (mounted) context.go('/login');
     } catch (error) {
       if (!mounted) return;
       await DialogUtils.showError(

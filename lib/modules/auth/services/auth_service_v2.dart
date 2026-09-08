@@ -12,6 +12,15 @@ import '../../../utils/validators.dart';
 import '../utils/auth_access_policy.dart';
 import '../utils/auth_error_mapper.dart';
 
+class TemporaryPasswordChangedSessionException implements Exception {
+  const TemporaryPasswordChangedSessionException();
+
+  @override
+  String toString() =>
+      'La contraseña sí fue cambiada, pero la sesión no pudo renovarse. '
+      'Inicia sesión con tu nueva contraseña.';
+}
+
 class AuthService {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
@@ -112,13 +121,29 @@ class AuthService {
   }
 
   Future<void> changeTemporaryStudentPassword(String password) async {
+    final email = _auth.currentUser?.email?.trim();
+    if (email == null || email.isEmpty) {
+      throw Exception('La sesión no permite identificar al estudiante.');
+    }
     final result = await FirebaseFunctions.instance
         .httpsCallable('cambiarClaveTemporalEstudiante')
         .call({'password': password});
     if (result.data['success'] != true) {
       throw Exception('No se pudo cambiar la contraseña temporal.');
     }
-    await _auth.currentUser?.getIdToken(true);
+
+    // Admin SDK revoca la credencial actual al cambiar la contraseña. No se
+    // refresca ese token vencido: se crea una sesión con la nueva contraseña.
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      await credential.user?.getIdToken(true);
+    } on FirebaseAuthException {
+      await _auth.signOut();
+      throw const TemporaryPasswordChangedSessionException();
+    }
   }
 
   Future<void> logout(userModelv2 currentUser) async {

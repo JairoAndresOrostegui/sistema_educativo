@@ -35,6 +35,10 @@ actualiza Auth, revoca sesiones anteriores y registra auditoría sin almacenar l
 clave. `getCaller` y las reglas bloquean los demás módulos mientras
 `mustChangePassword` sea verdadero. La segunda solo admite al propio estudiante,
 aplica la política de complejidad y elimina la marca junto con un log atómico.
+Como actualizar la contraseña mediante Admin SDK invalida la credencial vigente,
+el cliente crea inmediatamente una sesión nueva con la contraseña elegida; no
+intenta refrescar el token anterior ni presenta esa invalidación como un fallo
+del cambio de contraseña.
 Una falla de Auth revierte la marca; una falla posterior de auditoría conserva
 la cuenta bloqueada para que administración repita la generación con seguridad.
 Una clave temporal completada pero todavía no sustituida puede rotarse; el

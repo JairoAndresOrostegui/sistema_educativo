@@ -13,7 +13,7 @@ const OWNER_UID = "qhUeXTpqALbKAkVXlXj8pjk0HQT2";
 const ROUTE_ID = "playstore_validation_route_20260908";
 // Fecha fijada deliberadamente para que una limpieza posterior a medianoche
 // siga apuntando al recorrido creado y no deje una subcoleccion huerfana.
-const FIXTURE_DAY = "2026-09-07";
+const FIXTURE_DAY = "2026-09-08";
 const currentDay = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Bogota",
 }).format(new Date());
@@ -224,8 +224,7 @@ async function cleanup(request, context) {
   const writes = [];
   docs.forEach((doc, index) => {
     if (!doc) return;
-    const value = decode({mapValue: {fields: doc.fields}});
-    if (value.temporaryProductionFixture !== true) {
+    if (doc.fields?.temporaryProductionFixture?.booleanValue !== true) {
       throw new Error(`Proteccion: ${paths[index]} no es el fixture temporal`);
     }
     writes.push(remove(paths[index]));
