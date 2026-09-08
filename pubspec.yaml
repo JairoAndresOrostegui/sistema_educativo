@@ -2,7 +2,7 @@ name: sistema_educativo
 description: "Sistema educativo multiplataforma para colegios."
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.0+9
 
 environment:
   sdk: ^3.12.0
