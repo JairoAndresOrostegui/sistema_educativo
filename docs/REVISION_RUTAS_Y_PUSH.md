@@ -296,3 +296,22 @@ Fuentes oficiales consultadas:
 - https://developers.google.com/maps/documentation/routes/intermed_waypoints
 - https://developers.google.com/maps/documentation/routes/usage-and-billing
 - https://developers.google.com/maps/documentation/places/web-service/session-pricing
+
+## Cierre de estabilidad del ciclo de Rutas (8 de septiembre de 2026)
+
+Se validaron los estados sin asignación, pendiente, activo, finalizado, cancelado
+y desconocido. Ninguno debe mostrar excepciones, códigos de Firebase ni trazas al
+usuario. La pantalla presenta una explicación breve y, ante errores recuperables,
+permite reintentar. Un recorrido pendiente o terminado sigue siendo consultable,
+pero no abre el mapa; un estudiante recogido o ausente pierde acceso al GPS.
+
+Los modelos toleran documentos incompletos sin cerrar la aplicación. El backend
+rechaza estados, direcciones, coordenadas y respuestas de Maps inválidas mediante
+errores controlados. Al finalizar, elimina la ubicación en vivo y conserva el
+historial. La ruta física activa con mapa, movimiento y zoom fue comprobada en un
+Galaxy Z Flip7; la prueba temporal de producción se eliminó después de usarla.
+
+Pruebas automatizadas del cierre: 58 Flutter y 27 de Functions/seguridad de Rutas
+y Push. Continúan siendo pruebas manuales obligatorias antes de Play: pérdida de
+red durante un recorrido, GPS desactivado, aplicación en segundo plano y cierre
+forzado/reapertura en el dispositivo.

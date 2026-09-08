@@ -83,6 +83,36 @@ describe("Recorridos seguros", () => {
     await op("start");
     await assert.rejects(call("calcularTiemposRuta", {id: "r_today"}), (e) => e.code === "failed-precondition");
   });
+  it("sin asignacion responde vacio y conserva estados antes y despues", async () => {
+    await db.doc("users/s3").set({...scope, role: "Estudiante", status: "activo"});
+    const unassigned = {...scope, uid: "s3", role: "Estudiante", permissions: ["rutas.ver"]};
+    const empty = await call("consultarMiRecorrido", {}, unassigned);
+    assert.equal(empty.id, null);
+    const today = new Intl.DateTimeFormat("en-CA", {timeZone: "America/Bogota"}).format(new Date());
+    const todayRef = db.doc(`daily_routes/r_${today}`);
+    await todayRef.set({...scope, idRuta: "r", gestionador: "t", estado: "pendiente", fecha: Timestamp.now()});
+    await todayRef.collection("students").doc("s1").set({...scope, activo: true, recogido: false, anulado: false});
+    const assigned = {...scope, uid: "s1", role: "Estudiante", permissions: ["rutas.ver"]};
+    assert.equal((await call("consultarMiRecorrido", {}, assigned)).id, `r_${today}`);
+    await todayRef.update({estado: "finalizada"});
+    assert.equal((await call("consultarMiRecorrido", {}, assigned)).id, `r_${today}`);
+  });
+  it("rechaza datos incompletos y estados desconocidos sin error interno", async () => {
+    await db.doc("daily_routes/r_today/students/s1").update({direccion: null});
+    await assert.rejects(op("start"), (e) => e.code === "failed-precondition");
+    await db.doc("daily_routes/r_today").update({estado: "corrupta"});
+    await assert.rejects(op("start"), (e) => e.code === "failed-precondition");
+  });
+  it("finalizar elimina GPS y toda operacion posterior queda controlada", async () => {
+    await op("start");
+    await op("position", {latitude: 7, longitude: -73});
+    await op("pickup", {studentId: "s1"});
+    await op("absent", {studentId: "s2", reason: "No se presentó"});
+    await op("finish");
+    assert.equal((await db.doc("daily_routes/r_today/live/location").get()).exists, false);
+    await assert.rejects(op("position", {latitude: 7, longitude: -73}),
+        (e) => e.code === "failed-precondition");
+  });
   it("abre todas las paradas proximas y no duplica avisos con GPS", async () => {
     await op("start");
     for (const id of ["s1", "s2"]) {

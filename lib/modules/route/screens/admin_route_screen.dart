@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import '../widgets/route_history_dialog.dart';
 import '../widgets/route_admin_tools.dart';
@@ -10,6 +9,7 @@ import '../../../models/route/route_model.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../utils/route_ui_helpers.dart';
 
 class AdminRoutesScreen extends StatefulWidget {
   const AdminRoutesScreen({super.key});
@@ -23,42 +23,62 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
   bool isLoading = true;
   bool isSuperadmin = false;
   List<String> permissions = [];
+  String? _loadError;
   final ScrollController _routesScrollController = ScrollController();
 
-  late String _institutionId;
-  late String _campusId;
-  late String _performedBy;
-  late String _adminName;
+  String _institutionId = '';
+  String _campusId = '';
+  String _performedBy = '';
+  String _adminName = '';
 
   @override
   void initState() {
     super.initState();
-    _loadSessionData();
-    _loadRoutes();
+    if (_loadSessionData()) {
+      _loadRoutes();
+    } else {
+      isLoading = false;
+      _loadError = 'Tu sesión no está disponible. Inicia sesión nuevamente.';
+    }
   }
 
-  void _loadSessionData() {
+  bool _loadSessionData() {
     final user = context.read<UserProviderV2>().user;
-    if (user != null) {
-      isSuperadmin = user.isSuperadmin;
-      permissions = user.permissions;
-      _institutionId = user.institution;
-      _campusId = user.campus;
-      _performedBy = user.id;
-      _adminName = '${user.firstName} ${user.lastName}'.trim();
-      setState(() {});
-    }
+    if (user == null) return false;
+    isSuperadmin = user.isSuperadmin;
+    permissions = user.permissions;
+    _institutionId = user.institution;
+    _campusId = user.campus;
+    _performedBy = user.id;
+    _adminName = '${user.firstName} ${user.lastName}'.trim();
+    return true;
   }
 
   Future<void> _loadRoutes() async {
     setState(() => isLoading = true);
     try {
-      routes = await RouteService().obtenerTodasLasRutas(
+      final loaded = await RouteService().obtenerTodasLasRutas(
         institutionId: _institutionId,
         campusId: _campusId,
       );
-    } catch (_) {}
-    if (mounted) setState(() => isLoading = false);
+      if (mounted) {
+        setState(() {
+          routes = loaded;
+          _loadError = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _loadError = routeErrorMessage(
+            e,
+            fallback: 'No se pudieron consultar las rutas.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   Future<void> _deleteRoute(RouteModel route) async {
@@ -74,7 +94,10 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Eliminar', style: TextStyle(color: AppPalette.error)),
+            child: Text(
+              'Eliminar',
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
           ),
         ],
       ),
@@ -97,12 +120,15 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
           title: 'Ruta eliminada',
           message: 'Ruta eliminada correctamente',
         );
-      } catch (_) {
+      } catch (e) {
         if (!mounted) return;
         await DialogUtils.showError(
           context: context,
           title: 'Error',
-          message: 'Error al eliminar la ruta',
+          message: routeErrorMessage(
+            e,
+            fallback: 'No fue posible eliminar la ruta.',
+          ),
         );
       }
     }
@@ -110,16 +136,17 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final canCreate = isSuperadmin || permissions.contains('rutas.crear');
     final canEdit = isSuperadmin || permissions.contains('rutas.editar');
     final canDelete = isSuperadmin || permissions.contains('rutas.eliminar');
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       appBar: AppBar(
         title: Text('Rutas escolares'),
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
         centerTitle: true,
         leading: BackToDashboardButton(),
         actions: [
@@ -165,6 +192,23 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
       body: SafeArea(
         child: isLoading
             ? Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_loadError!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: _loadRoutes,
+                        child: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             : routes.isEmpty
             ? Center(child: Text('No hay rutas registradas.'))
             : Scrollbar(
@@ -191,22 +235,11 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: AppPalette.error.withValues(alpha: .15),
-                          ),
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              AppPalette.error.withValues(alpha: .06),
-                              AppPalette.surface,
-                            ],
-                          ),
+                          color: colors.surfaceContainerLow,
+                          border: Border.all(color: colors.outlineVariant),
                           boxShadow: [
                             BoxShadow(
-                              color: AppPalette.onSurface.withValues(
-                                alpha: 0.03,
-                              ),
+                              color: colors.shadow.withValues(alpha: 0.03),
                               blurRadius: 8,
                               offset: Offset(0, 2),
                             ),
@@ -229,7 +262,7 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                                   child: IconButton(
                                     icon: Icon(
                                       Icons.edit,
-                                      color: AppPalette.info,
+                                      color: colors.primary,
                                     ),
                                     onPressed: () => mostrarFormularioRuta(
                                       context: context,
@@ -246,7 +279,7 @@ class _AdminRoutesScreenState extends State<AdminRoutesScreen> {
                                   child: IconButton(
                                     icon: Icon(
                                       Icons.delete,
-                                      color: AppPalette.primary,
+                                      color: colors.error,
                                     ),
                                     onPressed: () => _deleteRoute(route),
                                     tooltip: 'Eliminar ruta',

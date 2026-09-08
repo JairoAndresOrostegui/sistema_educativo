@@ -28,18 +28,27 @@ class RouteModel {
   });
 
   factory RouteModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final raw = doc.data();
+    final data = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : const <String, dynamic>{};
+    String text(String key) => data[key] is String ? data[key] as String : '';
+    final rawStudents = data['estudiantes'];
     return RouteModel(
       id: doc.id,
-      name: data['nombre'] ?? '',
-      startAddress: data['direccionInicio'] ?? '',
+      name: text('nombre'),
+      startAddress: text('direccionInicio'),
       startDate: FormatUtils.dateTimeDesdeTimestamp(data['fechaInicio']),
       endDate: FormatUtils.dateTimeDesdeTimestamp(data['fechaFin']),
       startTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaInicio']),
       endTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaFin']),
-      manager: data['gestionador'],
-      driverId: data['driverId'],
-      students: List<String>.from(data['estudiantes'] ?? []),
+      manager: data['gestionador'] is String
+          ? data['gestionador'] as String
+          : null,
+      driverId: data['driverId'] is String ? data['driverId'] as String : null,
+      students: rawStudents is List
+          ? rawStudents.whereType<String>().toList(growable: false)
+          : const [],
     );
   }
 

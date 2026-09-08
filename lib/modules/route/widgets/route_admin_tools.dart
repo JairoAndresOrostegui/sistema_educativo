@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/daily_route_service.dart';
+import '../utils/route_ui_helpers.dart';
 
 Future<String?> routeTextDialog(BuildContext context, String title) async {
   final c = TextEditingController();
@@ -62,9 +63,11 @@ class _RouteToolsState extends State<_RouteTools> {
     });
     try {
       final result = await RouteOperations.call(_function, data);
-      if (mounted) setState(() => _items = result['items'] as List);
+      if (mounted) {
+        setState(() => _items = result['items'] is List ? result['items'] : []);
+      }
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = routeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -102,61 +105,55 @@ class _RouteToolsState extends State<_RouteTools> {
           if (_error != null) Text(_error!),
           Expanded(
             child: ListView(
-              children: _items
-                  .map(
-                    (v) => Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.drivers
-                                  ? '${v['name']} · ${v['license']}'
-                                  : '${v['routeName']} · ${v['studentId']}',
-                            ),
-                            Text(
-                              widget.drivers
-                                  ? '${v['phone']}\n${v['notes']}'
-                                  : '${v['address']}\n${v['reason']}',
-                            ),
-                            if (!widget.drivers)
-                              Wrap(
-                                children: [
-                                  for (final approve in [true, false])
-                                    TextButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () async {
-                                              final reason =
-                                                  await routeTextDialog(
-                                                    context,
-                                                    'Motivo de la decisión',
-                                                  );
-                                              if (reason != null &&
-                                                  reason.isNotEmpty) {
-                                                await _call({
-                                                  ...Map<String, dynamic>.from(
-                                                    v,
-                                                  ),
-                                                  'action': 'decide',
-                                                  'approved': approve,
-                                                  'reason': reason,
-                                                });
-                                              }
-                                            },
-                                      child: Text(
-                                        approve ? 'Aprobar' : 'Rechazar',
-                                      ),
-                                    ),
-                                ],
-                              ),
-                          ],
+              children: _items.whereType<Map>().map((raw) {
+                final v = Map<String, dynamic>.from(raw);
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.drivers
+                              ? '${routeText(v['name'], fallback: 'Conductor')} · ${routeText(v['license'], fallback: 'Sin licencia registrada')}'
+                              : '${routeText(v['routeName'], fallback: 'Recorrido')} · ${routeText(v['studentId'], fallback: 'Estudiante')}',
                         ),
-                      ),
+                        Text(
+                          widget.drivers
+                              ? '${routeText(v['phone'], fallback: 'Sin teléfono')}\n${routeText(v['notes'])}'
+                              : '${routeText(v['address'], fallback: 'Sin dirección')}\n${routeText(v['reason'], fallback: 'Sin motivo')}',
+                        ),
+                        if (!widget.drivers)
+                          Wrap(
+                            children: [
+                              for (final approve in [true, false])
+                                TextButton(
+                                  onPressed: _busy
+                                      ? null
+                                      : () async {
+                                          final reason = await routeTextDialog(
+                                            context,
+                                            'Motivo de la decisión',
+                                          );
+                                          if (reason != null &&
+                                              reason.isNotEmpty) {
+                                            await _call({
+                                              ...Map<String, dynamic>.from(v),
+                                              'action': 'decide',
+                                              'approved': approve,
+                                              'reason': reason,
+                                            });
+                                          }
+                                        },
+                                  child: Text(approve ? 'Aprobar' : 'Rechazar'),
+                                ),
+                            ],
+                          ),
+                      ],
                     ),
-                  )
-                  .toList(),
+                  ),
+                );
+              }).toList(),
             ),
           ),
         ],

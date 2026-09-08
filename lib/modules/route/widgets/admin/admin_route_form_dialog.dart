@@ -1,4 +1,4 @@
-import 'package:sistema_educativo/config/app_palette.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,14 +7,23 @@ import '../../services/daily_route_service.dart';
 import 'admin_route_form_body.dart';
 import '../../../../models/route/route_model.dart';
 import '../../../../providers/user_provider_v2.dart';
+import '../../../../utils/dialog_utils.dart';
+import '../../utils/route_ui_helpers.dart';
 
 Future<void> mostrarFormularioRuta({
   required BuildContext context,
   RouteModel? rutaModel,
   required VoidCallback onGuardar,
 }) async {
-  // 👉 Sesión desde Provider (obligatorio para filtros y auditoría)
-  final session = context.read<UserProviderV2>().user!;
+  final session = context.read<UserProviderV2>().user;
+  if (session == null) {
+    await DialogUtils.showError(
+      context: context,
+      title: 'Sesión no disponible',
+      message: 'Inicia sesión nuevamente antes de administrar rutas.',
+    );
+    return;
+  }
   final institutionId = session.institution;
   final campusId = session.campus;
   final performedBy = session.id;
@@ -34,20 +43,41 @@ Future<void> mostrarFormularioRuta({
 
   final managerId = ValueNotifier<String?>(rutaModel?.manager);
   String? driverId = rutaModel?.driverId;
-  final driverResult = await RouteOperations.call('gestionarConductores', {});
-  final drivers = (driverResult['items'] as List)
-      .where((d) => d['active'] == true || d['id'] == driverId)
-      .toList();
-
-  // 🔒 SIEMPRE filtrar por institution/campus
-  final students = await RouteService().obtenerEstudiantesDisponibles(
-    institutionId: institutionId,
-    campusId: campusId,
-  );
-  final managers = await RouteService().obtenerGestionadoresDisponibles(
-    institutionId: institutionId,
-    campusId: campusId,
-  );
+  List<Map<String, dynamic>> drivers;
+  List<DocumentSnapshot<Map<String, dynamic>>> students;
+  List<DocumentSnapshot<Map<String, dynamic>>> managers;
+  try {
+    final driverResult = await RouteOperations.call('gestionarConductores', {});
+    final rawDrivers = driverResult['items'];
+    drivers = rawDrivers is List
+        ? rawDrivers
+              .whereType<Map>()
+              .map((value) => Map<String, dynamic>.from(value))
+              .where((d) => d['active'] == true || d['id'] == driverId)
+              .toList()
+        : [];
+    students = await RouteService().obtenerEstudiantesDisponibles(
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+    managers = await RouteService().obtenerGestionadoresDisponibles(
+      institutionId: institutionId,
+      campusId: campusId,
+    );
+  } catch (e) {
+    nameController.dispose();
+    startAddressController.dispose();
+    managerController.dispose();
+    managerId.dispose();
+    if (context.mounted) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo abrir el formulario',
+        message: routeErrorMessage(e),
+      );
+    }
+    return;
+  }
 
   if (rutaModel?.manager != null) {
     final match = managers.where((g) => g.id == rutaModel!.manager).toList();
@@ -77,13 +107,14 @@ Future<void> mostrarFormularioRuta({
   await showDialog(
     context: context,
     builder: (ctx) {
+      final colors = Theme.of(ctx).colorScheme;
       return AlertDialog(
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
         contentPadding: EdgeInsets.all(16),
         title: Center(
           child: Text(
             rutaModel == null ? 'Crear ruta' : 'Editar ruta',
-            style: TextStyle(color: AppPalette.primary),
+            style: TextStyle(color: colors.primary),
           ),
         ),
         content: SafeArea(
@@ -155,9 +186,12 @@ Future<void> mostrarFormularioRuta({
                       items: drivers
                           .map(
                             (d) => DropdownMenuItem<String>(
-                              value: d['id'],
+                              value: routeText(d['id']),
                               child: Text(
-                                d['name'],
+                                routeText(
+                                  d['name'],
+                                  fallback: 'Conductor sin nombre',
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -211,12 +245,18 @@ Future<void> mostrarFormularioRuta({
                               }
                               if (context.mounted) Navigator.pop(context);
                               onGuardar();
-                            } catch (_) {
+                            } catch (e) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Error al guardar la ruta.'),
-                                    backgroundColor: AppPalette.primary,
+                                    content: Text(
+                                      routeErrorMessage(
+                                        e,
+                                        fallback:
+                                            'No fue posible guardar la ruta.',
+                                      ),
+                                    ),
+                                    backgroundColor: colors.error,
                                   ),
                                 );
                               }
@@ -225,8 +265,8 @@ Future<void> mostrarFormularioRuta({
                           icon: Icon(Icons.save),
                           label: Text('Guardar'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppPalette.primary,
-                            foregroundColor: AppPalette.surface,
+                            backgroundColor: colors.primary,
+                            foregroundColor: colors.onPrimary,
                           ),
                         ),
                       ),
@@ -240,4 +280,9 @@ Future<void> mostrarFormularioRuta({
       );
     },
   );
+  nameController.dispose();
+  startAddressController.dispose();
+  managerController.dispose();
+  managerId.dispose();
+  orderedStudents.dispose();
 }

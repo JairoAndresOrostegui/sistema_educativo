@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/daily_route_service.dart';
+import '../utils/route_ui_helpers.dart';
 
 Future<void> showRouteHistory(BuildContext context, {String? studentId}) async {
   await showDialog<void>(
@@ -21,11 +22,13 @@ Future<void> showRouteHistory(BuildContext context, {String? studentId}) async {
             if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-            final items = List<Map<String, dynamic>>.from(
-              (snapshot.data!['items'] as List).map(
-                (v) => Map<String, dynamic>.from(v),
-              ),
-            );
+            final rawItems = snapshot.data?['items'];
+            final items = rawItems is List
+                ? rawItems
+                      .whereType<Map>()
+                      .map((value) => Map<String, dynamic>.from(value))
+                      .toList()
+                : <Map<String, dynamic>>[];
             if (items.isEmpty) return const Text('Sin registros.');
             const labels = {
               'announcement': 'Aviso general del responsable',
@@ -43,16 +46,23 @@ Future<void> showRouteHistory(BuildContext context, {String? studentId}) async {
               'prepared': 'Preparación',
             };
             return ListView(
-              children: items
-                  .map(
-                    (v) => ListTile(
-                      title: Text(labels[v['action']] ?? v['action']),
-                      subtitle: Text(
-                        '${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.fromMillisecondsSinceEpoch(v['date']))}\n${v['reason'] ?? ''}',
-                      ),
-                    ),
-                  )
-                  .toList(),
+              children: items.map((v) {
+                final action = routeText(
+                  v['action'],
+                  fallback: 'Registro del recorrido',
+                );
+                final millis = v['date'];
+                final date = millis is num
+                    ? DateFormat('dd/MM/yyyy HH:mm').format(
+                        DateTime.fromMillisecondsSinceEpoch(millis.toInt()),
+                      )
+                    : 'Fecha no disponible';
+                final reason = routeText(v['reason']);
+                return ListTile(
+                  title: Text(labels[action] ?? action),
+                  subtitle: Text(reason.isEmpty ? date : '$date\n$reason'),
+                );
+              }).toList(),
             );
           },
         ),

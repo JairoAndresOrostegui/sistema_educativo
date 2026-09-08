@@ -1,6 +1,4 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -9,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/navigation_utils.dart';
 import '../services/student_route_service.dart';
+import '../utils/route_ui_helpers.dart';
 import '../widgets/student/route_live_view.dart';
 import '../widgets/route_history_dialog.dart';
 import '../services/daily_route_service.dart';
@@ -25,8 +24,6 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   late final MyRouteService _myRouteService;
 
   GoogleMapController? _mapController;
-  LatLng? _teacherPosition;
-
   bool _isLoading = true;
   String? _currentUserId;
 
@@ -47,11 +44,17 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     _bootstrap();
   }
 
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _bootstrap() async {
     try {
       final session = context.read<UserProviderV2>().user;
       if (session == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -77,20 +80,16 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
             _selectedStudentId!,
           );
         }
-        final ruta = await _myRouteService.getMyDailyRoute(
-          studentId: _selectedStudentId!,
-          institutionId: _institutionId,
-          campusId: _campusId,
-        );
-        _dailyRouteId = ruta?.id;
+        await _loadSelectedStudent(_selectedStudentId!);
       }
 
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
-        final message = e is FirebaseFunctionsException
-            ? (e.message ?? 'No fue posible consultar el recorrido.')
-            : 'No fue posible consultar el recorrido.';
+        final message = routeErrorMessage(
+          e,
+          fallback: 'No fue posible consultar el recorrido.',
+        );
         setState(() {
           _isLoading = false;
           _loadError = message;
@@ -100,6 +99,24 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
         ).showSnackBar(SnackBar(content: Text(message)));
       }
     }
+  }
+
+  Future<void> _loadSelectedStudent(String studentId) async {
+    final ruta = await _myRouteService.getMyDailyRoute(
+      studentId: studentId,
+      institutionId: _institutionId,
+      campusId: _campusId,
+    );
+    _dailyRouteId = ruta?.id;
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+      _dailyRouteId = null;
+    });
+    await _bootstrap();
   }
 
   Future<void> _loadRoleAndStudents(String uid) async {
@@ -150,81 +167,22 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     _mapController = controller;
   }
 
-  void _updateTeacherPosition(LatLng pos) {
-    setState(() {
-      _teacherPosition = pos;
-      _mapController?.animateCamera(CameraUpdate.newLatLng(pos));
-    });
-  }
-
-  String _str(Map<String, dynamic> d, List<String> keys, [String def = '']) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is String && v.trim().isNotEmpty) return v;
-    }
-    return def;
-  }
-
-  bool _bool(Map<String, dynamic> d, List<String> keys, [bool def = false]) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is bool) return v;
-    }
-    return def;
-  }
-
-  int _int(Map<String, dynamic> d, List<String> keys, [int def = 0]) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is int) return v;
-    }
-    return def;
-  }
-
-  Timestamp? _ts(Map<String, dynamic> d, List<String> keys) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is Timestamp) return v;
-    }
-    return null;
-  }
-
-  Map<String, dynamic>? _map(Map<String, dynamic> d, List<String> keys) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is Map<String, dynamic>) return v;
-    }
-    return null;
-  }
-
-  String _normalizeStatus(String raw) {
-    switch (raw.trim().toLowerCase()) {
-      case 'activa':
-        return 'active';
-      case 'finalizada':
-        return 'finished';
-      case 'pendiente':
-        return 'pending';
-      default:
-        return raw;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
+      final colors = Theme.of(context).colorScheme;
       return Scaffold(
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
         appBar: AppBar(
-          backgroundColor: AppPalette.surface,
+          backgroundColor: colors.surface,
           centerTitle: true,
           title: Text(
             'Mi Ruta de Hoy',
-            style: TextStyle(color: AppPalette.error),
+            style: TextStyle(color: colors.primary),
             semanticsLabel: 'Mi Ruta de Hoy',
           ),
           leading: BackToDashboardButton(),
-          iconTheme: IconThemeData(color: AppPalette.error),
+          iconTheme: IconThemeData(color: colors.primary),
         ),
         body: Center(
           child: Padding(
@@ -257,11 +215,12 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
       );
     }
 
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
         centerTitle: true,
         title: Text('Mi Ruta de Hoy'),
         actions: [
@@ -301,9 +260,9 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(routeErrorMessage(e))),
+                    );
                   }
                 }
               },
@@ -317,7 +276,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
           ),
         ],
         leading: BackToDashboardButton(),
-        iconTheme: IconThemeData(color: AppPalette.primary),
+        iconTheme: IconThemeData(color: colors.primary),
       ),
       body: SafeArea(
         child: Padding(
@@ -342,28 +301,27 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                       .toList(),
                   onChanged: (id) async {
                     if (id == null) return;
-                    await RouteOperations.call('seleccionarHijoActivo', {
-                      'studentId': id,
-                    });
-                    if (!mounted || !context.mounted) return;
-                    context.read<UserProviderV2>().setActiveStudentId(id);
                     setState(() {
                       _selectedStudentId = id;
                       _dailyRouteId = null;
                       _loadError = null;
-                      _teacherPosition = null;
                       _isLoading = true;
                     });
-                    final ruta = await _myRouteService.getMyDailyRoute(
-                      studentId: id,
-                      institutionId: _institutionId,
-                      campusId: _campusId,
-                    );
-                    if (!mounted) return;
-                    setState(() {
-                      _dailyRouteId = ruta?.id;
-                      _isLoading = false;
-                    });
+                    try {
+                      await RouteOperations.call('seleccionarHijoActivo', {
+                        'studentId': id,
+                      });
+                      if (!mounted || !context.mounted) return;
+                      context.read<UserProviderV2>().setActiveStudentId(id);
+                      await _loadSelectedStudent(id);
+                    } catch (e) {
+                      _loadError = routeErrorMessage(
+                        e,
+                        fallback: 'No fue posible consultar este recorrido.',
+                      );
+                    } finally {
+                      if (mounted) setState(() => _isLoading = false);
+                    }
                   },
                 ),
 
@@ -372,28 +330,30 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
               Expanded(
                 child: (_loadError != null)
                     ? Center(
-                        child: Text(_loadError!, textAlign: TextAlign.center),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_loadError!, textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: _retry,
+                              child: const Text('Reintentar'),
+                            ),
+                          ],
+                        ),
                       )
                     : (_selectedStudentId == null)
                     ? Center(child: Text('No hay estudiantes vinculados.'))
                     : (_dailyRouteId == null)
                     ? Center(
                         child: Text(
-                          'No hay ruta activa para hoy o no estás asignado.',
+                          'No tienes un recorrido asignado para hoy.',
                         ),
                       )
                     : RouteLiveView(
                         dailyRouteId: _dailyRouteId!,
                         studentId: _selectedStudentId!,
                         onMapCreated: _onMapCreated,
-                        teacherPosition: _teacherPosition,
-                        updateTeacherPosition: _updateTeacherPosition,
-                        str: _str,
-                        boolf: _bool,
-                        intf: _int,
-                        ts: _ts,
-                        mapf: _map,
-                        normalizeStatus: _normalizeStatus,
                       ),
               ),
             ],

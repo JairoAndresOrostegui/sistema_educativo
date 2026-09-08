@@ -73,17 +73,25 @@ class LocationService {
             distanceFilter: 25,
           );
 
-    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
-        .listen((pos) async {
-          try {
-            await _writeIfNeeded(
-              rutaDiaDocId,
-              GeoPoint(pos.latitude, pos.longitude),
-            );
-          } catch (e) {
-            debugPrint('LocationService: error procesando posición -> $e');
-          }
-        });
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (pos) async {
+        try {
+          await _writeIfNeeded(
+            rutaDiaDocId,
+            GeoPoint(pos.latitude, pos.longitude),
+          );
+        } catch (e) {
+          debugPrint('LocationService: error procesando posición -> $e');
+        }
+      },
+      onError: (Object error) {
+        // Un error del proveedor GPS no debe llegar como excepción no manejada
+        // al proceso de Flutter. El responsable puede reactivar ubicación.
+        debugPrint(
+          'LocationService: flujo de ubicación interrumpido -> $error',
+        );
+      },
+    );
   }
 
   Future<void> _writeIfNeeded(

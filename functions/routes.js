@@ -5,6 +5,8 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {FieldValue, Timestamp} = require("firebase-admin/firestore");
 const hash = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const day = () => new Intl.DateTimeFormat("en-CA", {timeZone: "America/Bogota"}).format(new Date());
+const cleanAddress = (value) => typeof value === "string" ? value.trim() : "";
+const timestampMillis = (value) => value && typeof value.toMillis === "function" ? value.toMillis() : null;
 
 function routeFunctions(db, getCaller, activeYear) {
   const fail = (message = "No tienes acceso a esta ruta.") => {
@@ -43,10 +45,12 @@ function routeFunctions(db, getCaller, activeYear) {
   function openWindows(tx, ref, d, students) {
     const groups = new Map();
     for (const s of students) {
-      if (!s.activo || s.recogido || s.anulado || s.mapEnabled ||
-          !s.estimatedArrivalAt || s.estimatedArrivalAt.toMillis() > Date.now() + 600000) continue;
+      const estimate = timestampMillis(s.estimatedArrivalAt);
+      const address = cleanAddress(s.direccion);
+      if (!s.activo || s.recogido || s.anulado || s.mapEnabled || !address ||
+          estimate === null || estimate > Date.now() + 600000) continue;
       tx.update(ref.collection("students").doc(s.id), {mapEnabled: true, approachNotifiedAt: FieldValue.serverTimestamp()});
-      const key = s.direccion.trim().toLocaleLowerCase();
+      const key = address.toLocaleLowerCase();
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(s.id);
     }
@@ -121,6 +125,9 @@ function routeFunctions(db, getCaller, activeYear) {
       await checkedYear(tx, route);
       const existing = await tx.get(ref);
       if (existing.exists) return {id: ref.id};
+      if (!Array.isArray(route.estudiantes) || !route.estudiantes.length) {
+        throw new HttpsError("failed-precondition", "La ruta no tiene estudiantes configurados.");
+      }
       const students = await tx.getAll(...route.estudiantes.map((id) => db.doc(`users/${ident(id)}`)));
       const d = {institution: route.institution, campus: route.campus,
         academicYearId: route.academicYearId, academicYear: route.academicYear,
@@ -129,8 +136,8 @@ function routeFunctions(db, getCaller, activeYear) {
         fecha: Timestamp.now(), estado: "pendiente", revision: 0, mode: "manual",
         horaInicio: null, horaFin: null};
       tx.create(ref, d);
-      students.filter((s) => s.exists && s.data().status === "activo" && s.data().institution === d.institution && s.data().campus === d.campus).forEach((s, i) => {
-        const address = s.data().routeAddress || "";
+      students.filter((s) => s.exists && s.data().role === "Estudiante" && s.data().status === "activo" && s.data().institution === d.institution && s.data().campus === d.campus).forEach((s, i) => {
+        const address = cleanAddress(s.data().routeAddress);
         tx.create(ref.collection("students").doc(s.id), {
           institution: d.institution, campus: d.campus, academicYearId: d.academicYearId,
           academicYear: d.academicYear, id: s.id, nombre: `${s.data().firstName || ""} ${s.data().lastName || ""}`.trim(),
@@ -152,6 +159,9 @@ function routeFunctions(db, getCaller, activeYear) {
       const operationRef = ref.collection("operations").doc(hash(`${u.uid}:${requestId}`));
       if ((await tx.get(operationRef)).exists) return {ok: true};
       if (d.estado === "finalizada") throw new HttpsError("failed-precondition", "Recorrido finalizado: solo consulta.");
+      if (!["pendiente", "activa"].includes(d.estado)) {
+        throw new HttpsError("failed-precondition", "El recorrido no está disponible para operación.");
+      }
       const snapshot = await tx.get(ref.collection("students"));
       const students = snapshot.docs.map((s) => ({...s.data(), id: s.id}));
       const target = students.find((s) => s.id === data.studentId);
@@ -159,8 +169,8 @@ function routeFunctions(db, getCaller, activeYear) {
       const updated = {...d, dailyId: ref.id};
       let affected = [];
       if (command === "start") {
-        if (running) throw new HttpsError("failed-precondition", "Ya inició.");
-        if (!students.some((s) => s.activo) || students.some((s) => s.activo && !s.direccion.trim())) throw new HttpsError("failed-precondition", "Completa direcciones y estudiantes antes de iniciar.");
+        if (d.estado !== "pendiente") throw new HttpsError("failed-precondition", "El recorrido ya inició.");
+        if (!students.some((s) => s.activo) || students.some((s) => s.activo && !cleanAddress(s.direccion))) throw new HttpsError("failed-precondition", "Completa direcciones y estudiantes antes de iniciar.");
         tx.update(ref, {estado: "activa", horaInicio: FieldValue.serverTimestamp()});
         affected = students.filter((s) => s.activo).map((s) => s.id);
         event(tx, `${ref.id}:start`, updated, affected, "Ruta iniciada", "El recorrido escolar ha iniciado.");
@@ -171,14 +181,17 @@ function routeFunctions(db, getCaller, activeYear) {
         affected = students.filter((s) => s.activo).map((s) => s.id);
         event(tx, `${ref.id}:finish`, updated, affected, "Ruta finalizada", "El recorrido escolar ha finalizado.");
       } else if (command === "position") {
-        if (!running || !Number.isFinite(data.latitude) || Math.abs(data.latitude) > 90 || !Number.isFinite(data.longitude) || Math.abs(data.longitude) > 180) fail();
+        if (!running) throw new HttpsError("failed-precondition", "El recorrido no está activo.");
+        if (!Number.isFinite(data.latitude) || Math.abs(data.latitude) > 90 || !Number.isFinite(data.longitude) || Math.abs(data.longitude) > 180) {
+          throw new HttpsError("invalid-argument", "La ubicación recibida no es válida.");
+        }
         const {GeoPoint} = require("firebase-admin/firestore");
         tx.set(ref.collection("live").doc("location"), {institution: d.institution, campus: d.campus,
           academicYearId: d.academicYearId, academicYear: d.academicYear,
           teacherPosition: new GeoPoint(data.latitude, data.longitude), lastUpdate: FieldValue.serverTimestamp()});
         openWindows(tx, ref, d, students);
       } else if (command === "announcement") {
-        if (!running) fail();
+        if (!running) throw new HttpsError("failed-precondition", "Inicia el recorrido antes de enviar avisos.");
         const body = text(data.reason, 500);
         affected = students.filter((s) => s.activo).map((s) => s.id);
         event(tx, `${ref.id}:announcement:${requestId}`, updated, affected, "Novedad del recorrido", body);
@@ -190,8 +203,11 @@ function routeFunctions(db, getCaller, activeYear) {
         if (command === "automatic" && process.env.MAPS_ROUTING_ENABLED !== "true") throw new HttpsError("failed-precondition", "Google Maps automático está pendiente de habilitación. Usa modo manual.");
         tx.update(ref, {mode: command});
       } else if (["pickup", "absent", "arrival", "eta"].includes(command)) {
-        if (!running || !target || !target.activo) fail();
-        const group = students.filter((s) => s.activo && s.direccion.trim().toLocaleLowerCase() === target.direccion.trim().toLocaleLowerCase());
+        if (!running) throw new HttpsError("failed-precondition", "El recorrido no está activo.");
+        if (!target || !target.activo) throw new HttpsError("failed-precondition", "El estudiante no está disponible en este recorrido.");
+        const targetAddress = cleanAddress(target.direccion);
+        if (!targetAddress) throw new HttpsError("failed-precondition", "La parada no tiene una dirección válida.");
+        const group = students.filter((s) => s.activo && cleanAddress(s.direccion).toLocaleLowerCase() === targetAddress.toLocaleLowerCase());
         if (command === "pickup" || command === "absent") {
           if (target.recogido || target.anulado) throw new HttpsError("failed-precondition", "La asistencia ya fue registrada.");
           const changes = command === "pickup" ? {recogido: true, mapEnabled: false, horaRecogida: FieldValue.serverTimestamp()} : {anulado: true, mapEnabled: false, observacion: text(data.reason, 500)};
@@ -199,7 +215,7 @@ function routeFunctions(db, getCaller, activeYear) {
           Object.assign(target, changes); affected = [target.id];
           // Una notificacion agrupada al cerrar la parada, no una por hermano.
           if (group.every((s) => s.id === target.id || s.recogido || s.anulado)) {
-            event(tx, `${ref.id}:stop:${hash(target.direccion.trim().toLocaleLowerCase())}`, updated,
+            event(tx, `${ref.id}:stop:${hash(targetAddress.toLocaleLowerCase())}`, updated,
                 group.map((s) => s.id), "Recogida actualizada", "Se registró el resultado de la recogida en tu parada. Consulta el detalle de tus hijos en Rutas.");
           }
         } else {
@@ -253,7 +269,7 @@ function routeFunctions(db, getCaller, activeYear) {
     query = query.orderBy("createdAt", "desc").limit(100);
     const rows = await query.get();
     return {items: rows.docs.map((r) => {
-      const d = r.data(); return {id: r.id, action: d.action, date: d.createdAt?.toMillis() || null,
+      const d = r.data(); return {id: r.id, action: typeof d.action === "string" ? d.action : "unknown", date: timestampMillis(d.createdAt),
         dailyRouteId: d.dailyRouteId, reason: d.reason || null};
     })};
   });
@@ -284,35 +300,53 @@ function routeFunctions(db, getCaller, activeYear) {
     if (process.env.MAPS_ROUTING_ENABLED !== "true") throw new HttpsError("failed-precondition", "Cálculo automático pendiente de habilitación y presupuesto de Google Maps. El modo manual está disponible.");
     const students = (await ref.collection("students").orderBy("orden").get()).docs
         .map((s) => ({id: s.id, ...s.data()})).filter((s) => s.activo && !s.recogido && !s.anulado);
-    const stops = [...new Set(students.map((s) => s.direccion.trim()))];
+    if (students.some((s) => !cleanAddress(s.direccion))) {
+      throw new HttpsError("failed-precondition", "Completa las direcciones antes de calcular tiempos.");
+    }
+    const stops = [...new Set(students.map((s) => cleanAddress(s.direccion)))];
     if (!stops.length) return {items: []};
     if (stops.length > 26) throw new HttpsError("failed-precondition", "Este recorrido requiere cálculo por segmentos. Usa modo manual.");
     const location = (await ref.collection("live").doc("location").get()).data();
-    if (!location?.teacherPosition || !location.lastUpdate || Date.now() - location.lastUpdate.toMillis() > 120000) throw new HttpsError("failed-precondition", "Se necesita una posición reciente del responsable.");
+    const locationAge = timestampMillis(location?.lastUpdate);
+    if (!location?.teacherPosition || locationAge === null || Date.now() - locationAge > 120000) throw new HttpsError("failed-precondition", "Se necesita una posición reciente del responsable.");
     const quotaRef = db.collection("maps_route_quotas").doc(day());
     await db.runTransaction(async (tx) => {
       const count = Number((await tx.get(quotaRef)).data()?.count || 0);
       if (count >= 100) throw new HttpsError("resource-exhausted", "Se alcanzó el límite diario de cálculos. Usa modo manual.");
       tx.set(quotaRef, {count: count + 1});
     });
-    const {applicationDefault} = require("firebase-admin/app");
-    const access = await applicationDefault().getAccessToken();
-    const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
-      method: "POST", headers: {"Authorization": `Bearer ${access.access_token}`,
-        "X-Goog-User-Project": process.env.GCLOUD_PROJECT,
-        "X-Goog-FieldMask": "routes.legs.duration,routes.legs.distanceMeters", "Content-Type": "application/json"},
-      body: JSON.stringify({origin: {location: {latLng: {latitude: location.teacherPosition.latitude, longitude: location.teacherPosition.longitude}}},
-        destination: {address: stops.at(-1)}, intermediates: stops.slice(0, -1).map((address) => ({address})),
-        travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", languageCode: "es"}),
-      signal: AbortSignal.timeout(15000),
-    });
+    let response;
+    try {
+      const {applicationDefault} = require("firebase-admin/app");
+      const access = await applicationDefault().getAccessToken();
+      response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+        method: "POST", headers: {"Authorization": `Bearer ${access.access_token}`,
+          "X-Goog-User-Project": process.env.GCLOUD_PROJECT,
+          "X-Goog-FieldMask": "routes.legs.duration,routes.legs.distanceMeters", "Content-Type": "application/json"},
+        body: JSON.stringify({origin: {location: {latLng: {latitude: location.teacherPosition.latitude, longitude: location.teacherPosition.longitude}}},
+          destination: {address: stops.at(-1)}, intermediates: stops.slice(0, -1).map((address) => ({address})),
+          travelMode: "DRIVE", routingPreference: "TRAFFIC_AWARE", languageCode: "es"}),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (error) {
+      console.error("No se pudo invocar Routes API:", error?.name || "unknown");
+      throw new HttpsError("unavailable", "Google Maps no pudo calcular. Conserva el modo manual e intenta más tarde.");
+    }
     if (!response.ok) throw new HttpsError("unavailable", "Google Maps no pudo calcular. Conserva el modo manual e intenta más tarde.");
-    const legs = (await response.json()).routes?.[0]?.legs;
-    if (!legs || legs.length !== stops.length) throw new HttpsError("unavailable", "No se encontró un recorrido completo.");
+    let legs;
+    try {
+      legs = (await response.json()).routes?.[0]?.legs;
+    } catch {
+      throw new HttpsError("unavailable", "Google Maps devolvió una respuesta incompleta. Usa modo manual.");
+    }
+    if (!Array.isArray(legs) || legs.length !== stops.length || legs.some((leg) =>
+      !Number.isFinite(Number.parseFloat(leg?.duration)) || !Number.isFinite(leg?.distanceMeters))) {
+      throw new HttpsError("unavailable", "No se encontró un recorrido completo. Usa modo manual.");
+    }
     let seconds = 0; const items = stops.map((address, i) => {
       seconds += Number.parseFloat(legs[i].duration);
       const result = {address, minutes: Math.max(1, Math.ceil(seconds / 60)), distanceMeters: legs[i].distanceMeters,
-        studentIds: students.filter((s) => s.direccion.trim() === address).map((s) => s.id)};
+        studentIds: students.filter((s) => cleanAddress(s.direccion) === address).map((s) => s.id)};
       seconds += 60; return result; // Un minuto operativo por parada: estimación, no hora garantizada.
     });
     await db.runTransaction(async (tx) => {
@@ -373,7 +407,7 @@ function routeFunctions(db, getCaller, activeYear) {
           decisionReason: text(data.reason, 500), decidedAt: FieldValue.serverTimestamp()});
         if (data.approved === true) tx.update(student.ref, {direccion: value.address});
         audit(tx, u, {...d, dailyId: ref.id}, data.approved === true ? "address_approved" : "address_rejected", {studentIds: [data.studentId], reason: data.reason});
-        event(tx, `${ref.id}:change:${value.createdAt.toMillis()}`, {...d, dailyId: ref.id}, [data.studentId], "Solicitud de parada resuelta", "Consulta la decisión del colegio en el historial de Rutas.");
+        event(tx, `${ref.id}:change:${change.id}:${timestampMillis(value.createdAt) ?? "legacy"}`, {...d, dailyId: ref.id}, [data.studentId], "Solicitud de parada resuelta", "Consulta la decisión del colegio en el historial de Rutas.");
       });
     }
     const s = scope(u, data); const year = await activeYear(s.institution, s.campus);

@@ -2,33 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../route_history_dialog.dart';
+import '../../utils/route_ui_helpers.dart';
 
 class RouteLiveView extends StatelessWidget {
   final String dailyRouteId;
   final String studentId;
   final void Function(GoogleMapController) onMapCreated;
-  final LatLng? teacherPosition;
-  final void Function(LatLng) updateTeacherPosition;
-  final String Function(Map<String, dynamic>, List<String>, [String]) str;
-  final bool Function(Map<String, dynamic>, List<String>, [bool]) boolf;
-  final int Function(Map<String, dynamic>, List<String>, [int]) intf;
-  final Timestamp? Function(Map<String, dynamic>, List<String>) ts;
-  final Map<String, dynamic>? Function(Map<String, dynamic>, List<String>) mapf;
-  final String Function(String) normalizeStatus;
 
   const RouteLiveView({
     super.key,
     required this.dailyRouteId,
     required this.studentId,
     required this.onMapCreated,
-    required this.teacherPosition,
-    required this.updateTeacherPosition,
-    required this.str,
-    required this.boolf,
-    required this.intf,
-    required this.ts,
-    required this.mapf,
-    required this.normalizeStatus,
   });
 
   @override
@@ -81,21 +66,23 @@ class RouteLiveView extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  data['nombreRuta'] ?? 'Ruta escolar',
+                  routeText(data['nombreRuta'], fallback: 'Ruta escolar'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                Text('Estado: ${data['estado']}'),
+                Text(routeStatusLabel(data['estado'])),
                 const SizedBox(height: 12),
                 Text(
-                  s['nombre'] ?? 'Estudiante',
+                  routeText(s['nombre'], fallback: 'Estudiante'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                Text('Parada: ${s['direccion'] ?? "Sin dirección"}'),
+                Text(
+                  'Parada: ${routeText(s['direccion'], fallback: "Sin dirección configurada")}',
+                ),
                 Text(
                   s['recogido'] == true
                       ? 'Recogida registrada'
                       : s['anulado'] == true
-                      ? 'No recogido: ${s['observacion'] ?? ""}'
+                      ? 'No recogido: ${routeText(s['observacion'], fallback: "Sin observación")}'
                       : s['activo'] != true
                       ? 'No viaja hoy'
                       : 'Pendiente de recogida',
@@ -165,9 +152,13 @@ class RouteLiveView extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(
-                        closed || data['estado'] == 'finalizada'
-                            ? 'El mapa ya no está disponible. Seguirás recibiendo los avisos generales y el cierre del recorrido.'
-                            : 'El mapa se habilita cuando la llegada estimada es de 10 minutos o menos. Recibirás un aviso; permite las notificaciones en Inicio.',
+                        routeMapUnavailableMessage(
+                          routeStatus: data['estado'],
+                          travelsToday: s['activo'] == true,
+                          pickedUp: s['recogido'] == true,
+                          absent: s['anulado'] == true,
+                          mapEnabled: s['mapEnabled'] == true,
+                        ),
                       ),
                     ),
                   ),

@@ -151,6 +151,20 @@ no confirman GPS físico, notificación visible ni aceptación de Google Play.
 
 ## Matriz de aceptación Rutas
 
+### Estados seguros de interfaz y backend
+
+- Sin ruta asignada: mostrar estado vacío; no intentar leer GPS ni dibujar mapa.
+- Pendiente: permitir consulta y cambios autorizados; indicar que aún no inicia.
+- Activa fuera de ventana: ocultar GPS y explicar el límite de diez minutos.
+- Activa dentro de ventana: mostrar la última ubicación válida; un documento aún
+  sin coordenadas es un estado de espera, no un error.
+- Recogido, ausente, finalizada o cancelada: revocar mapa inmediatamente y
+  conservar el historial permitido.
+- Estado o documento corrupto: responder con error de dominio controlado; nunca
+  propagar `FirebaseException`, stack trace, cast ni pantalla roja al usuario.
+- Fallo temporal de red/Maps: mantener la operación institucional guardada,
+  informar disponibilidad temporal y ofrecer reintento cuando corresponda.
+
 - Admin otra sede, docente ajeno, familiar con hijo ajeno: denegación.
 - Antes de 10 minutos: GPS denegado incluso por SDK directo.
 - Dos paradas a 8/9 minutos: ambas abiertas; misma dirección avisa agrupado.

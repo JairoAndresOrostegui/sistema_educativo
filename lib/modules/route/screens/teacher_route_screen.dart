@@ -7,6 +7,7 @@ import '../../../utils/navigation_utils.dart';
 import '../services/admin_route_service.dart';
 import '../services/daily_route_service.dart';
 import '../services/location_service.dart';
+import '../utils/route_ui_helpers.dart';
 import '../widgets/teacher/teacher_route_form_dialog.dart';
 import '../widgets/route_history_dialog.dart';
 
@@ -22,6 +23,7 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
   String? _dailyId;
   String? _error;
   bool _busy = false;
+  bool _loadingRoutes = true;
   final _location = LocationService();
   @override
   void initState() {
@@ -36,18 +38,39 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
   }
 
   Future<void> _load() async {
-    final u = context.read<UserProviderV2>().user!;
+    final u = context.read<UserProviderV2>().user;
+    if (u == null) {
+      if (mounted) {
+        setState(() {
+          _loadingRoutes = false;
+          _error = 'Tu sesión no está disponible. Inicia sesión nuevamente.';
+        });
+      }
+      return;
+    }
     try {
       final routes = await RouteService().getRutasAsignadas(
         userId: u.id,
         institutionId: u.institution,
         campusId: u.campus,
       );
-      if (mounted) setState(() => _routes = routes);
-    } catch (_) {
       if (mounted) {
-        setState(() => _error = 'No se pudieron consultar las rutas.');
+        setState(() {
+          _routes = routes;
+          _error = null;
+        });
       }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _error = routeErrorMessage(
+            e,
+            fallback: 'No se pudieron consultar las rutas asignadas.',
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingRoutes = false);
     }
   }
 
@@ -59,7 +82,7 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
     try {
       await action();
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = routeErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -117,6 +140,15 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (_loadingRoutes) const LinearProgressIndicator(),
+            if (!_loadingRoutes && _routes.isEmpty && _error == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No tienes rutas asignadas para operar.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
             DropdownButtonFormField<String>(
               isExpanded: true,
               initialValue: _selected,
@@ -149,7 +181,17 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.all(12),
-                child: Text(_error!, style: TextStyle(color: colors.error)),
+                child: Column(
+                  children: [
+                    Text(_error!, style: TextStyle(color: colors.error)),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
               ),
             if (_dailyId != null)
               StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -161,8 +203,22 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                   if (snap.hasError) {
                     return const Text('No se pudo consultar el recorrido.');
                   }
+                  if (snap.connectionState == ConnectionState.waiting &&
+                      !snap.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
                   final d = snap.data?.data();
-                  if (d == null) return const SizedBox.shrink();
+                  if (d == null) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'El recorrido ya no está disponible. Selecciona nuevamente la ruta.',
+                      ),
+                    );
+                  }
                   final active = d['estado'] == 'activa';
                   final pending = d['estado'] == 'pendiente';
                   final automatic = d['mode'] == 'automatic';
@@ -170,7 +226,7 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 12),
-                      Text('Estado: ${d['estado']}'),
+                      Text(routeStatusLabel(d['estado'])),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         title: Text(
@@ -315,8 +371,24 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                               'No se pudieron consultar las paradas.',
                             );
                           }
+                          if (snap.connectionState == ConnectionState.waiting &&
+                              !snap.hasData) {
+                            return const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          final docs = snap.data?.docs ?? [];
+                          if (docs.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text(
+                                'Este recorrido no tiene estudiantes disponibles.',
+                              ),
+                            );
+                          }
                           return Column(
-                            children: (snap.data?.docs ?? []).map((s) {
+                            children: docs.map((s) {
                               final v = s.data();
                               final closed =
                                   v['recogido'] == true || v['anulado'] == true;
@@ -328,12 +400,20 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        v['nombre'] ?? '',
+                                        routeText(
+                                          v['nombre'],
+                                          fallback: 'Estudiante',
+                                        ),
                                         style: Theme.of(
                                           context,
                                         ).textTheme.titleMedium,
                                       ),
-                                      Text(v['direccion'] ?? ''),
+                                      Text(
+                                        routeText(
+                                          v['direccion'],
+                                          fallback: 'Sin dirección configurada',
+                                        ),
+                                      ),
                                       if (automatic &&
                                           v['estimatedMinutes'] != null)
                                         Text(
