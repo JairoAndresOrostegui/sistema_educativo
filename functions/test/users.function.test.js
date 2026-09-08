@@ -774,10 +774,21 @@ describe("baja y eliminacion de usuarios", () => {
       uid: "student",
     }, adminToken);
     assert.equal(reset.body.result.success, true, JSON.stringify(reset.body));
-    const temporary = reset.body.result.temporaryPassword;
-    assert.match(temporary,
+    const firstTemporary = reset.body.result.temporaryPassword;
+    assert.match(firstTemporary,
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/);
     assert.equal((await signInAttempt(studentEmail)).idToken, undefined);
+    const rotated = await callFunction("restablecerClaveEstudiante", {
+      uid: "student",
+    }, adminToken);
+    assert.equal(rotated.body.result.success, true,
+        JSON.stringify(rotated.body));
+    const temporary = rotated.body.result.temporaryPassword;
+    assert.notEqual(temporary, firstTemporary);
+    const obsoleteLogin = await signInWithPassword(
+        studentEmail, firstTemporary,
+    );
+    assert.equal(obsoleteLogin.idToken, undefined);
     const temporaryLogin = await signInWithPassword(studentEmail, temporary);
     assert.ok(temporaryLogin.idToken, JSON.stringify(temporaryLogin));
     assert.equal((await db.collection("users").doc("student").get())
@@ -802,8 +813,11 @@ describe("baja y eliminacion de usuarios", () => {
         .where("usuarioId", "==", "student").get();
     assert.deepEqual(new Set(history.docs.map((item) => item.data().accion)),
         new Set(["clave_temporal_generada", "clave_temporal_cambiada"]));
-    assert.ok(history.docs.every((item) =>
-      !JSON.stringify(item.data()).includes(temporary)));
+    assert.ok(history.docs.every((item) => {
+      const serialized = JSON.stringify(item.data());
+      return !serialized.includes(temporary) &&
+        !serialized.includes(firstTemporary);
+    }));
   });
 
   it("prepara y activa el siguiente anio sin borrar el historico", async () => {

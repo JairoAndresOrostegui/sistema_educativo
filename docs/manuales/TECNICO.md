@@ -37,6 +37,9 @@ clave. `getCaller` y las reglas bloquean los demás módulos mientras
 aplica la política de complejidad y elimina la marca junto con un log atómico.
 Una falla de Auth revierte la marca; una falla posterior de auditoría conserva
 la cuenta bloqueada para que administración repita la generación con seguridad.
+Una clave temporal completada pero todavía no sustituida puede rotarse; el
+marcador `passwordResetCompletedAt` diferencia esa rotación de una operación
+concurrente aún en curso.
 
 La migración de contenido visual usa `migrate_production_assets.js`: copia solo
 objetos referenciados por el sitio y perfiles aprobados, valida generación y

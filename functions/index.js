@@ -2453,6 +2453,7 @@ exports.restablecerClaveEstudiante = onCall(async (request) => {
   }
   const operationId = crypto.randomUUID();
   const temporaryPassword = `L${crypto.randomBytes(8).toString("base64url")}9!`;
+  let previousResetState;
   await db.runTransaction(async (tx) => {
     const current = (await tx.get(targetRef)).data();
     if (!current || current.status !== "activo" ||
@@ -2460,17 +2461,26 @@ exports.restablecerClaveEstudiante = onCall(async (request) => {
       throw new HttpsError("aborted", "La cuenta cambio durante la operacion.");
     }
     if (current.mustChangePassword === true &&
-        current.passwordResetOperationId) {
+        current.passwordResetOperationId &&
+        !current.passwordResetCompletedAt) {
       throw new HttpsError(
           "failed-precondition",
-          "El estudiante ya tiene una clave temporal pendiente de cambio.",
+          "Ya hay un restablecimiento en curso. Intenta nuevamente.",
       );
     }
+    previousResetState = {
+      mustChangePassword: current.mustChangePassword === true,
+      operationId: current.passwordResetOperationId,
+      requestedAt: current.passwordResetRequestedAt,
+      requestedBy: current.passwordResetRequestedBy,
+      completedAt: current.passwordResetCompletedAt,
+    };
     tx.update(targetRef, {
       mustChangePassword: true,
       passwordResetOperationId: operationId,
       passwordResetRequestedAt: FieldValue.serverTimestamp(),
       passwordResetRequestedBy: caller.uid,
+      passwordResetCompletedAt: FieldValue.delete(),
     });
   });
   try {
@@ -2481,10 +2491,16 @@ exports.restablecerClaveEstudiante = onCall(async (request) => {
       const current = await tx.get(targetRef);
       if (current.data()?.passwordResetOperationId === operationId) {
         tx.update(targetRef, {
-          mustChangePassword: FieldValue.delete(),
-          passwordResetOperationId: FieldValue.delete(),
-          passwordResetRequestedAt: FieldValue.delete(),
-          passwordResetRequestedBy: FieldValue.delete(),
+          mustChangePassword: previousResetState.mustChangePassword ?
+            true : FieldValue.delete(),
+          passwordResetOperationId: previousResetState.operationId ||
+            FieldValue.delete(),
+          passwordResetRequestedAt: previousResetState.requestedAt ||
+            FieldValue.delete(),
+          passwordResetRequestedBy: previousResetState.requestedBy ||
+            FieldValue.delete(),
+          passwordResetCompletedAt: previousResetState.completedAt ||
+            FieldValue.delete(),
         });
       }
     });
@@ -2536,6 +2552,7 @@ exports.cambiarClaveTemporalEstudiante = onCall(async (request) => {
       passwordResetOperationId: FieldValue.delete(),
       passwordResetRequestedAt: FieldValue.delete(),
       passwordResetRequestedBy: FieldValue.delete(),
+      passwordResetCompletedAt: FieldValue.delete(),
       passwordChangedAt: FieldValue.serverTimestamp(),
     });
     tx.create(db.collection("user_history").doc(), {

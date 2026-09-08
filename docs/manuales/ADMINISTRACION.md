@@ -33,8 +33,10 @@ Para recuperar una cuenta estudiantil, abrir el menú del estudiante y elegir
 correctas, copiar la clave que se muestra una sola vez y entregarla de forma
 privada. No enviarla en grupos ni anotarla en observaciones. Mientras esté
 pendiente, el estudiante solo puede cambiarla; ningún módulo queda habilitado.
-No se genera una segunda clave hasta que se complete la primera. Esta acción y
-el cambio posterior quedan auditados, pero las contraseñas nunca quedan en el log.
+Si la clave se pierde o no fue copiada completa, se puede generar otra: la
+anterior queda inválida inmediatamente. El sistema bloquea únicamente otro
+restablecimiento que todavía esté ejecutándose. Cada generación y el cambio
+posterior quedan auditados, pero las contraseñas nunca quedan en el log.
 
 Inactivar impide acceso. Retirar lógicamente oculta al usuario al administrador
 normal, conservándolo para superadmin. Si tiene registros institucionales,

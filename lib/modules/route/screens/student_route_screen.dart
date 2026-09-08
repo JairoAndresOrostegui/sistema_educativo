@@ -1,5 +1,6 @@
 import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -34,6 +35,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   String? _selectedStudentId;
 
   String? _dailyRouteId;
+  String? _loadError;
 
   late String _institutionId;
   late String _campusId;
@@ -86,10 +88,16 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo cargar la ruta: $e')),
-        );
+        final message = e is FirebaseFunctionsException
+            ? (e.message ?? 'No fue posible consultar el recorrido.')
+            : 'No fue posible consultar el recorrido.';
+        setState(() {
+          _isLoading = false;
+          _loadError = message;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     }
   }
@@ -342,6 +350,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
                     setState(() {
                       _selectedStudentId = id;
                       _dailyRouteId = null;
+                      _loadError = null;
                       _teacherPosition = null;
                       _isLoading = true;
                     });
@@ -361,7 +370,11 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
               if (_isFamily) SizedBox(height: 12),
 
               Expanded(
-                child: (_selectedStudentId == null)
+                child: (_loadError != null)
+                    ? Center(
+                        child: Text(_loadError!, textAlign: TextAlign.center),
+                      )
+                    : (_selectedStudentId == null)
                     ? Center(child: Text('No hay estudiantes vinculados.'))
                     : (_dailyRouteId == null)
                     ? Center(
