@@ -315,3 +315,18 @@ prueba. Web en segundo plano y apertura de conversación siguen pendientes.
 Pendientes: Maps restringido,
 sincronizar canales académicos iniciales sin mensajes de prueba, prueba física
 de acceso/notificaciones, compilación definitiva y publicación de frontend/AAB.
+
+## AAB de preparación (contador corregido)
+
+Generado con `flutter build appbundle --flavor prod --release
+--dart-define=APP_ENV=prod --build-number=3`, versión 1.0.0 (3), desde código
+del commit `48eaf98`. Archivo local:
+`build/app/outputs/bundle/prodRelease/app-prod-release.aab` (78.9 MB).
+SHA256: `8F9E6736FF5D14EAA9D9ED1F47AD2DECC1EF49616D051E4F05066243689D1592`.
+Firma verificada por jarsigner y certificado SHA256 coincidente con la clave
+de carga Play `1F:49:BA:19:75:13:B8:CF:5A:32:88:C1:9D:76:DF:88:12:20:F3:48:8B:3B:06:B2:AF:9E:62:03:62:8C:DC:22`.
+Manifest: `com.desarrolloytecnologiasantander.serodolfollinas`, versionCode 3.
+No se ha subido a Play. La clave Android Maps de producción sigue vacía en el
+manifest: este artefacto no valida el mapa de Rutas y no se considera release
+definitiva. No confundir compilación/firma válidas con aprobación de Google.
+Validación del cambio: 54 pruebas Flutter, análisis, lint y 27 pruebas de reglas.
