@@ -24,6 +24,27 @@ Referencias:
 - https://support.google.com/googleplay/android-developer/answer/11605267?hl=es
 - https://support.google.com/googleplay/android-developer/answer/14151465?hl=es
 
+## Endurecimiento durante la prueba cerrada
+
+La primera versión cerrada usa el AAB de producción `1.0.0 (8)`. Publicar una
+versión superior en la misma pista no sustituye la exigencia de mantener al menos
+12 cuentas inscritas continuamente durante 14 días; conservar la lista y el enlace
+de inscripción. Aprovechar ese período para publicar una versión 9 con:
+
+- QR: validar sesión y tipos de todas las respuestas antes de dibujar o resolver.
+- Mensajería y panel Push: estado vacío ante sesión ausente, respuestas defensivas
+  y mensajes de dominio sin excepciones técnicas.
+- Matrículas e Historial: tolerar fechas, listas y documentos heredados incompletos.
+- Parámetros, Usuarios y Perfil: eliminar usos de sesión forzada y texto técnico
+  en errores recuperables.
+- Ejecutar pruebas de regresión, informe previo al lanzamiento y recorrido físico
+  de cada perfil antes de promover a producción pública.
+
+Los testers no tienen que abrir la aplicación todos los días para conservar la
+inscripción, pero la solicitud de acceso pregunta por uso real, funciones probadas
+y retroalimentación. Reclutar personas reales, preferiblemente más de 12, registrar
+las pruebas y no simular testers mediante varias cuentas de una sola persona.
+
 ## Rutas -> Mensajería (propuesta, NO implementada)
 
 Después de revisar Rutas, acordar con el propietario un canal por ruta, sede y
