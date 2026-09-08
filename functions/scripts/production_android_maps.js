@@ -63,7 +63,7 @@ async function main() {
     const root = path.resolve(__dirname, "../..");
     for (const kind of ["apk", "appbundle"]) {
       const result = spawnSync(process.platform === "win32" ? "flutter.bat" : "flutter",
-          ["build", kind, "--flavor", "prod", "--release", "--dart-define=APP_ENV=prod", "--build-number=4"], {
+          ["build", kind, "--flavor", "prod", "--release", "--dart-define=APP_ENV=prod", "--build-number=5"], {
             cwd: root, stdio: "inherit", shell: process.platform === "win32",
             env: {...process.env, ORG_GRADLE_PROJECT_PROD_MAPS_API_KEY: value.keyString},
           });

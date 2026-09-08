@@ -101,6 +101,11 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                   ),
                 ),
                 const SizedBox(height: 18),
+                const Text(
+                  'Los estudiantes no recuperan por correo. Deben solicitar una clave temporal al colegio.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

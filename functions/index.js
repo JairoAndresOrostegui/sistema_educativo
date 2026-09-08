@@ -405,6 +405,26 @@ async function getCaller(request) {
   if ((data.status || "").toString().toLowerCase() !== "activo") {
     throw new HttpsError("permission-denied", "La cuenta no esta activa.");
   }
+  if (data.mustChangePassword === true) {
+    throw new HttpsError(
+        "failed-precondition", "Debes cambiar la contrasena temporal.",
+    );
+  }
+  return {uid, ...data};
+}
+
+/** Perfil autenticado usado solo para completar una clave temporal. */
+async function getPasswordChangeCaller(request) {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Debes iniciar sesion.");
+  const snap = await db.collection("users").doc(uid).get();
+  const data = snap.data() || {};
+  if (!snap.exists || data.status !== "activo" || data.role !== "Estudiante" ||
+      data.mustChangePassword !== true) {
+    throw new HttpsError(
+        "failed-precondition", "No hay una clave temporal pendiente.",
+    );
+  }
   return {uid, ...data};
 }
 
@@ -2416,6 +2436,117 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
         "No se pudo crear el usuario ni enviar su correo de verificacion.",
     );
   }
+});
+
+/** Restablecimiento escolar para estudiantes sin correo real. */
+exports.restablecerClaveEstudiante = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireAdmin(caller);
+  requireUserAction(caller, "editar");
+  const uid = requiredString(request.data?.uid, "uid", 128);
+  const targetRef = db.collection("users").doc(uid);
+  const targetSnap = await targetRef.get();
+  const target = targetSnap.data() || {};
+  if (!targetSnap.exists || !sameTenant(caller, target) ||
+      target.role !== "Estudiante" || target.status !== "activo") {
+    throw new HttpsError("permission-denied", "No puedes restablecer esta cuenta.");
+  }
+  const operationId = crypto.randomUUID();
+  const temporaryPassword = `L${crypto.randomBytes(8).toString("base64url")}9!`;
+  await db.runTransaction(async (tx) => {
+    const current = (await tx.get(targetRef)).data();
+    if (!current || current.status !== "activo" ||
+        current.role !== "Estudiante" || !sameTenant(caller, current)) {
+      throw new HttpsError("aborted", "La cuenta cambio durante la operacion.");
+    }
+    if (current.mustChangePassword === true &&
+        current.passwordResetOperationId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "El estudiante ya tiene una clave temporal pendiente de cambio.",
+      );
+    }
+    tx.update(targetRef, {
+      mustChangePassword: true,
+      passwordResetOperationId: operationId,
+      passwordResetRequestedAt: FieldValue.serverTimestamp(),
+      passwordResetRequestedBy: caller.uid,
+    });
+  });
+  try {
+    await auth.updateUser(uid, {password: temporaryPassword});
+    await auth.revokeRefreshTokens(uid);
+  } catch (error) {
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(targetRef);
+      if (current.data()?.passwordResetOperationId === operationId) {
+        tx.update(targetRef, {
+          mustChangePassword: FieldValue.delete(),
+          passwordResetOperationId: FieldValue.delete(),
+          passwordResetRequestedAt: FieldValue.delete(),
+          passwordResetRequestedBy: FieldValue.delete(),
+        });
+      }
+    });
+    console.error("Error restableciendo clave estudiantil:", error.code);
+    throw new HttpsError("internal", "No se pudo restablecer la cuenta.");
+  }
+  const batch = db.batch();
+  batch.update(targetRef, {
+    passwordResetCompletedAt: FieldValue.serverTimestamp(),
+  });
+  batch.create(db.collection("user_history").doc(), {
+    usuarioId: uid, nombres: target.firstName || "",
+    apellidos: target.lastName || "", rol: target.role,
+    accion: "clave_temporal_generada", performedBy: caller.uid,
+    institution: target.institution, campus: target.campus,
+    fecha: FieldValue.serverTimestamp(),
+  });
+  try {
+    await batch.commit();
+  } catch (error) {
+    console.error("Clave cambiada; fallo registrando finalizacion:", error.code);
+    throw new HttpsError(
+        "internal",
+        "La cuenta quedo protegida. Vuelve a generar la clave temporal.",
+    );
+  }
+  return {success: true, temporaryPassword};
+});
+
+/** Sustituye la clave temporal antes de habilitar los modulos. */
+exports.cambiarClaveTemporalEstudiante = onCall(async (request) => {
+  const caller = await getPasswordChangeCaller(request);
+  const password = requiredString(request.data?.password, "password", 128);
+  if (password.length < 10 || !/[a-z]/.test(password) ||
+      !/[A-Z]/.test(password) || !/[0-9]/.test(password) ||
+      !/[^A-Za-z0-9]/.test(password)) {
+    throw new HttpsError("invalid-argument",
+        "Usa al menos 10 caracteres, mayuscula, minuscula, numero y simbolo.");
+  }
+  await auth.updateUser(caller.uid, {password});
+  const targetRef = db.collection("users").doc(caller.uid);
+  await db.runTransaction(async (tx) => {
+    const current = (await tx.get(targetRef)).data();
+    if (!current || current.mustChangePassword !== true) {
+      throw new HttpsError("aborted", "La clave temporal ya fue atendida.");
+    }
+    tx.update(targetRef, {
+      mustChangePassword: FieldValue.delete(),
+      passwordResetOperationId: FieldValue.delete(),
+      passwordResetRequestedAt: FieldValue.delete(),
+      passwordResetRequestedBy: FieldValue.delete(),
+      passwordChangedAt: FieldValue.serverTimestamp(),
+    });
+    tx.create(db.collection("user_history").doc(), {
+      usuarioId: caller.uid, nombres: caller.firstName || "",
+      apellidos: caller.lastName || "", rol: caller.role,
+      accion: "clave_temporal_cambiada", performedBy: caller.uid,
+      institution: caller.institution, campus: caller.campus,
+      fecha: FieldValue.serverTimestamp(),
+    });
+  });
+  return {success: true};
 });
 
 exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {

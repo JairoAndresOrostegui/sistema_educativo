@@ -37,6 +37,11 @@ La UI orienta, pero las reglas y Functions deciden. Los documentos sensibles no 
 
 Cuando una operación cruza Auth, Firestore y Storage, debe implementar compensación y dejar un estado reintentable. Nunca borrar metadatos antes de confirmar que el objeto físico se eliminó.
 
+Las contraseñas de estudiantes no se recuperan por correo. Administración genera
+una clave temporal mediante backend y el estudiante debe cambiarla antes de usar
+los módulos. Nunca guardar contraseñas temporales o definitivas en Firestore,
+logs, notificaciones ni respuestas posteriores a la generación inicial.
+
 ## Estados relevantes
 
 - Usuario: `activo`, `inactivo`, `eliminado`, `eliminando`.

@@ -247,6 +247,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                                         usuario: user,
                                                       );
                                                     } else if (action ==
+                                                        'reset_password') {
+                                                      _restablecerClave(user);
+                                                    } else if (action ==
                                                         'delete') {
                                                       _eliminarUsuario(user);
                                                     }
@@ -256,6 +259,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                                       const PopupMenuItem(
                                                         value: 'edit',
                                                         child: Text('Editar'),
+                                                      ),
+                                                    if (puedeEditar &&
+                                                        user.role ==
+                                                            'Estudiante')
+                                                      const PopupMenuItem(
+                                                        value: 'reset_password',
+                                                        child: Text(
+                                                          'Restablecer contraseña',
+                                                        ),
                                                       ),
                                                     if (puedeEliminarEste)
                                                       const PopupMenuItem(
@@ -279,6 +291,17 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                                       _mostrarFormulario(
                                                         usuario: user,
                                                       ),
+                                                ),
+                                              if (puedeEditar &&
+                                                  user.role == 'Estudiante')
+                                                IconButton(
+                                                  tooltip:
+                                                      'Restablecer contraseña',
+                                                  icon: const Icon(
+                                                    Icons.lock_reset,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _restablecerClave(user),
                                                 ),
                                               if (puedeEliminarEste)
                                                 IconButton(
@@ -477,6 +500,75 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           message: e.toString(),
         );
       }
+    }
+  }
+
+  Future<void> _restablecerClave(userModelv2 usuario) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restablecer contraseña estudiantil'),
+        content: Text(
+          'Se cerrarán las sesiones anteriores de ${usuario.firstName}. '
+          'El sistema generará una clave temporal que deberá cambiar al ingresar. '
+          'La clave se mostrará una sola vez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Generar clave temporal'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final password = await _userService.restablecerClaveEstudiante(
+        usuario.id,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Clave temporal generada'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Entrégala directamente al estudiante o acudiente. '
+                'No se enviará al correo ficticio ni quedará guardada en el historial.',
+              ),
+              const SizedBox(height: 16),
+              SelectableText(
+                password,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Ya la guardé'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo restablecer',
+        message: error.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 

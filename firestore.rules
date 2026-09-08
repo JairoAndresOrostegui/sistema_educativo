@@ -11,7 +11,8 @@ service cloud.firestore {
     }
 
     function active() {
-      return signedIn() && me().status == 'activo';
+      return signedIn() && me().status == 'activo' &&
+        (!('mustChangePassword' in me()) || me().mustChangePassword != true);
     }
 
     function admin() {
@@ -168,8 +169,9 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if active() &&
-        (request.auth.uid == userId || superadmin() ||
+      allow read: if (signedIn() && request.auth.uid == userId &&
+          resource.data.status == 'activo') ||
+        (active() && (superadmin() ||
          (family() && me().studentIds is list && userId in me().studentIds &&
           resource.data.role == 'Estudiante' &&
           resource.data.status == 'activo' &&
@@ -178,7 +180,7 @@ service cloud.firestore {
          (canManageUsers() &&
           resource.data.status in ['activo', 'inactivo'] &&
           resource.data.institution == me().institution &&
-          resource.data.campus == me().campus));
+          resource.data.campus == me().campus)));
 
       // La creacion y edicion administrativa pasa por Cloud Functions para
       // validar Auth, unicidad, sede, permisos, vinculos y auditoria.

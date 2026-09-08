@@ -28,6 +28,14 @@ verificación. Adultos usan correo real. No habilitar Autorizaciones a estudiant
 familiares solo reciben autorizaciones.ver, nunca crear/editar/eliminar.
 Auxiliar es una cuenta adulta para una ruta asignada, no un docente académico.
 
+Para recuperar una cuenta estudiantil, abrir el menú del estudiante y elegir
+**Generar clave temporal**. Confirmar que corresponde a la persona y sede
+correctas, copiar la clave que se muestra una sola vez y entregarla de forma
+privada. No enviarla en grupos ni anotarla en observaciones. Mientras esté
+pendiente, el estudiante solo puede cambiarla; ningún módulo queda habilitado.
+No se genera una segunda clave hasta que se complete la primera. Esta acción y
+el cambio posterior quedan auditados, pero las contraseñas nunca quedan en el log.
+
 Inactivar impide acceso. Retirar lógicamente oculta al usuario al administrador
 normal, conservándolo para superadmin. Si tiene registros institucionales,
 preferir inactivación y consultar impacto. Solo superadmin elimina definitivamente:

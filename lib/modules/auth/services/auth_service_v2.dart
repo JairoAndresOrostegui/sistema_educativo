@@ -111,6 +111,16 @@ class AuthService {
     await _auth.sendPasswordResetEmail(email: emailLower);
   }
 
+  Future<void> changeTemporaryStudentPassword(String password) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('cambiarClaveTemporalEstudiante')
+        .call({'password': password});
+    if (result.data['success'] != true) {
+      throw Exception('No se pudo cambiar la contraseña temporal.');
+    }
+    await _auth.currentUser?.getIdToken(true);
+  }
+
   Future<void> logout(userModelv2 currentUser) async {
     clearPushTokenHandler();
     try {

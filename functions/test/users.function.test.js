@@ -81,6 +81,15 @@ async function signIn(email) {
   return body.idToken;
 }
 
+async function signInWithPassword(email, password) {
+  const endpoint = `${authBase}/accounts:signInWithPassword?key=x`;
+  const response = await fetch(endpoint, {
+    method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({email, password, returnSecureToken: true}),
+  });
+  return response.json();
+}
+
 async function callFunction(name, data, token) {
   const response = await fetch(`${functionsBase}/${name}`, {
     method: "POST",
@@ -753,6 +762,48 @@ describe("baja y eliminacion de usuarios", () => {
     assert.equal((await auth.getUser("source-teacher")).disabled, false);
     assert.equal((await db.collection("subjects").doc("source-subject").get())
         .data().teacherId, "source-teacher");
+  });
+
+  it("restablece estudiante y obliga cambio de clave", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.editar"],
+    });
+    const studentEmail = await seedUser("student", "Estudiante");
+    const adminToken = await signIn(adminEmail);
+    const reset = await callFunction("restablecerClaveEstudiante", {
+      uid: "student",
+    }, adminToken);
+    assert.equal(reset.body.result.success, true, JSON.stringify(reset.body));
+    const temporary = reset.body.result.temporaryPassword;
+    assert.match(temporary,
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/);
+    assert.equal((await signInAttempt(studentEmail)).idToken, undefined);
+    const temporaryLogin = await signInWithPassword(studentEmail, temporary);
+    assert.ok(temporaryLogin.idToken, JSON.stringify(temporaryLogin));
+    assert.equal((await db.collection("users").doc("student").get())
+        .data().mustChangePassword, true);
+    const blocked = await callFunction("obtenerImpactoEliminacionUsuario", {
+      uid: "student",
+    }, temporaryLogin.idToken);
+    assert.equal(blocked.body.error.status, "FAILED_PRECONDITION");
+    const weak = await callFunction("cambiarClaveTemporalEstudiante", {
+      password: "simple",
+    }, temporaryLogin.idToken);
+    assert.equal(weak.body.error.status, "INVALID_ARGUMENT");
+    const changed = await callFunction("cambiarClaveTemporalEstudiante", {
+      password: "NuevaClave9!",
+    }, temporaryLogin.idToken);
+    assert.equal(changed.body.result.success, true,
+        JSON.stringify(changed.body));
+    assert.notEqual((await db.collection("users").doc("student").get())
+        .data().mustChangePassword, true);
+    assert.ok((await signInWithPassword(studentEmail, "NuevaClave9!")).idToken);
+    const history = await db.collection("user_history")
+        .where("usuarioId", "==", "student").get();
+    assert.deepEqual(new Set(history.docs.map((item) => item.data().accion)),
+        new Set(["clave_temporal_generada", "clave_temporal_cambiada"]));
+    assert.ok(history.docs.every((item) =>
+      !JSON.stringify(item.data()).includes(temporary)));
   });
 
   it("prepara y activa el siguiente anio sin borrar el historico", async () => {

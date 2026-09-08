@@ -206,6 +206,18 @@ class UserServiceV2 {
     return result.data['uid'];
   }
 
+  Future<String> restablecerClaveEstudiante(String uid) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('restablecerClaveEstudiante')
+        .call({'uid': uid});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final password = (data['temporaryPassword'] ?? '').toString();
+    if (data['success'] != true || password.isEmpty) {
+      throw Exception('No se pudo generar la clave temporal.');
+    }
+    return password;
+  }
+
   Future<UserDeletionImpact> obtenerImpactoEliminacion(String uid) async {
     final callable = FirebaseFunctions.instance.httpsCallable(
       'obtenerImpactoEliminacionUsuario',

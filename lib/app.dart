@@ -11,6 +11,7 @@ import 'modules/auth/guards/student_dashboard_guard.dart';
 import 'modules/auth/guards/teacher_dashboard_guard.dart';
 import 'modules/auth/screens/access_denied_page.dart';
 import 'modules/auth/screens/loginScreenV2.dart';
+import 'modules/auth/screens/change_temporary_password_screen.dart';
 import 'modules/auth/services/auth_service_v2.dart';
 import 'modules/auth/utils/auth_access_policy.dart';
 import 'modules/authorization/screens/admin_authorization_screen.dart';
@@ -97,6 +98,15 @@ class _AppRouterState extends State<AppRouter> {
                     : '/login');
         }
 
+        if (user.mustChangePassword &&
+            currentPath != '/change_temporary_password') {
+          return '/change_temporary_password';
+        }
+        if (!user.mustChangePassword &&
+            currentPath == '/change_temporary_password') {
+          return AuthAccessPolicy.homeForRole(user.role);
+        }
+
         final home = AuthAccessPolicy.homeForRole(user.role);
         if (loggingIn) {
           final next = Uri.tryParse(state.uri.queryParameters['next'] ?? '');
@@ -153,6 +163,10 @@ class _AppRouterState extends State<AppRouter> {
         GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
+        ),
+        GoRoute(
+          path: '/change_temporary_password',
+          builder: (context, state) => const ChangeTemporaryPasswordScreen(),
         ),
         GoRoute(
           path: '/enrollment_public',

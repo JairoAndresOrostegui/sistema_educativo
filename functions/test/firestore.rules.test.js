@@ -548,4 +548,20 @@ describe("Reglas Firestore", () => {
       phones: ["3000000000"],
     }));
   });
+
+  it("una clave temporal solo permite leer el perfil propio", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "users/temporary-student"),
+          activeUser("Estudiante", {
+            groupId: "group-5a", mustChangePassword: true,
+          }));
+    });
+    const temporaryDb = env.authenticatedContext("temporary-student")
+        .firestore();
+    await assertSucceeds(getDoc(doc(temporaryDb, "users/temporary-student")));
+    await assertFails(getDoc(doc(temporaryDb, "academic_groups/group-5a")));
+    await assertFails(updateDoc(doc(temporaryDb, "users/temporary-student"), {
+      photoUrl: "https://example.test/blocked.jpg",
+    }));
+  });
 });

@@ -12,6 +12,7 @@ abstract final class AuthAccessPolicy {
     '/my_qr',
     '/logout',
     '/access_denied',
+    '/change_temporary_password',
   };
 
   static Set<String> normalizePermissions(Iterable<Object?> permissions) {

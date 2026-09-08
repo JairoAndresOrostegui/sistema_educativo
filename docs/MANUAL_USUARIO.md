@@ -8,6 +8,12 @@ el diagnóstico histórico: ubicación solo en ventana previa, anuncios dentro d
 
 Administradores, docentes y familiares ingresan con correo. Los estudiantes ingresan con su documento; internamente el sistema resuelve su correo ficticio de Firebase y nunca les exige verificarlo. Una cuenta inactiva, retirada o eliminándose no puede iniciar sesión.
 
+Si un estudiante olvida la contraseña, un administrador autorizado de su sede
+genera desde **Usuarios** una clave temporal. Esa clave se muestra una sola vez
+al administrador y no se envía al correo ficticio. Al iniciar sesión, el
+estudiante debe sustituirla por una clave propia antes de acceder a cualquier
+módulo. La clave nunca se guarda en historiales ni documentos de Firestore.
+
 Cada persona consulta y edita únicamente los campos seguros de su propio perfil. La administración de otras personas se realiza en Usuarios, nunca desde Perfil.
 
 ## Roles

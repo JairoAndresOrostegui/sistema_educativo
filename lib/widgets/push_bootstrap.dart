@@ -41,7 +41,7 @@ class _PushBootstrapState extends State<PushBootstrap> {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<UserProviderV2>().user;
-    if (user == null) {
+    if (user == null || user.mustChangePassword) {
       _initedForUserId = null;
       clearPushTokenHandler();
     } else {

@@ -7,6 +7,12 @@ relaciona internamente con tu correo ficticio; no tienes que verificar ese corre
 Si no puedes entrar, informa al colegio: no crees otra cuenta ni uses la de un
 compañero. Una cuenta inactiva no puede iniciar sesión.
 
+Si el colegio te entrega una clave temporal, úsala una vez. La aplicación te
+llevará directamente a **Crear nueva contraseña** y no permitirá abrir otros
+módulos hasta completarla. La nueva clave debe tener al menos 10 caracteres,
+mayúscula, minúscula, número y símbolo. Después úsala normalmente con tu
+documento; el correo ficticio no se consulta ni se verifica.
+
 En Inicio verás solo módulos habilitados. En Perfil consultas tu información y
 puedes cambiar únicamente campos permitidos. Si grado/grupo o sede están mal,
 pide al colegio que los corrija; no son un cambio personal libre.

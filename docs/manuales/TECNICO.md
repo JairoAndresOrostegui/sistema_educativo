@@ -28,6 +28,16 @@ conjunto solo después de verificar Auth y relaciones. Auditoría en
 limpio; después de iniciar operación real sus comprobaciones de colecciones
 vacías dejarán de ser aplicables y no deben usarse para justificar limpiezas.
 
+La recuperación estudiantil usa `restablecerClaveEstudiante` y
+`cambiarClaveTemporalEstudiante`. La primera exige administrador con
+`usuarios.editar`, sede coincidente y estudiante activo; marca primero el perfil,
+actualiza Auth, revoca sesiones anteriores y registra auditoría sin almacenar la
+clave. `getCaller` y las reglas bloquean los demás módulos mientras
+`mustChangePassword` sea verdadero. La segunda solo admite al propio estudiante,
+aplica la política de complejidad y elimina la marca junto con un log atómico.
+Una falla de Auth revierte la marca; una falla posterior de auditoría conserva
+la cuenta bloqueada para que administración repita la generación con seguridad.
+
 La migración de contenido visual usa `migrate_production_assets.js`: copia solo
 objetos referenciados por el sitio y perfiles aprobados, valida generación y
 CRC32C, registra el manifiesto antes de copiar y publica referencias al terminar.

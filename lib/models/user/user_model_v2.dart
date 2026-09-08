@@ -33,6 +33,7 @@ class userModelv2 {
   final String? familyRelation;
   final List<String>? studentIds;
   final String? activeStudentId;
+  final bool mustChangePassword;
 
   userModelv2({
     required this.id,
@@ -65,6 +66,7 @@ class userModelv2 {
     this.familyRelation,
     this.studentIds,
     this.activeStudentId,
+    this.mustChangePassword = false,
   });
 
   factory userModelv2.fromFirestore(Map<String, dynamic> map, String id) {
@@ -107,6 +109,7 @@ class userModelv2 {
           ? List<String>.from(map['studentIds'])
           : null,
       activeStudentId: map['activeStudentId'],
+      mustChangePassword: map['mustChangePassword'] == true,
     );
   }
 
@@ -148,6 +151,7 @@ class userModelv2 {
       'familyRelation': familyRelation,
       'studentIds': studentIds,
       'activeStudentId': activeStudentId,
+      if (mustChangePassword) 'mustChangePassword': true,
     };
 
     final tokenMap = <String, dynamic>{};
@@ -195,6 +199,7 @@ class userModelv2 {
     String? familyRelation,
     List<String>? studentIds,
     String? activeStudentId,
+    bool? mustChangePassword,
   }) {
     return userModelv2(
       id: id ?? this.id,
@@ -227,6 +232,7 @@ class userModelv2 {
       familyRelation: familyRelation ?? this.familyRelation,
       studentIds: studentIds ?? this.studentIds,
       activeStudentId: activeStudentId ?? this.activeStudentId,
+      mustChangePassword: mustChangePassword ?? this.mustChangePassword,
     );
   }
 }
