@@ -298,35 +298,43 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     required bool allCampuses,
   }) {
     _pendingAuthSub?.cancel();
-    _messageUnreadSub?.cancel();
     _pendingAuthSub = AuthorizationService()
         .watchPendingCountForAdmin(
-          institutionId: allCampuses ? null : institutionId,
-          campusId: allCampuses ? null : campusId,
+          institutionId: institutionId,
+          campusId: campusId,
+          allCampuses: allCampuses,
         )
-        .listen((pendingCount) {
-          if (!mounted) return;
-          setState(() {
-            _menuItems = _menuItems
-                .map(
-                  (m) => m.route == '/admin_authorization'
-                      ? MenuItemData(
-                          label: m.label,
-                          icon: m.icon,
-                          route: m.route,
-                          badgeCount: pendingCount,
-                        )
-                      : m,
-                )
-                .toList();
-          });
-        });
+        .listen(
+          (pendingCount) {
+            if (!mounted) return;
+            setState(() {
+              _menuItems = _menuItems
+                  .map(
+                    (m) => m.route == '/admin_authorization'
+                        ? MenuItemData(
+                            label: m.label,
+                            icon: m.icon,
+                            route: m.route,
+                            badgeCount: pendingCount,
+                          )
+                        : m,
+                  )
+                  .toList();
+            });
+          },
+          onError: (Object error) {
+            debugPrint(
+              'No se pudo actualizar el contador de autorizaciones: $error',
+            );
+          },
+        );
   }
 
   @override
   void dispose() {
     _pendingSub?.cancel();
     _pendingAuthSub?.cancel();
+    _messageUnreadSub?.cancel();
     super.dispose();
   }
 

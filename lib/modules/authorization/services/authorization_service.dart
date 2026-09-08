@@ -4,6 +4,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../../../models/authorization/authorization_request_model.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../utils/active_academic_year_context.dart';
+import '../../../utils/sum_count_streams.dart';
 
 class AuthorizationPage {
   final List<AuthorizationRequest> items;
@@ -279,7 +280,32 @@ class AuthorizationService {
   Stream<int> watchPendingCountForAdmin({
     String? institutionId,
     String? campusId,
+    bool allCampuses = false,
   }) async* {
+    if (allCampuses) {
+      // Firestore rules permit this unscoped settings query only to superadmin.
+      final settings = await _db.collection('academic_year_settings').get();
+      final scopes = <(String, String)>{};
+      for (final document in settings.docs) {
+        final data = document.data();
+        final institution = (data['institutionId'] ?? '').toString();
+        final campus = (data['campusId'] ?? '').toString();
+        if (institution.isEmpty || campus.isEmpty) {
+          throw StateError(
+            'Configuración de año lectivo sin institución o sede.',
+          );
+        }
+        scopes.add((institution, campus));
+      }
+      yield* sumCountStreams([
+        for (final scope in scopes)
+          watchPendingCountForAdmin(
+            institutionId: scope.$1,
+            campusId: scope.$2,
+          ),
+      ]);
+      return;
+    }
     if ((institutionId ?? '').isEmpty || (campusId ?? '').isEmpty) {
       throw StateError('Selecciona una institución y una sede.');
     }

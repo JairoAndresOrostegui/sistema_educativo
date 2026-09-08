@@ -8,6 +8,9 @@ puede operar entre sedes. Verificar el año activo antes de cualquier operación
 No compartir una cuenta administrativa con conductores, familias ni estudiantes.
 
 Inicio permite entrar a módulos habilitados y activar notificaciones del equipo.
+El contador de autorizaciones del superadministrador suma las sedes configuradas,
+cada una en su año vigente. El administrador normal solo cuenta su propia sede.
+La suma inicial espera la respuesta de todas las sedes para no mostrar un total parcial.
 Perfil modifica datos personales permitidos, no el directorio de usuarios.
 Un móvil nuevo reemplaza al móvil anterior; un navegador nuevo reemplaza al
 navegador anterior. Son dos registros independientes.

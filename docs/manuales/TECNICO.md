@@ -2,6 +2,13 @@
 
 ## Fuentes y entorno
 
+Contador de autorizaciones: `allCampuses` es explícito para superadmin; enumera
+`academic_year_settings` y suma streams por institución/sede/año activo, sin
+pasar scopes nulos ni quitar filtros. Firestore mantiene la autorización real.
+`sumCountStreams` propaga errores y cancela todas sus suscripciones al salir.
+El tablero captura errores del contador y libera también la suscripción de
+mensajes al desmontarse. Pruebas: cero sedes, suma reactiva, errores y cancelación.
+
 Leer AGENTS.md, [GUIA_DESARROLLO](../GUIA_DESARROLLO.md),
 [REGISTRO_CARGA_DOCENTE](../REGISTRO_CARGA_DOCENTE.md) y el manual del perfil
 antes de modificar módulos. Inventario funcional en [README](README.md).
