@@ -120,6 +120,10 @@ describe("Reglas Firestore", () => {
         institutionId: "inst-2", campusId: "campus-2",
         year: 2026, status: "active",
       });
+      await setDoc(doc(db, "parameters/document-type"), {
+        clave: "documentType", etiqueta: "Cedula", valor: "CC",
+        orden: 1, activo: true,
+      });
       await setDoc(doc(db, "enrollments/local"), {
         institution: "inst-1",
         campus: "campus-1",
@@ -484,6 +488,19 @@ describe("Reglas Firestore", () => {
       institution: "inst-1",
       campus: "campus-1",
       accion: "falsa",
+    }));
+  });
+
+  it("mantiene parametros como lectura publica e inmutables", async () => {
+    const publicDb = env.unauthenticatedContext().firestore();
+    const adminDb = env.authenticatedContext("admin").firestore();
+    const superDb = env.authenticatedContext("superadmin").firestore();
+    const target = "parameters/document-type";
+    await assertSucceeds(getDoc(doc(publicDb, target)));
+    await assertFails(updateDoc(doc(adminDb, target), {valor: "Ataque"}));
+    await assertFails(deleteDoc(doc(superDb, target)));
+    await assertFails(setDoc(doc(superDb, "parameters/forged"), {
+      clave: "permission", valor: "usuarios.eliminar", activo: true,
     }));
   });
 

@@ -134,7 +134,8 @@ service cloud.firestore {
 
     match /parameters/{id} {
       allow read: if true;
-      allow write: if admin();
+      // Catálogos internos de plataforma. Ningún cliente los administra.
+      allow create, update, delete: if false;
     }
 
     match /academic_groups/{id} {

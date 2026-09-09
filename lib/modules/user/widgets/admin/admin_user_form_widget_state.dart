@@ -165,7 +165,8 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           (permission) =>
               permission.valor.startsWith('usuarios.') ||
               permission.valor == 'historial.ver' ||
-              permission.valor == 'sitio_web.editar',
+              permission.valor == 'sitio_web.editar' ||
+              permission.valor == 'parametros.editar',
         );
       }
       if (!normalized.any((p) => p.valor == 'sitio_web.ver')) {
@@ -179,6 +180,24 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
             etiqueta: 'Sitio web',
             valor: 'sitio_web.editar',
             orden: 901,
+          ),
+        );
+      }
+      if (!normalized.any((p) => p.valor == 'parametros.ver')) {
+        normalized.add(
+          Parameter(
+            etiqueta: 'Configuración académica',
+            valor: 'parametros.ver',
+            orden: 910,
+          ),
+        );
+      }
+      if (!normalized.any((p) => p.valor == 'parametros.editar')) {
+        normalized.add(
+          Parameter(
+            etiqueta: 'Configuración académica',
+            valor: 'parametros.editar',
+            orden: 911,
           ),
         );
       }

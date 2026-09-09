@@ -24,6 +24,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
   String? _institutionId;
   String? _campusId;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -32,23 +33,56 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
   }
 
   Future<void> _loadInitial() async {
-    final user = context.read<UserProviderV2>().user!;
-    _institutionId = user.institution;
-    _campusId = user.campus;
-    _institutions = await _parameters.getInstitutions();
-    await _loadGroups();
+    final user = context.read<UserProviderV2>().user;
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Tu sesión no está disponible. Inicia sesión nuevamente.';
+        });
+      }
+      return;
+    }
+    try {
+      _institutionId = user.institution;
+      _campusId = user.campus;
+      _institutions = await _parameters.getInstitutions();
+      await _loadGroups();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = userFacingError(
+            error,
+            fallback: 'No se pudieron consultar los grupos.',
+          );
+        });
+      }
+    }
   }
 
   Future<void> _loadGroups() async {
     if (_institutionId == null || _campusId == null) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final groups = await _service.list(
+      final groups = await _service.listForAdministration(
         institutionId: _institutionId!,
         campusId: _campusId!,
-        activeOnly: false,
       );
       if (mounted) setState(() => _groups = groups);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _groups = [];
+          _error = userFacingError(
+            error,
+            fallback: 'No se pudieron consultar los grupos.',
+          );
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -145,6 +179,53 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
   }
 
   Future<void> _delete(AcademicGroup group) async {
+    if (group.active) return;
+    Map<String, dynamic> result;
+    try {
+      result = await _service.deleteImpact(group.id);
+    } catch (error) {
+      if (!mounted) return;
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo revisar el impacto',
+        message: userFacingError(error),
+      );
+      return;
+    }
+    if (!mounted) return;
+    final impact = Map<String, dynamic>.from(
+      result['impact'] as Map? ?? const <String, dynamic>{},
+    );
+    final references =
+        <String, String>{
+              'users': 'estudiantes',
+              'tutors': 'docentes directores de grupo',
+              'schedules': 'horarios y asignaturas',
+              'authorizations': 'autorizaciones',
+              'channels': 'canales acad\u00e9micos',
+              'serviceChannels': 'canales de servicio',
+              'files': 'publicaciones de archivos',
+              'enrollments': 'matr\u00edculas',
+            }.entries
+            .map(
+              (entry) => MapEntry(
+                entry.value,
+                (impact[entry.key] as num?)?.toInt() ?? 0,
+              ),
+            )
+            .where((entry) => entry.value > 0)
+            .toList();
+    if (references.isNotEmpty) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'El grupo est\u00e1 protegido',
+        message:
+            'No se puede eliminar porque conserva informaci\u00f3n institucional:\n'
+            '${references.map((entry) => '${entry.key}: ${entry.value}').join('\n')}\n\n'
+            'Debe permanecer inactivo para conservar el historial.',
+      );
+      return;
+    }
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -188,8 +269,12 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<UserProviderV2>().user!;
-    if (!user.isSuperadmin && !user.permissions.contains('usuarios.editar')) {
+    final user = context.watch<UserProviderV2>().user;
+    if (user == null) return const SizedBox.shrink();
+    final canEdit =
+        user.isSuperadmin || user.permissions.contains('parametros.editar');
+    final canView = canEdit || user.permissions.contains('parametros.ver');
+    if (!canView) {
       return const SizedBox.shrink();
     }
     final campuses = _selectedInstitution?.campuses ?? const <String>[];
@@ -208,7 +293,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _loading ? null : _openForm,
+                  onPressed: _loading || !canEdit ? null : _openForm,
                   icon: const Icon(Icons.add),
                   label: const Text('Nuevo grupo'),
                 ),
@@ -274,6 +359,8 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
             const SizedBox(height: 12),
             if (_loading)
               const LinearProgressIndicator()
+            else if (_error != null)
+              _ParameterLoadError(message: _error!, onRetry: _loadGroups)
             else if (_groups.isEmpty)
               const Text('No hay grupos configurados en esta sede.')
             else
@@ -289,14 +376,48 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
                               : Icons.visibility_off_outlined,
                         ),
                         label: Text(group.name),
-                        onPressed: () => _openForm(group),
-                        onDeleted: () => _delete(group),
+                        onPressed: canEdit ? () => _openForm(group) : null,
+                        onDeleted: canEdit && user.isSuperadmin && !group.active
+                            ? () => _delete(group)
+                            : null,
                       ),
                     )
                     .toList(),
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ParameterLoadError extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _ParameterLoadError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: colors.onErrorContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colors.onErrorContainer),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+        ],
       ),
     );
   }

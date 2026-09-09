@@ -65,10 +65,10 @@ abstract final class AuthAccessPolicy {
 
     switch (normalizedRole) {
       case 'Administrador':
-        if (path == '/admin_dashboard' || path == '/admin_parameters') {
-          return true;
-        }
+        if (path == '/admin_dashboard') return true;
         return switch (path) {
+          '/admin_parameters' =>
+            has('parametros.ver') || has('parametros.editar'),
           '/admin_user' => has('usuarios.ver'),
           '/management_route' => has('rutas.ver'),
           '/execute_route' => has('rutas.ver'),

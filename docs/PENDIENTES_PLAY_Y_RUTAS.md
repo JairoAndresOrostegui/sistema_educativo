@@ -38,8 +38,9 @@ Durante este período se completó el endurecimiento previsto:
 - Mensajería y panel Push: estado vacío ante sesión ausente, respuestas defensivas
   y mensajes de dominio sin excepciones técnicas.
 - Matrículas e Historial: tolerar fechas, listas y documentos heredados incompletos.
-- Parámetros, Usuarios y Perfil: eliminar usos de sesión forzada y texto técnico
-  en errores recuperables.
+- Usuarios y Perfil: eliminar usos restantes de sesión forzada y texto técnico
+  en errores recuperables. Parámetros quedó sustituido por Configuración
+  académica con permisos, alcance y errores controlados para la próxima entrega.
 - Se ejecutaron pruebas de regresión y compilaciones de producción. Aún corresponde
   conservar evidencia del recorrido físico de cada perfil y revisar el informe
   previo al lanzamiento antes de promover a producción pública.
@@ -49,12 +50,10 @@ inscripción, pero la solicitud de acceso pregunta por uso real, funciones proba
 y retroalimentación. Reclutar personas reales, preferiblemente más de 12, registrar
 las pruebas y no simular testers mediante varias cuentas de una sola persona.
 
-## Rutas -> Mensajería (propuesta, NO implementada)
+## Rutas y avisos: decisión vigente
 
-Después de revisar Rutas, acordar con el propietario un canal por ruta, sede y
-año, con familias/estudiantes del recorrido y responsables vigentes. Propuesta:
-avisos generales de retraso, cambio de recorrido o cancelación; novedades
-individuales solo al estudiante/familia correspondiente, nunca al grupo.
-La ubicación en vivo permanece en Rutas, sin copiarla al chat ni publicar
-direcciones. Definir quién puede escribir y qué eventos generan push para no
-saturar dispositivos. Reutilizar cola y auditoría, sin crear otro motor de chat.
+La propuesta anterior de crear un canal de Mensajería por ruta fue descartada.
+Los avisos de retraso, cambio, cancelación, proximidad, recogida e incidentes se
+operan y consultan dentro de Rutas, con eventos, historial, audiencia validada y
+cola push propios. No se crea un chat paralelo ni se copia ubicación, direcciones
+o estado operativo a Mensajería.

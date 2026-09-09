@@ -182,6 +182,7 @@ const RESTRICTED_DELEGATED_PERMISSIONS = new Set([
   "usuarios.ver",
   "historial.ver",
   "sitio_web.editar",
+  "parametros.editar",
 ]);
 const FILE_MODULE_LIMIT_BYTES = 1024 * 1024 * 1024;
 const FILE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024;
@@ -432,6 +433,24 @@ async function getPasswordChangeCaller(request) {
 function requireAdmin(caller) {
   if (caller.isSuperadmin === true || caller.role === "Administrador") return;
   throw new HttpsError("permission-denied", "Se requiere rol administrador.");
+}
+
+/**
+ * Exige acceso granular a Configuración académica.
+ * @param {Object} caller Usuario llamador.
+ * @param {string} action Acción ver o editar.
+ */
+function requireParameterAction(caller, action) {
+  if (caller.isSuperadmin === true) return;
+  const permissions = Array.isArray(caller.permissions) ?
+    caller.permissions : [];
+  if (caller.role === "Administrador" &&
+      (permissions.includes(`parametros.${action}`) ||
+       action === "ver" && permissions.includes("parametros.editar"))) return;
+  throw new HttpsError(
+      "permission-denied",
+      `No tienes permiso para ${action} la configuracion academica.`,
+  );
 }
 
 /**
@@ -1961,8 +1980,14 @@ async function syncAcademicMessageChannel(groupId) {
   const groupSnapshot = await db.collection("academic_groups").doc(groupId).get();
   const ref = db.collection("message_channels").doc(`academic_${groupId}`);
   if (!groupSnapshot.exists) {
-    await ref.set({status: "archived", updatedAt: FieldValue.serverTimestamp()},
-        {merge: true});
+    const current = await ref.get();
+    if (!current.exists) return null;
+    if (Number(current.data()?.messageSequence || 0) > 0) {
+      await ref.set({status: "archived", updatedAt: FieldValue.serverTimestamp()},
+          {merge: true});
+    } else {
+      await ref.delete();
+    }
     return null;
   }
   const group = {id: groupSnapshot.id, ...groupSnapshot.data()};
@@ -3727,15 +3752,32 @@ exports.eliminarHorario = onCall(async (request) => {
 
 /** @param {Object} caller Usuario. */
 function requireAcademicGroupAdmin(caller) {
-  if (caller.isSuperadmin === true) return;
-  const permissions = Array.isArray(caller.permissions) ?
-    caller.permissions : [];
-  if (caller.role === "Administrador" &&
-      permissions.includes("usuarios.editar")) return;
-  throw new HttpsError(
-      "permission-denied", "No tienes permiso para administrar grupos.",
-  );
+  requireParameterAction(caller, "editar");
 }
+
+exports.listarGruposAcademicosAdministracion = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireParameterAction(caller, "ver");
+  const institution = caller.isSuperadmin === true ? requiredString(
+      request.data?.institutionId, "institucion", 120,
+  ) : caller.institution;
+  const campus = caller.isSuperadmin === true ? requiredString(
+      request.data?.campusId, "sede", 120,
+  ) : caller.campus;
+  if (!sameTenant(caller, {institutionId: institution, campusId: campus})) {
+    throw new HttpsError("permission-denied", "Sede fuera de tu alcance.");
+  }
+  await validateInstitutionCampus({institution, campus});
+  const year = await requireActiveAcademicYear(institution, campus);
+  const snapshot = await db.collection("academic_groups")
+      .where("institutionId", "==", institution)
+      .where("campusId", "==", campus)
+      .where("academicYearId", "==", year.id).get();
+  const groups = snapshot.docs.map((item) => ({id: item.id, ...item.data()}))
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0) ||
+        String(a.name || "").localeCompare(String(b.name || "")));
+  return {groups, academicYearId: year.id, academicYear: year.year};
+});
 
 exports.crearGrupoAcademico = onCall(async (request) => {
   const caller = await getCaller(request);
@@ -3856,9 +3898,71 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
   return {success: true};
 });
 
+/**
+ * Cuenta referencias que impiden eliminar definitivamente un grupo.
+ * @param {string} id Identificador del grupo.
+ * @return {Promise<Object>} Conteos por colección.
+ */
+async function academicGroupImpact(id) {
+  const queries = {
+    users: db.collection("users").where("groupId", "==", id),
+    tutors: db.collection("users").where("tutorGroupId", "==", id),
+    schedules: db.collection("subjects").where("groupId", "==", id),
+    authorizations: db.collection("authorization_requests")
+        .where("groupId", "==", id),
+    serviceChannels: db.collection("message_channels")
+        .where("targetGroupIds", "array-contains", id),
+    files: db.collection("files")
+        .where("targetGroupIds", "array-contains", id),
+    enrollments: db.collection("enrollments").where("data.groupId", "==", id),
+  };
+  const [entries, academicChannel] = await Promise.all([
+    Promise.all(Object.entries(queries).map(
+        async ([key, query]) => [key, (await query.get()).size],
+    )),
+    db.collection("message_channels").doc(`academic_${id}`).get(),
+  ]);
+  const impact = Object.fromEntries(entries);
+  impact.channels = academicChannel.exists &&
+      Number(academicChannel.data()?.messageSequence || 0) > 0 ? 1 : 0;
+  return impact;
+}
+
+exports.obtenerImpactoEliminacionGrupoAcademico = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireParameterAction(caller, "editar");
+  if (caller.isSuperadmin !== true) {
+    throw new HttpsError(
+        "permission-denied",
+        "Solo el superadministrador consulta la eliminacion definitiva.",
+    );
+  }
+  const id = requiredString(request.data?.id, "grupo", 160);
+  const snapshot = await db.collection("academic_groups").doc(id).get();
+  const current = snapshot.data() || {};
+  if (!snapshot.exists || !sameTenant(caller, current)) {
+    throw new HttpsError("permission-denied", "Grupo fuera de tu alcance.");
+  }
+  const impact = await academicGroupImpact(id);
+  return {
+    id,
+    name: current.name || id,
+    active: current.active === true,
+    impact,
+    total: Object.values(impact).reduce((sum, count) => sum + count, 0),
+  };
+});
+
 exports.eliminarGrupoAcademico = onCall(async (request) => {
   const caller = await getCaller(request);
   requireAcademicGroupAdmin(caller);
+  if (caller.isSuperadmin !== true) {
+    throw new HttpsError(
+        "permission-denied",
+        "Solo el superadministrador elimina grupos definitivamente. " +
+        "Desactiva el grupo si ya no se utilizara.",
+    );
+  }
   const id = requiredString(request.data?.id, "grupo", 160);
   const ref = db.collection("academic_groups").doc(id);
   const snapshot = await ref.get();
@@ -3874,38 +3978,20 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
         "failed-precondition", "Los grupos historicos son de solo lectura.",
     );
   }
-  const collections = [
-    ["users", "groupId"],
-    ["subjects", "groupId"],
-    ["authorization_requests", "groupId"],
-    ["message_channels", "groupId"],
-  ];
-  for (const [collection, field] of collections) {
-    const linked = await db.collection(collection)
-        .where(field, "==", id).limit(1).get();
-    if (!linked.empty) {
-      throw new HttpsError(
-          "failed-precondition",
-          "El grupo tiene informacion institucional y no puede eliminarse.",
-      );
-    }
-  }
-  const linkedFiles = await db.collection("files")
-      .where("targetGroupIds", "array-contains", id).limit(1).get();
-  if (!linkedFiles.empty) {
+  if (current.active === true) {
     throw new HttpsError(
-        "failed-precondition",
-        "El grupo tiene archivos institucionales y no puede eliminarse.",
+        "failed-precondition", "Desactiva el grupo antes de eliminarlo.",
     );
   }
-  const enrollments = await db.collection("enrollments")
-      .where("data.groupId", "==", id).limit(1).get();
-  if (!enrollments.empty) {
+  const impact = await academicGroupImpact(id);
+  if (Object.values(impact).some((count) => count > 0)) {
     throw new HttpsError(
-        "failed-precondition", "El grupo tiene matriculas vinculadas.",
+        "failed-precondition",
+        "El grupo tiene informacion institucional y no puede eliminarse.",
     );
   }
   const batch = db.batch();
+  batch.delete(db.collection("message_channels").doc(`academic_${id}`));
   batch.delete(ref);
   batch.create(db.collection("academic_group_history").doc(), {
     groupId: id,
@@ -5483,7 +5569,7 @@ exports.revertirTrasladoDocenteTemporal = onCall(async (request) => {
 
 exports.listarAniosLectivos = onCall(async (request) => {
   const caller = await getCaller(request);
-  requireAdmin(caller);
+  requireParameterAction(caller, "ver");
   const institution = caller.isSuperadmin === true ? requiredString(
       request.data?.institutionId, "institucion", 120,
   ) : caller.institution;
@@ -5504,7 +5590,7 @@ exports.listarAniosLectivos = onCall(async (request) => {
 
 exports.prepararAnioLectivo = onCall(async (request) => {
   const caller = await getCaller(request);
-  requireAdmin(caller);
+  requireParameterAction(caller, "editar");
   const institution = caller.isSuperadmin === true ? requiredString(
       request.data?.institutionId, "institucion", 120,
   ) : caller.institution;
@@ -5623,7 +5709,7 @@ exports.prepararAnioLectivo = onCall(async (request) => {
 
 exports.activarAnioLectivo = onCall(async (request) => {
   const caller = await getCaller(request);
-  requireAdmin(caller);
+  requireParameterAction(caller, "editar");
   const id = requiredString(request.data?.academicYearId, "anio lectivo", 128);
   const confirmation = requiredString(
       request.data?.confirmation, "confirmacion", 40,

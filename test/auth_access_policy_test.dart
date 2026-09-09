@@ -83,6 +83,10 @@ void main() {
       expect(allowed(role: 'Administrador', path: '/admin_dashboard'), isTrue);
       expect(allowed(role: 'Administrador', path: '/admin_user'), isFalse);
       expect(
+        allowed(role: 'Administrador', path: '/admin_parameters'),
+        isFalse,
+      );
+      expect(
         allowed(role: 'Administrador', path: '/management_route'),
         isFalse,
       );
@@ -93,6 +97,7 @@ void main() {
     test('cada permiso administrativo habilita unicamente su modulo', () {
       const cases = {
         'usuarios.ver': '/admin_user',
+        'parametros.ver': '/admin_parameters',
         'rutas.ver': '/management_route',
         'horarios.ver': '/management_schedule',
         'archivos.ver': '/management_document',

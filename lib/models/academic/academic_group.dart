@@ -36,4 +36,17 @@ class AcademicGroup {
       active: data['active'] == true,
     );
   }
+
+  factory AcademicGroup.fromMap(Map<String, dynamic> data) {
+    return AcademicGroup(
+      id: (data['id'] ?? '').toString(),
+      institutionId: (data['institutionId'] ?? '').toString(),
+      campusId: (data['campusId'] ?? '').toString(),
+      name: (data['name'] ?? '').toString(),
+      level: (data['level'] ?? '').toString(),
+      section: (data['section'] ?? '').toString(),
+      order: (data['order'] as num?)?.toInt() ?? 0,
+      active: data['active'] == true,
+    );
+  }
 }

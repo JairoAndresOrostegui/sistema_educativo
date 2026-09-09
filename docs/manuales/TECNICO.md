@@ -73,6 +73,26 @@ y pendiente, nunca se sustituye silenciosamente por la de otra persona.
 Esquemas exactos y permisos se verifican en Functions/reglas; una fila no reemplaza
 validación de payload. No agregar escritura directa del cliente por conveniencia.
 
+Configuración académica significa grupos y años lectivos bajo alcance
+institucional. `parametros.ver` permite consultar y `parametros.editar` permite
+modificar mediante Functions. El administrador normal siempre usa su propia sede;
+solo el superadministrador puede seleccionarla. Los documentos de `parameters`
+son catálogos internos de solo lectura para el cliente; sus escrituras directas
+están denegadas y no existe un CRUD genérico en la interfaz.
+
+Antes de publicar este cambio se ejecuta en seco y luego se aplica la migración
+idempotente de permisos:
+
+```text
+node functions/scripts/migrate_parameter_permissions.js --project=<proyecto>
+node functions/scripts/migrate_parameter_permissions.js --project=<proyecto> --apply
+node functions/scripts/migrate_parameter_permissions.js --project=<proyecto> --verify
+```
+
+La eliminación de grupos es excepcional: solo superadministrador, grupo inactivo,
+impacto previo sin relaciones, confirmación y registro en
+`academic_group_history`. La operación se detiene si cualquier validación falla.
+
 ## Rutas: ventana privada de ubicación
 
 El documento daily_routes conserva estado general, no GPS. La ubicación actual está

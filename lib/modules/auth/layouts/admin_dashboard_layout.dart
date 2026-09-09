@@ -73,13 +73,17 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    items.add(
-      const MenuItemData(
-        label: 'Par\u00e1metros',
-        icon: Icons.tune,
-        route: '/admin_parameters',
-      ),
-    );
+    if (esSuperadmin ||
+        perms.contains('parametros.ver') ||
+        perms.contains('parametros.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Configuración académica',
+          icon: Icons.tune,
+          route: '/admin_parameters',
+        ),
+      );
+    }
 
     if (esSuperadmin ||
         perms.contains('matricula.ver') ||

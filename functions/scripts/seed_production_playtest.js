@@ -56,6 +56,7 @@ const ADMIN_PERMISSIONS = [
   "archivos.ver", "archivos.crear", "archivos.eliminar", "mensajeria.ver",
   "codigoqr.crear", "codigoqr.editar", "rutas.ver", "rutas.crear", "rutas.editar",
   "rutas.eliminar", "historial_rutas.ver", "historial.ver", "sitio_web.ver", "sitio_web.editar",
+  "parametros.ver", "parametros.editar",
 ];
 const TEACHER_PERMISSIONS = [
   "matricula.ver", "autorizaciones.ver", "horarios.ver", "archivos.ver",

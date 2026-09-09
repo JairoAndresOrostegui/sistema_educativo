@@ -4,7 +4,9 @@ Fecha de cierre técnico: 9 de septiembre de 2026.
 
 ## Resultado
 
-Se revisaron los módulos actualmente desplegados: acceso y recuperación de cuenta,
+Esta auditoría cubrió endurecimiento técnico y regresiones automatizadas de los
+módulos desplegados. No constituye cierre funcional del sistema, aceptación del
+colegio ni prueba física completa de cada flujo. Se revisaron: acceso y recuperación de cuenta,
 tableros por rol, usuarios, matrículas, parámetros académicos, horarios,
 autorizaciones, archivos, mensajería, notificaciones, QR, rutas, historiales y sitio
 web institucional.
@@ -33,6 +35,20 @@ Internet, permisos vencidos, cierre de sesión y respuestas incompletas.
   de consulta, paginación y campos heredados incompletos.
 - Sitio web: carga y guardado del editor sin exponer errores de Firebase.
 
+## Alcance que no se debe considerar terminado
+
+- El lector de cámara y las operaciones de asistencia, entrega o eventos por QR
+  todavía no están implementados; la pantalla QR actual identifica y valida manualmente.
+- El hallazgo del CRUD genérico de Parámetros se corrigió para la próxima entrega:
+  la pantalla administra solo grupos y años lectivos, con alcance por sede,
+  permisos granulares, Functions, historial y eliminación protegida. Los catálogos
+  internos quedaron sin escritura directa ni CRUD administrativo.
+- Lonchera, Restaurante y Eventos completos no son módulos operativos terminados.
+- Rutas conserva pendientes avanzados: Places/pin, planificación futura,
+  ida/regreso separados, relevo en recorrido, cola offline e historial unificado.
+- Los avisos de recorrido permanecen en Rutas. No se debe crear un canal paralelo
+  en Mensajería ni interpretar propuestas históricas como alcance vigente.
+
 ## Validación automatizada
 
 - `flutter analyze`: aprobado sin observaciones.
@@ -58,7 +74,8 @@ Internet, permisos vencidos, cierre de sesión y respuestas incompletas.
 - 18 usuarios reales y 16 usuarios temporales de la prueba controlada.
 - Auth, `users` y `user_directory`: 34 identidades coincidentes.
 - 32 grupos y 2 años lectivos coherentes.
-- 72 Cloud Functions activas, sin despliegues pendientes.
+- 74 Cloud Functions activas después de incorporar consulta administrativa e
+  impacto seguro de grupos académicos.
 - Los endpoints de horarios, archivos, QR, historial de rutas y años lectivos
   rechazaron correctamente solicitudes sin autenticar.
 - Siete imágenes de producción accesibles y ninguna referencia al bucket de QA.

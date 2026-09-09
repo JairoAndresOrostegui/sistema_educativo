@@ -181,9 +181,14 @@ Eliminar una fila, columna, componente, elemento o página modifica primero el b
 
 Los módulos sensibles generan registros con actor, sede, acción, fecha y contexto. Los historiales no se pueden falsificar desde el cliente. La visibilidad respeta sede; el superadministrador puede consultar transversalmente cuando corresponde.
 
-## Años lectivos
+## Configuración académica
 
-En **Parámetros > Años lectivos**, un administrador prepara el siguiente año
+En **Configuración académica**, un administrador autorizado consulta los grupos
+de su sede y los años lectivos. Cuarto A y Cuarto B siempre son grupos distintos.
+Los grupos que ya no operan se desactivan para conservar estudiantes, horarios e
+historial; no se eliminan para ocultar información existente.
+
+En **Años lectivos**, un administrador prepara el siguiente año
 sin afectar el vigente. Puede copiar la estructura de grupos y, opcionalmente,
 los horarios para revisarlos. Al activar el nuevo período, el anterior queda
 cerrado y disponible únicamente para consulta. El sistema no cambia de año de

@@ -21,7 +21,8 @@ Un módulo futuro o una pantalla residual no representa una función disponible.
 |---|---|---|
 | Acceso, Inicio, Perfil | Cada usuario | Solo perfil propio; cuentas adultas verifican correo |
 | Usuarios y continuidad | Administración | Sede propia; superadmin transversal |
-| Parámetros, grupos y años | Administración | Grupos independientes por sede y año |
+| Grupos y años lectivos | Administración | Independientes por institución, sede y año |
+| Catálogos internos | Plataforma | Solo lectura para clientes; sin CRUD administrativo |
 | Matrículas | Administración; familiar en su contexto | Solicitud, revisión y decisiones auditadas |
 | Autorizaciones | Administración y familiares | Estudiante no accede; docente no adquiere funciones futuras |
 | Horarios | Administración | Consulta por grupo/docente; familiar por hijo |

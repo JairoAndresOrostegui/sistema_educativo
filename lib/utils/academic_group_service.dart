@@ -11,6 +11,20 @@ class AcademicGroupService {
     : _db = db ?? FirebaseFirestore.instance,
       _functions = functions ?? FirebaseFunctions.instance;
 
+  Future<List<AcademicGroup>> listForAdministration({
+    required String institutionId,
+    required String campusId,
+  }) async {
+    final result = await _functions
+        .httpsCallable('listarGruposAcademicosAdministracion')
+        .call({'institutionId': institutionId, 'campusId': campusId});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return (data['groups'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((item) => AcademicGroup.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
   Future<List<AcademicGroup>> list({
     required String institutionId,
     required String campusId,
@@ -83,5 +97,12 @@ class AcademicGroupService {
 
   Future<void> delete(String id) async {
     await _functions.httpsCallable('eliminarGrupoAcademico').call({'id': id});
+  }
+
+  Future<Map<String, dynamic>> deleteImpact(String id) async {
+    final result = await _functions
+        .httpsCallable('obtenerImpactoEliminacionGrupoAcademico')
+        .call({'id': id});
+    return Map<String, dynamic>.from(result.data as Map);
   }
 }

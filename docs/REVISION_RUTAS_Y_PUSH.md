@@ -52,8 +52,8 @@ históricos como pendientes actuales.
 - Cálculo automático implementado detrás de MAPS_ROUTING_ENABLED, desactivado
   hasta habilitar/verificar APIs y presupuesto. No afirmar prueba real de Maps.
 - Pendientes explícitos: búsqueda visual Places/pin validado; planificación
-  anticipada y dos sentidos diarios; canal de Mensajería por ruta; relevo de
-  auxiliares durante viaje; sincronización offline con resolución de conflictos;
+  anticipada y dos sentidos diarios; relevo de auxiliares durante viaje;
+  sincronización offline con resolución de conflictos;
   migración del historial antiguo al historial unificado. No declarar terminado
   el rework completo ni publicado en Play.
 - APK ARM64 final: `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`
@@ -269,9 +269,11 @@ entregado/llegó al colegio; corregir exige motivo y auditoría, no toggles libr
 
 Familia ve solo estado/parada de su hijo, ETA y posición del vehículo durante
 su viaje autorizado; no lista de domicilios/pasajeros. Ubicación del responsable
-fuera del recorrido nunca se comparte. Avisos generales al canal de la ruta;
-dirección, ausencia, recogida e incidentes individuales solo a familia vinculada
-y personal autorizado. Publicación automática en Mensajería pendiente de go.
+fuera del recorrido nunca se comparte. Los avisos generales e individuales se
+operan, consultan y auditan dentro de Rutas y usan su propia cola de eventos push.
+No se crea un canal de Mensajería para cada ruta ni se duplica allí el recorrido.
+Dirección, ausencia, recogida e incidentes individuales solo se comunican a la
+familia vinculada y al personal autorizado.
 
 Avisos: inicio, proximidad (una vez por umbral/parada), llegada, recogida,
 entrega, retraso relevante, cancelación y decisión de cambio. Deduplicación por

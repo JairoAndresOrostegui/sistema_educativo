@@ -52,7 +52,7 @@ recibe la carga vigente. Mensajes/archivos conservan autor original. En temporal
 Restaurar revierte responsabilidades que aún correspondan. No trasladar tokens ni QR.
 El relevo de un auxiliar durante un viaje necesita todavía un flujo específico.
 
-## Parámetros, grupos y años lectivos
+## Configuración académica: grupos y años lectivos
 
 Administrar grupos por sede: Cuarto A y Cuarto B son grupos distintos, incluso
 si comparten nivel. Revisar que estudiantes, docentes y horarios correspondan.
@@ -60,6 +60,16 @@ Un grupo con referencias no debe borrarse; usar desactivación cuando correspond
 Para cambio de año: preparar período, revisar estructura y copia opcional de
 horarios, resolver pendientes y activar. El anterior queda cerrado, no se borra.
 No ocurre automáticamente el 1 de enero. Usuarios y sitio web no se reinician.
+
+El acceso requiere `parametros.ver`; los cambios requieren `parametros.editar`.
+Un administrador normal queda limitado a su institución y sede. Solo el
+superadministrador cambia de sede. Los catálogos internos de roles, permisos,
+documentos y EPS son de solo lectura y no aparecen como un CRUD administrativo.
+
+Para retirar un grupo con historia, desactivarlo. La eliminación definitiva solo
+está disponible para el superadministrador cuando el grupo ya está inactivo y el
+análisis previo confirma que no tiene estudiantes, docente director, horarios,
+matrículas, autorizaciones, canales ni archivos relacionados.
 
 ## Matrículas
 

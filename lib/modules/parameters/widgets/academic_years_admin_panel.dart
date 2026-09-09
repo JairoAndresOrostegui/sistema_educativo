@@ -24,6 +24,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
   String? _institutionId;
   String? _campusId;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -32,16 +33,40 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
   }
 
   Future<void> _loadInitial() async {
-    final user = context.read<UserProviderV2>().user!;
-    _institutionId = user.institution;
-    _campusId = user.campus;
-    _institutions = await _parameters.getInstitutions();
-    await _load();
+    final user = context.read<UserProviderV2>().user;
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Tu sesión no está disponible. Inicia sesión nuevamente.';
+        });
+      }
+      return;
+    }
+    try {
+      _institutionId = user.institution;
+      _campusId = user.campus;
+      _institutions = await _parameters.getInstitutions();
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = userFacingError(
+            error,
+            fallback: 'No se pudieron consultar los años lectivos.',
+          );
+        });
+      }
+    }
   }
 
   Future<void> _load() async {
     if (_institutionId == null || _campusId == null) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final years = await _service.list(
         institutionId: _institutionId!,
@@ -50,11 +75,13 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
       if (mounted) setState(() => _years = years);
     } catch (error) {
       if (mounted) {
-        await DialogUtils.showError(
-          context: context,
-          title: 'No se pudieron consultar los años lectivos',
-          message: userFacingError(error),
-        );
+        setState(() {
+          _years = [];
+          _error = userFacingError(
+            error,
+            fallback: 'No se pudieron consultar los años lectivos.',
+          );
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -214,7 +241,12 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<UserProviderV2>().user!;
+    final user = context.watch<UserProviderV2>().user;
+    if (user == null) return const SizedBox.shrink();
+    final canEdit =
+        user.isSuperadmin || user.permissions.contains('parametros.editar');
+    final canView = canEdit || user.permissions.contains('parametros.ver');
+    if (!canView) return const SizedBox.shrink();
     final campuses = _institution?.campuses ?? const <String>[];
     return Card(
       child: Padding(
@@ -231,7 +263,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _loading ? null : _prepare,
+                  onPressed: _loading || !canEdit ? null : _prepare,
                   icon: const Icon(Icons.add),
                   label: const Text('Preparar siguiente'),
                 ),
@@ -297,6 +329,8 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
             const SizedBox(height: 12),
             if (_loading)
               const LinearProgressIndicator()
+            else if (_error != null)
+              _ParameterLoadError(message: _error!, onRetry: _load)
             else
               ..._years.map(
                 (year) => ListTile(
@@ -313,7 +347,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
                     '${year.copiedGroups} grupos copiados · '
                     '${year.copiedSchedules} horarios copiados',
                   ),
-                  trailing: year.status == 'draft'
+                  trailing: year.status == 'draft' && canEdit
                       ? FilledButton.tonal(
                           onPressed: () => _activate(year),
                           child: const Text('Activar'),
@@ -323,6 +357,38 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ParameterLoadError extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _ParameterLoadError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: colors.onErrorContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colors.onErrorContainer),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+        ],
       ),
     );
   }

@@ -821,7 +821,9 @@ describe("baja y eliminacion de usuarios", () => {
   });
 
   it("prepara y activa el siguiente anio sin borrar el historico", async () => {
-    const adminEmail = await seedUser("admin", "Administrador");
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["parametros.ver", "parametros.editar"],
+    });
     const token = await signIn(adminEmail);
     const prepared = await callFunction("prepararAnioLectivo", {
       institutionId: "inst-1",
@@ -852,5 +854,71 @@ describe("baja y eliminacion de usuarios", () => {
         .data().status, "closed");
     assert.ok((await db.collection("academic_groups").doc("group-5a").get())
         .exists);
+  });
+
+  it("protege configuracion y lista grupos inactivos por sede", async () => {
+    await db.collection("academic_groups").doc("group-inactive").set({
+      institutionId: "inst-1", campusId: "campus-1", level: "Sexto",
+      academicYearId: academicYearId("inst-1", "campus-1"),
+      academicYear: 2026, section: "B", name: "Sexto B", order: 6,
+      active: false,
+    });
+    const deniedEmail = await seedUser("admin-denied", "Administrador");
+    const allowedEmail = await seedUser("admin-parameters", "Administrador", {
+      permissions: ["parametros.ver", "parametros.editar"],
+    });
+    const denied = await callFunction(
+        "listarGruposAcademicosAdministracion",
+        {institutionId: "inst-1", campusId: "campus-1"},
+        await signIn(deniedEmail),
+    );
+    assert.equal(denied.body.error.status, "PERMISSION_DENIED");
+    const allowedToken = await signIn(allowedEmail);
+    const listed = await callFunction(
+        "listarGruposAcademicosAdministracion",
+        {institutionId: "inst-1", campusId: "campus-2"},
+        allowedToken,
+    );
+    assert.deepEqual(
+        listed.body.result.groups.map((item) => item.name),
+        ["Quinto A", "Sexto B"],
+    );
+    const deleted = await callFunction(
+        "eliminarGrupoAcademico", {id: "group-inactive"}, allowedToken,
+    );
+    assert.equal(deleted.body.error.status, "PERMISSION_DENIED");
+    assert.ok((await db.collection("academic_groups").doc("group-inactive")
+        .get()).exists);
+
+    const superEmail = await seedUser("super-parameters", "Administrador", {
+      isSuperadmin: true,
+    });
+    await seedUser("group-tutor", "Docente", {
+      tutorGroupId: "group-inactive",
+    });
+    const superToken = await signIn(superEmail);
+    const impact = await callFunction(
+        "obtenerImpactoEliminacionGrupoAcademico",
+        {id: "group-inactive"},
+        superToken,
+    );
+    assert.equal(impact.body.result.impact.tutors, 1);
+    const protectedDelete = await callFunction(
+        "eliminarGrupoAcademico", {id: "group-inactive"}, superToken,
+    );
+    assert.equal(protectedDelete.body.error.status, "FAILED_PRECONDITION");
+
+    await db.collection("users").doc("group-tutor").update({
+      tutorGroupId: null,
+    });
+    const finalDelete = await callFunction(
+        "eliminarGrupoAcademico", {id: "group-inactive"}, superToken,
+    );
+    assert.equal(finalDelete.body.result.success, true);
+    assert.equal((await db.collection("academic_groups")
+        .doc("group-inactive").get()).exists, false);
+    assert.ok((await db.collection("academic_group_history")
+        .where("groupId", "==", "group-inactive")
+        .where("action", "==", "deleted").get()).size > 0);
   });
 });
