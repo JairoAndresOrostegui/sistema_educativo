@@ -47,8 +47,8 @@ conserva archivado junto con el grupo inactivo.
 
 Estado del 9 de septiembre de 2026: migración aplicada y verificada en
 producción para 5 administradores activos; reglas publicadas y 9 Functions
-afectadas desplegadas sin errores. El cliente se distribuye con la siguiente
-publicación web/móvil.
+afectadas desplegadas sin errores. El cliente web quedó publicado en Hostinger
+desde el commit `ba0554c`; el cliente móvil se incluirá en el siguiente AAB.
 
 La entrega requiere, en este orden:
 
