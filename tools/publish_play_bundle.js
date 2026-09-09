@@ -1,9 +1,13 @@
 "use strict";
 
 const fs = require("node:fs");
+const {createRequire} = require("node:module");
 const os = require("node:os");
 const path = require("node:path");
-const {GoogleAuth} = require("google-auth-library");
+const requireFunctions = createRequire(path.resolve(
+    __dirname, "../functions/package.json",
+));
+const {GoogleAuth} = requireFunctions("google-auth-library");
 
 const PACKAGE_NAME = "com.desarrolloytecnologiasantander.serodolfollinas";
 const DEFAULT_TRACK = "alpha";
