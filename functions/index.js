@@ -1921,6 +1921,134 @@ function materializedMessageMembers(members) {
 }
 
 /**
+ * Carga los familiares activos vinculados a un estudiante dentro de su sede.
+ * @param {Object} student Perfil del estudiante con uid.
+ * @return {Promise<Array>} Documentos de familiares vigentes.
+ */
+async function activeFamiliesForStudent(student) {
+  if (!student?.uid) return [];
+  const snapshot = await db.collection("users")
+      .where("institution", "==", student.institution)
+      .where("campus", "==", student.campus)
+      .where("role", "==", "Familiar")
+      .where("status", "==", "activo")
+      .where("studentIds", "array-contains", student.uid).get();
+  return snapshot.docs;
+}
+
+/** @param {Object} teacher Docente. @param {Object} student Estudiante. */
+async function teacherCanContactStudent(teacher, student, year) {
+  if (teacher.tutorGroupId === student.groupId) return true;
+  const subjects = await db.collection("subjects")
+      .where("institutionId", "==", student.institution)
+      .where("campusId", "==", student.campus)
+      .where("academicYearId", "==", year.id)
+      .where("teacherId", "==", teacher.uid)
+      .where("groupId", "==", student.groupId).limit(1).get();
+  return !subjects.empty;
+}
+
+/**
+ * Construye la audiencia de una conversacion supervisada sin confiar en el
+ * cliente. Incluye estudiante, responsable institucional y familiares activos.
+ * @param {Object} student Estudiante.
+ * @param {Object} staff Docente o administrador.
+ * @param {Object} year Anio activo.
+ * @return {Promise<Object>} Miembros y campos materializados.
+ */
+async function supervisedStudentAudience(student, staff, year) {
+  if (student.role !== "Estudiante" || student.status !== "activo" ||
+      !sameTenant(student, staff) ||
+      !["Docente", "Administrador"].includes(staff.role) ||
+      staff.status !== "activo") {
+    throw new HttpsError(
+        "failed-precondition", "La conversacion supervisada ya no esta vigente.",
+    );
+  }
+  if (staff.role === "Docente" &&
+      !(await teacherCanContactStudent(staff, student, year))) {
+    throw new HttpsError(
+        "permission-denied", "El docente ya no tiene acceso al estudiante.",
+    );
+  }
+  const families = await activeFamiliesForStudent(student);
+  const members = new Map([[student.uid, student], [staff.uid, staff]]);
+  families.forEach((item) => members.set(item.id, item.data()));
+  return {
+    ...materializedMessageMembers(members),
+    studentIds: [student.uid],
+    teacherIds: staff.role === "Docente" ? [staff.uid] : [],
+    familyIds: families.map((item) => item.id),
+    supervisedStudentId: student.uid,
+    supervisedStaffId: staff.uid,
+    contextStudentId: student.uid,
+    contextStudentName:
+      `${student.firstName || ""} ${student.lastName || ""}`.trim(),
+    contextStudentGroupId: student.groupId || null,
+    contextStudentGroupName: student.groupName || null,
+  };
+}
+
+/**
+ * Revalida y sincroniza los miembros de un canal supervisado.
+ * @param {FirebaseFirestore.DocumentReference} ref Canal.
+ * @param {Object} year Anio activo.
+ * @return {Promise<Object>} Canal actualizado.
+ */
+async function syncSupervisedStudentChannel(ref, year) {
+  const snapshot = await ref.get();
+  const channel = snapshot.data() || {};
+  if (!snapshot.exists || channel.channelType !== "supervised_student") {
+    throw new HttpsError("not-found", "La conversacion no existe.");
+  }
+  const [studentSnapshot, staffSnapshot] = await Promise.all([
+    db.collection("users").doc(channel.supervisedStudentId || "_").get(),
+    db.collection("users").doc(channel.supervisedStaffId || "_").get(),
+  ]);
+  if (!studentSnapshot.exists || !staffSnapshot.exists) {
+    throw new HttpsError(
+        "failed-precondition", "La conversacion supervisada ya no esta vigente.",
+    );
+  }
+  const audience = await supervisedStudentAudience(
+      {uid: studentSnapshot.id, ...studentSnapshot.data()},
+      {uid: staffSnapshot.id, ...staffSnapshot.data()}, year,
+  );
+  await ref.set({...audience, updatedAt: FieldValue.serverTimestamp()},
+      {merge: true});
+  return {...channel, ...audience};
+}
+
+/** @param {Iterable<string>} studentIds Estudiantes que cambiaron. */
+async function syncSupervisedChannelsForStudents(studentIds) {
+  for (const studentId of new Set([...studentIds].filter(Boolean))) {
+    const channels = await db.collection("message_channels")
+        .where("supervisedStudentId", "==", studentId).get();
+    for (const channel of channels.docs) {
+      const data = channel.data();
+      const yearSnapshot = await db.collection("academic_years")
+          .doc(data.academicYearId || "_").get();
+      try {
+        if (!yearSnapshot.exists || yearSnapshot.data().status !== "active") {
+          continue;
+        }
+        await syncSupervisedStudentChannel(
+            channel.ref, {id: yearSnapshot.id, ...yearSnapshot.data()},
+        );
+      } catch (error) {
+        if (error instanceof HttpsError &&
+            ["failed-precondition", "permission-denied"].includes(error.code)) {
+          await channel.ref.set({status: "archived",
+            updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+}
+
+/**
  * Obtiene los miembros vigentes de un grupo: estudiantes, familiares,
  * director de grupo y todo docente con una asignatura en ese grupo.
  * @param {Object} group Grupo academico.
@@ -2114,13 +2242,18 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
   };
   let contextStudent;
   if (caller.role === "Administrador" || caller.isSuperadmin === true) {
+    if (recipient.role === "Estudiante") {
+      return {student: recipient, supervised: true, staff: caller};
+    }
     return {student: null};
   }
   if (caller.role === "Estudiante") {
-    if (recipient.role === "Administrador") return {student: null};
+    if (recipient.role === "Administrador") {
+      return {student: caller, supervised: true, staff: recipient};
+    }
     if (recipient.role === "Docente" &&
         (await teacherGroups(recipient.uid)).has(caller.groupId)) {
-      return {student: null};
+      return {student: caller, supervised: true, staff: recipient};
     }
   }
   if (caller.role === "Docente") {
@@ -2129,15 +2262,7 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
     }
     const groups = await teacherGroups(caller.uid);
     if (recipient.role === "Estudiante" && groups.has(recipient.groupId)) {
-      return {student: recipient};
-    }
-    if (recipient.role === "Familiar") {
-      const linkedIds = Array.isArray(recipient.studentIds) ?
-        recipient.studentIds : [];
-      const linked = await usersByIds(db.collection("users"), linkedIds);
-      if (linked.some((item) => groups.has(item.data().groupId))) {
-        return {student: null};
-      }
+      return {student: recipient, supervised: true, staff: caller};
     }
   }
   if (caller.role === "Familiar") {
@@ -2155,7 +2280,10 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
         !sameTenant(caller, contextStudent)) {
       throw new HttpsError("failed-precondition", "El hijo no esta activo.");
     }
-    if (recipient.role === "Administrador") return {student: contextStudent};
+    if (recipient.role === "Administrador") {
+      return {student: {uid: studentContextId, ...contextStudent},
+        supervised: true, staff: recipient};
+    }
     if (recipient.role === "Familiar" && recipient.uid !== caller.uid &&
         contextStudent.role === "Estudiante" && contextStudent.groupId) {
       const group = await db.collection("academic_groups")
@@ -2173,7 +2301,8 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
     }
     if (recipient.role === "Docente" &&
         (await teacherGroups(recipient.uid)).has(contextStudent.groupId)) {
-      return {student: contextStudent};
+      return {student: {uid: studentContextId, ...contextStudent},
+        supervised: true, staff: recipient};
     }
   }
   throw new HttpsError(
@@ -4235,6 +4364,90 @@ exports.listarArchivos = onCall(async (request) => {
   })};
 });
 
+/** @param {Object} caller Usuario. @param {Object} file Archivo. */
+async function requireFileDownloadAccess(caller, file) {
+  if (file.status !== "active" || !sameTenant(caller, file)) {
+    throw new HttpsError("permission-denied", "Archivo fuera de tu alcance.");
+  }
+  if (caller.isSuperadmin === true || caller.role === "Administrador" ||
+      file.uploadedBy === caller.uid ||
+      (Array.isArray(file.recipientUserIds) &&
+       file.recipientUserIds.includes(caller.uid))) return;
+  if (caller.role === "Familiar" && caller.activeStudentId &&
+      Array.isArray(caller.studentIds) &&
+      caller.studentIds.includes(caller.activeStudentId) &&
+      Array.isArray(file.recipientContextKeys) &&
+      file.recipientContextKeys.includes(
+          `${caller.uid}:${caller.activeStudentId}`)) return;
+  throw new HttpsError("permission-denied", "No puedes descargar este archivo.");
+}
+
+exports.registrarDescargaArchivo = onCall(async (request) => {
+  const caller = await getCaller(request);
+  const fileId = requiredString(request.data?.fileId, "archivo", 128);
+  const fileSnapshot = await db.collection("files").doc(fileId).get();
+  if (!fileSnapshot.exists) {
+    throw new HttpsError("not-found", "El archivo ya no existe.");
+  }
+  const file = fileSnapshot.data();
+  await requireFileDownloadAccess(caller, file);
+  const receiptId = crypto.createHash("sha256")
+      .update(`${fileId}\u0000${caller.uid}`).digest("hex");
+  const receiptRef = db.collection("file_download_receipts").doc(receiptId);
+  await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(receiptRef);
+    const now = FieldValue.serverTimestamp();
+    const payload = {
+      fileId,
+      userId: caller.uid,
+      userName: `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
+      userRole: caller.role,
+      institutionId: file.institutionId,
+      campusId: file.campusId,
+      academicYearId: file.academicYearId,
+      lastDownloadedAt: now,
+      downloadCount: Number(current.data()?.downloadCount || 0) + 1,
+    };
+    if (current.exists) transaction.update(receiptRef, payload);
+    else transaction.create(receiptRef, {...payload, firstDownloadedAt: now});
+  });
+  return {success: true};
+});
+
+exports.listarDescargasArchivo = onCall(async (request) => {
+  const caller = await getCaller(request);
+  const fileId = requiredString(request.data?.fileId, "archivo", 128);
+  const fileSnapshot = await db.collection("files").doc(fileId).get();
+  const file = fileSnapshot.data() || {};
+  if (!fileSnapshot.exists || !sameTenant(caller, file)) {
+    throw new HttpsError("permission-denied", "Archivo fuera de tu alcance.");
+  }
+  if (caller.isSuperadmin !== true && caller.role !== "Administrador" &&
+      file.uploadedBy !== caller.uid) {
+    throw new HttpsError(
+        "permission-denied", "Solo el remitente o administracion ven los acuses.",
+    );
+  }
+  const receipts = await db.collection("file_download_receipts")
+      .where("fileId", "==", fileId).get();
+  return {
+    recipientCount: Array.isArray(file.recipientUserIds) ?
+      file.recipientUserIds.filter((uid) => uid !== file.uploadedBy).length : 0,
+    receipts: receipts.docs.map((item) => {
+      const value = item.data();
+      return {
+        userId: value.userId,
+        userName: value.userName || "Usuario",
+        userRole: value.userRole || "",
+        firstDownloadedAtMillis: value.firstDownloadedAt?.toMillis?.() || null,
+        lastDownloadedAtMillis: value.lastDownloadedAt?.toMillis?.() || null,
+        downloadCount: Number(value.downloadCount || 0),
+      };
+    }).sort((a, b) =>
+      (b.lastDownloadedAtMillis || 0) - (a.lastDownloadedAtMillis || 0)),
+  };
+});
+
 exports.solicitarCargaArchivo = onCall(async (request) => {
   const caller = await getCaller(request);
   requireFileAction(caller, "crear");
@@ -4518,6 +4731,14 @@ async function deleteFileRecords(caller, ids, source) {
   for (const file of files) {
     const usageRef = db.collection("file_storage_usage")
         .doc(fileUsageId(file.institutionId));
+    const receiptSnapshots = await db.collection("file_download_receipts")
+        .where("fileId", "==", file.id).get();
+    for (let index = 0; index < receiptSnapshots.docs.length; index += 400) {
+      const batch = db.batch();
+      receiptSnapshots.docs.slice(index, index + 400).forEach((receipt) =>
+        batch.delete(receipt.ref));
+      await batch.commit();
+    }
     await db.runTransaction(async (transaction) => {
       const usageSnapshot = await transaction.get(usageRef);
       const usage = usageSnapshot.data() || {};
@@ -5020,6 +5241,10 @@ exports.sincronizarDirectorioUsuarios = onDocumentWritten(
           const student = await db.collection("users").doc(studentId).get();
           if (student.data()?.groupId) groupIds.add(student.data().groupId);
         }
+        await syncSupervisedChannelsForStudents(studentIds);
+      }
+      if (before?.role === "Estudiante" || after?.role === "Estudiante") {
+        await syncSupervisedChannelsForStudents([event.params.userId]);
       }
       for (const groupId of groupIds) await syncAcademicMessageChannel(groupId);
     },
@@ -5489,6 +5714,9 @@ exports.ejecutarTrasladoDocente = onCall(async (request) => {
       memberUserIds: participants,
       memberNames: names,
       memberRoles: roles,
+      ...(data.channelType === "supervised_student" &&
+          data.supervisedStaffId === sourceId ?
+        {supervisedStaffId: targetId} : {}),
       delegatedFromTeacherId: sourceId,
       delegatedToTeacherId: targetId,
       delegatedByTransferId: transferRef.id,
@@ -5628,6 +5856,9 @@ exports.revertirTrasladoDocenteTemporal = onCall(async (request) => {
       memberUserIds: participants,
       memberNames: names,
       memberRoles: roles,
+      ...(data.channelType === "supervised_student" &&
+          data.supervisedStaffId === transfer.targetTeacherId ?
+        {supervisedStaffId: transfer.sourceTeacherId} : {}),
       delegatedFromTeacherId: FieldValue.delete(),
       delegatedToTeacherId: FieldValue.delete(),
       delegatedByTransferId: FieldValue.delete(),
@@ -5953,9 +6184,7 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
         .map((item) => item.uid));
     allowed = all.filter((item) => item.uid !== caller.uid &&
       (["Administrador", "Docente"].includes(item.role) ||
-       studentIds.has(item.uid) || item.role === "Familiar" &&
-       Array.isArray(item.studentIds) &&
-       item.studentIds.some((id) => studentIds.has(id))));
+       studentIds.has(item.uid)));
     studentContextId = "";
   } else if (caller.role === "Familiar") {
     if (!studentContextId || !Array.isArray(caller.studentIds) ||
@@ -6020,9 +6249,14 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     );
     const pair = [caller.uid, recipientId].sort();
     const conversationContext = context.familyGroupId || studentContextId || "";
-    const deterministicId = `private_${crypto.createHash("sha256")
-        .update(`${year.id}\u0000${pair.join("\u0000")}\u0000${conversationContext}`)
-        .digest("hex")}`;
+    const supervised = context.supervised === true;
+    const deterministicId = supervised ?
+      `supervised_${crypto.createHash("sha256")
+          .update(`${year.id}\u0000${context.student.uid}\u0000${context.staff.uid}`)
+          .digest("hex")}` :
+      `private_${crypto.createHash("sha256")
+          .update(`${year.id}\u0000${pair.join("\u0000")}\u0000${conversationContext}`)
+          .digest("hex")}`;
     // Reutiliza una conversacion migrada aunque su id anterior no fuera
     // deterministico. Evita mostrar dos privados para las mismas personas.
     const existing = await db.collection("message_channels")
@@ -6030,54 +6264,73 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     const matching = existing.docs.find((item) => {
       const data = item.data();
       const members = Array.isArray(data.memberUserIds) ? data.memberUserIds : [];
-      return data.channelType === "private" &&
-        data.institutionId === caller.institution &&
-        data.campusId === caller.campus &&
-        data.academicYearId === year.id &&
+      const sameSupervised = supervised &&
+        data.channelType === "supervised_student" &&
+        data.supervisedStudentId === context.student.uid &&
+        data.supervisedStaffId === context.staff.uid;
+      const legacyStudentPair = supervised && data.channelType === "private" &&
+        members.length === 2 && members.includes(recipientId);
+      return (sameSupervised || legacyStudentPair ||
+        !supervised && data.channelType === "private" &&
         members.length === 2 && members.includes(recipientId) &&
         (context.familyGroupId ? data.familyGroupId === context.familyGroupId :
-          (data.contextStudentId || null) === studentContextId);
+          (data.contextStudentId || null) === studentContextId)) &&
+        data.institutionId === caller.institution &&
+        data.campusId === caller.campus &&
+        data.academicYearId === year.id;
     });
     channelId = matching?.id || deterministicId;
-    const members = new Map([[caller.uid, caller], [recipientId, recipient]]);
     const contextStudent = context.student;
     const privateRef = db.collection("message_channels").doc(channelId);
-    await db.runTransaction(async (transaction) => {
-      if ((await transaction.get(privateRef)).exists) return;
-      transaction.create(privateRef, {
-        channelType: "private",
-        category: "private",
-        iconKey: "private",
-        title: "Conversacion privada",
-        institutionId: caller.institution,
-        campusId: caller.campus,
-        academicYearId: year.id,
-        academicYear: year.year,
-        status: "active",
-        postingPolicy: "members",
-        mutedByAdmin: false,
-        contextStudentId: studentContextId,
-        familyGroupId: context.familyGroupId || null,
-        contextStudentName: contextStudent ?
+    const currentPrivate = await privateRef.get();
+    const members = supervised ? null :
+      new Map([[caller.uid, caller], [recipientId, recipient]]);
+    const audience = supervised ? await supervisedStudentAudience(
+        context.student, context.staff, year,
+    ) : materializedMessageMembers(members);
+    await privateRef.set({
+      channelType: supervised ? "supervised_student" : "private",
+      category: "private",
+      iconKey: "private",
+      title: supervised ? "Conversacion supervisada" : "Conversacion privada",
+      institutionId: caller.institution,
+      campusId: caller.campus,
+      academicYearId: year.id,
+      academicYear: year.year,
+      status: "active",
+      postingPolicy: "members",
+      mutedByAdmin: false,
+      contextStudentId: supervised ? context.student.uid : studentContextId,
+      familyGroupId: context.familyGroupId || null,
+      contextStudentName: contextStudent ?
         `${contextStudent.firstName || ""} ${contextStudent.lastName || ""}`.trim() : null,
-        contextStudentGroupId: contextStudent?.groupId || null,
-        contextStudentGroupName: contextStudent?.groupName || null,
+      contextStudentGroupId: contextStudent?.groupId || null,
+      contextStudentGroupName: contextStudent?.groupName || null,
+      ...audience,
+      ...(!currentPrivate.exists ? {
         messageSequence: 0,
         readSequences: {},
         readAtByUser: {},
-        ...materializedMessageMembers(members),
         createdBy: caller.uid,
         createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    });
+      } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
   }
   const channelRef = db.collection("message_channels").doc(channelId);
   const currentChannelSnapshot = await channelRef.get();
   if (!currentChannelSnapshot.exists) {
     throw new HttpsError("not-found", "El canal no existe.");
   }
-  const currentChannel = currentChannelSnapshot.data();
+  let currentChannel = currentChannelSnapshot.data();
+  if (currentChannel.channelType === "supervised_student") {
+    currentChannel = await syncSupervisedStudentChannel(channelRef, year);
+    if (!currentChannel.memberUserIds.includes(caller.uid)) {
+      throw new HttpsError(
+          "permission-denied", "Ya no perteneces a esta conversacion.",
+      );
+    }
+  }
   if (currentChannel.channelType === "private") {
     const peerId = (Array.isArray(currentChannel.memberUserIds) ?
       currentChannel.memberUserIds : []).find((uid) => uid !== caller.uid);
@@ -6116,12 +6369,26 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     }
     const sequence = Number(channel.messageSequence || 0) + 1;
     const senderName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim();
+    const recipients = (Array.isArray(channel.memberUserIds) ?
+      channel.memberUserIds : []).filter((uid) => uid !== caller.uid);
+    const recipientNames = Object.fromEntries(recipients.map((uid) => [
+      uid, channel.memberNames?.[uid] || "Usuario",
+    ]));
+    const recipientRoles = Object.fromEntries(recipients.map((uid) => [
+      uid, channel.memberRoles?.[uid] || "",
+    ]));
     transaction.create(messageRef, {
       sequence,
       senderId: caller.uid,
       senderName,
       senderRole: caller.role,
       body,
+      recipientUserIds: recipients,
+      recipientNames,
+      recipientRoles,
+      readAtByUser: {},
+      readNames: {},
+      readRoles: {},
       createdAt: FieldValue.serverTimestamp(),
       academicYearId: year.id,
       academicYear: year.year,
@@ -6136,8 +6403,6 @@ exports.enviarMensajeCanal = onCall(async (request) => {
       [`readAtByUser.${caller.uid}`]: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    const recipients = (Array.isArray(channel.memberUserIds) ?
-      channel.memberUserIds : []).filter((uid) => uid !== caller.uid);
     transaction.create(db.collection("push_events").doc(messageRef.id), {
       institutionId: caller.institution, campusId: caller.campus,
       academicYearId: year.id, channelId, senderName, body: body.slice(0, 120),
@@ -6162,17 +6427,43 @@ exports.marcarCanalMensajeriaLeido = onCall(async (request) => {
   requireMessagingAccess(caller);
   const channelId = requiredString(request.data?.channelId, "canal", 160);
   const ref = db.collection("message_channels").doc(channelId);
-  await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (!snapshot.exists) throw new HttpsError("not-found", "El canal no existe.");
-    const channel = snapshot.data();
-    requireMessageChannelRead(caller, channel);
-    transaction.update(ref, {
-      [`readSequences.${caller.uid}`]: Number(channel.messageSequence || 0),
-      [`readAtByUser.${caller.uid}`]: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+  let completed = false;
+  while (!completed) {
+    completed = await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "El canal no existe.");
+      }
+      const channel = snapshot.data();
+      requireMessageChannelRead(caller, channel);
+      const previous = Number(channel.readSequences?.[caller.uid] || 0);
+      const target = Number(channel.messageSequence || 0);
+      const unread = await transaction.get(ref.collection("messages")
+          .where("sequence", ">", previous)
+          .where("sequence", "<=", target)
+          .orderBy("sequence").limit(400));
+      for (const message of unread.docs) {
+        const messageReads = message.data().readAtByUser || {};
+        if (!messageReads[caller.uid]) {
+          transaction.update(message.ref, {
+            [`readAtByUser.${caller.uid}`]: FieldValue.serverTimestamp(),
+            [`readNames.${caller.uid}`]:
+              `${caller.firstName || ""} ${caller.lastName || ""}`.trim() ||
+              "Usuario",
+            [`readRoles.${caller.uid}`]: caller.role || "",
+          });
+        }
+      }
+      const lastRead = unread.empty ? target :
+        Number(unread.docs.at(-1).data().sequence || previous);
+      transaction.update(ref, {
+        [`readSequences.${caller.uid}`]: lastRead,
+        [`readAtByUser.${caller.uid}`]: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return lastRead >= target;
     });
-  });
+  }
   return {success: true};
 });
 
@@ -6191,8 +6482,11 @@ exports.configurarSilencioCanalMensajeria = onCall(async (request) => {
   if (!snapshot.exists || !sameTenant(caller, channel)) {
     throw new HttpsError("permission-denied", "Canal fuera de tu sede.");
   }
-  if (channel.channelType === "private") {
-    throw new HttpsError("failed-precondition", "Un chat privado no se silencia globalmente.");
+  if (["private", "supervised_student"].includes(channel.channelType)) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Una conversacion privada o supervisada no se silencia globalmente.",
+    );
   }
   await ref.update({
     mutedByAdmin: muted,

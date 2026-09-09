@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
+import '../../../utils/active_academic_year_context.dart';
 import '../../../utils/parameters_service.dart';
 import '../../enrollment/services/enrollment_service.dart';
 import '../../messaging/services/messaging_service.dart';
@@ -79,7 +81,11 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     ];
 
     if (role == 'familiar' && perms.contains('matricula.ver')) {
-      final showEnrollment = await _shouldShowEnrollmentMenu(user.id);
+      final showEnrollment = await _shouldShowEnrollmentMenu(
+        user.id,
+        user.institution,
+        user.campus,
+      );
       if (showEnrollment) {
         items.add(
           const MenuItemData(
@@ -155,7 +161,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     if (perms.contains('mensajeria.ver')) {
       _messageUnreadSub?.cancel();
       _messageUnreadSub = MessagingService().watchUnreadCount(user).listen((
-        count,
+        unreadCount,
       ) {
         if (!mounted) return;
         setState(
@@ -166,7 +172,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
                         label: item.label,
                         icon: item.icon,
                         route: item.route,
-                        badgeCount: count,
+                        badgeCount: unreadCount,
                       )
                     : item,
               )
@@ -183,17 +189,25 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     super.dispose();
   }
 
-  Future<bool> _shouldShowEnrollmentMenu(String userId) async {
+  Future<bool> _shouldShowEnrollmentMenu(
+    String userId,
+    String institutionId,
+    String campusId,
+  ) async {
     try {
       final params = ParametersService();
       final enabled = await params.getEnrollmentParentEnabled();
       if (!enabled) return false;
 
-      final anio = await params.getEnrollmentYear() ?? DateTime.now().year;
+      final activeYear = await loadActiveAcademicYear(
+        firestore: FirebaseFirestore.instance,
+        institutionId: institutionId,
+        campusId: campusId,
+      );
       final hasMatricula = await EnrollmentService().hasEnrollmentForUser(
         userId: userId,
         estados: ['matriculado'],
-        anioMatricula: anio,
+        anioMatricula: activeYear.year,
       );
       return !hasMatricula;
     } catch (_) {

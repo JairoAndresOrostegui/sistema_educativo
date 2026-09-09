@@ -22,13 +22,17 @@ audiencia y confirmar carga. No puede enviar a toda la sede por ser docente.
 No puede borrar ni ocultar publicaciones, ni siquiera las propias: solicitar
 corrección a administración. Una carga fallida no significa publicación efectiva.
 La cuota de 1 GiB se comparte institucionalmente; no subir videos en este módulo.
+En **Ver descargas** puede comprobar por usuario cuándo se inició la descarga;
+esto no prueba que el contenido haya sido leído.
 
 ## Mensajería
 
 Participa en grupos donde es líder o dicta; puede anunciar tareas, materiales o
 novedades. Los mensajes no crean por sí solos módulos de evaluación/eventos.
-Usar Particular para contactar estudiantes/familiares autorizados. Revisar acuses
-de mensajes propios mediante Leído por, sin confundir envío push con lectura.
+Usar Particular y elegir al estudiante. Se abre una sola conversación supervisada
+con ese estudiante y todos sus familiares activos; no iniciar asuntos del menor
+con un familiar aislado. Revisar acuses por persona mediante **Leído por**, sin
+confundir envío push con lectura. Cada cuenta mantiene su pendiente independiente.
 Si un canal está silenciado, respetar su modo de anuncios. Un cambio de carga
 puede retirar acceso; la autoría e historial anteriores no cambian.
 

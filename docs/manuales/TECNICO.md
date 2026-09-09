@@ -63,8 +63,8 @@ y pendiente, nunca se sustituye silenciosamente por la de otra persona.
 | Matrículas | enrollments, enrollment_history | Unicidad, transición transaccional e hijo validado |
 | Autorizaciones | historial y estados | Familiar solo ver/solicitar, finalized inmutable salvo super |
 | Horarios | subjects, schedule_history | Cruces, expectedRevision, docente y grupo activos |
-| Archivos | files, cuota y Storage | Reserva, confirmación, borrar objeto antes de metadatos |
-| Mensajería | message_channels, mensajes/lecturas | Miembros derivados, secuencia, privados restringidos |
+| Archivos | files, cuota, Storage y file_download_receipts | Reserva, confirmación, acuse por cuenta, borrar objeto antes de metadatos |
+| Mensajería | message_channels, mensajes/lecturas | Miembros derivados, `supervised_student`, secuencia y lectura por cuenta |
 | QR | qr_credentials, events, auditoría | Token opaco, revocación, sin autorización implícita |
 | Web | website/config, website_pages | Esquema v5, filas/columnas, tema central, limpieza reintentable |
 | Rutas | routes, daily_routes, route_history | Operador asignado; paradas bloqueadas al iniciar |
@@ -82,6 +82,8 @@ exclusivamente mediante Functions: se conserva el valor interno, se usa baja
 lógica y se audita en `parameter_history`. Solo el superadministrador modifica
 estos catálogos globales. Roles, permisos y banderas técnicas no forman parte
 del CRUD de la interfaz y se cambian mediante migraciones versionadas.
+La normalización oficial se ejecuta con `sync_colombia_catalogs.js`: conserva
+opciones antiguas como inactivas, normaliza códigos usados y deja respaldo.
 
 Antes de publicar este cambio se ejecuta en seco y luego se aplica la migración
 idempotente de permisos:

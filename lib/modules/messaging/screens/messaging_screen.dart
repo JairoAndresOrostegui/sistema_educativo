@@ -627,17 +627,13 @@ class _ChatPanel extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final message = items[index];
                           final mine = message.senderId == user.id;
-                          final readCount =
-                              channel?.readCountForSequence(
-                                message.sequence,
-                                excludingUserId: message.senderId,
-                              ) ??
-                              0;
-                          final audience =
-                              ((channel?.memberUserIds.length ?? 1) - 1).clamp(
-                                0,
-                                9999,
-                              );
+                          final readCount = message.readAtByUser.entries
+                              .where((entry) => entry.key != message.senderId)
+                              .length;
+                          final audience = message.recipientUserIds.isNotEmpty
+                              ? message.recipientUserIds.length
+                              : ((channel?.memberUserIds.length ?? 1) - 1)
+                                    .clamp(0, 9999);
                           return Align(
                             alignment: mine
                                 ? Alignment.centerRight
@@ -669,8 +665,10 @@ class _ChatPanel extends StatelessWidget {
                                     ),
                                   SelectableText(message.body),
                                   const SizedBox(height: 3),
-                                  if (mine &&
-                                      (isAdmin || user.role == 'Docente'))
+                                  if ((mine &&
+                                          (isAdmin ||
+                                              user.role == 'Docente')) ||
+                                      channel?.isSupervised == true)
                                     _ReadReceipt(
                                       channel: channel!,
                                       message: message,
@@ -776,17 +774,11 @@ class _ReadReceipt extends StatelessWidget {
 
   Future<void> _showReaders(BuildContext context) async {
     final readers =
-        channel.readSequences.entries
-            .where(
-              (entry) =>
-                  entry.key != message.senderId &&
-                  entry.value >= message.sequence,
-            )
+        message.readAtByUser.entries
+            .where((entry) => entry.key != message.senderId)
             .toList()
           ..sort((a, b) {
-            final aDate = channel.readAtByUser[a.key] ?? DateTime(1900);
-            final bDate = channel.readAtByUser[b.key] ?? DateTime(1900);
-            return bDate.compareTo(aDate);
+            return b.value.compareTo(a.value);
           });
     await showDialog<void>(
       context: context,
@@ -801,15 +793,21 @@ class _ReadReceipt extends StatelessWidget {
                   itemCount: readers.length,
                   itemBuilder: (context, index) {
                     final reader = readers[index];
-                    final date = channel.readAtByUser[reader.key];
                     return ListTile(
                       leading: const Icon(Icons.done_all_outlined),
-                      title: Text(channel.memberNames[reader.key] ?? 'Usuario'),
+                      title: Text(
+                        message.readNames[reader.key] ??
+                            message.recipientNames[reader.key] ??
+                            channel.memberNames[reader.key] ??
+                            'Usuario',
+                      ),
                       subtitle: Text(
                         [
-                          channel.memberRoles[reader.key] ?? '',
-                          if (date != null)
-                            DateFormat('dd/MM/yyyy HH:mm').format(date),
+                          message.readRoles[reader.key] ??
+                              message.recipientRoles[reader.key] ??
+                              channel.memberRoles[reader.key] ??
+                              '',
+                          DateFormat('dd/MM/yyyy HH:mm').format(reader.value),
                         ].where((value) => value.isNotEmpty).join(' • '),
                       ),
                     );

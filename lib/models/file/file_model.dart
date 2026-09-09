@@ -125,3 +125,41 @@ class FileModel {
       '${targetStudentIds.length} estudiante${targetStudentIds.length == 1 ? '' : 's'}',
   };
 }
+
+class FileDownloadReceipt {
+  const FileDownloadReceipt({
+    required this.userId,
+    required this.userName,
+    required this.userRole,
+    required this.firstDownloadedAt,
+    required this.lastDownloadedAt,
+    required this.downloadCount,
+  });
+
+  final String userId, userName, userRole;
+  final DateTime? firstDownloadedAt, lastDownloadedAt;
+  final int downloadCount;
+
+  factory FileDownloadReceipt.fromMap(Map<String, dynamic> data) {
+    DateTime? fromMillis(dynamic value) => value is num
+        ? DateTime.fromMillisecondsSinceEpoch(value.toInt())
+        : null;
+    return FileDownloadReceipt(
+      userId: (data['userId'] ?? '').toString(),
+      userName: (data['userName'] ?? 'Usuario').toString(),
+      userRole: (data['userRole'] ?? '').toString(),
+      firstDownloadedAt: fromMillis(data['firstDownloadedAtMillis']),
+      lastDownloadedAt: fromMillis(data['lastDownloadedAtMillis']),
+      downloadCount: (data['downloadCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class FileDownloadSummary {
+  const FileDownloadSummary({
+    required this.recipientCount,
+    required this.receipts,
+  });
+  final int recipientCount;
+  final List<FileDownloadReceipt> receipts;
+}

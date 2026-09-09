@@ -155,6 +155,29 @@ class FileService {
   Future<String> downloadUrl(FileModel file) =>
       _storage.ref(file.storagePath).getDownloadURL();
 
+  Future<void> registerDownload(String fileId) async {
+    await _functions.httpsCallable('registrarDescargaArchivo').call({
+      'fileId': fileId,
+    });
+  }
+
+  Future<FileDownloadSummary> downloadSummary(String fileId) async {
+    final result = await _functions
+        .httpsCallable('listarDescargasArchivo')
+        .call({'fileId': fileId});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return FileDownloadSummary(
+      recipientCount: (data['recipientCount'] as num?)?.toInt() ?? 0,
+      receipts: (data['receipts'] as List? ?? const [])
+          .map(
+            (item) => FileDownloadReceipt.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+
   Future<void> deleteSelected(Iterable<String> ids) async {
     await _functions.httpsCallable('eliminarArchivos').call({
       'ids': ids.toSet().toList(),

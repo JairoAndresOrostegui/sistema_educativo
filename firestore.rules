@@ -349,6 +349,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /file_download_receipts/{id} {
+      // Los acuses se registran y consultan mediante Functions para impedir
+      // que un cliente falsifique una lectura o enumere actividad ajena.
+      allow read, create, update, delete: if false;
+    }
+
     match /file_storage_usage/{id} {
       allow read: if active() &&
         (superadmin() || resource.data.institutionId == me().institution) &&

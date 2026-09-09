@@ -105,6 +105,8 @@ puede ocupar cuota temporalmente. No dar por publicado un archivo sin confirmaci
 Administración autorizada elimina manualmente; superadmin limpia por antigüedad
 superior a 60 días. Docentes nunca borran ni ocultan. Si Storage falla, conservar
 metadatos y reintentar por el sistema. No ajustar contadores manualmente.
+Usar **Ver descargas** para consultar acuses individuales; una solicitud de
+descarga no equivale a lectura efectiva del contenido.
 
 ## Mensajería
 
@@ -112,6 +114,8 @@ Usar grupos para comunidad académica y particulares para asuntos individuales.
 La membresía viene de matrícula/grupo/docencia/vínculos vigentes. Silenciar un
 grupo lo convierte en anuncios, no elimina historia. Consultar acuses propios
 cuando estén disponibles. No confundir FCM aceptado con lectura del mensaje.
+Todo particular entre personal y estudiante es `supervised_student`: incluye al
+menor y a todos sus familiares activos, con pendiente y hora de lectura propios.
 Solo superadmin abre Estado de notificaciones y reintenta fallos auditados.
 Los avisos del viaje se operan en Rutas, no requieren crear un chat paralelo.
 

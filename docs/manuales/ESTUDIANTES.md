@@ -37,6 +37,7 @@ Consulta publicaciones dirigidas a ti o a tu grupo, lee el mensaje/enlace y abre
 el documento. No puedes publicar, borrar ni ocultar archivos institucionales.
 Si un documento no abre, anota cuál es y solicita revisión; no subas copias a sitios
 externos con información de otros estudiantes.
+La apertura o descarga queda asociada únicamente a tu cuenta.
 
 ## Mensajería
 
@@ -47,6 +48,9 @@ En Particular puedes contactar docentes/administración cuando el sistema lo
 permita. Nunca puedes enviar privados a otros estudiantes, incluso del mismo grupo.
 El contador indica mensajes no leídos; abrirlos registra lectura. No existe una
 opción de borrar historial institucional para ocultar un envío.
+La conversación particular con docente o administración es supervisada: también
+incluye a tus familiares activos. La lectura de cada cuenta es independiente y
+**Leído por...** muestra la hora de envío y las lecturas registradas.
 
 ## Rutas
 

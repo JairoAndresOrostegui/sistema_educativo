@@ -136,6 +136,13 @@ docentes vigentes. Las Functions recalculan miembros desde usuarios,
 matrículas, horarios y dirección de grupo; el cliente nunca decide la
 audiencia ni escribe mensajes, lecturas o silencios directamente.
 
+El contacto particular entre un docente o administrador y un estudiante usa
+un único canal `supervised_student`. Sus miembros son el estudiante, el miembro
+del personal y todos los familiares activos vinculados al estudiante. La
+audiencia se vuelve a materializar al enviar y cuando cambia un vínculo o el
+estado de un usuario. El docente elige al estudiante, no a un familiar aislado;
+así ninguna comunicación sobre un menor queda en un chat lateral incompleto.
+
 Los privados entre estudiantes están prohibidos, incluso en canales creados
 antes de esta regla. Contactos y envíos aplican la misma política. Los privados
 entre familiares se identifican por pareja, año y `familyGroupId`: el hijo
@@ -145,8 +152,10 @@ cada envío y cada familiar responde con su propio contexto de hijo. Reabrir
 un privado conserva secuencias, lecturas e historial.
 
 `messageSequence` aumenta en transacción y `readSequences/readAtByUser`
-permiten obtener el número exacto de mensajes pendientes y los acuses de
-lectura sin crear una escritura por destinatario al enviar. `mutedByAdmin`
+mantienen el pendiente independiente de cada cuenta: la lectura de un familiar
+no modifica al estudiante ni a los demás familiares. Cada mensaje conserva la
+audiencia de envío y `readAtByUser/readNames/readRoles`; al abrir el canal se
+registra la primera lectura exacta por mensaje. `mutedByAdmin`
 convierte un canal colectivo en solo anuncios; no elimina contenido. Los
 canales `service` son extensibles por categoría e icono y almacenan
 comunicación, no el estado operativo del módulo que los origina.
@@ -170,6 +179,7 @@ en Rutas, con eventos e historial, no como un chat de servicio.
 - Una publicación usa `audienceType` (`all`, `groups`, `students`), `targetGroupIds`, `targetStudentIds`, `recipientUserIds` y `recipientContextKeys`. La última lista enlaza familiar e hijo para que la consulta respete el hijo activo. Estas listas se derivan y validan en backend; nunca se aceptan nombres ni destinatarios confiando en el cliente.
 - El cliente lista mediante `listarArchivos`; la Function valida rol, permiso, sede y, para Familiar, que el hijo solicitado sea el vínculo activo. Firestore no permite listar `files` directamente, aunque sí protege la lectura puntual que necesita Storage.
 - El mensaje opcional admite hasta 2000 caracteres y puede ser texto o un enlace. `sentAt` registra el momento de confirmación del archivo.
+- `file_download_receipts` registra por archivo y usuario la primera y última solicitud de descarga y su contador. Solo el remitente, administración y superadministración consultan el resumen; el cliente no escribe acuses directamente. Iniciar la descarga no garantiza que el sistema operativo haya guardado o abierto correctamente el archivo.
 - El docente obtiene sus grupos desde `subjects.teacherId`; no se limita a un único `groupId` del perfil. Solo administradores eliminan, y nunca se ofrece borrado u ocultamiento a docentes.
 
 1 GiB permite atender la carga documental de ambas sedes y equivale a cerca del 20 % de una cuota sin costo de 5 GB. Todavía deja espacio para perfiles, contenido web y futuros recursos. La aplicación no promete costo cero: el proyecto debe estar en Blaze para Cloud Storage y el consumo real se vigila en Firebase/Google Cloud.

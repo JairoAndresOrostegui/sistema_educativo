@@ -33,6 +33,9 @@ realizan mediante una migración versionada.
 - `parametros.editar` no puede ser delegado por un administrador normal.
 - Las reglas deniegan toda escritura directa en `parameters`.
 - Solo `eps` y `documentType` son catálogos administrables desde la interfaz.
+- La base documental normalizada usa CC, TI, RC, CE, PA, PT, CD, SC, PE, CN,
+  DE, MS, AS y SI. EPS usa código oficial y baja lógica; una migración conserva
+  el valor anterior antes de normalizar usuarios y matrículas.
 - Cada cambio se conserva en `parameter_history`.
 
 ## Ciclo de vida de grupos

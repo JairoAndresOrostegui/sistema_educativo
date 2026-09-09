@@ -105,6 +105,7 @@ Archivos distribuye publicaciones compuestas por un documento PDF, Word o Excel 
 - El docente nunca puede borrar ni ocultar una publicación, incluso si se alterara su matriz de permisos.
 - El superadministrador puede eliminar cualquier selección y ejecutar la limpieza de todos los documentos con más de 60 días.
 - Toda carga, descarga o eliminación relevante queda registrada.
+- El remitente y administración pueden abrir **Ver descargas** para consultar por persona la primera y última solicitud de descarga. Cada cuenta conserva su propio registro; esta marca confirma que la descarga se inició, no que la persona leyó el contenido.
 
 La eliminación retira primero el objeto de Storage y después ajusta registros y cuota. Un fallo no debe dejar metadatos huérfanos.
 
@@ -122,20 +123,26 @@ del horario actualizan los miembros automáticamente. Salir de un canal impide
 leer o escribir contenido nuevo, pero nunca cambia la autoría de sus mensajes
 históricos.
 
-**Particulares** permite buscar únicamente contactos autorizados. Un
-estudiante puede conversar por privado con docentes que le dictan y
-administración; con otros estudiantes solo conversa en el chat general.
-Un familiar conversa con docentes del hijo seleccionado, administración y
+**Particulares** permite buscar únicamente contactos autorizados. Cuando un
+docente o administrador conversa con un estudiante, el sistema crea una sola
+**Conversación supervisada** que incluye al estudiante y a todos sus familiares
+activos vinculados. El docente selecciona al estudiante, no a un familiar
+aislado. El estudiante puede responder allí; con otros estudiantes solo
+conversa en el chat general. Un familiar conversa con docentes del hijo
+seleccionado, administración y
 familiares que tengan algún hijo activo en el mismo grupo del hijo elegido.
 Para responder, el otro familiar selecciona su propio hijo de ese grupo.
 Un retiro o cambio que termine el vínculo compartido bloquea nuevos envíos,
 incluidos los chats anteriores. El docente accede a estudiantes y familiares de los grupos
 donde dicta. El familiar siempre debe seleccionar primero el hijo activo.
 
-El número sobre el icono y en cada conversación muestra mensajes no leídos.
-Al abrir un canal se registra la fecha de lectura. Docentes y administradores
-pueden pulsar el texto **Leído por...** de un mensaje propio para consultar
-quién lo vio y cuándo.
+El número sobre el icono y en cada conversación muestra mensajes no leídos para
+la cuenta que inició sesión. Al abrir un canal se registra por mensaje la fecha
+de lectura de esa cuenta: si un familiar lo lee, no se borra el pendiente del
+estudiante ni de los otros familiares. En conversaciones supervisadas todos los
+miembros pueden pulsar **Leído por...** para ver fecha/hora de envío y quién lo
+vio y cuándo. En los demás canales, docentes y administradores consultan los
+acuses de sus mensajes propios.
 
 Administración también crea canales de servicio con iconos diferenciados para
 Lonchera, Restaurante, Ruta escolar, Comunidad u Otro. Son canales de anuncios
@@ -192,6 +199,10 @@ En **Catálogos administrativos** se consultan las EPS y los tipos de documento
 usados por los formularios. Solo el superadministrador agrega opciones o cambia
 su nombre, orden y estado. Una opción antigua se desactiva; su código interno no
 se cambia ni se elimina porque puede existir en usuarios o matrículas anteriores.
+Los códigos documentales normalizados son CC, TI, RC, CE, PA, PT, CD, SC, PE,
+CN, DE, MS, AS y SI. El catálogo de EPS parte del listado oficial nacional y
+debe revisarse cuando el Ministerio anuncie retiros, liquidaciones o cambios de
+nombre; esos cambios se aplican por migración y baja lógica, no borrando historia.
 
 En **Años lectivos**, un administrador prepara el siguiente año
 sin afectar el vigente. Puede copiar la estructura de grupos y, opcionalmente,

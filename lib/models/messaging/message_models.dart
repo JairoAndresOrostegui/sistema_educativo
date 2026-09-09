@@ -49,6 +49,9 @@ class MessageThreadSummary {
     this.lastSenderName,
     this.lastMessageAt,
     this.familyGroupId,
+    this.supervisedStudentId,
+    this.supervisedStaffId,
+    this.familyIds = const [],
     this.targetGroupIds = const [],
   });
   final String id, channelType, category, iconKey, title, status;
@@ -62,6 +65,8 @@ class MessageThreadSummary {
   final String? lastMessage, lastSenderId, lastSenderName;
   final DateTime? lastMessageAt;
   final String? familyGroupId;
+  final String? supervisedStudentId, supervisedStaffId;
+  final List<String> familyIds;
   final List<String> targetGroupIds;
   bool belongsToChild(MessagingChildContext child) {
     if (isAcademicGroup) return groupId == child.groupId;
@@ -70,13 +75,24 @@ class MessageThreadSummary {
     return contextStudentId == child.id;
   }
 
-  bool get isPrivate => channelType == 'private';
+  bool get isPrivate =>
+      channelType == 'private' || channelType == 'supervised_student';
+  bool get isSupervised => channelType == 'supervised_student';
   bool get isAcademicGroup => channelType == 'academic_group';
   bool get isService => channelType == 'service';
   int unreadCountFor(String userId) =>
       (messageSequence - (readSequences[userId] ?? 0)).clamp(0, 9999);
   String displayTitleFor(String userId) {
     if (!isPrivate) return title;
+    if (isSupervised) {
+      final ownRole = memberRoles[userId] ?? '';
+      final targetId = ownRole == 'Docente' || ownRole == 'Administrador'
+          ? supervisedStudentId
+          : supervisedStaffId;
+      return targetId == null
+          ? 'Conversación supervisada'
+          : memberNames[targetId] ?? 'Conversación supervisada';
+    }
     final peerId = memberUserIds.cast<String?>().firstWhere(
       (id) => id != userId,
       orElse: () => null,
@@ -89,6 +105,14 @@ class MessageThreadSummary {
   String subtitleFor(String userId) {
     if (isAcademicGroup) return groupName ?? 'Grupo académico';
     if (isService) return 'Canal de servicio';
+    if (isSupervised) {
+      final student = (contextStudentName ?? '').trim();
+      return [
+        'Conversación supervisada',
+        if (student.isNotEmpty) 'Estudiante: $student',
+        '${familyIds.length} familiar${familyIds.length == 1 ? '' : 'es'}',
+      ].join(' • ');
+    }
     final peerId = memberUserIds.cast<String?>().firstWhere(
       (id) => id != userId,
       orElse: () => null,
@@ -143,6 +167,9 @@ class MessageThreadSummary {
       status: (data['status'] ?? 'active').toString(),
       groupId: data['groupId']?.toString(),
       familyGroupId: data['familyGroupId']?.toString(),
+      supervisedStudentId: data['supervisedStudentId']?.toString(),
+      supervisedStaffId: data['supervisedStaffId']?.toString(),
+      familyIds: List<String>.from(data['familyIds'] ?? const []),
       targetGroupIds: List<String>.from(data['targetGroupIds'] ?? const []),
       groupName: data['groupName']?.toString(),
       contextStudentId: data['contextStudentId']?.toString(),
@@ -165,23 +192,68 @@ class MessageItem {
     required this.senderName,
     required this.senderRole,
     required this.body,
+    this.recipientUserIds = const [],
+    this.recipientNames = const {},
+    this.recipientRoles = const {},
+    this.readAtByUser = const {},
+    this.readNames = const {},
+    this.readRoles = const {},
     this.createdAt,
   });
   final String id, senderId, senderName, senderRole, body;
   final int sequence;
+  final List<String> recipientUserIds;
+  final Map<String, String> recipientNames, recipientRoles;
+  final Map<String, DateTime> readAtByUser;
+  final Map<String, String> readNames, readRoles;
   final DateTime? createdAt;
-  factory MessageItem.fromMap(Map<String, dynamic> data, String id) =>
-      MessageItem(
-        id: id,
-        sequence: (data['sequence'] as num?)?.toInt() ?? 0,
-        senderId: (data['senderId'] ?? '').toString(),
-        senderName: (data['senderName'] ?? '').toString(),
-        senderRole: (data['senderRole'] ?? '').toString(),
-        body: (data['body'] ?? '').toString(),
-        createdAt: data['createdAt'] is Timestamp
-            ? (data['createdAt'] as Timestamp).toDate()
-            : null,
-      );
+  factory MessageItem.fromMap(
+    Map<String, dynamic> data,
+    String id,
+  ) => MessageItem(
+    id: id,
+    sequence: (data['sequence'] as num?)?.toInt() ?? 0,
+    senderId: (data['senderId'] ?? '').toString(),
+    senderName: (data['senderName'] ?? '').toString(),
+    senderRole: (data['senderRole'] ?? '').toString(),
+    body: (data['body'] ?? '').toString(),
+    recipientUserIds: List<String>.from(data['recipientUserIds'] ?? const []),
+    recipientNames:
+        (data['recipientNames'] is Map
+                ? data['recipientNames'] as Map
+                : const <String, dynamic>{})
+            .map((key, value) => MapEntry(key.toString(), value.toString())),
+    recipientRoles:
+        (data['recipientRoles'] is Map
+                ? data['recipientRoles'] as Map
+                : const <String, dynamic>{})
+            .map((key, value) => MapEntry(key.toString(), value.toString())),
+    readAtByUser:
+        (data['readAtByUser'] is Map
+                ? data['readAtByUser'] as Map
+                : const <String, dynamic>{})
+            .map(
+              (key, value) => MapEntry(
+                key.toString(),
+                value is Timestamp
+                    ? value.toDate()
+                    : DateTime.fromMillisecondsSinceEpoch(0),
+              ),
+            ),
+    readNames:
+        (data['readNames'] is Map
+                ? data['readNames'] as Map
+                : const <String, dynamic>{})
+            .map((key, value) => MapEntry(key.toString(), value.toString())),
+    readRoles:
+        (data['readRoles'] is Map
+                ? data['readRoles'] as Map
+                : const <String, dynamic>{})
+            .map((key, value) => MapEntry(key.toString(), value.toString())),
+    createdAt: data['createdAt'] is Timestamp
+        ? (data['createdAt'] as Timestamp).toDate()
+        : null,
+  );
 }
 
 class MessagingChildContext {

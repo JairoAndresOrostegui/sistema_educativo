@@ -21,8 +21,8 @@ asigne responsabilidad, acceso o trabajo vigente a un docente.
 |---|---|---|
 | Horarios | `subjects.teacherId`, nombre derivado y revisión | historial previo |
 | Dirección de grupo | `users.tutorGroupId` | años cerrados |
-| Mensajería | membresía de canales académicos por `subjects.teacherId` o `tutorGroupId`, publicación en canales de servicio y acceso delegado a privados vigentes | mensajes, autor, secuencia y lecturas históricas |
-| Archivos | acceso delegado a publicaciones vigentes | autor y fecha de carga |
+| Mensajería | membresía de canales académicos por `subjects.teacherId` o `tutorGroupId`, publicación en canales de servicio y rol de personal en `supervised_student` | mensajes, autor, audiencia enviada, secuencia y lecturas históricas por cuenta |
+| Archivos | acceso delegado a publicaciones vigentes | autor, fecha de carga y acuses de descarga |
 | Rutas | gestionador y rutas diarias abiertas | recorridos finalizados |
 | Autorizaciones | responsabilidad derivada del grupo | decisiones previas |
 | Matrículas | responsabilidad derivada del grupo | formularios previos |
@@ -77,7 +77,7 @@ Si existe carga docente, se agrega una fila al inventario y se integra en
   reinician.
 - Cada `academic_groups/{groupId}` tiene un único canal general. La membresía
   docente se recalcula al cambiar una asignatura o dirección de grupo. El
-  traslado añade al reemplazo a privados vigentes y retira al saliente de los
+  traslado reemplaza al responsable docente en conversaciones supervisadas vigentes y retira al saliente de los
   canales académicos sin reescribir mensajes.
 - El cambio de año es asistido: preparar, revisar y activar. Nunca ocurre
   automáticamente el 1 de enero.

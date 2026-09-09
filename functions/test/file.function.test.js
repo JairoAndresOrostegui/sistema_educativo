@@ -211,11 +211,28 @@ describe("archivos seguros", () => {
         "listarArchivos", {activeStudentId: "student-6a"}, familyToken,
     ), "PERMISSION_DENIED");
 
+    const firstDownload = await callFunction(
+        "registrarDescargaArchivo", {fileId: id}, familyToken,
+    );
+    assert.equal(firstDownload.body.result.success, true);
+    await callFunction("registrarDescargaArchivo", {fileId: id}, familyToken);
+    const studentToken = await signIn("student-5a@colegio.test");
+    await callFunction("registrarDescargaArchivo", {fileId: id}, studentToken);
+    const downloads = await callFunction(
+        "listarDescargasArchivo", {fileId: id}, teacherToken,
+    );
+    assert.equal(downloads.body.result.recipientCount, 2);
+    assert.equal(downloads.body.result.receipts.length, 2);
+    assert.equal(downloads.body.result.receipts.find((item) =>
+      item.userId === "family-5a").downloadCount, 2);
+
     const deleted = await callFunction(
         "eliminarArchivos", {ids: [id]}, adminToken,
     );
     assert.equal(deleted.body.result.deleted, 1);
     assert.equal((await db.collection("files").doc(id).get()).exists, false);
+    assert.equal((await db.collection("file_download_receipts")
+        .where("fileId", "==", id).get()).empty, true);
     assert.equal((await bucket.file(storagePath).exists())[0], false);
     assert.equal((await db.collection("file_history")
         .where("fileId", "==", id).get()).size, 2);

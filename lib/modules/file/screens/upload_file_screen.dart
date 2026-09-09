@@ -13,7 +13,6 @@ import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/parameters_service.dart';
 import '../../../utils/user_facing_error.dart';
-import '../../../utils/user_log_service.dart';
 import '../../schedule/services/schedule_service.dart';
 import '../../user/services/active_student_service.dart';
 import '../services/file_service.dart';
@@ -250,15 +249,65 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     try {
       final url = await _service.downloadUrl(file);
       await descargarArchivoDesdeURL(url, file.name);
-      await UserLogService().logEvent(
-        user: _user,
-        event: 'file_download',
-        extra: {
-          'fileId': file.id,
-          'name': file.name,
-          'sizeBytes': file.sizeBytes,
-        },
+      await _service.registerDownload(file.id);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _showDownloads(FileModel file) async {
+    setState(() => _busy = true);
+    try {
+      final summary = await _service.downloadSummary(file.id);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Descargas registradas'),
+          content: SizedBox(
+            width: 520,
+            child: summary.receipts.isEmpty
+                ? const Text('Ningún destinatario ha descargado el archivo.')
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: summary.receipts.length,
+                    itemBuilder: (context, index) {
+                      final receipt = summary.receipts[index];
+                      final first = receipt.firstDownloadedAt;
+                      final last = receipt.lastDownloadedAt;
+                      return ListTile(
+                        leading: const Icon(Icons.download_done_outlined),
+                        title: Text(receipt.userName),
+                        subtitle: Text(
+                          [
+                            receipt.userRole,
+                            if (first != null)
+                              'Primera: ${DateFormat('dd/MM/yyyy HH:mm').format(first)}',
+                            if (last != null && last != first)
+                              'Última: ${DateFormat('dd/MM/yyyy HH:mm').format(last)}',
+                            '${receipt.downloadCount} descarga${receipt.downloadCount == 1 ? '' : 's'}',
+                          ].where((value) => value.isNotEmpty).join(' • '),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
       );
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible cargar los acuses',
+          message: userFacingError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -728,6 +777,12 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
               icon: const Icon(Icons.download),
               label: const Text('Descargar'),
             ),
+            if (_isAdmin || file.uploadedBy == _user.id)
+              TextButton.icon(
+                onPressed: _busy ? null : () => _showDownloads(file),
+                icon: const Icon(Icons.fact_check_outlined),
+                label: const Text('Ver descargas'),
+              ),
           ],
         ),
       ),

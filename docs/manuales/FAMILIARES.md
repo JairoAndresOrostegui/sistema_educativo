@@ -48,6 +48,7 @@ Elige hijo y consulta las publicaciones dirigidas a él o a su grupo. Lee mensaj
 abre enlaces y descarga documentos. No puedes subir/borrar publicaciones del colegio.
 Si una publicación solo corresponde a un hermano, no tiene por qué aparecer en el
 otro contexto. Una limpieza administrativa puede retirar documentos antiguos.
+La descarga queda registrada para tu propia cuenta y no marca la de otro familiar.
 
 ## Mensajería
 
@@ -58,6 +59,10 @@ hijo que mantiene ese vínculo. Si un niño cambia de grupo o se retira, nuevos 
 pueden quedar bloqueados. No puedes escribir a estudiantes ajenos.
 El contador muestra pendientes. La lectura queda registrada; no puedes manipular
 acuses o borrar historia. Un grupo silenciado queda en modo anuncios.
+Los mensajes del docente o administración sobre el hijo se reúnen en una
+conversación supervisada con el estudiante y todos sus familiares activos. Tu
+lectura solo elimina tu pendiente; los demás conservan el suyo. Pulsa **Leído
+por...** para consultar la hora de envío y las lecturas individuales.
 
 ## Rutas: antes, durante y después
 

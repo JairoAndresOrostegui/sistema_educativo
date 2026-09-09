@@ -232,6 +232,68 @@ describe("mensajeria institucional", () => {
     assert.ok(channel.memberUserIds.includes("family"));
   });
 
+  it("supervisa estudiante con todos sus familiares y lecturas independientes",
+      async () => {
+        const teacherToken = await signIn("teacher@colegio.test");
+        const studentToken = await signIn("student-1@colegio.test");
+        const firstFamilyToken = await signIn("family@colegio.test");
+        const secondFamilyToken = await signIn(await seedUser(
+            "family-second", "Familiar", {
+              firstName: "Carlos", studentIds: ["student-1"],
+              activeStudentId: "student-1",
+            },
+        ));
+        const sent = await callFunction("enviarMensajeCanal", {
+          recipientId: "student-1", body: "Informe supervisado",
+        }, teacherToken);
+        assert.equal(sent.body.result.success, true);
+        const channelId = sent.body.result.channelId;
+        const channelRef = db.collection("message_channels").doc(channelId);
+        const channel = (await channelRef.get()).data();
+        assert.equal(channel.channelType, "supervised_student");
+        assert.deepEqual(new Set(channel.memberUserIds), new Set([
+          "teacher", "student-1", "family", "family-second",
+        ]));
+        const messageRef = channelRef.collection("messages")
+            .doc(sent.body.result.messageId);
+        const message = (await messageRef.get()).data();
+        assert.deepEqual(new Set(message.recipientUserIds), new Set([
+          "student-1", "family", "family-second",
+        ]));
+        const push = (await db.collection("push_events")
+            .doc(sent.body.result.messageId).get()).data();
+        assert.deepEqual(new Set(push.recipientIds), new Set([
+          "student-1", "family", "family-second",
+        ]));
+        const adminToken = await signIn(await seedUser(
+            "admin", "Administrador",
+        ));
+        assertError(await callFunction("configurarSilencioCanalMensajeria", {
+          channelId, muted: true,
+        }, adminToken), "FAILED_PRECONDITION");
+
+        await callFunction("marcarCanalMensajeriaLeido", {channelId},
+            firstFamilyToken);
+        const afterFirst = (await channelRef.get()).data();
+        assert.equal(afterFirst.readSequences.family, 1);
+        assert.equal(afterFirst.readSequences["family-second"], undefined);
+        assert.equal(afterFirst.readSequences["student-1"], undefined);
+        const firstRead = (await messageRef.get()).data();
+        assert.ok(firstRead.readAtByUser.family);
+        assert.equal(firstRead.readAtByUser["family-second"], undefined);
+        assert.equal(firstRead.readAtByUser["student-1"], undefined);
+
+        await callFunction("marcarCanalMensajeriaLeido", {channelId},
+            secondFamilyToken);
+        await callFunction("marcarCanalMensajeriaLeido", {channelId},
+            studentToken);
+        const fullyRead = (await messageRef.get()).data();
+        assert.deepEqual(new Set(Object.keys(fullyRead.readAtByUser)), new Set([
+          "family", "family-second", "student-1",
+        ]));
+        assert.equal(fullyRead.readNames["family-second"], "Carlos Prueba");
+      });
+
   it("permite familiares del mismo grupo y revalida vinculos al responder",
       async () => {
         const first = await signIn("family@colegio.test");
