@@ -190,7 +190,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       items.add(
         const MenuItemData(
           label: 'Sitio web',
-          icon: Icons.language,
+          icon: Icons.web,
           route: '/website_admin',
         ),
       );

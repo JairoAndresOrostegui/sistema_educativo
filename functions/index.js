@@ -193,6 +193,10 @@ const MESSAGE_SERVICE_CATEGORIES = new Set([
 ]);
 const ACADEMIC_YEAR_MIN = 2020;
 const ACADEMIC_YEAR_MAX = 2100;
+const MANAGED_PARAMETER_KEYS = new Map([
+  ["eps", "EPS"],
+  ["documentType", "Tipos de documento"],
+]);
 const FILE_MIME_TYPES = new Set([
   "application/pdf",
   "application/msword",
@@ -3754,6 +3758,118 @@ exports.eliminarHorario = onCall(async (request) => {
 function requireAcademicGroupAdmin(caller) {
   requireParameterAction(caller, "editar");
 }
+
+/** @param {*} value Valor de catalogo. @return {string} Valor comparable. */
+function normalizedCatalogValue(value) {
+  return String(value || "").normalize("NFKC").trim().toLocaleLowerCase("es");
+}
+
+/** @param {string} key Clave solicitada. */
+function requireManagedParameterKey(key) {
+  if (!MANAGED_PARAMETER_KEYS.has(key)) {
+    throw new HttpsError(
+        "invalid-argument", "El catalogo solicitado no es administrable.",
+    );
+  }
+}
+
+exports.listarCatalogosAdministrables = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireParameterAction(caller, "ver");
+  const snapshots = await Promise.all([...MANAGED_PARAMETER_KEYS.keys()].map(
+      (key) => db.collection("parameters").where("clave", "==", key).get(),
+  ));
+  const items = snapshots.flatMap((snapshot) => snapshot.docs.map((item) => {
+    const value = item.data();
+    return {
+      id: item.id,
+      key: value.clave,
+      label: String(value.etiqueta || value.valor || "").trim(),
+      value: String(value.valor || "").trim(),
+      order: Number(value.orden || 0),
+      active: value.activo === true,
+    };
+  })).sort((a, b) => a.key.localeCompare(b.key) || a.order - b.order ||
+    a.label.localeCompare(b.label));
+  return {
+    catalogs: [...MANAGED_PARAMETER_KEYS].map(([key, label]) => ({key, label})),
+    items,
+    canEdit: caller.isSuperadmin === true,
+  };
+});
+
+exports.guardarCatalogoAdministrable = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireParameterAction(caller, "editar");
+  if (caller.isSuperadmin !== true) {
+    throw new HttpsError(
+        "permission-denied",
+        "Solo el superadministrador modifica los catalogos globales.",
+    );
+  }
+  const key = requiredString(request.data?.key, "catalogo", 40);
+  requireManagedParameterKey(key);
+  const label = requiredString(request.data?.label, "nombre mostrado", 100);
+  const value = requiredString(request.data?.value, "codigo interno", 100);
+  const order = Number(request.data?.order);
+  if (!Number.isInteger(order) || order < 0 || order > 10000) {
+    throw new HttpsError("invalid-argument", "El orden no es valido.");
+  }
+  if (typeof request.data?.active !== "boolean") {
+    throw new HttpsError("invalid-argument", "El estado no es valido.");
+  }
+
+  const requestedId = String(request.data?.id || "").trim();
+  const ref = requestedId ? db.collection("parameters").doc(requestedId) :
+    db.collection("parameters").doc(`${key}_${crypto.createHash("sha256")
+        .update(normalizedCatalogValue(value)).digest("hex").slice(0, 24)}`);
+  const existingSnapshot = await ref.get();
+  const before = existingSnapshot.data() || null;
+  if (requestedId && (!existingSnapshot.exists || before.clave !== key)) {
+    throw new HttpsError("not-found", "La opcion ya no esta disponible.");
+  }
+  if (before && normalizedCatalogValue(before.valor) !==
+      normalizedCatalogValue(value)) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El codigo interno no puede cambiarse. Crea otra opcion y desactiva esta.",
+    );
+  }
+  const sameKey = await db.collection("parameters")
+      .where("clave", "==", key).get();
+  if (sameKey.docs.some((item) => item.id !== ref.id &&
+      normalizedCatalogValue(item.data().valor) ===
+      normalizedCatalogValue(value))) {
+    throw new HttpsError("already-exists", "La opcion ya existe.");
+  }
+
+  const payload = {
+    clave: key,
+    etiqueta: label,
+    valor: before?.valor || value,
+    orden: order,
+    activo: request.data.active,
+    updatedBy: caller.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+    ...(!before ? {
+      createdBy: caller.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    } : {}),
+  };
+  const batch = db.batch();
+  if (before) batch.update(ref, payload); else batch.create(ref, payload);
+  batch.create(db.collection("parameter_history").doc(), {
+    parameterId: ref.id,
+    key,
+    action: before ? "updated" : "created",
+    before,
+    after: payload,
+    performedBy: caller.uid,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await batch.commit();
+  return {success: true, id: ref.id};
+});
 
 exports.listarGruposAcademicosAdministracion = onCall(async (request) => {
   const caller = await getCaller(request);

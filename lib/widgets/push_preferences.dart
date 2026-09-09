@@ -23,7 +23,7 @@ class _PushPreferencesState extends State<PushPreferences> {
         final ok = await enablePushFromHome();
         if (!ok) {
           _message = kIsWeb
-              ? 'En el navegador abre los permisos de este sitio → Notificaciones → Permitir. Después pulsa Activar nuevamente.'
+              ? 'En el navegador abre los permisos de este sitio, entra a Notificaciones y elige Permitir. Después pulsa Activar nuevamente.'
               : 'Permite las notificaciones en Ajustes de la aplicación y vuelve a pulsar Activar.';
         }
       } else {

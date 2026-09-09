@@ -449,7 +449,8 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                                 vertical: 6,
                               ),
                               child: ListTile(
-                                title: Text('👤 $header'),
+                                leading: const Icon(Icons.person_outline),
+                                title: Text(header),
                                 subtitle: Text(sub),
                               ),
                             ),

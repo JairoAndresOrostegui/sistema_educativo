@@ -63,8 +63,11 @@ No ocurre automáticamente el 1 de enero. Usuarios y sitio web no se reinician.
 
 El acceso requiere `parametros.ver`; los cambios requieren `parametros.editar`.
 Un administrador normal queda limitado a su institución y sede. Solo el
-superadministrador cambia de sede. Los catálogos internos de roles, permisos,
-documentos y EPS son de solo lectura y no aparecen como un CRUD administrativo.
+superadministrador cambia de sede. EPS y tipos de documento aparecen en
+Catálogos administrativos: el administrador de sede los consulta y solo el
+superadministrador agrega, renombra, ordena o desactiva opciones. El código
+interno de una opción existente no cambia y no se eliminan opciones con historia.
+Roles y permisos se gestionan como matriz técnica versionada, no como texto libre.
 
 Para retirar un grupo con historia, desactivarlo. La eliminación definitiva solo
 está disponible para el superadministrador cuando el grupo ya está inactivo y el

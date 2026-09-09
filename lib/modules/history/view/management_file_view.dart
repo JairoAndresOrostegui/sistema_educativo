@@ -425,7 +425,8 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                                 vertical: 6,
                               ),
                               child: ListTile(
-                                title: Text('📄 ${r['nombre'] ?? ''}'),
+                                leading: const Icon(Icons.description_outlined),
+                                title: Text('${r['nombre'] ?? ''}'),
                                 subtitle: Text(
                                   'Grupo: ${r['grupo'] ?? ''}\n'
                                   'Subido por: ${r['subidoPor'] ?? ''}\n'

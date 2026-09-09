@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/navigation_utils.dart';
 import '../widgets/academic_groups_admin_panel.dart';
 import '../widgets/academic_years_admin_panel.dart';
+import '../widgets/managed_catalogs_admin_panel.dart';
 
 class AdminParametersScreen extends StatelessWidget {
   const AdminParametersScreen({super.key});
@@ -26,8 +27,8 @@ class AdminParametersScreen extends StatelessWidget {
                 padding: EdgeInsets.all(16),
                 child: Text(
                   'Administra los años lectivos y los grupos de la sede. '
-                  'Los catálogos internos del sistema no se modifican desde '
-                  'esta pantalla.',
+                  'Los catálogos globales de EPS y tipos de documento se '
+                  'gestionan de forma separada y segura.',
                 ),
               ),
             ),
@@ -35,6 +36,8 @@ class AdminParametersScreen extends StatelessWidget {
             const AcademicYearsAdminPanel(),
             const SizedBox(height: 16),
             const AcademicGroupsAdminPanel(),
+            const SizedBox(height: 16),
+            const ManagedCatalogsAdminPanel(),
           ],
         ),
       ),

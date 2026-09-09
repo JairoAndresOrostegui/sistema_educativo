@@ -188,6 +188,11 @@ de su sede y los años lectivos. Cuarto A y Cuarto B siempre son grupos distinto
 Los grupos que ya no operan se desactivan para conservar estudiantes, horarios e
 historial; no se eliminan para ocultar información existente.
 
+En **Catálogos administrativos** se consultan las EPS y los tipos de documento
+usados por los formularios. Solo el superadministrador agrega opciones o cambia
+su nombre, orden y estado. Una opción antigua se desactiva; su código interno no
+se cambia ni se elimina porque puede existir en usuarios o matrículas anteriores.
+
 En **Años lectivos**, un administrador prepara el siguiente año
 sin afectar el vigente. Puede copiar la estructura de grupos y, opcionalmente,
 los horarios para revisarlos. Al activar el nuevo período, el anterior queda

@@ -76,9 +76,12 @@ validación de payload. No agregar escritura directa del cliente por convenienci
 Configuración académica significa grupos y años lectivos bajo alcance
 institucional. `parametros.ver` permite consultar y `parametros.editar` permite
 modificar mediante Functions. El administrador normal siempre usa su propia sede;
-solo el superadministrador puede seleccionarla. Los documentos de `parameters`
-son catálogos internos de solo lectura para el cliente; sus escrituras directas
-están denegadas y no existe un CRUD genérico en la interfaz.
+solo el superadministrador puede seleccionarla. Las escrituras directas del
+cliente en `parameters` están denegadas. `eps` y `documentType` se administran
+exclusivamente mediante Functions: se conserva el valor interno, se usa baja
+lógica y se audita en `parameter_history`. Solo el superadministrador modifica
+estos catálogos globales. Roles, permisos y banderas técnicas no forman parte
+del CRUD de la interfaz y se cambian mediante migraciones versionadas.
 
 Antes de publicar este cambio se ejecuta en seco y luego se aplica la migración
 idempotente de permisos:

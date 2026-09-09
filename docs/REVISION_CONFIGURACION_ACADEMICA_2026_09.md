@@ -11,10 +11,16 @@ La pantalla se reemplaza por **Configuración académica** y administra solament
 - grupos académicos de la sede y del año activo;
 - preparación, consulta y activación de años lectivos.
 
-Los catálogos internos de roles, permisos, tipos de documento y EPS continúan
-disponibles para las lecturas funcionales que los necesitan, pero ningún cliente
-puede crearlos, modificarlos o eliminarlos. No existe CRUD administrativo para
-ellos.
+Los catálogos globales de EPS y tipos de documento continúan disponibles para
+las lecturas funcionales y se administran desde un panel independiente dentro
+de esta pantalla. Solo el superadministrador puede crearlos, cambiar su nombre,
+orden o estado mediante Cloud Functions auditadas. El código interno queda
+inmutable y las opciones se desactivan en lugar de eliminarlas, para conservar
+la compatibilidad con registros anteriores.
+
+Roles y permisos son parte de la matriz técnica de acceso: no admiten claves
+arbitrarias desde la interfaz. Se consultan al asignar usuarios y sus cambios se
+realizan mediante una migración versionada.
 
 ## Seguridad y alcance
 
@@ -26,6 +32,8 @@ ellos.
 - Solo el superadministrador selecciona otra institución o sede.
 - `parametros.editar` no puede ser delegado por un administrador normal.
 - Las reglas deniegan toda escritura directa en `parameters`.
+- Solo `eps` y `documentType` son catálogos administrables desde la interfaz.
+- Cada cambio se conserva en `parameter_history`.
 
 ## Ciclo de vida de grupos
 
@@ -74,5 +82,7 @@ node functions/scripts/migrate_parameter_permissions.js --project=<proyecto> --v
 - Un administrador sin permiso no ve ni abre la ruta.
 - Un administrador con `parametros.ver` consulta pero no modifica.
 - Un administrador con `parametros.editar` modifica solo su sede.
+- Un administrador de sede consulta los catálogos globales; solo el
+  superadministrador los modifica.
 - Un grupo inactivo sigue visible y conserva su historia.
 - La eliminación definitiva se bloquea frente a cualquier impacto.

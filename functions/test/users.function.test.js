@@ -921,4 +921,59 @@ describe("baja y eliminacion de usuarios", () => {
         .where("groupId", "==", "group-inactive")
         .where("action", "==", "deleted").get()).size > 0);
   });
+
+  it("administra EPS y documentos globales solo como superadmin", async () => {
+    await db.collection("parameters").doc("eps-existing").set({
+      clave: "eps", etiqueta: "EPS Uno", valor: "eps-uno",
+      orden: 2, activo: true,
+    });
+    await db.collection("parameters").doc("permission-hidden").set({
+      clave: "permission", etiqueta: "Oculto", valor: "oculto.ver",
+      orden: 1, activo: true,
+    });
+    const adminEmail = await seedUser("catalog-admin", "Administrador", {
+      permissions: ["parametros.ver", "parametros.editar"],
+    });
+    const adminToken = await signIn(adminEmail);
+    const listed = await callFunction(
+        "listarCatalogosAdministrables", {}, adminToken,
+    );
+    assert.equal(listed.body.result.items.length, 1);
+    assert.equal(listed.body.result.items[0].value, "eps-uno");
+    assert.equal(listed.body.result.canEdit, false);
+    const denied = await callFunction("guardarCatalogoAdministrable", {
+      key: "eps", label: "EPS Dos", value: "eps-dos",
+      order: 3, active: true,
+    }, adminToken);
+    assert.equal(denied.body.error.status, "PERMISSION_DENIED");
+
+    const superEmail = await seedUser("catalog-super", "Administrador", {
+      isSuperadmin: true,
+    });
+    const superToken = await signIn(superEmail);
+    const created = await callFunction("guardarCatalogoAdministrable", {
+      key: "documentType", label: "Permiso especial", value: "PEP",
+      order: 6, active: true,
+    }, superToken);
+    assert.equal(created.body.result.success, true,
+        JSON.stringify(created.body));
+    const id = created.body.result.id;
+    const updated = await callFunction("guardarCatalogoAdministrable", {
+      id, key: "documentType", label: "Permiso por proteccion temporal",
+      value: "PEP", order: 7, active: false,
+    }, superToken);
+    assert.equal(updated.body.result.success, true,
+        JSON.stringify(updated.body));
+    const stored = (await db.collection("parameters").doc(id).get()).data();
+    assert.equal(stored.valor, "PEP");
+    assert.equal(stored.activo, false);
+    assert.equal((await db.collection("parameter_history")
+        .where("parameterId", "==", id).get()).size, 2);
+
+    const forbidden = await callFunction("guardarCatalogoAdministrable", {
+      key: "permission", label: "Ataque", value: "todo.editar",
+      order: 1, active: true,
+    }, superToken);
+    assert.equal(forbidden.body.error.status, "INVALID_ARGUMENT");
+  });
 });
