@@ -98,9 +98,10 @@ prueba cerrada se debe registrar, por lo menos una vez por cada rol:
 Rutas requiere además una prueba física de recorrido con GPS y Maps. Antes de la
 siguiente carga en Play se revisan Android Vitals y el informe previo al lanzamiento.
 
-## Próxima entrega
+## Entrega vigente
 
-La versión cerrada activa es `1.0.0 (9)`. El AAB generado en esta auditoría confirma
-que el código compila, pero conserva el código 9 y no debe subirse. Cuando se agrupen
-los comentarios de los verificadores se incrementa a `versionCode 10`, se repite esta
-validación y se publica una sola actualización estable en la pista cerrada.
+La versión cerrada activa es `1.0.0 (10)`. Incluye mensajería supervisada entre
+personal, estudiante y todos sus familiares activos, lecturas independientes por
+cuenta y auditoría de descarga de documentos. La misma revisión fue publicada en
+QA web y backend el 9 de septiembre de 2026. Los pendientes funcionales y módulos
+nuevos se mantienen en [HOJA_RUTA_PENDIENTES_2026_09.md](HOJA_RUTA_PENDIENTES_2026_09.md).
