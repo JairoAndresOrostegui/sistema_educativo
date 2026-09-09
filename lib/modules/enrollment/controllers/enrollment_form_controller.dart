@@ -13,6 +13,7 @@ import '../models/submit_result.dart';
 import '../services/enrollment_rules_service.dart';
 import '../services/enrollment_service.dart';
 import '../../../utils/parameters_service.dart';
+import '../../../utils/user_facing_error.dart';
 import '../../user/services/active_student_service.dart';
 
 class EnrollmentFormController extends ChangeNotifier {
@@ -948,7 +949,10 @@ class EnrollmentFormController extends ChangeNotifier {
         success: false,
         estado: null,
         payload: payload,
-        error: e.toString(),
+        error: userFacingError(
+          e,
+          fallback: 'No fue posible guardar la matrícula. Intenta nuevamente.',
+        ),
       );
     }
   }

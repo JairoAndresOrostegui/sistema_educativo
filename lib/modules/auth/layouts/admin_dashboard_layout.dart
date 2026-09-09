@@ -207,7 +207,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       _messageUnreadSub?.cancel();
       _messageUnreadSub = MessagingService()
           .watchUnreadCount(user)
-          .listen(_setMessageBadge);
+          .listen(_setMessageBadge, onError: (_) => _setMessageBadge(0));
     }
   }
 
@@ -230,65 +230,87 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   }
 
   Future<void> _listenPending() async {
-    final user = context.read<UserProviderV2>().user;
-    if (user == null) return;
-    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-        .collection('enrollments')
-        .where(
-          'estado',
-          whereIn: [
-            'prematriculado',
-            'pendiente_revision',
-            'correccion_solicitada',
-          ],
-        );
-    if (user.isSuperadmin) {
-      final settings = await FirebaseFirestore.instance
-          .collection('academic_year_settings')
-          .get();
-      final ids = settings.docs
-          .map((item) => (item.data()['activeYearId'] ?? '').toString())
-          .where((item) => item.isNotEmpty)
-          .take(30)
-          .toList();
-      if (ids.isEmpty) return;
-      query = query.where('academicYearId', whereIn: ids);
-    } else {
-      final settings = await FirebaseFirestore.instance
-          .collection('academic_year_settings')
-          .where('institutionId', isEqualTo: user.institution)
-          .where('campusId', isEqualTo: user.campus)
-          .limit(1)
-          .get();
-      if (settings.docs.isEmpty) return;
-      query = query.where(
-        'academicYearId',
-        isEqualTo: settings.docs.first.data()['activeYearId'],
-      );
-    }
-    if (!user.isSuperadmin) {
-      query = query
-          .where('institution', isEqualTo: user.institution)
-          .where('campus', isEqualTo: user.campus);
-    }
-    _pendingStream = query.snapshots();
-    _pendingSub = _pendingStream!.listen((snapshot) {
-      final count = snapshot.size;
-      if (!mounted) return;
-      setState(() {
-        _menuItems = _menuItems
-            .map(
-              (m) => m.route == '/enrollment'
-                  ? MenuItemData(
-                      label: m.label,
-                      icon: m.icon,
-                      route: m.route,
-                      badgeCount: count,
-                    )
-                  : m,
-            )
+    try {
+      final user = context.read<UserProviderV2>().user;
+      if (user == null) return;
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('enrollments')
+          .where(
+            'estado',
+            whereIn: [
+              'prematriculado',
+              'pendiente_revision',
+              'correccion_solicitada',
+            ],
+          );
+      if (user.isSuperadmin) {
+        final settings = await FirebaseFirestore.instance
+            .collection('academic_year_settings')
+            .get();
+        final ids = settings.docs
+            .map((item) => (item.data()['activeYearId'] ?? '').toString())
+            .where((item) => item.isNotEmpty)
+            .take(30)
             .toList();
-      });
+        if (ids.isEmpty) return;
+        query = query.where('academicYearId', whereIn: ids);
+      } else {
+        final settings = await FirebaseFirestore.instance
+            .collection('academic_year_settings')
+            .where('institutionId', isEqualTo: user.institution)
+            .where('campusId', isEqualTo: user.campus)
+            .limit(1)
+            .get();
+        if (settings.docs.isEmpty) return;
+        query = query.where(
+          'academicYearId',
+          isEqualTo: settings.docs.first.data()['activeYearId'],
+        );
+      }
+      if (!user.isSuperadmin) {
+        query = query
+            .where('institution', isEqualTo: user.institution)
+            .where('campus', isEqualTo: user.campus);
+      }
+      _pendingStream = query.snapshots();
+      _pendingSub = _pendingStream!.listen((snapshot) {
+        final count = snapshot.size;
+        if (!mounted) return;
+        setState(() {
+          _menuItems = _menuItems
+              .map(
+                (m) => m.route == '/enrollment'
+                    ? MenuItemData(
+                        label: m.label,
+                        icon: m.icon,
+                        route: m.route,
+                        badgeCount: count,
+                      )
+                    : m,
+              )
+              .toList();
+        });
+      }, onError: (_) => _setEnrollmentBadge(0));
+    } catch (_) {
+      _setEnrollmentBadge(0);
+    }
+  }
+
+  void _setEnrollmentBadge(int count) {
+    if (!mounted) return;
+    setState(() {
+      _menuItems = _menuItems
+          .map(
+            (item) => item.route == '/enrollment'
+                ? MenuItemData(
+                    label: item.label,
+                    icon: item.icon,
+                    route: item.route,
+                    badgeCount: count,
+                  )
+                : item,
+          )
+          .toList();
     });
   }
 

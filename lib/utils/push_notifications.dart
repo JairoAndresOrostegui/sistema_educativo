@@ -87,6 +87,7 @@ Future<void> initializePush({
     _pushListenersInitialized = true;
     FirebaseMessaging.onMessageOpenedApp.listen(
       (message) => _openNotification(message.data),
+      onError: (_) {},
     );
     final initial = await messaging.getInitialMessage();
     if (initial != null) _openNotification(initial.data);
@@ -97,41 +98,49 @@ Future<void> initializePush({
       }
     }
     FirebaseMessaging.onMessage.listen((message) async {
-      final title = _resolveTitle(message);
-      final body = _resolveBody(message);
+      try {
+        final title = _resolveTitle(message);
+        final body = _resolveBody(message);
 
-      if (kIsWeb) {
-        await _showWebNotificationDialog(
+        if (kIsWeb) {
+          await _showWebNotificationDialog(
+            title: title,
+            body: body,
+            data: message.data,
+          );
+          return;
+        }
+
+        await _fln.show(
+          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
           title: title,
           body: body,
-          data: message.data,
-        );
-        return;
-      }
-
-      await _fln.show(
-        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title: title,
-        body: body,
-        payload: jsonEncode(message.data),
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            'high_importance_channel',
-            'Notificaciones importantes',
-            channelDescription:
-                'Canal para mensajes importantes del sistema educativo',
-            importance: Importance.high,
-            priority: Priority.high,
+          payload: jsonEncode(message.data),
+          notificationDetails: NotificationDetails(
+            android: AndroidNotificationDetails(
+              'high_importance_channel',
+              'Notificaciones importantes',
+              channelDescription:
+                  'Canal para mensajes importantes del sistema educativo',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
+            iOS: DarwinNotificationDetails(),
           ),
-          iOS: DarwinNotificationDetails(),
-        ),
-      );
-    });
+        );
+      } catch (_) {
+        // Una notificación defectuosa no debe interrumpir la aplicación.
+      }
+    }, onError: (_) {});
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
-      final handler = _tokenHandler;
-      if (token.isNotEmpty && handler != null) await handler(token);
-    });
+      try {
+        final handler = _tokenHandler;
+        if (token.isNotEmpty && handler != null) await handler(token);
+      } catch (_) {
+        // El siguiente refresh o inicio de sesión vuelve a registrar el token.
+      }
+    }, onError: (_) {});
   }
 
   String? token;

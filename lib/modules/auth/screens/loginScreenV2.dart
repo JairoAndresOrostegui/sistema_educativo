@@ -8,6 +8,7 @@ import '../../../config/theme_config.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/validators.dart';
 import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/auth_service_v2.dart';
 import '../widgets/public_logo_widget.dart';
 import '../widgets/public_title_widget.dart';
@@ -356,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await DialogUtils.showError(
         context: context,
         title: 'Error al iniciar sesión',
-        message: e.toString().replaceAll('Exception: ', ''),
+        message: userFacingError(e),
       );
     }
   }

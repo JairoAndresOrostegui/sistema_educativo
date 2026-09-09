@@ -4,6 +4,7 @@ import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 import 'package:sistema_educativo/modules/user/services/teacher_bulk_import_service.dart';
 import 'package:sistema_educativo/providers/user_provider_v2.dart';
+import 'package:sistema_educativo/utils/user_facing_error.dart';
 
 class TeacherBulkImportDialog extends StatefulWidget {
   const TeacherBulkImportDialog({super.key});
@@ -90,11 +91,10 @@ class _TeacherBulkImportDialogState extends State<TeacherBulkImportDialog> {
   }
 
   String _cleanError(Object error) {
-    final message = error.toString();
-    if (message.startsWith('Exception: ')) {
-      return message.substring('Exception: '.length);
-    }
-    return message;
+    return userFacingError(
+      error,
+      fallback: 'No fue posible procesar el archivo. Intenta nuevamente.',
+    );
   }
 
   @override

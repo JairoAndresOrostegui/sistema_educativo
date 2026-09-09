@@ -21,6 +21,7 @@ import '../widgets/teacher_authorization_dialog.dart';
 
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class AuthorizationAdminScreen extends StatefulWidget {
   const AuthorizationAdminScreen({super.key});
@@ -45,6 +46,8 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   late String _campusId;
 
   bool _loading = true;
+
+  String? _loadError;
 
   String? _updatingRequestId;
 
@@ -97,19 +100,35 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
   void _subscribeToItems() {
     _itemsSub?.cancel();
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     _itemsSub = _svc
         .watchForAdmin(
           institutionId: _isSuperadmin ? null : _institutionId,
           campusId: _isSuperadmin ? null : _campusId,
         )
-        .listen((items) {
-          if (!mounted) return;
-          setState(() {
-            _items = items;
-            _loading = false;
-          });
-        });
+        .listen(
+          (items) {
+            if (!mounted) return;
+            setState(() {
+              _items = items;
+              _loading = false;
+              _loadError = null;
+            });
+          },
+          onError: (Object error) {
+            if (!mounted) return;
+            setState(() {
+              _loading = false;
+              _loadError = userFacingError(
+                error,
+                fallback: 'No se pudieron cargar las autorizaciones.',
+              );
+            });
+          },
+        );
   }
 
   String _fmtD(DateTime? d) =>
@@ -206,7 +225,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
         title: 'Error',
 
-        message: e.toString(),
+        message: userFacingError(e),
       );
     } finally {
       if (mounted) setState(() => _updatingRequestId = null);
@@ -265,6 +284,24 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_loadError!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: _subscribeToItems,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             : Padding(
                 padding: const EdgeInsets.all(16),
 

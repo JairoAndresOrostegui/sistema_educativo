@@ -133,11 +133,15 @@ class FileService {
               },
             ),
           );
-      task.snapshotEvents.listen((snapshot) {
-        onProgress?.call(
-          FileUploadProgress(snapshot.bytesTransferred, snapshot.totalBytes),
-        );
-      });
+      task.snapshotEvents.listen(
+        (snapshot) {
+          onProgress?.call(
+            FileUploadProgress(snapshot.bytesTransferred, snapshot.totalBytes),
+          );
+        },
+        // El error principal lo entrega `await task` y activa la cancelación.
+        onError: (_) {},
+      );
       await task;
       await _functions.httpsCallable('confirmarCargaArchivo').call({'id': id});
     } catch (_) {

@@ -143,7 +143,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
               )
               .toList(),
         );
-      });
+      }, onError: (_) {});
     }
 
     if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
@@ -172,7 +172,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
                     )
                     .toList();
               });
-            });
+            }, onError: (_) {});
       }
     }
   }

@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/schedule_history_service.dart';
 import '../export/utils/schedule_export_utils.dart';
 
@@ -67,50 +69,64 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
       _pageIndex = 0;
     }
 
-    final page = await _service.obtenerHistorialHorarios(
-      institutionId: user.institution,
-      campusId: user.campus,
-      groupContains: _grupoContiene.trim().isEmpty
-          ? null
-          : _grupoContiene.trim(),
-      subjectContains: _materiaContiene.trim().isEmpty
-          ? null
-          : _materiaContiene.trim(),
-      day: _dia?.toLowerCase(),
-      action: _accion,
-      rango: _rango,
-      limite: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final page = await _service.obtenerHistorialHorarios(
+        institutionId: user.institution,
+        campusId: user.campus,
+        groupContains: _grupoContiene.trim().isEmpty
+            ? null
+            : _grupoContiene.trim(),
+        subjectContains: _materiaContiene.trim().isEmpty
+            ? null
+            : _materiaContiene.trim(),
+        day: _dia?.toLowerCase(),
+        action: _accion,
+        rango: _rango,
+        limite: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final total = await _service.contarTotal(
-      institutionId: user.institution,
-      campusId: user.campus,
-      action: _accion,
-      day: _dia?.toLowerCase(),
-      rango: _rango,
-      groupContains: _grupoContiene.trim().isEmpty
-          ? null
-          : _grupoContiene.trim(),
-      subjectContains: _materiaContiene.trim().isEmpty
-          ? null
-          : _materiaContiene.trim(),
-    );
+      final total = await _service.contarTotal(
+        institutionId: user.institution,
+        campusId: user.campus,
+        action: _accion,
+        day: _dia?.toLowerCase(),
+        rango: _rango,
+        groupContains: _grupoContiene.trim().isEmpty
+            ? null
+            : _grupoContiene.trim(),
+        subjectContains: _materiaContiene.trim().isEmpty
+            ? null
+            : _materiaContiene.trim(),
+      );
 
-    setState(() {
-      _items = page.items;
-      _hasNext = page.hasNext;
-      if (page.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(page.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = page.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _items = page.items;
+        _hasNext = page.hasNext;
+        if (page.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(page.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = page.lastDoc;
+          }
         }
-      }
-      _total = total;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _total = total;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo cargar el historial',
+        message: userFacingError(
+          error,
+          fallback: 'Intenta nuevamente en unos momentos.',
+        ),
+      );
+    }
   }
 
   Future<void> _siguientePagina() async {
@@ -456,7 +472,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                           final fechaTexto = fecha != null
                               ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
                               : '-';
-                          final mensaje = (r['mensaje'] ?? '') as String;
+                          final mensaje = r['mensaje']?.toString() ?? '';
 
                           return Semantics(
                             label: 'Registro de log de horarios',

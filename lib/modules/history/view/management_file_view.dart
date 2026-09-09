@@ -9,6 +9,8 @@ import '../services/file_history_service.dart';
 import '../export/utils/file_export_utils.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../models/academic/academic_group.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class GestionDocumentosView extends StatefulWidget {
   const GestionDocumentosView({super.key});
@@ -67,18 +69,29 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
     // Si no hay usuario/tenant aún, no seguimos (evita consultar sin filtros obligatorios)
     if (_institutionId == null || _campusId == null) return;
 
-    _cargarGrupos();
-    _aplicarFiltros(recargar: true);
+    _bootstrap();
   }
 
-  Future<void> _cargarGrupos() async {
-    if (_institutionId == null || _campusId == null) return;
-    final list = await _service.obtenerGrupos(
-      institutionId: _institutionId!,
-      campusId: _campusId!,
-    );
-    if (!mounted) return;
-    setState(() => _groups = list);
+  Future<void> _bootstrap() async {
+    if (await _cargarGrupos() && mounted) {
+      await _aplicarFiltros(recargar: true);
+    }
+  }
+
+  Future<bool> _cargarGrupos() async {
+    if (_institutionId == null || _campusId == null) return false;
+    try {
+      final list = await _service.obtenerGrupos(
+        institutionId: _institutionId!,
+        campusId: _campusId!,
+      );
+      if (!mounted) return false;
+      setState(() => _groups = list);
+      return true;
+    } catch (error) {
+      await _showLoadError(error, stopLoading: false);
+      return false;
+    }
   }
 
   Future<void> _aplicarFiltros({bool recargar = false}) async {
@@ -93,37 +106,51 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
       _pageIndex = 0;
     }
 
-    final res = await _service.obtenerHistorialDocumentos(
-      institutionId: _institutionId!,
-      campusId: _campusId!,
-      groupId: _groupSelected,
-      rango: _rango,
-      limite: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final res = await _service.obtenerHistorialDocumentos(
+        institutionId: _institutionId!,
+        campusId: _campusId!,
+        groupId: _groupSelected,
+        rango: _rango,
+        limite: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final total = await _service.contarTotalDocumentos(
-      institutionId: _institutionId!,
-      campusId: _campusId!,
-      groupId: _groupSelected,
-      rango: _rango,
-    );
+      final total = await _service.contarTotalDocumentos(
+        institutionId: _institutionId!,
+        campusId: _campusId!,
+        groupId: _groupSelected,
+        rango: _rango,
+      );
 
-    if (!mounted) return;
-    setState(() {
-      _documentos = res.items;
-      _hasNext = res.hasNext;
-      if (res.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(res.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = res.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _documentos = res.items;
+        _hasNext = res.hasNext;
+        if (res.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(res.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = res.lastDoc;
+          }
         }
-      }
-      _totalEnRango = total;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _totalEnRango = total;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      await _showLoadError(error);
+    }
+  }
+
+  Future<void> _showLoadError(Object error, {bool stopLoading = true}) async {
+    if (!mounted) return;
+    if (stopLoading) setState(() => _cargando = false);
+    await DialogUtils.showError(
+      context: context,
+      title: 'No se pudo cargar el historial',
+      message: userFacingError(error),
+    );
   }
 
   Future<void> _siguientePagina() async {

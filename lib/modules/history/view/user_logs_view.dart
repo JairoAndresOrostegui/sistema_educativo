@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../services/user_logs_service.dart';
 import '../export/utils/user_logs_export_utils.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class GestionLogsUsuariosView extends StatefulWidget {
   const GestionLogsUsuariosView({super.key});
@@ -58,40 +60,53 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       _pageIndex = 0;
     }
 
-    final page = await _service.getLogs(
-      role: _role,
-      event: null,
-      campus: null,
-      institution: null,
-      platform: null,
-      nameContains: _nameContains.trim().isEmpty ? null : _nameContains.trim(),
-      rango: _rango,
-      limit: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final page = await _service.getLogs(
+        role: _role,
+        event: null,
+        campus: null,
+        institution: null,
+        platform: null,
+        nameContains: _nameContains.trim().isEmpty
+            ? null
+            : _nameContains.trim(),
+        rango: _rango,
+        limit: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final total = await _service.countLogs(
-      role: _role,
-      event: null,
-      campus: null,
-      institution: null,
-      rango: _rango,
-    );
+      final total = await _service.countLogs(
+        role: _role,
+        event: null,
+        campus: null,
+        institution: null,
+        rango: _rango,
+      );
 
-    setState(() {
-      _items = page.items;
-      _hasNext = page.hasNext;
-      if (page.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(page.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = page.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _items = page.items;
+        _hasNext = page.hasNext;
+        if (page.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(page.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = page.lastDoc;
+          }
         }
-      }
-      _total = total;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _total = total;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo cargar el historial',
+        message: userFacingError(error),
+      );
+    }
   }
 
   Future<void> _siguientePagina() async {

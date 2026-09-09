@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/auth_service_v2.dart';
 import '../utils/auth_access_policy.dart';
 
@@ -66,7 +67,7 @@ class _ChangeTemporaryPasswordScreenState
       await DialogUtils.showInfo(
         context: context,
         title: 'Contraseña cambiada',
-        message: error.toString(),
+        message: userFacingError(error),
       );
       if (mounted) context.go('/login');
     } catch (error) {
@@ -74,7 +75,7 @@ class _ChangeTemporaryPasswordScreenState
       await DialogUtils.showError(
         context: context,
         title: 'No se pudo cambiar la contraseña',
-        message: error.toString().replaceFirst('Exception: ', ''),
+        message: userFacingError(error),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

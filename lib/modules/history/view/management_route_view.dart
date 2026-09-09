@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../services/route_history_service.dart';
 import '../export/utils/route_export_utils.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class GestionRutasView extends StatefulWidget {
   const GestionRutasView({super.key});
@@ -59,38 +61,49 @@ class _GestionRutasViewState extends State<GestionRutasView> {
       _pageIndex = 0;
     }
 
-    final page = await _service.obtenerHistorialRutasAdmin(
-      routeNameContains: _nombreContiene.trim().isEmpty
-          ? null
-          : _nombreContiene.trim(),
-      action: _accion,
-      rango: _rango,
-      limite: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final page = await _service.obtenerHistorialRutasAdmin(
+        routeNameContains: _nombreContiene.trim().isEmpty
+            ? null
+            : _nombreContiene.trim(),
+        action: _accion,
+        rango: _rango,
+        limite: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final total = await _service.contarTotal(
-      action: _accion,
-      rango: _rango,
-      routeNameContains: _nombreContiene.trim().isEmpty
-          ? null
-          : _nombreContiene.trim(),
-    );
+      final total = await _service.contarTotal(
+        action: _accion,
+        rango: _rango,
+        routeNameContains: _nombreContiene.trim().isEmpty
+            ? null
+            : _nombreContiene.trim(),
+      );
 
-    setState(() {
-      _items = page.items;
-      _hasNext = page.hasNext;
-      if (page.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(page.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = page.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _items = page.items;
+        _hasNext = page.hasNext;
+        if (page.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(page.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = page.lastDoc;
+          }
         }
-      }
-      _total = total;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _total = total;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo cargar el historial',
+        message: userFacingError(error),
+      );
+    }
   }
 
   Future<void> _siguientePagina() async {

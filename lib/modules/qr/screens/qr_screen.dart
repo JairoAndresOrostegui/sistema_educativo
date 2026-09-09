@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class QrScreen extends StatefulWidget {
   const QrScreen({super.key, this.manage = false, this.invoke});
@@ -80,7 +81,7 @@ class _QrScreenState extends State<QrScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.toString();
+          _error = userFacingError(error);
           _busy = false;
         });
       }
@@ -111,7 +112,7 @@ class _QrScreenState extends State<QrScreen> {
       });
       if (mounted) setState(() => _payload = result['payload'] as String);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userFacingError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -166,7 +167,7 @@ class _QrScreenState extends State<QrScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = error.toString();
+          _error = userFacingError(error);
           _busy = false;
         });
       }
@@ -208,7 +209,7 @@ class _QrScreenState extends State<QrScreen> {
       if (mounted) setState(() => _payload = null);
       if (action == 'rotate') await _select(_selected!);
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userFacingError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -239,7 +240,7 @@ class _QrScreenState extends State<QrScreen> {
         ),
       );
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userFacingError(error));
     }
   }
 

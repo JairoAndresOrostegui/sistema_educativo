@@ -727,7 +727,7 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
         await DialogUtils.showError(
           context: context,
           title: 'Error al guardar',
-          message: e.toString(),
+          message: userFacingError(e),
         );
       }
     } finally {

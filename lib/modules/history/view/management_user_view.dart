@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../export/utils/user_export_utils.dart';
 import '../services/user_history_service.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class GestionUsuariosView extends StatefulWidget {
   const GestionUsuariosView({super.key});
@@ -46,44 +48,64 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
       _lastDoc = null;
     });
 
-    final page = await _svc.obtenerHistorial(
-      nameContains: null,
-      role: _rolSel,
-      action: _accionSel,
-      rango: _rango,
-      limite: _pageSize,
-      startAfter: null,
-    );
+    try {
+      final page = await _svc.obtenerHistorial(
+        nameContains: null,
+        role: _rolSel,
+        action: _accionSel,
+        rango: _rango,
+        limite: _pageSize,
+        startAfter: null,
+      );
 
-    setState(() {
-      _items.addAll(page.items);
-      _hasNext = page.hasNext;
-      _lastDoc = page.lastDoc;
-      _loading = false;
-      _rebuildFiltersSourcesAndSanitizeSelection();
-    });
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _hasNext = page.hasNext;
+        _lastDoc = page.lastDoc;
+        _loading = false;
+        _rebuildFiltersSourcesAndSanitizeSelection();
+      });
+    } catch (error) {
+      await _showLoadError(error);
+    }
   }
 
   Future<void> _loadMore() async {
     if (!_hasNext || _loading) return;
     setState(() => _loading = true);
 
-    final page = await _svc.obtenerHistorial(
-      nameContains: null,
-      role: _rolSel,
-      action: _accionSel,
-      rango: _rango,
-      limite: _pageSize,
-      startAfter: _lastDoc,
-    );
+    try {
+      final page = await _svc.obtenerHistorial(
+        nameContains: null,
+        role: _rolSel,
+        action: _accionSel,
+        rango: _rango,
+        limite: _pageSize,
+        startAfter: _lastDoc,
+      );
 
-    setState(() {
-      _items.addAll(page.items);
-      _hasNext = page.hasNext;
-      _lastDoc = page.lastDoc;
-      _loading = false;
-      _rebuildFiltersSourcesAndSanitizeSelection();
-    });
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page.items);
+        _hasNext = page.hasNext;
+        _lastDoc = page.lastDoc;
+        _loading = false;
+        _rebuildFiltersSourcesAndSanitizeSelection();
+      });
+    } catch (error) {
+      await _showLoadError(error);
+    }
+  }
+
+  Future<void> _showLoadError(Object error) async {
+    if (!mounted) return;
+    setState(() => _loading = false);
+    await DialogUtils.showError(
+      context: context,
+      title: 'No se pudo cargar el historial',
+      message: userFacingError(error),
+    );
   }
 
   void _rebuildFiltersSourcesAndSanitizeSelection() {

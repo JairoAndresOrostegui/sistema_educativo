@@ -10,6 +10,8 @@ import '../../../providers/user_provider_v2.dart'; // ⬅️ NUEVO
 import '../services/daily_route_history_service.dart';
 import '../export/utils/daily_route_export_utils.dart';
 import '../../../utils/format_utils.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class RutasDiariasView extends StatefulWidget {
   const RutasDiariasView({super.key});
@@ -86,41 +88,52 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
 
     final service = RutaHistoryService();
 
-    final res = await service.obtenerHistorialRutas(
-      institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
-      campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
-      nombreRuta: _nombreCtrl.text.trim().isEmpty
-          ? null
-          : _nombreCtrl.text.trim(),
-      estado: _estadoSeleccionado,
-      rango: _rango,
-      limite: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final res = await service.obtenerHistorialRutas(
+        institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
+        campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
+        nombreRuta: _nombreCtrl.text.trim().isEmpty
+            ? null
+            : _nombreCtrl.text.trim(),
+        estado: _estadoSeleccionado,
+        rango: _rango,
+        limite: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final totalFin = await service.contarRutasFinalizadas(
-      institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
-      campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
-      rango: _rango,
-      nombreRuta: _nombreCtrl.text.trim().isEmpty
-          ? null
-          : _nombreCtrl.text.trim(),
-    );
+      final totalFin = await service.contarRutasFinalizadas(
+        institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
+        campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
+        rango: _rango,
+        nombreRuta: _nombreCtrl.text.trim().isEmpty
+            ? null
+            : _nombreCtrl.text.trim(),
+      );
 
-    setState(() {
-      _rutas = res.items;
-      _hasNext = res.hasNext;
-      if (res.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(res.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = res.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _rutas = res.items;
+        _hasNext = res.hasNext;
+        if (res.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(res.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = res.lastDoc;
+          }
         }
-      }
-      _totalFinalizadas = totalFin;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _totalFinalizadas = totalFin;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo cargar el historial',
+        message: userFacingError(error),
+      );
+    }
   }
 
   Future<void> _siguientePagina() async {

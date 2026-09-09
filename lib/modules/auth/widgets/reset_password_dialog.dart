@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../../../utils/validators.dart';
 import '../services/auth_service_v2.dart';
 
@@ -172,7 +173,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
       mensaje = 'Se ha enviado un enlace para restablecer la contrasena.';
       envioOk = true;
     } catch (e) {
-      mensaje = e.toString().replaceAll('Exception: ', '');
+      mensaje = userFacingError(e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }

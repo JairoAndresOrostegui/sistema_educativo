@@ -54,9 +54,10 @@ class AdminScheduleHistoryService {
     final items = <Map<String, dynamic>>[];
     for (final document in snapshot.docs) {
       final data = document.data();
-      final subject = Map<String, dynamic>.from(
-        (data['after'] ?? data['before'] ?? const {}) as Map,
-      );
+      final rawSubject = data['after'] ?? data['before'];
+      final subject = rawSubject is Map
+          ? Map<String, dynamic>.from(rawSubject)
+          : <String, dynamic>{};
       final groupName = (data['groupName'] ?? subject['groupName'] ?? '')
           .toString();
       final subjectName = (subject['subject'] ?? '').toString();
@@ -76,7 +77,9 @@ class AdminScheduleHistoryService {
         'dia': subject['day'] ?? '',
         'accion': data['action'] ?? '',
         'usuarioNombre': data['performedBy'] ?? '',
-        'fecha': (data['createdAt'] as Timestamp?)?.toDate(),
+        'fecha': data['createdAt'] is Timestamp
+            ? (data['createdAt'] as Timestamp).toDate()
+            : null,
       });
     }
     return ScheduleHistoryPage(

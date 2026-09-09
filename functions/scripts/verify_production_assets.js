@@ -1,12 +1,18 @@
 "use strict";
 /* eslint-disable max-len */
 const {cloudAccess} = require("./cloud_access");
-const {TARGET, SOURCE, REAL_USERS} = require("./production_readiness");
+const {TARGET, SOURCE, REAL_USERS, PLAYTEST_FIXTURE_ID} = require("./production_readiness");
 const {decode} = require("./production_projection");
 const {walk} = require("./migrate_production_assets");
 async function main() {
   const request = await cloudAccess();
   const base = `https://firestore.googleapis.com/v1/projects/${TARGET}/databases/(default)/documents`;
+  const fixtureRaw = await request(`${base}/test_fixtures/${PLAYTEST_FIXTURE_ID}`);
+  const fixture = decode({mapValue: {fields: fixtureRaw.fields}});
+  const approvedUsers = new Set([
+    ...REAL_USERS,
+    ...(fixture.phase === "complete" && fixture.cleanupRequired === true ? fixture.authUids || [] : []),
+  ]);
   const urls = new Set();
   let count = 0;
   for (const collection of ["website", "website_pages", "configuracion_colegios", "users", "user_directory"]) {
@@ -14,7 +20,7 @@ async function main() {
     if (result.nextPageToken) throw new Error("Unexpected verification page count");
     for (const raw of result.documents || []) {
       const id = raw.name.split("/").pop();
-      if (["users", "user_directory"].includes(collection) && !REAL_USERS.includes(id)) throw new Error("Unexpected profile");
+      if (["users", "user_directory"].includes(collection) && !approvedUsers.has(id)) throw new Error("Unexpected profile");
       const data = decode({mapValue: {fields: raw.fields}});
       walk(data, (value) => {
         if (value.includes(`${SOURCE}.firebasestorage.app`) || value.includes(`${SOURCE}.appspot.com`)) throw new Error(`QA asset reference in ${collection}/${id}`);

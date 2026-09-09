@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../models/user/user_model_v2.dart';
 import '../../../../utils/dialog_utils.dart';
+import '../../../../utils/user_facing_error.dart';
 import '../../services/user_service_v2.dart';
 
 class TeacherTransferDialog extends StatefulWidget {
@@ -86,7 +87,7 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo restaurar la carga',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {
@@ -128,7 +129,7 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo calcular la carga',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {
@@ -216,7 +217,7 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo trasladar la carga',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {

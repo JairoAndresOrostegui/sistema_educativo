@@ -26,10 +26,13 @@ Referencias:
 
 ## Endurecimiento durante la prueba cerrada
 
-La primera versión cerrada usa el AAB de producción `1.0.0 (8)`. Publicar una
-versión superior en la misma pista no sustituye la exigencia de mantener al menos
-12 cuentas inscritas continuamente durante 14 días; conservar la lista y el enlace
-de inscripción. Aprovechar ese período para publicar una versión 9 con:
+La prueba cerrada está activa con el AAB de producción `1.0.0 (9)`. Publicar una
+versión superior en la misma pista no sustituye ni reinicia la exigencia de mantener
+al menos 12 cuentas inscritas continuamente durante 14 días; conservar la lista y
+el enlace de inscripción. La siguiente entrega que se suba debe usar como mínimo el
+`versionCode 10`; nunca intentar reemplazar el código 9 ya aceptado.
+
+Durante este período se completó el endurecimiento previsto:
 
 - QR: validar sesión y tipos de todas las respuestas antes de dibujar o resolver.
 - Mensajería y panel Push: estado vacío ante sesión ausente, respuestas defensivas
@@ -37,8 +40,9 @@ de inscripción. Aprovechar ese período para publicar una versión 9 con:
 - Matrículas e Historial: tolerar fechas, listas y documentos heredados incompletos.
 - Parámetros, Usuarios y Perfil: eliminar usos de sesión forzada y texto técnico
   en errores recuperables.
-- Ejecutar pruebas de regresión, informe previo al lanzamiento y recorrido físico
-  de cada perfil antes de promover a producción pública.
+- Se ejecutaron pruebas de regresión y compilaciones de producción. Aún corresponde
+  conservar evidencia del recorrido físico de cada perfil y revisar el informe
+  previo al lanzamiento antes de promover a producción pública.
 
 Los testers no tienen que abrir la aplicación todos los días para conservar la
 inscripción, pero la solicitud de acceso pregunta por uso real, funciones probadas

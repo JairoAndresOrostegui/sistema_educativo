@@ -6,6 +6,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/academic_year_service.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/parameters_service.dart';
+import '../../../utils/user_facing_error.dart';
 
 class AcademicYearsAdminPanel extends StatefulWidget {
   const AcademicYearsAdminPanel({super.key});
@@ -52,7 +53,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudieron consultar los años lectivos',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {
@@ -152,7 +153,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo preparar el año',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     }
@@ -202,7 +203,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
         await DialogUtils.showError(
           context: context,
           title: 'No se pudo activar el año',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     }

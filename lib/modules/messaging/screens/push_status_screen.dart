@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
+import '../../../utils/user_facing_error.dart';
 
 class PushStatusScreen extends StatefulWidget {
   const PushStatusScreen({super.key});
@@ -50,7 +51,7 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
         _more = jobs.length == 50;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userFacingError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -91,7 +92,7 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = error.toString();
+          _error = userFacingError(error);
         });
       }
     }

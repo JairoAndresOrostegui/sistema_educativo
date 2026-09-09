@@ -13,6 +13,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../services/authorization_service.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../widgets/student_authorization_dialog.dart';
 import '../widgets/teacher_authorization_dialog.dart';
 import '../../user/services/active_student_service.dart';
@@ -172,7 +173,7 @@ class _AuthorizationStudentScreenState
             await DialogUtils.showError(
               context: context,
               title: 'Error',
-              message: error.toString(),
+              message: userFacingError(error),
             );
             if (mounted) setState(() => _loading = false);
           },
@@ -320,7 +321,7 @@ class _AuthorizationStudentScreenState
       await DialogUtils.showError(
         context: ctx,
         title: 'Error',
-        message: e.toString(),
+        message: userFacingError(e),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -391,7 +392,7 @@ class _AuthorizationStudentScreenState
       await DialogUtils.showError(
         context: ctx,
         title: 'Error',
-        message: e.toString(),
+        message: userFacingError(e),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

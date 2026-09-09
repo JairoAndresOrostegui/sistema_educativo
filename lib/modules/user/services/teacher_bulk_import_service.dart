@@ -6,6 +6,7 @@ import 'package:sistema_educativo/modules/user/controllers/admin_user_form_contr
 import 'package:sistema_educativo/utils/parameters_service.dart';
 import 'package:sistema_educativo/utils/validators.dart';
 import 'package:sistema_educativo/utils/academic_group_service.dart';
+import 'package:sistema_educativo/utils/user_facing_error.dart';
 
 typedef TeacherDocumentTypeLoader = Future<Map<String, String>> Function();
 typedef TeacherUniquenessCheck =
@@ -553,11 +554,10 @@ class TeacherBulkImportService {
   }
 
   String _cleanError(Object error) {
-    final message = error.toString().trim();
-    if (message.startsWith('Exception: ')) {
-      return message.substring('Exception: '.length).trim();
-    }
-    return message;
+    return userFacingError(
+      error,
+      fallback: 'No fue posible procesar esta fila.',
+    );
   }
 }
 

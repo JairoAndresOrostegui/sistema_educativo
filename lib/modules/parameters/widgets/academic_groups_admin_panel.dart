@@ -6,6 +6,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/academic_group_service.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/parameters_service.dart';
+import '../../../utils/user_facing_error.dart';
 
 class AcademicGroupsAdminPanel extends StatefulWidget {
   const AcademicGroupsAdminPanel({super.key});
@@ -134,7 +135,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
       await DialogUtils.showError(
         context: context,
         title: 'No se pudo guardar el grupo',
-        message: error.toString(),
+        message: userFacingError(error),
       );
     } finally {
       level.dispose();
@@ -173,7 +174,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
       await DialogUtils.showError(
         context: context,
         title: 'El grupo está protegido',
-        message: error.toString(),
+        message: userFacingError(error),
       );
     }
   }

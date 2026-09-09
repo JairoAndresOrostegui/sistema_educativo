@@ -14,6 +14,7 @@ import '../../../utils/academic_year_service.dart';
 import '../widgets/subject_form_dialog.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../widgets/admin/admin_grade_dropdown.dart';
 import '../widgets/admin/admin_day_column.dart';
 import '../widgets/searchable_schedule_selector.dart';
@@ -128,7 +129,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         _loadError = null;
       }
     } catch (e) {
-      _loadError = 'No se pudieron cargar los docentes. $e';
+      _loadError = userFacingError(
+        e,
+        fallback: 'No se pudieron cargar los docentes. Intenta nuevamente.',
+      );
     }
     setState(() => _isLoading = false);
   }
@@ -159,7 +163,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       }
     } catch (error) {
       _allSchedules = {};
-      _loadError = 'No fue posible cargar el horario seleccionado. $error';
+      _loadError = userFacingError(
+        error,
+        fallback: 'No fue posible cargar el horario. Intenta nuevamente.',
+      );
     }
 
     setState(() => _isLoading = false);
@@ -191,7 +198,10 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       }
     } catch (error) {
       _allSchedules = {};
-      _loadError = 'No fue posible cargar el horario del docente. $error';
+      _loadError = userFacingError(
+        error,
+        fallback: 'No fue posible cargar el horario. Intenta nuevamente.',
+      );
     }
     if (mounted) setState(() => _isLoading = false);
   }
@@ -285,7 +295,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                 await DialogUtils.showError(
                   context: dialogContext,
                   title: 'Error al guardar',
-                  message: 'No se pudo guardar la materia. ($e)',
+                  message: userFacingError(
+                    e,
+                    fallback:
+                        'No se pudo guardar la materia. Intenta nuevamente.',
+                  ),
                 );
               }
               rethrow;
@@ -347,7 +361,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                 await DialogUtils.showError(
                   context: dialogContext,
                   title: 'Error',
-                  message: 'Error al editar la materia. ($e)',
+                  message: userFacingError(
+                    e,
+                    fallback:
+                        'No se pudo editar la materia. Intenta nuevamente.',
+                  ),
                 );
               }
               rethrow;
@@ -407,7 +425,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                 await DialogUtils.showError(
                   context: context,
                   title: 'Error',
-                  message: 'Error al eliminar la materia. ($e)',
+                  message: userFacingError(
+                    e,
+                    fallback:
+                        'No se pudo eliminar la materia. Intenta nuevamente.',
+                  ),
                 );
               } finally {
                 _setBlocking(false);

@@ -69,10 +69,13 @@ class UserLogsService {
     final items = <Map<String, dynamic>>[];
     for (final d in docs) {
       final data = d.data();
-      final ts = (data['timestamp'] as Timestamp?)?.toDate();
+      final ts = data['timestamp'] is Timestamp
+          ? (data['timestamp'] as Timestamp).toDate()
+          : null;
 
-      final env = (data['env'] is Map<String, dynamic>)
-          ? data['env'] as Map<String, dynamic>
+      final rawEnv = data['env'];
+      final env = rawEnv is Map
+          ? Map<String, dynamic>.from(rawEnv)
           : <String, dynamic>{};
 
       final map = {

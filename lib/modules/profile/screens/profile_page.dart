@@ -10,6 +10,7 @@ import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/profile_service.dart';
 import '../utils/profile_image_picker.dart';
 import '../widgets/profile_field.dart';
@@ -86,7 +87,7 @@ class _ProfilePageState extends State<ProfilePage> {
         await DialogUtils.showError(
           context: context,
           title: 'Error al subir imagen',
-          message: e.toString(),
+          message: userFacingError(e),
         );
       }
     }

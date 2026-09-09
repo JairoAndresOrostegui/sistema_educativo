@@ -54,45 +54,56 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
   }
 
   Future<void> _listenPending() async {
-    final user = context.read<UserProviderV2>().user!;
-    final isTeacher = user.role.trim().toLowerCase() == 'docente';
-    if (isTeacher && (user.groupId ?? '').trim().isEmpty) return;
-    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-        .collection('enrollments')
-        .where(
-          'estado',
-          whereIn: [
-            'prematriculado',
-            'pendiente_revision',
-            'correccion_solicitada',
-          ],
+    try {
+      final user = context.read<UserProviderV2>().user!;
+      final isTeacher = user.role.trim().toLowerCase() == 'docente';
+      if (isTeacher && (user.groupId ?? '').trim().isEmpty) return;
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('enrollments')
+          .where(
+            'estado',
+            whereIn: [
+              'prematriculado',
+              'pendiente_revision',
+              'correccion_solicitada',
+            ],
+          );
+      if (user.isSuperadmin) {
+        final ids = await loadAllActiveAcademicYearIds(
+          firestore: FirebaseFirestore.instance,
         );
-    if (user.isSuperadmin) {
-      final ids = await loadAllActiveAcademicYearIds(
-        firestore: FirebaseFirestore.instance,
+        if (ids.isEmpty) return;
+        query = query.where('academicYearId', whereIn: ids.take(30).toList());
+      } else {
+        final year = await loadActiveAcademicYear(
+          firestore: FirebaseFirestore.instance,
+          institutionId: user.institution,
+          campusId: user.campus,
+        );
+        query = query.where('academicYearId', isEqualTo: year.id);
+      }
+      if (!user.isSuperadmin) {
+        query = query
+            .where('institution', isEqualTo: user.institution)
+            .where('campus', isEqualTo: user.campus);
+      }
+      if (isTeacher && (user.groupId ?? '').trim().isNotEmpty) {
+        query = query.where('data.groupId', isEqualTo: user.groupId!.trim());
+      }
+      _pendingSub = query.snapshots().listen(
+        (snapshot) {
+          if (!mounted) return;
+          setState(() => _pendingCount = snapshot.size);
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() => _pendingCount = 0);
+        },
       );
-      if (ids.isEmpty) return;
-      query = query.where('academicYearId', whereIn: ids.take(30).toList());
-    } else {
-      final year = await loadActiveAcademicYear(
-        firestore: FirebaseFirestore.instance,
-        institutionId: user.institution,
-        campusId: user.campus,
-      );
-      query = query.where('academicYearId', isEqualTo: year.id);
-    }
-    if (!user.isSuperadmin) {
-      query = query
-          .where('institution', isEqualTo: user.institution)
-          .where('campus', isEqualTo: user.campus);
-    }
-    if (isTeacher && (user.groupId ?? '').trim().isNotEmpty) {
-      query = query.where('data.groupId', isEqualTo: user.groupId!.trim());
-    }
-    _pendingSub = query.snapshots().listen((snapshot) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _pendingCount = snapshot.size);
-    });
+      setState(() => _pendingCount = 0);
+    }
   }
 
   Future<void> _fetch() async {

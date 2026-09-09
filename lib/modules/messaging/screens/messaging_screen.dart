@@ -8,6 +8,7 @@ import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/messaging_service.dart';
 import 'push_status_screen.dart';
 
@@ -56,7 +57,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No fue posible cargar Mensajería',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     });
@@ -136,7 +137,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No fue posible cargar contactos',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     }
@@ -165,7 +166,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No se envió el mensaje',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {
@@ -181,7 +182,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No fue posible cambiar el canal',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     }
@@ -210,7 +211,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No se creó el canal',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     }
@@ -226,7 +227,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No fue posible seleccionar el hijo',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
       return;

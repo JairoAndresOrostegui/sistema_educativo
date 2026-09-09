@@ -11,6 +11,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../services/authorization_service.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../widgets/teacher_authorization_dialog.dart';
 
 class AuthorizationTeacherScreen extends StatefulWidget {
@@ -117,7 +118,7 @@ class _AuthorizationTeacherScreenState
             await DialogUtils.showError(
               context: context,
               title: 'Error',
-              message: error.toString(),
+              message: userFacingError(error),
             );
             if (mounted) setState(() => _loading = false);
           },

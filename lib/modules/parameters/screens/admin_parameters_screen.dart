@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../models/parameter_entry.dart';
 import '../services/parameter_admin_service.dart';
 import '../widgets/academic_groups_admin_panel.dart';
@@ -44,7 +45,10 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
       await DialogUtils.showError(
         context: context,
         title: 'Error',
-        message: 'No se pudieron cargar los parámetros.\n$e',
+        message: userFacingError(
+          e,
+          fallback: 'No se pudieron cargar los parámetros. Intenta nuevamente.',
+        ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -85,7 +89,11 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
             await DialogUtils.showError(
               context: context,
               title: 'Error',
-              message: 'No se pudo guardar.\n$e',
+              message: userFacingError(
+                e,
+                fallback:
+                    'No se pudo guardar el parámetro. Intenta nuevamente.',
+              ),
             );
           } finally {
             if (mounted) setState(() => _saving = false);
@@ -125,7 +133,10 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
       await DialogUtils.showError(
         context: context,
         title: 'Error',
-        message: 'No se pudo eliminar.\n$e',
+        message: userFacingError(
+          e,
+          fallback: 'No se pudo eliminar el parámetro. Intenta nuevamente.',
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);

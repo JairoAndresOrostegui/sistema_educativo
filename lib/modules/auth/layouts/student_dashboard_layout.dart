@@ -23,6 +23,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
   StreamSubscription<int>? _messageUnreadSub;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSub;
 
   @override
   void initState() {
@@ -32,14 +33,17 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
   }
 
   void _listenNotifications() {
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _foregroundMessageSub?.cancel();
+    _foregroundMessageSub = FirebaseMessaging.onMessage.listen((
+      RemoteMessage message,
+    ) {
       if (!mounted) return;
       final notif = message.notification;
       if (notif == null) return;
-      final titulo = notif.title ?? 'Notificacion';
+      final titulo = notif.title ?? 'Notificación';
       final cuerpo = notif.body ?? '';
       _showAlert(titulo, cuerpo);
-    });
+    }, onError: (_) {});
   }
 
   void _showAlert(String titulo, String cuerpo) {
@@ -168,12 +172,13 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
               )
               .toList(),
         );
-      });
+      }, onError: (_) {});
     }
   }
 
   @override
   void dispose() {
+    _foregroundMessageSub?.cancel();
     _messageUnreadSub?.cancel();
     super.dispose();
   }

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../config/enrollment_fields.dart';
 import '../config/enrollment_sections.dart';
 import '../controllers/enrollment_form_controller.dart';
@@ -717,7 +718,11 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
             await DialogUtils.showError(
               context: context,
               title: 'Error al imprimir',
-              message: 'No fue posible generar el recibo de matricula.\n$e',
+              message: userFacingError(
+                e,
+                fallback:
+                    'No fue posible generar el recibo de matrícula. Intenta nuevamente.',
+              ),
             );
           }
         }

@@ -12,6 +12,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/parameters_service.dart';
+import '../../../utils/user_facing_error.dart';
 import '../../../utils/user_log_service.dart';
 import '../../schedule/services/schedule_service.dart';
 import '../../user/services/active_student_service.dart';
@@ -95,7 +96,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No fue posible cargar Archivos',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {
@@ -225,7 +226,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'No fue posible publicar',
-          message: error.toString(),
+          message: userFacingError(error),
         );
       }
     } finally {

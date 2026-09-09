@@ -5,6 +5,7 @@ import 'package:sistema_educativo/models/user/user_model_v2.dart';
 import 'package:sistema_educativo/providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/user_service_v2.dart';
 import '../widgets/admin/admin_photo_widget.dart';
 import '../widgets/admin/admin_user_form_widget.dart';
@@ -72,7 +73,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'Error al cargar usuarios',
-          message: e.toString(),
+          message: userFacingError(e),
         );
       }
     }
@@ -497,7 +498,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         await DialogUtils.showError(
           context: context,
           title: 'Error al eliminar usuario',
-          message: e.toString(),
+          message: userFacingError(e),
         );
       }
     }
@@ -567,7 +568,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       await DialogUtils.showError(
         context: context,
         title: 'No se pudo restablecer',
-        message: error.toString().replaceFirst('Exception: ', ''),
+        message: userFacingError(error),
       );
     }
   }

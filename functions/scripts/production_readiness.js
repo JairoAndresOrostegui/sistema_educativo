@@ -5,6 +5,7 @@ const path = require("path");
 const {refreshToken} = require("firebase-admin/app");
 const SOURCE = "sistema-educativo-rl";
 const TARGET = "sistema-educativo-rl-prod";
+const PLAYTEST_FIXTURE_ID = "play_store_closed_test_2026_09";
 const REAL_USERS = [
   "176sNjmWSXbNePE7zzHEJyKSD1G2", "3b7TWoz2R9d9n8pDaFXcrU4N5dq2", "4nGxhgcXjCcCWo5zrLeHjGAF30e2",
   "BHYawHIo4bdAAlqIeAI9loM7Bw62", "LrA7aBbr0Re0IoVim2gg9U8IkxA2", "O5tf0tAiScMBJjI6oQ3ca5BFe3w1",
@@ -61,4 +62,4 @@ if (require.main === module) {
     console.error(e.code || e.message); process.exitCode = 1;
   });
 }
-module.exports = {REAL_USERS, SOURCE, TARGET};
+module.exports = {REAL_USERS, SOURCE, TARGET, PLAYTEST_FIXTURE_ID};
