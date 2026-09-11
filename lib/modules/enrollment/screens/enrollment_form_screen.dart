@@ -39,6 +39,7 @@ class EnrollmentFormScreen extends StatefulWidget {
   final String? initialEstado;
   final String? institution;
   final String? campus;
+  final int? initialRevision;
 
   const EnrollmentFormScreen({
     super.key,
@@ -53,6 +54,7 @@ class EnrollmentFormScreen extends StatefulWidget {
     this.initialEstado,
     this.institution,
     this.campus,
+    this.initialRevision,
   });
 
   @override
@@ -94,23 +96,32 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
       initialEstado: widget.initialEstado,
       initialLinkedStudentId: widget.initialLinkedStudentId,
       existingData: widget.existingData,
+      initialRevision: widget.initialRevision,
       readOnly:
           widget.forceReadOnly ||
           (widget.initialEstado == 'matriculado' &&
               _resolveMode() != EnrollmentEntryMode.admin),
     );
-    _controller.loadAnioFromParameters();
-    _controller.loadOptions(userProvider: context.read<UserProviderV2>());
-    _controller.loadPendingCount(
-      isAdmin: _resolveMode() == EnrollmentEntryMode.admin,
-      userProvider: context.read<UserProviderV2>(),
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    final provider = context.read<UserProviderV2>();
+    await _controller.loadOptions(
+      userProvider: provider,
+      publicMode: _resolveMode() == EnrollmentEntryMode.publico,
     );
-    _controller.loadChildrenIfNeeded(context.read<UserProviderV2>());
+    if (!mounted || _controller.optionsError != null) return;
+    await _controller.loadPendingCount(
+      isAdmin: _resolveMode() == EnrollmentEntryMode.admin,
+      userProvider: provider,
+    );
+    if (mounted) await _controller.loadChildrenIfNeeded(provider);
   }
 
   @override
   void dispose() {
-    _controller.disposeControllers();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -928,6 +939,27 @@ class _EnrollmentFormScreenState extends State<EnrollmentFormScreen> {
             backgroundColor: AppPalette.surface,
             body: _loadingOptions
                 ? const Center(child: CircularProgressIndicator())
+                : controller.optionsError != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            controller.optionsError!,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: _loadInitialData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : SafeArea(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(16),

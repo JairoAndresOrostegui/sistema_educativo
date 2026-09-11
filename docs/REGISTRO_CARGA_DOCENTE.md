@@ -27,6 +27,8 @@ asigne responsabilidad, acceso o trabajo vigente a un docente.
 | Autorizaciones | responsabilidad derivada del grupo | decisiones previas |
 | Matrículas | responsabilidad derivada del grupo | formularios previos |
 | Notificaciones | destinatarios futuros derivados | eventos ya enviados |
+| Lista de asistencia | `attendance_sessions.responsibleTeacherId` en sesiones abiertas del año activo | creador de sesión, marcas, correcciones e historial de sesiones cerradas |
+| Eventos | `school_events.responsibleUserIds` en borradores o eventos publicados que todavía no iniciaron | creador, publicaciones, inscripciones, autorizaciones, asistencia y eventos finalizados/cancelados |
 
 Los reintentos push comprueban que el docente siga activo y conserve membresía
 en el canal. No se cambia la autoría ni se trasladan tokens del saliente al
@@ -51,6 +53,29 @@ QR identifica al docente, no representa carga transferible: su credencial nunca
 se entrega al reemplazo, quien usa la propia. La desactivación del saliente
 bloquea su resolución. Los identificadores de eventos actuales no asignan
 responsables; antes de añadirlos, integrar el evento al contrato de traslado.
+
+Lista de asistencia transfiere únicamente sesiones todavía abiertas cuya
+responsabilidad vigente pertenece al docente saliente. `createdBy`,
+`markedBy`, autores de correcciones e historial no cambian. El impacto cuenta
+esas sesiones antes de confirmar. Al revertir un traslado temporal solo se
+restauran las que continúan abiertas y aún pertenecen al reemplazo; una sesión
+cerrada durante el reemplazo conserva responsable e historia tal como quedó.
+
+Eventos transfiere la responsabilidad futura solo cuando el docente saliente está
+en `responsibleUserIds` y el evento permanece en borrador o publicado sin haber
+iniciado. El reemplazo se agrega sin duplicarlo y el saliente se retira. En una
+reversión temporal se restaura únicamente si el evento continúa elegible y el
+reemplazo conserva esa responsabilidad. Creador, actores históricos, inscripciones,
+autorizaciones y marcas de asistencia nunca se reescriben.
+
+Eventos y Lista de asistencia releen el actor, el responsable vigente y el año
+lectivo dentro de sus transacciones de escritura. Un traslado, desactivación o
+cierre de año concurrente no puede aprovechar una pantalla abierta para guardar
+con el acceso anterior. Los avisos de Eventos y Asistencia conservan referencia
+al outbox original y revalidan destinatarios en cada envío y reintento: no se
+trasladan avisos antiguos al reemplazo ni se envían a familiares desvinculados.
+Los recordatorios futuros de Eventos resuelven los responsables y vínculos
+vigentes sin modificar la audiencia histórica de la publicación original.
 
 Antes de considerar terminado un módulo nuevo se debe documentar:
 

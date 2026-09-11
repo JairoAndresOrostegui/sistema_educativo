@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../utils/open_external_link.dart';
 
 import '../../../config/app_palette.dart';
 import '../models/website_content.dart';
@@ -57,9 +58,22 @@ class _PublicWebsiteScreenState extends State<PublicWebsiteScreen> {
                     const SizedBox(height: 14),
                     const Text('Esta página no está disponible.'),
                     const SizedBox(height: 14),
-                    FilledButton(
-                      onPressed: () => context.go('/'),
-                      child: const Text('Ir al inicio'),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => setState(_load),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar'),
+                        ),
+                        if (widget.slug != 'home')
+                          FilledButton(
+                            onPressed: () => context.go('/'),
+                            child: const Text('Ir al inicio'),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -1235,7 +1249,7 @@ Future<void> openWebsiteLink(BuildContext context, String value) async {
   }
   final uri = Uri.tryParse(value);
   if (uri != null && {'https', 'http', 'mailto', 'tel'}.contains(uri.scheme)) {
-    await launchUrl(uri, mode: LaunchMode.platformDefault);
+    await openExternalLink(context, uri, mode: LaunchMode.platformDefault);
   }
 }
 

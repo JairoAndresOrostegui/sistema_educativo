@@ -10,6 +10,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/active_academic_year_context.dart';
+import '../../../utils/user_facing_error.dart';
 import '../export/enrollment_pdf_utils.dart';
 import '../models/enrollment_model.dart';
 import '../screens/enrollment_form_screen.dart';
@@ -29,6 +30,8 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
   List<Enrollment> _items = [];
   String _estadoActual = 'pendiente_revision';
   int _pendingCount = 0;
+  String? _loadError;
+  String? _pendingError;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingSub;
 
   final _tabs = const [
@@ -55,6 +58,9 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
 
   Future<void> _listenPending() async {
     try {
+      await _pendingSub?.cancel();
+      _pendingSub = null;
+      if (!mounted) return;
       final user = context.read<UserProviderV2>().user!;
       final isTeacher = user.role.trim().toLowerCase() == 'docente';
       if (isTeacher && (user.groupId ?? '').trim().isEmpty) return;
@@ -93,21 +99,37 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       _pendingSub = query.snapshots().listen(
         (snapshot) {
           if (!mounted) return;
-          setState(() => _pendingCount = snapshot.size);
+          setState(() {
+            _pendingCount = snapshot.size;
+            _pendingError = null;
+          });
         },
-        onError: (_) {
+        onError: (Object error) {
           if (!mounted) return;
-          setState(() => _pendingCount = 0);
+          setState(() {
+            _pendingError = userFacingError(
+              error,
+              fallback: 'No se pudo actualizar el contador de matrículas.',
+            );
+          });
         },
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      setState(() => _pendingCount = 0);
+      setState(() {
+        _pendingError = userFacingError(
+          error,
+          fallback: 'No se pudo actualizar el contador de matrículas.',
+        );
+      });
     }
   }
 
   Future<void> _fetch() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
       final service = EnrollmentService();
       final user = context.read<UserProviderV2>().user!;
@@ -126,13 +148,15 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       if (mounted) {
         setState(() => _items = data);
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
-      await DialogUtils.showError(
-        context: context,
-        title: 'Error',
-        message: 'No se pudo cargar el listado de matrículas.',
-      );
+      setState(() {
+        _items = [];
+        _loadError = userFacingError(
+          error,
+          fallback: 'No se pudo cargar el listado de matrículas.',
+        );
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -173,6 +197,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         id: e.id,
         action: 'approve',
         linkedStudentId: e.vinculaUsuarioId,
+        expectedRevision: e.revision,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -251,6 +276,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         id: e.id,
         action: action,
         observation: observation,
+        expectedRevision: e.revision,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -308,6 +334,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
         id: e.id,
         action: 'reject',
         observation: motivo,
+        expectedRevision: e.revision,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -350,6 +377,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
       await EnrollmentService().transitionEnrollment(
         id: e.id,
         action: 'withdraw',
+        expectedRevision: e.revision,
       );
       if (!mounted) return;
       await DialogUtils.showSuccess(
@@ -381,6 +409,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
           anioMatricula: e.anioMatricula,
           institution: e.institution,
           campus: e.campus,
+          initialRevision: e.revision,
         ),
       ),
     ).then((_) => _fetch());
@@ -394,6 +423,7 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
           enrollmentId: e.id,
           initialEstado: e.estado,
           existingData: e.data,
+          initialRevision: e.revision,
           initialLinkedStudentId: e.vinculaUsuarioId,
           modeOverride: EnrollmentEntryMode.admin,
           anioMatricula: e.anioMatricula,
@@ -595,197 +625,248 @@ class _AdminEnrollmentScreenState extends State<AdminEnrollmentScreen>
           indicatorColor: AppPalette.primary,
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _fetch,
-              child: _items.isEmpty
-                  ? const ListTile(
-                      title: Text('Sin matrículas en este estado.'),
-                    )
-                  : ListView.builder(
-                      itemCount: _items.length,
-                      itemBuilder: (_, index) {
-                        final e = _items[index];
-                        final nombre =
-                            (e.data['nombresApellidosAlumno'] ??
-                                    '${e.data['nombresAlumno'] ?? ''} ${e.data['apellidosAlumno'] ?? ''}')
-                                .toString()
-                                .trim();
-                        final estadoLabel = _estadoDisplay(e.estado);
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: ListTile(
-                            title: Text(nombre.isEmpty ? 'Sin nombre' : nombre),
-                            subtitle: Text(
-                              'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'}  Estado: $estadoLabel',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: compactList
-                                ? PopupMenuButton<String>(
-                                    tooltip: 'Acciones de matrícula',
-                                    onSelected: (action) =>
-                                        _runListAction(action, e),
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'view',
-                                        child: Text('Ver detalle'),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'history',
-                                        child: Text('Ver historial'),
-                                      ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado ==
-                                                  'pendiente_revision' ||
-                                              e.estado == 'matriculado'))
-                                        const PopupMenuItem(
-                                          value: 'edit',
-                                          child: Text('Editar'),
-                                        ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado ==
-                                                  'pendiente_revision')) ...[
-                                        const PopupMenuItem(
-                                          value: 'correction',
-                                          child: Text('Solicitar corrección'),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'approve',
-                                          child: Text('Aprobar'),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'reject',
-                                          child: Text('Rechazar'),
-                                        ),
-                                      ],
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          e.estado == 'matriculado')
-                                        const PopupMenuItem(
-                                          value: 'withdraw',
-                                          child: Text('Retirar'),
-                                        ),
-                                      if (isTeacher && canEdit)
-                                        const PopupMenuItem(
-                                          value: 'observe',
-                                          child: Text('Agregar observación'),
-                                        ),
-                                      if (isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado == 'pendiente_revision'))
-                                        const PopupMenuItem(
-                                          value: 'correction',
-                                          child: Text('Solicitar corrección'),
-                                        ),
-                                    ],
-                                  )
-                                : Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      IconButton(
-                                        onPressed: () => _ver(e),
-                                        icon: const Icon(Icons.visibility),
-                                        tooltip: 'Ver detalle',
-                                      ),
-                                      IconButton(
-                                        onPressed: () => _showHistory(e),
-                                        icon: const Icon(Icons.history),
-                                        tooltip: 'Ver historial',
-                                      ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado ==
-                                                  'pendiente_revision' ||
-                                              e.estado == 'matriculado'))
-                                        IconButton(
-                                          onPressed: () => _editar(e),
-                                          icon: const Icon(Icons.edit),
-                                          tooltip: 'Editar',
-                                        ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado == 'pendiente_revision'))
-                                        IconButton(
-                                          onPressed: () => _accionDocente(
-                                            e,
-                                            'request_correction',
-                                          ),
-                                          icon: const Icon(Icons.rule),
-                                          tooltip: 'Solicitar corrección',
-                                        ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado == 'pendiente_revision'))
-                                        IconButton(
-                                          onPressed: () => _aprobar(e),
-                                          icon: Icon(
-                                            Icons.check_circle,
-                                            color: AppPalette.success,
-                                          ),
-                                          tooltip: 'Aprobar',
-                                        ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado == 'pendiente_revision'))
-                                        IconButton(
-                                          onPressed: () => _rechazar(e),
-                                          icon: Icon(
-                                            Icons.cancel,
-                                            color: AppPalette.primary,
-                                          ),
-                                          tooltip: 'Rechazar',
-                                        ),
-                                      if (!isTeacher &&
-                                          canEdit &&
-                                          e.estado == 'matriculado')
-                                        IconButton(
-                                          onPressed: () => _desmatricular(e),
-                                          icon: Icon(
-                                            Icons.undo,
-                                            color: AppPalette.warning,
-                                          ),
-                                          tooltip: 'Retirar',
-                                        ),
-                                      if (isTeacher && canEdit)
-                                        IconButton(
-                                          onPressed: () =>
-                                              _accionDocente(e, 'observe'),
-                                          icon: const Icon(Icons.comment),
-                                          tooltip: 'Agregar observación',
-                                        ),
-                                      if (isTeacher &&
-                                          canEdit &&
-                                          (e.estado == 'prematriculado' ||
-                                              e.estado == 'pendiente_revision'))
-                                        IconButton(
-                                          onPressed: () => _accionDocente(
-                                            e,
-                                            'request_correction',
-                                          ),
-                                          icon: const Icon(Icons.rule),
-                                          tooltip: 'Solicitar corrección',
-                                        ),
-                                    ],
-                                  ),
-                          ),
-                        );
-                      },
-                    ),
+      body: Column(
+        children: [
+          if (_pendingError != null)
+            MaterialBanner(
+              content: Text(_pendingError!),
+              actions: [
+                TextButton(
+                  onPressed: _listenPending,
+                  child: const Text('Reintentar'),
+                ),
+              ],
             ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _loadError != null
+                ? ListView(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.error_outline),
+                        title: const Text(
+                          'No se pudieron cargar las matrículas',
+                        ),
+                        subtitle: Text(_loadError!),
+                        trailing: IconButton(
+                          onPressed: _fetch,
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Reintentar',
+                        ),
+                      ),
+                    ],
+                  )
+                : RefreshIndicator(
+                    onRefresh: _fetch,
+                    child: _items.isEmpty
+                        ? const ListTile(
+                            title: Text('Sin matrículas en este estado.'),
+                          )
+                        : ListView.builder(
+                            itemCount: _items.length,
+                            itemBuilder: (_, index) {
+                              final e = _items[index];
+                              final nombre =
+                                  (e.data['nombresApellidosAlumno'] ??
+                                          '${e.data['nombresAlumno'] ?? ''} ${e.data['apellidosAlumno'] ?? ''}')
+                                      .toString()
+                                      .trim();
+                              final estadoLabel = _estadoDisplay(e.estado);
+                              return Card(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                child: ListTile(
+                                  title: Text(
+                                    nombre.isEmpty ? 'Sin nombre' : nombre,
+                                  ),
+                                  subtitle: Text(
+                                    'Doc: ${e.data['numeroIdentidad'] ?? 'N/D'}  Estado: $estadoLabel',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: compactList
+                                      ? PopupMenuButton<String>(
+                                          tooltip: 'Acciones de matrícula',
+                                          onSelected: (action) =>
+                                              _runListAction(action, e),
+                                          itemBuilder: (context) => [
+                                            const PopupMenuItem(
+                                              value: 'view',
+                                              child: Text('Ver detalle'),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'history',
+                                              child: Text('Ver historial'),
+                                            ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision' ||
+                                                    e.estado == 'matriculado'))
+                                              const PopupMenuItem(
+                                                value: 'edit',
+                                                child: Text('Editar'),
+                                              ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision')) ...[
+                                              const PopupMenuItem(
+                                                value: 'correction',
+                                                child: Text(
+                                                  'Solicitar corrección',
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'approve',
+                                                child: Text('Aprobar'),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'reject',
+                                                child: Text('Rechazar'),
+                                              ),
+                                            ],
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                e.estado == 'matriculado')
+                                              const PopupMenuItem(
+                                                value: 'withdraw',
+                                                child: Text('Retirar'),
+                                              ),
+                                            if (isTeacher && canEdit)
+                                              const PopupMenuItem(
+                                                value: 'observe',
+                                                child: Text(
+                                                  'Agregar observación',
+                                                ),
+                                              ),
+                                            if (isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision'))
+                                              const PopupMenuItem(
+                                                value: 'correction',
+                                                child: Text(
+                                                  'Solicitar corrección',
+                                                ),
+                                              ),
+                                          ],
+                                        )
+                                      : Wrap(
+                                          spacing: 8,
+                                          children: [
+                                            IconButton(
+                                              onPressed: () => _ver(e),
+                                              icon: const Icon(
+                                                Icons.visibility,
+                                              ),
+                                              tooltip: 'Ver detalle',
+                                            ),
+                                            IconButton(
+                                              onPressed: () => _showHistory(e),
+                                              icon: const Icon(Icons.history),
+                                              tooltip: 'Ver historial',
+                                            ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision' ||
+                                                    e.estado == 'matriculado'))
+                                              IconButton(
+                                                onPressed: () => _editar(e),
+                                                icon: const Icon(Icons.edit),
+                                                tooltip: 'Editar',
+                                              ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision'))
+                                              IconButton(
+                                                onPressed: () => _accionDocente(
+                                                  e,
+                                                  'request_correction',
+                                                ),
+                                                icon: const Icon(Icons.rule),
+                                                tooltip: 'Solicitar corrección',
+                                              ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision'))
+                                              IconButton(
+                                                onPressed: () => _aprobar(e),
+                                                icon: Icon(
+                                                  Icons.check_circle,
+                                                  color: AppPalette.success,
+                                                ),
+                                                tooltip: 'Aprobar',
+                                              ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision'))
+                                              IconButton(
+                                                onPressed: () => _rechazar(e),
+                                                icon: Icon(
+                                                  Icons.cancel,
+                                                  color: AppPalette.primary,
+                                                ),
+                                                tooltip: 'Rechazar',
+                                              ),
+                                            if (!isTeacher &&
+                                                canEdit &&
+                                                e.estado == 'matriculado')
+                                              IconButton(
+                                                onPressed: () =>
+                                                    _desmatricular(e),
+                                                icon: Icon(
+                                                  Icons.undo,
+                                                  color: AppPalette.warning,
+                                                ),
+                                                tooltip: 'Retirar',
+                                              ),
+                                            if (isTeacher && canEdit)
+                                              IconButton(
+                                                onPressed: () => _accionDocente(
+                                                  e,
+                                                  'observe',
+                                                ),
+                                                icon: const Icon(Icons.comment),
+                                                tooltip: 'Agregar observación',
+                                              ),
+                                            if (isTeacher &&
+                                                canEdit &&
+                                                (e.estado == 'prematriculado' ||
+                                                    e.estado ==
+                                                        'pendiente_revision'))
+                                              IconButton(
+                                                onPressed: () => _accionDocente(
+                                                  e,
+                                                  'request_correction',
+                                                ),
+                                                icon: const Icon(Icons.rule),
+                                                tooltip: 'Solicitar corrección',
+                                              ),
+                                          ],
+                                        ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+          ),
+        ],
+      ),
       floatingActionButton: isTeacher || !canEdit
           ? null
           : FloatingActionButton.extended(

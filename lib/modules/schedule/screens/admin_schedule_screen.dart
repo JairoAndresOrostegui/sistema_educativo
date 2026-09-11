@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
@@ -134,7 +133,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
         fallback: 'No se pudieron cargar los docentes. Intenta nuevamente.',
       );
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadSchedulesForGroup(String? groupId) async {
@@ -149,6 +148,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     setState(() {
       _isLoading = true;
       _selectedGroupId = groupId;
+      _loadError = null;
     });
 
     try {
@@ -169,7 +169,7 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       );
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadSchedulesForTeacher(String? teacherId) async {
@@ -454,25 +454,36 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       _allSchedules = {};
       _isLoading = true;
     });
-    _academicYears = await _yearService.list(
-      institutionId: institutionId,
-      campusId: campusId,
-    );
-    _selectedAcademicYearId = _academicYears
-        .where((item) => item.status == 'active')
-        .firstOrNull
-        ?.id;
-    _teachers = await _scheduleService.getTeachers(
-      institutionId: institutionId,
-      campusId: campusId,
-      includeInactive: !_canWriteCurrentYear,
-    );
-    _availableGroups = await _groupService.list(
-      institutionId: institutionId,
-      campusId: campusId,
-      academicYearId: _selectedAcademicYearId,
-    );
-    if (mounted) setState(() => _isLoading = false);
+    try {
+      _academicYears = await _yearService.list(
+        institutionId: institutionId,
+        campusId: campusId,
+      );
+      _selectedAcademicYearId = _academicYears
+          .where((item) => item.status == 'active')
+          .firstOrNull
+          ?.id;
+      _teachers = await _scheduleService.getTeachers(
+        institutionId: institutionId,
+        campusId: campusId,
+        includeInactive: !_canWriteCurrentYear,
+      );
+      _availableGroups = await _groupService.list(
+        institutionId: institutionId,
+        campusId: campusId,
+        academicYearId: _selectedAcademicYearId,
+      );
+      _loadError = null;
+    } catch (error) {
+      _teachers = [];
+      _availableGroups = [];
+      _loadError = userFacingError(
+        error,
+        fallback: 'No fue posible cargar la sede seleccionada.',
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _changeAcademicYear(String? id) async {
@@ -486,17 +497,28 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
       _allSchedules = {};
       _isLoading = true;
     });
-    _teachers = await _scheduleService.getTeachers(
-      institutionId: _selectedInstitution!,
-      campusId: _selectedCampus!,
-      includeInactive: !_canWriteCurrentYear,
-    );
-    _availableGroups = await _groupService.list(
-      institutionId: _selectedInstitution!,
-      campusId: _selectedCampus!,
-      academicYearId: id,
-    );
-    if (mounted) setState(() => _isLoading = false);
+    try {
+      _teachers = await _scheduleService.getTeachers(
+        institutionId: _selectedInstitution!,
+        campusId: _selectedCampus!,
+        includeInactive: !_canWriteCurrentYear,
+      );
+      _availableGroups = await _groupService.list(
+        institutionId: _selectedInstitution!,
+        campusId: _selectedCampus!,
+        academicYearId: id,
+      );
+      _loadError = null;
+    } catch (error) {
+      _teachers = [];
+      _availableGroups = [];
+      _loadError = userFacingError(
+        error,
+        fallback: 'No fue posible cargar el año lectivo seleccionado.',
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   InstitutionOption? get _selectedInstitutionOption {
@@ -695,16 +717,16 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppPalette.primary.withValues(alpha: 0.08),
+                  color: Theme.of(context).colorScheme.errorContainer,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppPalette.primary.withValues(alpha: 0.22),
+                    color: Theme.of(context).colorScheme.error,
                   ),
                 ),
                 child: Text(
                   _loadError!,
                   style: TextStyle(
-                    color: AppPalette.primary,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -734,11 +756,11 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
     );
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Gestión de horarios'),
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.primary,
         centerTitle: true,
         leading: const BackToDashboardButton(),
       ),
@@ -753,7 +775,9 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
             child: _blocking
                 ? Container(
                     key: const ValueKey('overlay'),
-                    color: AppPalette.onSurface.withValues(alpha: 0.35),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.35),
                     child: Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -761,13 +785,13 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                           vertical: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: AppPalette.surface,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: AppPalette.onSurface.withValues(
-                                alpha: 0.08,
-                              ),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.08),
                               blurRadius: 24,
                               offset: const Offset(0, 8),
                             ),
@@ -831,8 +855,8 @@ class _ScheduleAdminScreenState extends State<ScheduleAdminScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 4.0),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),

@@ -48,6 +48,7 @@ class EnrollmentService {
     String? vinculaUsuarioId,
     String? institution,
     String? campus,
+    int? expectedRevision,
   }) async {
     final action = switch (estado) {
       'matriculado' => 'approve',
@@ -61,6 +62,7 @@ class EnrollmentService {
       data: data,
       observation: rechazoMotivo,
       linkedStudentId: vinculaUsuarioId,
+      expectedRevision: expectedRevision,
     );
   }
 
@@ -70,14 +72,19 @@ class EnrollmentService {
     Map<String, dynamic>? data,
     String? observation,
     String? linkedStudentId,
+    int? expectedRevision,
   }) async {
-    await _functions.httpsCallable('actualizarMatricula').call({
+    final payload = <String, dynamic>{
       'id': id,
       'action': action,
       'data': data,
       'observation': observation,
       'vinculaUsuarioId': linkedStudentId,
-    });
+    };
+    if (expectedRevision != null) {
+      payload['expectedRevision'] = expectedRevision;
+    }
+    await _functions.httpsCallable('actualizarMatricula').call(payload);
   }
 
   Future<Enrollment?> getById(String id) async {
@@ -95,12 +102,6 @@ class EnrollmentService {
     return snapshot.docs
         .map((document) => {'id': document.id, ...document.data()})
         .toList();
-  }
-
-  Future<Enrollment?> getByToken(String token) async {
-    final snap = await _col.where('token', isEqualTo: token).limit(1).get();
-    if (snap.docs.isEmpty) return null;
-    return Enrollment.fromDoc(snap.docs.first);
   }
 
   Future<List<Enrollment>> listByEstado(

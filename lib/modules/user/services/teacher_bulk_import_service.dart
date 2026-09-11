@@ -494,23 +494,24 @@ class TeacherBulkImportService {
   }
 
   Future<Map<String, String>> _loadDocumentTypeMap() async {
-    try {
-      final params = await ParametersService().getDocumentTypes();
-      final map = <String, String>{};
-      for (final item in params) {
-        final valor = item.valor.trim();
-        if (valor.isEmpty) {
-          continue;
-        }
-        map[_normalizeLookupKey(valor)] = valor;
-        if (item.etiqueta.trim().isNotEmpty) {
-          map[_normalizeLookupKey(item.etiqueta)] = valor;
-        }
+    final params = await ParametersService().getDocumentTypes();
+    final map = <String, String>{};
+    for (final item in params) {
+      final valor = item.valor.trim();
+      if (valor.isEmpty) {
+        continue;
       }
-      return map;
-    } catch (_) {
-      return <String, String>{};
+      map[_normalizeLookupKey(valor)] = valor;
+      if (item.etiqueta.trim().isNotEmpty) {
+        map[_normalizeLookupKey(item.etiqueta)] = valor;
+      }
     }
+    if (map.isEmpty) {
+      throw Exception(
+        'No hay tipos de documento activos. Configúralos antes de importar.',
+      );
+    }
+    return map;
   }
 
   String _normalizeDocumentType(
@@ -519,11 +520,19 @@ class TeacherBulkImportService {
   ) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
-      return documentTypes[_normalizeLookupKey('CC')] ?? 'CC';
+      final defaultValue = documentTypes[_normalizeLookupKey('CC')];
+      if (defaultValue == null) {
+        throw Exception('Indica un tipo de documento válido.');
+      }
+      return defaultValue;
     }
 
     final normalizedKey = _normalizeLookupKey(trimmed);
-    return documentTypes[normalizedKey] ?? trimmed;
+    final resolved = documentTypes[normalizedKey];
+    if (resolved == null) {
+      throw Exception('El tipo de documento "$trimmed" no está configurado.');
+    }
+    return resolved;
   }
 
   String _normalizeLookupKey(String value) {

@@ -9,6 +9,7 @@ class AcademicGroup {
   final String section;
   final int order;
   final bool active;
+  final int revision;
 
   const AcademicGroup({
     required this.id,
@@ -19,6 +20,7 @@ class AcademicGroup {
     required this.section,
     required this.order,
     required this.active,
+    this.revision = 1,
   });
 
   factory AcademicGroup.fromDocument(
@@ -34,6 +36,7 @@ class AcademicGroup {
       section: (data['section'] ?? '').toString(),
       order: (data['order'] as num?)?.toInt() ?? 0,
       active: data['active'] == true,
+      revision: (data['revision'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -47,6 +50,7 @@ class AcademicGroup {
       section: (data['section'] ?? '').toString(),
       order: (data['order'] as num?)?.toInt() ?? 0,
       active: data['active'] == true,
+      revision: (data['revision'] as num?)?.toInt() ?? 1,
     );
   }
 }

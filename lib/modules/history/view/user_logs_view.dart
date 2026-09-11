@@ -1,12 +1,14 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../services/user_logs_service.dart';
 import '../export/utils/user_logs_export_utils.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/user_facing_error.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../widgets/history_date_range_field.dart';
 
 class GestionLogsUsuariosView extends StatefulWidget {
   const GestionLogsUsuariosView({super.key});
@@ -18,6 +20,10 @@ class GestionLogsUsuariosView extends StatefulWidget {
 
 class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
   final _service = UserLogsService();
+  final _nameController = TextEditingController();
+  final _groupController = TextEditingController();
+  late final String _institutionId;
+  late final String _campusId;
 
   String? _role;
   String _groupEquals = ''; // local (igual)
@@ -38,6 +44,9 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
   @override
   void initState() {
     super.initState();
+    final user = context.read<UserProviderV2>().user!;
+    _institutionId = user.institution;
+    _campusId = user.campus;
     final now = DateTime.now();
     _rango = DateTimeRange(
       start: DateTime(
@@ -48,6 +57,13 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
     _aplicarFiltros(recargar: true);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _groupController.dispose();
+    super.dispose();
   }
 
   Future<void> _aplicarFiltros({bool recargar = false}) async {
@@ -64,12 +80,13 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       final page = await _service.getLogs(
         role: _role,
         event: null,
-        campus: null,
-        institution: null,
+        campus: _campusId,
+        institution: _institutionId,
         platform: null,
         nameContains: _nameContains.trim().isEmpty
             ? null
             : _nameContains.trim(),
+        groupEquals: _groupEquals.trim().isEmpty ? null : _groupEquals.trim(),
         rango: _rango,
         limit: _porPagina,
         startAfter: _cursors[_pageIndex],
@@ -78,8 +95,13 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       final total = await _service.countLogs(
         role: _role,
         event: null,
-        campus: null,
-        institution: null,
+        campus: _campusId,
+        institution: _institutionId,
+        platform: null,
+        nameContains: _nameContains.trim().isEmpty
+            ? null
+            : _nameContains.trim(),
+        groupEquals: _groupEquals.trim().isEmpty ? null : _groupEquals.trim(),
         rango: _rango,
       );
 
@@ -148,11 +170,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(
-            ctx,
-          ).colorScheme.copyWith(primary: AppPalette.primary),
-        ),
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
         child: child!,
       ),
     );
@@ -184,7 +202,7 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       await _aplicarFiltros(recargar: true);
     }
     if (kIsWeb && _items.isNotEmpty) {
-      UserLogsExportUtils.exportarExcel(_filtradoLocal(_items));
+      UserLogsExportUtils.exportarExcel(_items);
     }
   }
 
@@ -193,23 +211,13 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
       await _aplicarFiltros(recargar: true);
     }
     if (_items.isNotEmpty) {
-      await UserLogsExportUtils.exportarPDF(_filtradoLocal(_items));
+      await UserLogsExportUtils.exportarPDF(_items);
     }
-  }
-
-  List<Map<String, dynamic>> _filtradoLocal(List<Map<String, dynamic>> base) {
-    return base.where((r) {
-      if (_groupEquals.trim().isNotEmpty) {
-        if ((r['groupName'] ?? '').toString().trim() != _groupEquals.trim()) {
-          return false;
-        }
-      }
-      return true;
-    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
         body: SafeArea(
@@ -222,10 +230,10 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
         ? ''
         : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
-    final itemsFiltradosLocal = _filtradoLocal(_items);
+    final itemsFiltradosLocal = _items;
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -237,14 +245,12 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  border: Border.all(
-                    color: AppPalette.error.withValues(alpha: .15),
-                  ),
+                  color: colors.surface,
+                  border: Border.all(color: colors.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.shadow.withValues(alpha: .06),
                       blurRadius: 8,
                       offset: Offset(0, 2),
                     ),
@@ -301,8 +307,9 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   SizedBox(
                     width: 240,
                     child: TextFormField(
+                      controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: 'Nombre (contiene, local)',
+                        labelText: 'Nombre (contiene)',
                         border: OutlineInputBorder(),
                       ),
                       onChanged: (v) => setState(() {
@@ -314,8 +321,9 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   SizedBox(
                     width: 200,
                     child: TextFormField(
+                      controller: _groupController,
                       decoration: InputDecoration(
-                        labelText: 'Grupo (igual, local)',
+                        labelText: 'Grupo (igual)',
                         border: OutlineInputBorder(),
                       ),
                       onChanged: (v) => setState(() {
@@ -326,13 +334,8 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                   ),
                   SizedBox(
                     width: 280,
-                    child: TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Rango de fechas',
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: TextEditingController(text: rangoTexto),
+                    child: HistoryDateRangeField(
+                      value: rangoTexto,
                       onTap: _pickDateRange,
                     ),
                   ),
@@ -341,14 +344,16 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                     onPressed: () => _aplicarFiltros(recargar: true),
                     label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
                     ),
                   ),
                   TextButton(
                     onPressed: () {
                       final now = DateTime.now();
                       setState(() {
+                        _nameController.clear();
+                        _groupController.clear();
                         _role = null;
                         _groupEquals = '';
                         _nameContains = '';
@@ -386,13 +391,13 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                     ElevatedButton.icon(
                       onPressed: _exportarExcel,
                       icon: Icon(Icons.table_view),
-                      label: Text('Exportar Excel'),
+                      label: Text('Exportar página a Excel'),
                     ),
                     SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _exportarPDF,
                       icon: Icon(Icons.picture_as_pdf),
-                      label: Text('Exportar PDF'),
+                      label: Text('Exportar página a PDF'),
                     ),
                   ],
                 ),
@@ -434,14 +439,10 @@ class _GestionLogsUsuariosViewState extends State<GestionLogsUsuariosView> {
                           return Semantics(
                             label: 'Log de usuario',
                             child: Card(
-                              color: AppPalette.surface,
+                              color: colors.surface,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: AppPalette.error.withValues(
-                                    alpha: .12,
-                                  ),
-                                ),
+                                side: BorderSide(color: colors.outlineVariant),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               margin: EdgeInsets.symmetric(

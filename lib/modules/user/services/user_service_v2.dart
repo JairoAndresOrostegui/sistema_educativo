@@ -146,6 +146,7 @@ class UserServiceV2 {
         .where(FieldPath.documentId, isEqualTo: uid)
         .where('institution', isEqualTo: institutionId)
         .where('campus', isEqualTo: campusId)
+        .where('status', whereIn: const ['activo', 'inactivo'])
         .limit(1)
         .get();
 
@@ -163,6 +164,7 @@ class UserServiceV2 {
     );
     final result = await callable.call({
       'uid': usuario.id,
+      'expectedRevision': usuario.revision,
       'profile': usuario.toMap(),
     });
     if (result.data['success'] != true) {
@@ -248,19 +250,6 @@ class UserServiceV2 {
     await eliminarUsuarioAuth(usuario.id, mode: mode);
   }
 
-  Future<void> actualizarEstado({
-    required String uid,
-    required String status,
-  }) async {
-    final callable = FirebaseFunctions.instance.httpsCallable(
-      'actualizarEstadoUsuario',
-    );
-    final result = await callable.call({'uid': uid, 'status': status});
-    if (result.data['success'] != true) {
-      throw Exception('No se pudo actualizar el estado del usuario');
-    }
-  }
-
   Future<TeacherTransferPreview> previewTeacherTransfer({
     required String sourceTeacherId,
     required String targetTeacherId,
@@ -342,48 +331,5 @@ class UserServiceV2 {
       'type': 'user_history',
       'payload': {'userId': usuario.id, 'action': accion},
     });
-  }
-
-  // ================== VALIDACIONES DE UNICIDAD ==================
-
-  Future<bool> existeCorreoPersonal(String email, {String? excluirId}) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final snap = await _db
-        .collection('users')
-        .where('personalEmail', isEqualTo: normalizedEmail)
-        .limit(5)
-        .get();
-
-    if (snap.docs.isEmpty) return false;
-    if (excluirId == null) return true;
-    return snap.docs.any((d) => d.id != excluirId);
-  }
-
-  Future<bool> existeCorreoInstitucional(
-    String email, {
-    String? excluirId,
-  }) async {
-    final normalizedEmail = email.trim().toLowerCase();
-    final snap = await _db
-        .collection('users')
-        .where('institutionalEmail', isEqualTo: normalizedEmail)
-        .limit(5)
-        .get();
-
-    if (snap.docs.isEmpty) return false;
-    if (excluirId == null) return true;
-    return snap.docs.any((d) => d.id != excluirId);
-  }
-
-  Future<bool> existeDocumento(String documento, {String? excluirId}) async {
-    final snap = await _db
-        .collection('users')
-        .where('document', isEqualTo: documento.trim())
-        .limit(5)
-        .get();
-
-    if (snap.docs.isEmpty) return false;
-    if (excluirId == null) return true;
-    return snap.docs.any((d) => d.id != excluirId);
   }
 }

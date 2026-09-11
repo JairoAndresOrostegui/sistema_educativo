@@ -17,6 +17,7 @@ import 'modules/auth/utils/auth_access_policy.dart';
 import 'modules/authorization/screens/admin_authorization_screen.dart';
 import 'modules/authorization/screens/student_authorization_screen.dart';
 import 'modules/authorization/screens/teacher_authorization_screen.dart';
+import 'modules/attendance/screens/attendance_screen.dart';
 import 'modules/file/screens/upload_file_screen.dart';
 import 'modules/file/screens/view_file_screen.dart';
 import 'modules/history/screens/admin_history_screen.dart';
@@ -32,6 +33,7 @@ import 'modules/schedule/screens/student_schedule_screen.dart';
 import 'modules/schedule/screens/teacher_schedule_screen.dart';
 import 'modules/enrollment/screens/enrollment_form_screen.dart';
 import 'modules/enrollment/screens/admin_enrollment_screen.dart';
+import 'modules/events/screens/events_screen.dart';
 import 'modules/user/screens/admin_users_screen.dart';
 import 'modules/website/screens/public_website_screen.dart';
 import 'modules/website/screens/website_editor_screen.dart';
@@ -223,6 +225,14 @@ class _AppRouterState extends State<AppRouter> {
         GoRoute(
           path: '/admin_qr',
           builder: (context, state) => const QrScreen(manage: true),
+        ),
+        GoRoute(
+          path: '/attendance',
+          builder: (context, state) => const AttendanceScreen(),
+        ),
+        GoRoute(
+          path: '/events',
+          builder: (context, state) => const EventsScreen(),
         ),
         GoRoute(
           path: '/website_admin',

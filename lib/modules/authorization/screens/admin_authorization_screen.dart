@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 
 import 'package:intl/intl.dart';
 
@@ -105,10 +104,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
       _loadError = null;
     });
     _itemsSub = _svc
-        .watchForAdmin(
-          institutionId: _isSuperadmin ? null : _institutionId,
-          campusId: _isSuperadmin ? null : _campusId,
-        )
+        .watchForAdmin(institutionId: _institutionId, campusId: _campusId)
         .listen(
           (items) {
             if (!mounted) return;
@@ -153,18 +149,19 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   }
 
   Color _statusColor(AuthorizationStatus s) {
+    final colors = Theme.of(context).colorScheme;
     switch (s) {
       case AuthorizationStatus.pending:
-        return AppPalette.warning;
+        return colors.tertiary;
 
       case AuthorizationStatus.approved:
-        return AppPalette.success;
+        return colors.primary;
 
       case AuthorizationStatus.rejected:
-        return AppPalette.primary;
+        return colors.error;
 
       case AuthorizationStatus.finished:
-        return AppPalette.info;
+        return colors.outline;
     }
   }
 
@@ -204,6 +201,8 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
         admin: _logged!,
 
+        expectedRevision: r.revision,
+
         superOverride:
             _isSuperadmin && r.status == AuthorizationStatus.finished,
       );
@@ -240,6 +239,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final session = context.watch<UserProviderV2>().user;
 
     if (session == null) {
@@ -254,29 +254,29 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
           title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
 
-          backgroundColor: AppPalette.surface,
+          backgroundColor: colors.surface,
 
-          foregroundColor: AppPalette.primary,
+          foregroundColor: colors.primary,
 
           centerTitle: true,
         ),
 
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
 
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
       );
     }
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
 
       appBar: AppBar(
         title: const Text('Autorizaciones'),
         leading: const BackToDashboardButton(),
 
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
 
-        foregroundColor: AppPalette.primary,
+        foregroundColor: colors.primary,
 
         centerTitle: true,
       ),
@@ -377,19 +377,17 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
                               borderRadius: BorderRadius.circular(12),
 
                               border: Border.all(
-                                color: AppPalette.primary.withValues(
-                                  alpha: .12,
-                                ),
+                                color: colors.primary.withValues(alpha: .12),
                               ),
 
-                              color: AppPalette.surfaceContainer,
+                              color: colors.surfaceContainer,
                             ),
 
                             child: ListTile(
                               leading: Icon(
                                 Icons.assignment_turned_in,
 
-                                color: AppPalette.primary,
+                                color: colors.primary,
                               ),
 
                               title: Row(
@@ -431,7 +429,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
                                   ? IconButton(
                                       icon: Icon(
                                         Icons.manage_accounts,
-                                        color: AppPalette.primary,
+                                        color: colors.primary,
                                       ),
                                       onPressed: () => _manage(r),
                                     )

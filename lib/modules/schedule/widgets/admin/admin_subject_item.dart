@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../../models/schedule/subject_model.dart';
 
@@ -29,8 +28,10 @@ class AdminSubjectItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-        color: AppPalette.surfaceContainer,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
+        ),
+        color: Theme.of(context).colorScheme.surfaceContainer,
       ),
       child: ListTile(
         title: Text(

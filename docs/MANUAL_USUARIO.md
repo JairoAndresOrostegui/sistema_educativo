@@ -123,6 +123,13 @@ del horario actualizan los miembros automáticamente. Salir de un canal impide
 leer o escribir contenido nuevo, pero nunca cambia la autoría de sus mensajes
 históricos.
 
+Los administradores forman parte de los canales colectivos de su sede, pero no
+pueden consultar conversaciones particulares ajenas. El superadministrador
+conserva el acceso excepcional de plataforma. En un canal ya iniciado se pueden
+adjuntar PDF, Word y Excel de hasta 25 MiB. El botón del clip carga y envía el
+archivo; en una conversación particular nueva primero se envía un mensaje para
+crear el canal.
+
 **Particulares** permite buscar únicamente contactos autorizados. Cuando un
 docente o administrador conversa con un estudiante, el sistema crea una sola
 **Conversación supervisada** que incluye al estudiante y a todos sus familiares
@@ -133,8 +140,9 @@ seleccionado, administración y
 familiares que tengan algún hijo activo en el mismo grupo del hijo elegido.
 Para responder, el otro familiar selecciona su propio hijo de ese grupo.
 Un retiro o cambio que termine el vínculo compartido bloquea nuevos envíos,
-incluidos los chats anteriores. El docente accede a estudiantes y familiares de los grupos
-donde dicta. El familiar siempre debe seleccionar primero el hijo activo.
+incluidos los chats anteriores. El docente accede a estudiantes y familiares de
+los grupos donde dicta o de los que es director. El familiar siempre debe
+seleccionar primero el hijo activo.
 
 El número sobre el icono y en cada conversación muestra mensajes no leídos para
 la cuenta que inició sesión. Al abrir un canal se registra por mensaje la fecha
@@ -143,6 +151,11 @@ estudiante ni de los otros familiares. En conversaciones supervisadas todos los
 miembros pueden pulsar **Leído por...** para ver fecha/hora de envío y quién lo
 vio y cuándo. En los demás canales, docentes y administradores consultan los
 acuses de sus mensajes propios.
+
+Cada adjunto utiliza la misma cuota institucional de 1 GiB y la retención de 60
+días de Archivos. Solo los miembros vigentes del canal pueden descargarlo. La
+descarga queda registrada para esa cuenta y no cambia los pendientes ni los
+acuses de los demás miembros.
 
 Administración también crea canales de servicio con iconos diferenciados para
 Lonchera, Restaurante, Ruta escolar, Comunidad u Otro. Son canales de anuncios
@@ -165,6 +178,9 @@ Hay cinco intentos automáticos por ciclo; un reintento manual inicia otro.
 La aceptación por Firebase no confirma que el equipo lo haya mostrado ni que
 la persona lo haya leído. Una interrupción durante una entrega incierta puede
 producir un aviso repetido. Se mantiene un móvil y un navegador por persona.
+Si Firebase confirma que un registro del dispositivo ya no existe, el sistema
+lo desactiva sin afectar un teléfono o navegador registrado después. La persona
+puede volver a activar los avisos desde Inicio cuando corresponda.
 
 ## Sitio web
 
@@ -181,6 +197,11 @@ Las imágenes se eligen desde el equipo y se guardan en Storage. Los videos se a
 El selector de color muestra una paleta visual amplia y deja el hexadecimal como opción avanzada. El color principal y la tipografía también alimentan el tema de los módulos internos; los fondos y estilos propios de filas, columnas y componentes solo afectan el sitio público. Antes de publicar se puede alternar la vista previa entre escritorio y móvil. Solo usuarios con `sitio_web.editar` o el superadministrador pueden modificar y publicar.
 
 Los carruseles publicados pueden recorrerse con las flechas, los indicadores inferiores o el gesto de arrastre. En pantallas estrechas, la bandeja de mensajes muestra primero el listado y abre el detalle en una vista independiente con botón para regresar; así ninguna acción ni texto queda oculto.
+
+La bandeja solo muestra formularios de la institución y sede activas. Un
+formulario deja de aceptar envíos si su página o el componente fueron
+desactivados. Si otra persona publicó mientras el editor estaba abierto, el
+sistema solicita recargar para evitar reemplazar sus cambios.
 
 Eliminar una fila, columna, componente, elemento o página modifica primero el borrador. Al publicar se retiran sus referencias del documento de Firestore y se eliminan de Storage las imágenes que ya no utiliza ninguna parte del sitio. Si Storage falla, las rutas quedan en `pendingAssetCleanup` y se reintentan en la siguiente publicación; no se considera una limpieza terminada silenciosamente.
 
@@ -218,6 +239,48 @@ rutas, conversaciones y archivos involucrados, y bloquea choques antes de
 confirmar. El traslado puede ser temporal o definitivo. En uno temporal,
 **Restaurar** devuelve el acceso y la carga que todavía corresponda al docente
 original. La autoría histórica de mensajes y archivos no cambia.
+
+## Lista de asistencia
+
+Administración y docentes autorizados abren una lista para un grupo y fecha. El
+docente solo puede usar sus asignaturas o, para jornada completa, el grupo que
+dirige. La lista conserva los estudiantes activos que existían al abrirla. Cada
+estudiante debe quedar como Presente, Ausente, Tarde o Excusado antes de cerrar.
+
+Una lista cerrada ya no puede cambiarla el docente. Administración con permiso de
+edición puede corregirla; la corrección queda en historial y genera un nuevo aviso.
+Estudiantes y familiares ven únicamente listas cerradas y solo del estudiante o
+hijo activo correspondiente. Ausencias y tardanzas generan notificación, pero el
+push no sustituye la consulta del módulo. El QR actual solo identifica y no marca
+asistencia automáticamente.
+
+No se admiten fechas inexistentes ni escrituras en años cerrados. Un error de
+carga no se presenta como lista vacía. Los avisos se revalidan antes de cada
+envío y reintento: familiares reciben novedades de cualquiera de sus hijos
+activos vinculados, sin depender del hijo que tengan seleccionado en ese momento.
+
+## Eventos
+
+Administración y docentes autorizados abren **Eventos** desde el tablero. Un evento
+se guarda primero como borrador; después puede publicarse, cancelarse, finalizarse
+y archivarse. Incluye lugar, horario, responsables, grupos destinatarios, enlaces,
+confirmación familiar y cupo opcional. El docente solo usa grupos de su carga.
+
+Al publicar, estudiantes y familiares destinatarios reciben el aviso y consultan el
+evento desde su propia cuenta. El familiar selecciona al hijo y confirma si
+asistirá cuando se solicite; el estudiante consulta pero no responde por el adulto.
+Al comenzar, responsables y administración registran Presente o Ausente de forma
+explícita. Nadie queda Ausente por omisión. El reporte permite consultar eventos de
+un rango, destinatarios y confirmaciones. El identificador QR de evento continúa
+siendo solo identificación y no marca asistencia automáticamente.
+
+La publicación vuelve a validar audiencia y responsables activos; los eventos
+de años cerrados son de solo consulta. Una cancelación sigue visible para sus
+destinatarios si el evento estuvo publicado, pero cancelar un borrador no lo
+publica. Los recordatorios se generan una vez dentro de las 24 horas previas y
+usan familiares y responsables vigentes. Listas de asistencia de más de 400
+destinatarios se guardan por bloques; si falla un bloque se recargan los datos
+confirmados para completar lo pendiente sin sobrescribir cambios ajenos.
 
 ## Rutas, QR y módulos en evolución
 
@@ -264,14 +327,18 @@ Un usuario inactivo o eliminado no puede identificarse con un QR antiguo.
 **Identificador de evento** crea una referencia con nombre y año activo, no una
 asistencia ni una reunión completa. Su sede se indica en pantalla: corresponde
 a la entidad seleccionada o, sin selección, a la del administrador.
-**Validar código** permite pegar un identificador copiado desde la aplicación.
+**Validar manualmente** permite pegar un identificador copiado desde la
+aplicación. **Leer con cámara** abre el lector, solicita permiso en el equipo y
+acepta únicamente códigos del sistema. Puede encender la linterna o cambiar de
+cámara. Si el permiso fue negado, debe habilitarse en Ajustes o usarse la opción
+manual.
 La respuesta está limitada por permisos; no muestra perfiles ajenos a usuarios
 normales. Los vínculos de hijos se consultan en la base de datos.
 
 Los QR no contienen documentos ni datos personales y no son firmas digitales.
-Presentar o copiar un QR no autoriza entregar a un estudiante, reclamar bienes
-ni registrar asistencia. El lector de cámara y esas operaciones se incorporarán
-cuando se definan los módulos correspondientes. No publicar el QR en redes.
+Presentar, copiar o leer un QR no autoriza entregar a un estudiante, reclamar
+bienes ni registrar asistencia. La cámara solo identifica; cada operación futura
+exigirá su propia confirmación y registro. No publicar el QR en redes.
 Los códigos del esquema anterior deben reemplazarse; ya no son válidos.
 
 Rutas gestiona recorridos y estados diarios, sujeto a permisos y sede. Los permisos de ubicación y el flujo Android deben volver a validarse antes de publicar en Play Store. Toda ampliación futura debe mantener selección de hijo, grupos por sede, seguridad backend, auditoría y tema central.

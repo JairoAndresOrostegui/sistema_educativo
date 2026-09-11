@@ -58,13 +58,18 @@ async function main() {
   }
   console.log(JSON.stringify({mapsSdkEnabled: true, restrictedToPackage: PACKAGE, certificates: apps.length, routesAutomaticUnchanged: true}));
   if (process.argv.includes("--build")) {
+    const versionArgument = process.argv.find((item) => item.startsWith("--build-number="));
+    const buildNumber = versionArgument?.split("=")[1];
+    if (!/^[1-9][0-9]*$/.test(buildNumber || "")) {
+      throw new Error("Indica --build-number=<codigo de version> para compilar.");
+    }
     const value = await request(`https://apikeys.googleapis.com/v2/${KEY}/keyString`);
     if (!/^AIza[\w-]+$/.test(value.keyString || "")) throw new Error("Invalid Maps key response");
     const root = path.resolve(__dirname, "../..");
-    for (const kind of ["apk", "appbundle"]) {
+    for (const kind of process.argv.includes("--bundle-only") ? ["appbundle"] : ["apk", "appbundle"]) {
       const result = spawnSync(process.platform === "win32" ? "flutter.bat" : "flutter",
-          ["build", kind, "--flavor", "prod", "--release", "--dart-define=APP_ENV=prod", "--build-number=10"], {
-            cwd: root, stdio: "inherit", shell: process.platform === "win32",
+          ["build", kind, "--flavor", "prod", "--release", "--dart-define=APP_ENV=prod", `--build-number=${buildNumber}`], {
+            cwd: root, stdio: "inherit", windowsHide: true, shell: process.platform === "win32",
             env: {...process.env, ORG_GRADLE_PROJECT_PROD_MAPS_API_KEY: value.keyString},
           });
       if (result.error || result.status !== 0) throw new Error(`Production ${kind} build failed`);

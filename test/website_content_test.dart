@@ -71,6 +71,29 @@ void main() {
       expect(restored.footer.rows.first.columns.length, 3);
     });
 
+    test('preserves tenant scope and publication revision', () {
+      final config = WebsiteBundle.defaults.config.copyWith(
+        institutionId: 'inst-1',
+        campusId: 'campus-1',
+        revision: 7,
+      );
+      final restoredConfig = WebsiteSiteConfig.fromMap(config.toMap());
+      expect(restoredConfig.institutionId, 'inst-1');
+      expect(restoredConfig.campusId, 'campus-1');
+      expect(restoredConfig.revision, 7);
+
+      const page = WebsitePage(
+        id: 'home',
+        institutionId: 'inst-1',
+        campusId: 'campus-1',
+        label: 'Inicio',
+        slug: 'home',
+      );
+      final restoredPage = WebsitePage.fromMap(page.id, page.toMap());
+      expect(restoredPage.institutionId, 'inst-1');
+      expect(restoredPage.campusId, 'campus-1');
+    });
+
     test('rejects old schemas instead of keeping compatibility code', () {
       expect(
         () =>

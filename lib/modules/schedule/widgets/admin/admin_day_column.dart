@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../../models/schedule/subject_model.dart';
 import 'admin_subject_item.dart';
@@ -41,7 +40,7 @@ class AdminDayColumn extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 10),
           margin: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: AppPalette.primary.withValues(alpha: .08),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: .08),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Center(
@@ -50,7 +49,7 @@ class AdminDayColumn extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppPalette.primary,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
@@ -61,12 +60,16 @@ class AdminDayColumn extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: AppPalette.primary.withValues(alpha: .15),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: .15),
             ),
-            color: AppPalette.surfaceContainer,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             boxShadow: [
               BoxShadow(
-                color: AppPalette.onSurface.withValues(alpha: 0.03),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.03),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -102,8 +105,8 @@ class AdminDayColumn extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8.0),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppPalette.primary,
-                foregroundColor: AppPalette.surface,
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

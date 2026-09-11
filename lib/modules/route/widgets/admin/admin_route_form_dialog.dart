@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -44,8 +43,8 @@ Future<void> mostrarFormularioRuta({
   final managerId = ValueNotifier<String?>(rutaModel?.manager);
   String? driverId = rutaModel?.driverId;
   List<Map<String, dynamic>> drivers;
-  List<DocumentSnapshot<Map<String, dynamic>>> students;
-  List<DocumentSnapshot<Map<String, dynamic>>> managers;
+  List<Map<String, dynamic>> students;
+  List<Map<String, dynamic>> managers;
   try {
     final driverResult = await RouteOperations.call('gestionarConductores', {});
     final rawDrivers = driverResult['items'];
@@ -56,14 +55,12 @@ Future<void> mostrarFormularioRuta({
               .where((d) => d['active'] == true || d['id'] == driverId)
               .toList()
         : [];
-    students = await RouteService().obtenerEstudiantesDisponibles(
+    final participants = await RouteService().obtenerParticipantes(
       institutionId: institutionId,
       campusId: campusId,
     );
-    managers = await RouteService().obtenerGestionadoresDisponibles(
-      institutionId: institutionId,
-      campusId: campusId,
-    );
+    students = participants['students'] ?? const [];
+    managers = participants['managers'] ?? const [];
   } catch (e) {
     nameController.dispose();
     startAddressController.dispose();
@@ -80,9 +77,9 @@ Future<void> mostrarFormularioRuta({
   }
 
   if (rutaModel?.manager != null) {
-    final match = managers.where((g) => g.id == rutaModel!.manager).toList();
+    final match = managers.where((g) => g['id'] == rutaModel!.manager).toList();
     if (match.isNotEmpty) {
-      final d = match.first.data() ?? {};
+      final d = match.first;
       final first = (d['firstName'] ?? '').toString();
       final last = (d['lastName'] ?? '').toString();
       managerController.text = ('$first $last').trim();
@@ -90,9 +87,9 @@ Future<void> mostrarFormularioRuta({
   }
 
   final mapped = (rutaModel?.students ?? []).map<Map<String, dynamic>>((id) {
-    final m = students.where((e) => e.id == id).toList();
+    final m = students.where((e) => e['id'] == id).toList();
     if (m.isNotEmpty) {
-      final d = m.first.data() ?? {};
+      final d = m.first;
       return {
         'id': id,
         'nombre': '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}',
@@ -102,6 +99,7 @@ Future<void> mostrarFormularioRuta({
   }).toList();
 
   final orderedStudents = ValueNotifier<List<Map<String, dynamic>>>(mapped);
+  var saving = false;
 
   if (!context.mounted) return;
   await showDialog(
@@ -167,8 +165,8 @@ Future<void> mostrarFormularioRuta({
                             ),
                           ),
                           onSelectManager: (doc) {
-                            managerId.value = doc.id;
-                            final d = doc.data() ?? {};
+                            managerId.value = doc['id'] as String?;
+                            final d = doc;
                             final first = (d['firstName'] ?? '').toString();
                             final last = (d['lastName'] ?? '').toString();
                             managerController.text = ('$first $last').trim();
@@ -206,62 +204,109 @@ Future<void> mostrarFormularioRuta({
                         button: true,
                         label: 'Guardar ruta',
                         child: ElevatedButton.icon(
-                          onPressed: () async {
-                            if (!formKey.currentState!.validate()) return;
-
-                            final newRoute = RouteModel(
-                              id: rutaModel?.id ?? '',
-                              name: nameController.text.trim(),
-                              startAddress: startAddressController.text.trim(),
-                              startDate: startDate,
-                              endDate: endDate,
-                              startTime: startTime,
-                              endTime: endTime,
-                              manager: managerId.value,
-                              driverId: driverId,
-                              students: orderedStudents.value
-                                  .map((e) => e['id'] as String)
-                                  .toList(),
-                            );
-
-                            try {
-                              if (rutaModel == null) {
-                                await RouteService().guardarRuta(
-                                  ruta: newRoute,
-                                  performedBy: performedBy,
-                                  adminName: adminName,
-                                  institutionId: institutionId,
-                                  campusId: campusId,
-                                );
-                              } else {
-                                await RouteService().guardarRuta(
-                                  id: rutaModel.id,
-                                  ruta: newRoute,
-                                  performedBy: performedBy,
-                                  adminName: adminName,
-                                  institutionId: institutionId,
-                                  campusId: campusId,
-                                );
-                              }
-                              if (context.mounted) Navigator.pop(context);
-                              onGuardar();
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      routeErrorMessage(
-                                        e,
-                                        fallback:
-                                            'No fue posible guardar la ruta.',
+                          onPressed: saving
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate()) return;
+                                  if (managerId.value == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Selecciona el responsable desde la lista.',
+                                        ),
                                       ),
-                                    ),
-                                    backgroundColor: colors.error,
-                                  ),
-                                );
-                              }
-                            }
-                          },
+                                    );
+                                    return;
+                                  }
+                                  if (startDate == null ||
+                                      endDate == null ||
+                                      startTime == null ||
+                                      endTime == null ||
+                                      orderedStudents.value.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Completa fechas, horarios y estudiantes.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  final startMinutes =
+                                      startTime!.hour * 60 + startTime!.minute;
+                                  final endMinutes =
+                                      endTime!.hour * 60 + endTime!.minute;
+                                  if (endDate!.isBefore(startDate!) ||
+                                      endMinutes <= startMinutes) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'La fecha y la hora finales deben ser posteriores a las iniciales.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  setState(() => saving = true);
+
+                                  final newRoute = RouteModel(
+                                    id: rutaModel?.id ?? '',
+                                    name: nameController.text.trim(),
+                                    startAddress: startAddressController.text
+                                        .trim(),
+                                    startDate: startDate,
+                                    endDate: endDate,
+                                    startTime: startTime,
+                                    endTime: endTime,
+                                    manager: managerId.value,
+                                    driverId: driverId,
+                                    students: orderedStudents.value
+                                        .map((e) => e['id'] as String)
+                                        .toList(),
+                                    revision: rutaModel?.revision ?? 0,
+                                  );
+
+                                  try {
+                                    if (rutaModel == null) {
+                                      await RouteService().guardarRuta(
+                                        ruta: newRoute,
+                                        performedBy: performedBy,
+                                        adminName: adminName,
+                                        institutionId: institutionId,
+                                        campusId: campusId,
+                                      );
+                                    } else {
+                                      await RouteService().guardarRuta(
+                                        id: rutaModel.id,
+                                        ruta: newRoute,
+                                        performedBy: performedBy,
+                                        adminName: adminName,
+                                        institutionId: institutionId,
+                                        campusId: campusId,
+                                      );
+                                    }
+                                    if (context.mounted) Navigator.pop(context);
+                                    onGuardar();
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      setState(() => saving = false);
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            routeErrorMessage(
+                                              e,
+                                              fallback:
+                                                  'No fue posible guardar la ruta.',
+                                            ),
+                                          ),
+                                          backgroundColor: colors.error,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
                           icon: Icon(Icons.save),
                           label: Text('Guardar'),
                           style: ElevatedButton.styleFrom(

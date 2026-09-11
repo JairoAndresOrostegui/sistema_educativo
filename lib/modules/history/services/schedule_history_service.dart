@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'history_query_utils.dart';
+
 class ScheduleHistoryPage {
   final List<Map<String, dynamic>> items;
   final bool hasNext;
@@ -14,28 +16,48 @@ class ScheduleHistoryPage {
 }
 
 class AdminScheduleHistoryService {
-  final _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
 
-  Future<ScheduleHistoryPage> obtenerHistorialHorarios({
-    required String institutionId,
-    required String campusId,
+  AdminScheduleHistoryService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
+
+  Map<String, dynamic> _subject(Map<String, dynamic> data) {
+    final raw = data['after'] ?? data['before'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  }
+
+  bool _matches(
+    Map<String, dynamic> data, {
     String? groupContains,
     String? subjectContains,
     String? day,
+  }) {
+    final subject = _subject(data);
+    final groupName = (data['groupName'] ?? subject['groupName'] ?? '')
+        .toString()
+        .toLowerCase();
+    final subjectName = (subject['subject'] ?? '').toString().toLowerCase();
+    final expectedGroup = groupContains?.trim().toLowerCase() ?? '';
+    final expectedSubject = subjectContains?.trim().toLowerCase() ?? '';
+    final expectedDay = day?.trim().toLowerCase() ?? '';
+    return (expectedGroup.isEmpty || groupName.contains(expectedGroup)) &&
+        (expectedSubject.isEmpty || subjectName.contains(expectedSubject)) &&
+        (expectedDay.isEmpty ||
+            (subject['day'] ?? '').toString().toLowerCase() == expectedDay);
+  }
+
+  Query<Map<String, dynamic>> _query({
+    required String institutionId,
+    required String campusId,
     String? action,
     DateTimeRange? rango,
-    required int limite,
-    DocumentSnapshot<Map<String, dynamic>>? startAfter,
-  }) async {
+  }) {
     Query<Map<String, dynamic>> query = _db
         .collection('schedule_history')
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId);
     if (action != null && action.isNotEmpty) {
       query = query.where('action', isEqualTo: action);
-    }
-    if (day != null && day.isNotEmpty) {
-      query = query.where('after.day', isEqualTo: day);
     }
     if (rango != null) {
       query = query
@@ -48,27 +70,44 @@ class AdminScheduleHistoryService {
             isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
           );
     }
-    query = query.orderBy('createdAt', descending: true).limit(limite);
-    if (startAfter != null) query = query.startAfterDocument(startAfter);
-    final snapshot = await query.get();
+    return query;
+  }
+
+  Future<ScheduleHistoryPage> obtenerHistorialHorarios({
+    required String institutionId,
+    required String campusId,
+    String? groupContains,
+    String? subjectContains,
+    String? day,
+    String? action,
+    DateTimeRange? rango,
+    required int limite,
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) async {
+    final query = _query(
+      institutionId: institutionId,
+      campusId: campusId,
+      action: action,
+      rango: rango,
+    ).orderBy('createdAt', descending: true);
+    final page = await scanFilteredPage(
+      query: query,
+      pageSize: limite,
+      startAfter: startAfter,
+      matches: (data) => _matches(
+        data,
+        groupContains: groupContains,
+        subjectContains: subjectContains,
+        day: day,
+      ),
+    );
     final items = <Map<String, dynamic>>[];
-    for (final document in snapshot.docs) {
+    for (final document in page.documents) {
       final data = document.data();
-      final rawSubject = data['after'] ?? data['before'];
-      final subject = rawSubject is Map
-          ? Map<String, dynamic>.from(rawSubject)
-          : <String, dynamic>{};
+      final subject = _subject(data);
       final groupName = (data['groupName'] ?? subject['groupName'] ?? '')
           .toString();
       final subjectName = (subject['subject'] ?? '').toString();
-      if (groupContains != null &&
-          !groupName.toLowerCase().contains(groupContains.toLowerCase())) {
-        continue;
-      }
-      if (subjectContains != null &&
-          !subjectName.toLowerCase().contains(subjectContains.toLowerCase())) {
-        continue;
-      }
       items.add({
         'id': document.id,
         'grupo': groupName,
@@ -77,15 +116,13 @@ class AdminScheduleHistoryService {
         'dia': subject['day'] ?? '',
         'accion': data['action'] ?? '',
         'usuarioNombre': data['performedBy'] ?? '',
-        'fecha': data['createdAt'] is Timestamp
-            ? (data['createdAt'] as Timestamp).toDate()
-            : null,
+        'fecha': historyDate(data['createdAt']),
       });
     }
     return ScheduleHistoryPage(
       items: items,
-      hasNext: snapshot.docs.length == limite,
-      lastDoc: snapshot.docs.isEmpty ? null : snapshot.docs.last,
+      hasNext: page.hasNext,
+      lastDoc: page.lastDoc,
     );
   }
 
@@ -98,16 +135,26 @@ class AdminScheduleHistoryService {
     String? groupContains,
     String? subjectContains,
   }) async {
-    final page = await obtenerHistorialHorarios(
+    final query = _query(
       institutionId: institutionId,
       campusId: campusId,
-      groupContains: groupContains,
-      subjectContains: subjectContains,
-      day: day,
       action: action,
       rango: rango,
-      limite: 1000,
     );
-    return page.items.length;
+    final hasLocalFilters = [
+      groupContains,
+      subjectContains,
+      day,
+    ].any((value) => value != null && value.trim().isNotEmpty);
+    if (!hasLocalFilters) return (await query.count().get()).count ?? 0;
+    return countFilteredDocuments(
+      query: query.orderBy('createdAt', descending: true),
+      matches: (data) => _matches(
+        data,
+        groupContains: groupContains,
+        subjectContains: subjectContains,
+        day: day,
+      ),
+    );
   }
 }

@@ -30,6 +30,8 @@ describe("Recorridos seguros", () => {
   });
   it("bloquea responsable ajeno y direccion despues de iniciar", async () => {
     await assert.rejects(op("start", {}, {...teacher, uid: "other"}));
+    await assert.rejects(op("start", {}, admin),
+        (e) => e.code === "permission-denied");
     await op("start");
     await assert.rejects(op("address", {studentId: "s1", address: "Otra"}));
     assert.equal((await db.doc("daily_routes/r_today").get()).data().estado, "activa");
@@ -52,9 +54,93 @@ describe("Recorridos seguros", () => {
     await assert.rejects(call("eliminarRutaSegura", {id: "r"}, admin));
     assert.equal((await db.doc("routes/r").get()).exists, true);
   });
+  it("audita la creacion de rutas con nombre y estado", async () => {
+    await db.doc("users/t").set({...teacher, status: "activo"});
+    await db.doc("routes/r").delete();
+    const now = Date.now();
+    const result = await call("guardarRutaSegura", {
+      nombre: "Ruta nueva", direccionInicio: "Colegio", gestionador: "t",
+      estudiantes: ["s1", "s2"], institution: "i", campus: "c",
+      fechaInicio: now, fechaFin: now + 86400000,
+      horaInicio: now, horaFin: now + 3600000,
+    }, admin);
+    const history = await db.collection("route_history")
+        .where("routeId", "==", result.id).get();
+    assert.equal(history.size, 1);
+    assert.equal(history.docs[0].data().action, "route_created");
+    assert.equal(history.docs[0].data().routeName, "Ruta nueva");
+    assert.equal(history.docs[0].data().before, null);
+    assert.equal(history.docs[0].data().after.nombre, "Ruta nueva");
+  });
+  it("impide estudiantes duplicados y ediciones con revision vencida",
+      async () => {
+        await db.doc("users/t").set({...teacher, status: "activo"});
+        const now = Date.now();
+        const payload = {
+          id: "r", nombre: "Ruta editada", direccionInicio: "Colegio",
+          gestionador: "t", estudiantes: ["s1", "s2"],
+          institution: "i", campus: "c", fechaInicio: now,
+          fechaFin: now + 86400000, horaInicio: now,
+          horaFin: now + 3600000, expectedRevision: 0,
+        };
+        await call("guardarRutaSegura", payload, admin);
+        await assert.rejects(call("guardarRutaSegura", payload, admin),
+            (e) => e.code === "aborted");
+        await assert.rejects(call("guardarRutaSegura", {
+          ...payload, id: undefined, expectedRevision: undefined,
+          nombre: "Ruta duplicada",
+        }, admin), (e) => e.code === "already-exists");
+      });
+  it("valida fechas y conserva como baja logica una ruta sin recorridos",
+      async () => {
+        await db.doc("users/t").set({...teacher, status: "activo"});
+        await db.doc("routes/r").delete();
+        await db.doc("daily_routes/r_today").delete();
+        const now = Date.now();
+        const payload = {
+          nombre: "Ruta temporal", direccionInicio: "Colegio",
+          gestionador: "t", estudiantes: ["s1", "s2"],
+          institution: "i", campus: "c", fechaInicio: now,
+          fechaFin: now + 86400000, horaInicio: now,
+          horaFin: now + 3600000,
+        };
+        await assert.rejects(call("guardarRutaSegura", {
+          ...payload, fechaInicio: now + 86400000, fechaFin: now,
+        }, admin), (e) => e.code === "invalid-argument");
+        const created = await call("guardarRutaSegura", payload, admin);
+        await call("eliminarRutaSegura", {id: created.id}, admin);
+        const removed = (await db.doc(`routes/${created.id}`).get()).data();
+        assert.equal(removed.status, "deleted");
+        assert.equal(removed.revision, 2);
+      });
   it("ano cerrado no admite operacion", async () => {
     await db.doc("academic_years/y").update({status: "closed"});
     await assert.rejects(op("start"));
+  });
+  it("solo prepara rutas vigentes con todos sus estudiantes activos", async () => {
+    const now = Date.now();
+    await db.doc("routes/r").update({
+      fechaInicio: Timestamp.fromMillis(now + 86400000),
+      fechaFin: Timestamp.fromMillis(now + (2 * 86400000)),
+    });
+    await assert.rejects(call("prepararRecorrido", {routeId: "r"}),
+        (e) => e.code === "failed-precondition");
+
+    await db.doc("routes/r").update({
+      fechaInicio: Timestamp.fromMillis(now - 86400000),
+      fechaFin: Timestamp.fromMillis(now + 86400000),
+    });
+    await db.doc("users/s2").update({status: "inactivo"});
+    await assert.rejects(call("prepararRecorrido", {routeId: "r"}),
+        (e) => e.code === "failed-precondition");
+
+    await db.doc("users/s2").update({status: "activo"});
+    const result = await call("prepararRecorrido", {routeId: "r"});
+    assert.ok(result.id.startsWith("r_"));
+    assert.equal((await db.doc(`daily_routes/${result.id}/students/s1`).get())
+        .exists, true);
+    assert.equal((await db.doc(`daily_routes/${result.id}/students/s2`).get())
+        .exists, true);
   });
   it("consultas e historial requieren permiso de rutas", async () => {
     const student = {...scope, uid: "s1", role: "Estudiante", permissions: []};
@@ -76,8 +162,27 @@ describe("Recorridos seguros", () => {
     await assert.rejects(call("gestionarConductores", data));
     const result = await call("gestionarConductores", data, admin);
     assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].revision, 1);
+    await assert.rejects(call("gestionarConductores", data, admin),
+        (e) => e.code === "already-exists");
+    await call("gestionarConductores", {
+      ...data, id: result.items[0].id, expectedRevision: 1, active: false,
+    }, admin);
+    await assert.rejects(call("gestionarConductores", {
+      ...data, id: result.items[0].id, expectedRevision: 1,
+    }, admin), (e) => e.code === "aborted");
     assert.equal((await db.collection("users").get()).size, 2);
     assert.equal((await call("gestionarConductores", {}, {...admin, campus: "otra"})).items.length, 0);
+  });
+  it("entrega participantes y direcciones solo al administrador autorizado", async () => {
+    await db.doc("users/t").set({...teacher, status: "activo", firstName: "Docente", lastName: "Ruta"});
+    await db.doc("users/foreign").set({...scope, institution: "otra", role: "Estudiante", status: "activo", routeAddress: "Privada"});
+    const result = await call("listarParticipantesRuta", {institution: "i", campus: "c"}, admin);
+    assert.deepEqual(result.students.map((item) => item.id).sort(), ["s1", "s2"]);
+    assert.equal(result.students[0].routeAddress, "Misma dirección");
+    assert.deepEqual(result.managers.map((item) => item.id), ["t"]);
+    await assert.rejects(call("listarParticipantesRuta", {}, teacher), (e) => e.code === "permission-denied");
+    await assert.rejects(call("listarParticipantesRuta", {}, {...admin, permissions: ["rutas.ver"]}), (e) => e.code === "permission-denied");
   });
   it("automatico no consume APIs mientras no este habilitado", async () => {
     await op("start");

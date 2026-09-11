@@ -1,6 +1,4 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import '../../../../utils/format_utils.dart';
 
@@ -24,9 +22,9 @@ class AdminRouteFormBody extends StatefulWidget {
   final void Function(int, int) onReorderStudent;
   final void Function(String) onRemoveStudent;
 
-  final List<DocumentSnapshot<Map<String, dynamic>>> availableStudents;
-  final List<DocumentSnapshot<Map<String, dynamic>>> availableManagers;
-  final void Function(DocumentSnapshot<Map<String, dynamic>>) onSelectManager;
+  final List<Map<String, dynamic>> availableStudents;
+  final List<Map<String, dynamic>> availableManagers;
+  final void Function(Map<String, dynamic>) onSelectManager;
 
   const AdminRouteFormBody({
     super.key,
@@ -59,31 +57,32 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
   // Controller que entrega TypeAheadField para el campo de gestionador (solo UI)
   TextEditingController? _managerFieldCtrl;
 
-  InputDecoration _input(String label) => InputDecoration(
+  InputDecoration _input(BuildContext context, String label) => InputDecoration(
     labelText: label,
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: AppPalette.error.withValues(alpha: .25)),
+      borderSide: BorderSide(
+        color: Theme.of(context).colorScheme.outlineVariant,
+      ),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(12)),
-      borderSide: BorderSide(color: AppPalette.primary, width: 1.4),
+      borderSide: BorderSide(
+        color: Theme.of(context).colorScheme.primary,
+        width: 1.4,
+      ),
     ),
     isDense: true,
   );
 
-  BoxDecoration _box() => BoxDecoration(
+  BoxDecoration _box(BuildContext context) => BoxDecoration(
     borderRadius: BorderRadius.circular(14),
-    border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [AppPalette.error.withValues(alpha: .06), AppPalette.surface],
-    ),
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
     boxShadow: [
       BoxShadow(
-        color: AppPalette.onSurface.withValues(alpha: 0.06),
+        color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
         blurRadius: 12,
         offset: Offset(0, 6),
       ),
@@ -107,7 +106,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'Campo obligatorio'
                     : null,
-                decoration: _input('Nombre de la ruta'),
+                decoration: _input(context, 'Nombre de la ruta'),
               ),
             ),
           ),
@@ -121,7 +120,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
                 validator: (v) => (v == null || v.trim().isEmpty)
                     ? 'Campo obligatorio'
                     : null,
-                decoration: _input('Dirección de inicio'),
+                decoration: _input(context, 'Dirección de inicio'),
               ),
             ),
           ),
@@ -160,14 +159,14 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
               'Estudiantes asignados (orden de recogida)',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: AppPalette.primary.withValues(alpha: .65),
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
           SizedBox(height: 8),
-          _typeAheadStudents(),
+          _typeAheadStudents(context),
           SizedBox(height: 8),
-          _studentList(),
+          _studentList(context),
 
           SizedBox(height: 16),
           Align(
@@ -176,50 +175,12 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
               'Gestionador asignado',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
-                color: AppPalette.primary.withValues(alpha: .65),
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
           ),
           SizedBox(height: 8),
-          _typeAheadManager(),
-
-          SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              if (widget.formKey.currentState?.validate() ?? false) {
-                final missing = <String>[];
-                if (widget.startDate == null) missing.add('Fecha inicio');
-                if (widget.endDate == null) missing.add('Fecha fin');
-                if (widget.startTime == null) missing.add('Hora inicio');
-                if (widget.endTime == null) missing.add('Hora fin');
-                if (widget.orderedStudents.isEmpty) {
-                  missing.add('Estudiantes asignados');
-                }
-                if (widget.managerController.text.trim().isEmpty) {
-                  missing.add('Gestionador');
-                }
-
-                if (missing.isNotEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Faltan campos obligatorios: ${missing.join(', ')}',
-                      ),
-                      backgroundColor: AppPalette.primary,
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Formulario completo y válido'),
-                      backgroundColor: AppPalette.success,
-                    ),
-                  );
-                }
-              }
-            },
-            child: Text('Validar formulario'),
-          ),
+          _typeAheadManager(context),
         ],
       ),
     );
@@ -234,12 +195,15 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     return Container(
       margin: EdgeInsets.symmetric(vertical: 6),
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: _box(),
+      decoration: _box(context),
       child: Row(
         children: [
           Expanded(child: Text('$label: ${FormatUtils.formatearFecha(fecha)}')),
           IconButton(
-            icon: Icon(Icons.calendar_today, color: AppPalette.primary),
+            icon: Icon(
+              Icons.calendar_today,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             onPressed: () async {
               final sel = await showDatePicker(
                 context: context,
@@ -264,12 +228,15 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     return Container(
       margin: EdgeInsets.symmetric(vertical: 6),
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: _box(),
+      decoration: _box(context),
       child: Row(
         children: [
           Expanded(child: Text('$label: ${FormatUtils.formatearHora(hora)}')),
           IconButton(
-            icon: Icon(Icons.access_time, color: AppPalette.primary),
+            icon: Icon(
+              Icons.access_time,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             onPressed: () async {
               final sel = await showTimePicker(
                 context: context,
@@ -283,39 +250,39 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     );
   }
 
-  Widget _typeAheadStudents() {
+  Widget _typeAheadStudents(BuildContext context) {
     return Container(
-      decoration: _box(),
+      decoration: _box(context),
       padding: EdgeInsets.all(8),
-      child: TypeAheadField<DocumentSnapshot<Map<String, dynamic>>>(
+      child: TypeAheadField<Map<String, dynamic>>(
         builder: (context, controller, focusNode) {
           return TextField(
             controller: controller,
             focusNode: focusNode,
-            decoration: _input('Buscar estudiante'),
+            decoration: _input(context, 'Buscar estudiante'),
           );
         },
         suggestionsCallback: (pattern) {
           final q = pattern.toLowerCase();
           return widget.availableStudents.where((e) {
-            final data = e.data() ?? {};
+            final data = e;
             final name =
                 '${(data['firstName'] ?? '').toString()} ${(data['lastName'] ?? '').toString()}'
                     .toLowerCase();
-            final id = e.id;
+            final id = e['id'];
             final already = widget.orderedStudents.any((s) => s['id'] == id);
             return name.contains(q) && !already;
           }).toList();
         },
         itemBuilder: (context, suggestion) {
-          final d = suggestion.data() ?? {};
+          final d = suggestion;
           return ListTile(
             title: Text('${d['firstName'] ?? ''} ${d['lastName'] ?? ''}'),
           );
         },
         onSelected: (sel) {
-          final id = sel.id;
-          final d = sel.data() ?? {};
+          final id = sel['id'];
+          final d = sel;
           widget.onAddStudent({
             'id': id,
             'nombre': '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}',
@@ -325,10 +292,10 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     );
   }
 
-  Widget _studentList() {
+  Widget _studentList(BuildContext context) {
     return Container(
       height: 220,
-      decoration: _box(),
+      decoration: _box(context),
       child: ReorderableListView(
         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         onReorderItem: widget.onReorderStudent,
@@ -340,7 +307,7 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
                 trailing: IconButton(
                   icon: Icon(
                     Icons.remove_circle_outline,
-                    color: AppPalette.primary,
+                    color: Theme.of(context).colorScheme.error,
                   ),
                   onPressed: () => widget.onRemoveStudent(e['id']),
                 ),
@@ -351,11 +318,11 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
     );
   }
 
-  Widget _typeAheadManager() {
+  Widget _typeAheadManager(BuildContext context) {
     return Container(
-      decoration: _box(),
+      decoration: _box(context),
       padding: EdgeInsets.all(8),
-      child: TypeAheadField<DocumentSnapshot<Map<String, dynamic>>>(
+      child: TypeAheadField<Map<String, dynamic>>(
         builder: (context, controller, focusNode) {
           // guardo referencia al controller interno para poder actualizar el texto
           _managerFieldCtrl ??= controller;
@@ -371,13 +338,13 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
             focusNode: focusNode,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Campo obligatorio' : null,
-            decoration: _input('Buscar gestionador'),
+            decoration: _input(context, 'Buscar gestionador'),
           );
         },
         suggestionsCallback: (pattern) {
           final q = pattern.toLowerCase();
           return widget.availableManagers.where((u) {
-            final d = u.data() ?? {};
+            final d = u;
             final name =
                 '${(d['firstName'] ?? '').toString()} ${(d['lastName'] ?? '').toString()}'
                     .toLowerCase();
@@ -385,12 +352,12 @@ class _AdminRouteFormBodyState extends State<AdminRouteFormBody> {
           }).toList();
         },
         itemBuilder: (context, suggestion) {
-          final d = suggestion.data() ?? {};
+          final d = suggestion;
           final name = '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}';
           return ListTile(title: Text(name));
         },
         onSelected: (suggestion) {
-          final d = suggestion.data() ?? {};
+          final d = suggestion;
           final fullName = '${d['firstName'] ?? ''} ${d['lastName'] ?? ''}';
 
           // actualizo el texto visible

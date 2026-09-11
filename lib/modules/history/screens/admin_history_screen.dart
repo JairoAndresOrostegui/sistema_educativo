@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../utils/history_types.dart';
@@ -23,14 +22,15 @@ class _AdminHistoryScreenState extends State<AdminHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
         appBar: AppBar(
-          title: Text('History system'),
+          title: Text('Historial administrativo'),
           centerTitle: true,
-          backgroundColor: AppPalette.surface,
-          foregroundColor: AppPalette.primary,
+          backgroundColor: colors.surface,
+          foregroundColor: colors.primary,
           leading: BackToDashboardButton(),
         ),
         body: SafeArea(
@@ -39,12 +39,12 @@ class _AdminHistoryScreenState extends State<AdminHistoryScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        title: Text('History system'),
+        title: Text('Historial administrativo'),
         centerTitle: true,
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
         leading: BackToDashboardButton(),
       ),
       body: SafeArea(

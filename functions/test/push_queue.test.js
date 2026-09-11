@@ -41,6 +41,7 @@ describe("cola push", () => {
   it("reintenta temporales y descarta credenciales invalidas", async () => {
     let first = true;
     const calls = [];
+    const invalidated = [];
     const queue = createPushQueue(db, {
       sendEachForMulticast: async ({tokens}) => {
         calls.push(tokens);
@@ -51,7 +52,9 @@ describe("cola push", () => {
         }}, {success: false, error: {
           code: "messaging/registration-token-not-registered",
         }}]};
-      }}, async (_, tokens) => tokens);
+      }}, async (_, tokens) => tokens, async (_, tokens) => {
+      invalidated.push(...tokens);
+    });
     await queue.enqueue({tokens: ["ok", "retry", "invalid"]}, scope);
     const ref = (await db.collection("push_jobs").get()).docs[0].ref;
     await queue.process(ref);
@@ -63,6 +66,7 @@ describe("cola push", () => {
     assert.equal(result.rejected, 1);
     assert.equal(result.status, "partial");
     assert.deepEqual(calls[1], ["retry"]);
+    assert.deepEqual(invalidated, ["invalid"]);
   });
   it("se detiene tras cinco intentos y revalida dispositivos", async () => {
     const queue = createPushQueue(db, {sendEachForMulticast: async () => {
@@ -83,5 +87,31 @@ describe("cola push", () => {
       attempts: 0});
     await inactive.process(ref);
     assert.equal((await ref.get()).data().skipped, 1);
+    assert.equal((await ref.get()).data().status, "skipped");
   });
+  for (const wholeBatch of [false, true]) {
+    it(`conserva dispositivos si INVALID_ARGUMENT afecta ${
+      wholeBatch ? "el lote" : "una respuesta"}`, async () => {
+      const invalidated = [];
+      const failure = Object.assign(new Error("invalid payload"), {
+        code: "messaging/invalid-argument",
+      });
+      const queue = createPushQueue(db, {
+        sendEachForMulticast: async () => {
+          if (wholeBatch) throw failure;
+          return {responses: [{success: false, error: failure}]};
+        },
+      }, async (_, tokens) => tokens, async (_, tokens) => {
+        invalidated.push(...tokens);
+      });
+      await queue.enqueue({tokens: ["still-valid"]}, scope);
+      const ref = (await db.collection("push_jobs").get()).docs[0].ref;
+      await queue.process(ref);
+      const result = (await ref.get()).data();
+      assert.deepEqual(invalidated, []);
+      assert.deepEqual(result.pendingTokens, ["still-valid"]);
+      assert.equal(result.rejected, 0);
+      assert.equal(result.status, "retry");
+    });
+  }
 });

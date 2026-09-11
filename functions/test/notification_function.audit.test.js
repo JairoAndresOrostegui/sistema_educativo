@@ -9,7 +9,7 @@ describe("Auditoria funcion real de notificaciones, transporte externo bloqueado
       let api; let db;
       const mobile = "mobile-synthetic-token-123456789";
       const web = "web-synthetic-token-123456789";
-      const call = () => api.enviarNotificacion.run({auth: {uid: "teacher"},
+      const call = () => api.enviarNotificacion.run({auth: {uid: "teacher", token: {email_verified: true}},
         data: {titulo: "Prueba local", cuerpo: "Solo emulador",
           notificationType: "schedule", audience: {studentIds: ["student"]}}});
       before(() => {
@@ -25,7 +25,7 @@ describe("Auditoria funcion real de notificaciones, transporte externo bloqueado
           await db.recursiveDelete(db.collection(name));
         }
         const scope = {institution: "i", campus: "c", status: "activo"};
-        await db.doc("users/teacher").set({...scope, role: "Docente",
+        await db.doc("users/teacher").set({...scope, role: "Administrador",
           permissions: []});
         await db.doc("users/student").set({...scope, role: "Estudiante"});
       });
@@ -58,8 +58,15 @@ describe("Auditoria funcion real de notificaciones, transporte externo bloqueado
       it("rechaza avisos de ruta genericos aunque sea docente",
           async () => {
             await db.doc("users/student").update({notificationTokens: {mobile}});
-            await assert.rejects(api.enviarNotificacion.run({auth: {uid: "teacher"},
+            await assert.rejects(api.enviarNotificacion.run({auth: {uid: "teacher", token: {email_verified: true}},
               data: {titulo: "Prueba", cuerpo: "Prueba", notificationType: "route", audience: {studentIds: ["student"]}}}),
             (e) => e.code === "permission-denied");
+          });
+      it("un docente no puede fabricar avisos genéricos para otros grupos",
+          async () => {
+            await db.doc("users/teacher").update({role: "Docente",
+              groupId: "group-1"});
+            await assert.rejects(call(), (error) =>
+              error.code === "permission-denied");
           });
     });

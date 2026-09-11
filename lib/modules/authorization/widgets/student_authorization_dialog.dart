@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -63,6 +62,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
   TimeOfDay? _startTod;
   TimeOfDay? _endTod;
   final _reasonCtrl = TextEditingController();
+  String? _validationError;
 
   @override
   void initState() {
@@ -162,15 +162,17 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
     required bool enabled,
     required VoidCallback? onTap,
   }) {
-    return TextFormField(
-      readOnly: true,
-      enabled: enabled,
-      controller: TextEditingController(text: text),
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          enabled: enabled,
+          border: const OutlineInputBorder(),
+        ),
+        child: Text(text.isEmpty ? 'Seleccionar' : text),
       ),
-      onTap: onTap,
     );
   }
 
@@ -189,12 +191,8 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
         ? ''
         : tf.format(_toDateTime(_dateFrom ?? DateTime.now(), _endTod)!);
 
-    final themed = Theme.of(context).copyWith(
-      colorScheme: Theme.of(context).colorScheme.copyWith(
-        primary: AppPalette.primary,
-        secondary: AppPalette.primary,
-      ),
-    );
+    final themed = Theme.of(context);
+    final colors = themed.colorScheme;
 
     return Theme(
       data: themed,
@@ -227,7 +225,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                     'Nueva solicitud de autorizacion',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppPalette.primary,
+                      color: colors.primary,
                       fontWeight: FontWeight.w700,
                       fontSize: 18,
                     ),
@@ -280,14 +278,14 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                           if (isCompact) ...[
                             SwitchListTile(
                               value: _allDay,
-                              activeThumbColor: AppPalette.primary,
+                              activeThumbColor: colors.primary,
                               onChanged: (v) => setState(() => _allDay = v),
                               title: const Text('Todo el dia'),
                               contentPadding: EdgeInsets.zero,
                             ),
                             SwitchListTile(
                               value: _multiDay,
-                              activeThumbColor: AppPalette.primary,
+                              activeThumbColor: colors.primary,
                               onChanged: (v) => setState(() {
                                 _multiDay = v;
                                 if (!v) _dateTo = null;
@@ -301,7 +299,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                                 Expanded(
                                   child: SwitchListTile(
                                     value: _allDay,
-                                    activeThumbColor: AppPalette.primary,
+                                    activeThumbColor: colors.primary,
                                     onChanged: (v) =>
                                         setState(() => _allDay = v),
                                     title: const Text('Todo el dia'),
@@ -311,7 +309,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                                 Expanded(
                                   child: SwitchListTile(
                                     value: _multiDay,
-                                    activeThumbColor: AppPalette.primary,
+                                    activeThumbColor: colors.primary,
                                     onChanged: (v) => setState(() {
                                       _multiDay = v;
                                       if (!v) _dateTo = null;
@@ -411,6 +409,7 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: _reasonCtrl,
+                            maxLength: 2000,
                             minLines: 3,
                             maxLines: 6,
                             textInputAction: TextInputAction.newline,
@@ -430,11 +429,9 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: AppPalette.primary.withValues(
-                                  alpha: .15,
-                                ),
+                                color: colors.primary.withValues(alpha: .15),
                               ),
-                              color: AppPalette.primary.withValues(alpha: .06),
+                              color: colors.primary.withValues(alpha: .06),
                             ),
                             child: const Text(
                               'Debes enviar la evidencia del motivo por los canales oficiales. WhatsApp: +573168706758. Correo institucional: liceobilinguerodolfollinaspd@gmail.com.',
@@ -485,12 +482,20 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (_validationError != null) ...[
+                    Text(
+                      _validationError!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: colors.error),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Row(
                     children: [
                       Expanded(
                         child: TextButton(
                           style: TextButton.styleFrom(
-                            foregroundColor: AppPalette.primary,
+                            foregroundColor: colors.primary,
                           ),
                           onPressed: () => Navigator.pop(context),
                           child: const Text('Cancelar'),
@@ -500,12 +505,30 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                       Expanded(
                         child: TextButton(
                           style: TextButton.styleFrom(
-                            foregroundColor: AppPalette.primary,
+                            foregroundColor: colors.primary,
                           ),
                           onPressed: () {
                             if (_studentId == null ||
                                 _dateFrom == null ||
                                 _reasonCtrl.text.trim().isEmpty) {
+                              setState(() {
+                                _validationError =
+                                    'Selecciona estudiante y fecha, y escribe el motivo.';
+                              });
+                              return;
+                            }
+                            if (_multiDay && _dateTo == null) {
+                              setState(() {
+                                _validationError =
+                                    'Selecciona la fecha final de la autorización.';
+                              });
+                              return;
+                            }
+                            if (!_allDay && _startTod == null) {
+                              setState(() {
+                                _validationError =
+                                    'Selecciona la hora de inicio.';
+                              });
                               return;
                             }
                             final startDt = _allDay
@@ -513,7 +536,17 @@ class _AuthorizationCreateDialogState extends State<AuthorizationCreateDialog> {
                                 : _toDateTime(_dateFrom!, _startTod);
                             final endDt = _allDay
                                 ? null
-                                : _toDateTime(_dateFrom!, _endTod);
+                                : _toDateTime(
+                                    _multiDay ? _dateTo! : _dateFrom!,
+                                    _endTod,
+                                  );
+                            if (endDt != null && !endDt.isAfter(startDt!)) {
+                              setState(() {
+                                _validationError =
+                                    'La hora final debe ser posterior a la inicial.';
+                              });
+                              return;
+                            }
                             final res = CreateAuthorizationResult(
                               studentId: _studentId!,
                               allDay: _allDay,

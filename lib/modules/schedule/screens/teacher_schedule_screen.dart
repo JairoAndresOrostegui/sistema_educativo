@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
@@ -7,6 +6,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/format_utils.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 extension _Cap on String {
   String cap() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
@@ -27,6 +27,7 @@ class TeacherScheduleScreen extends StatefulWidget {
 class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
   final _schedule = ScheduleService();
   bool _loading = false;
+  String? _loadError;
   String? _selectedKey;
   List<String> _grades = [];
   final Map<String, String> _groupLabels = {};
@@ -79,8 +80,12 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
         );
       _selectedKey = 'My schedule';
       _byDay = _schedule.groupByDay(contextResult.subjects);
-    } catch (_) {
-      // Capturar error.
+      _loadError = null;
+    } catch (error) {
+      _loadError = userFacingError(
+        error,
+        fallback: 'No fue posible cargar el horario.',
+      );
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -106,8 +111,12 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
         );
       }
       if (!_daysOfWeek.contains(_selectedDay)) _selectedDay = 'lunes';
-    } catch (_) {
-      _byDay = {};
+      _loadError = null;
+    } catch (error) {
+      _loadError = userFacingError(
+        error,
+        fallback: 'No fue posible cargar el horario.',
+      );
     }
 
     if (mounted) setState(() => _loading = false);
@@ -121,11 +130,11 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Horario docente'),
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.primary,
         centerTitle: true,
         leading: const BackToDashboardButton(),
       ),
@@ -138,16 +147,35 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
                 grades: _grades,
                 groupLabels: _groupLabels,
                 selected: _selectedKey,
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => _selectedKey = v);
-                  _loadSchedulesForSelection(v);
-                },
+                onChanged: _loading
+                    ? null
+                    : (v) {
+                        if (v == null) return;
+                        setState(() => _selectedKey = v);
+                        _loadSchedulesForSelection(v);
+                      },
               ),
               const SizedBox(height: 16),
               if (_loading)
                 const Expanded(
                   child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_loadError != null)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_loadError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _bootstrap,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
                 )
               else if (_isDesktop)
                 _buildWebLayout()
@@ -206,8 +234,10 @@ class _TeacherScheduleScreenState extends State<TeacherScheduleScreen> {
                     selected: sel,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppPalette.primary,
-                        foregroundColor: AppPalette.surface,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -241,7 +271,7 @@ class _FilterBar extends StatelessWidget {
   final List<String> grades;
   final Map<String, String> groupLabels;
   final String? selected;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<String?>? onChanged;
 
   const _FilterBar({
     required this.grades,
@@ -259,11 +289,15 @@ class _FilterBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-          color: AppPalette.surfaceContainer,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
+          ),
+          color: Theme.of(context).colorScheme.surfaceContainer,
           boxShadow: [
             BoxShadow(
-              color: AppPalette.onSurface.withValues(alpha: 0.03),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.03),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -312,7 +346,9 @@ class _DayColumn extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: AppPalette.primary.withValues(alpha: .08),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: .08),
             ),
             child: Semantics(
               header: true,
@@ -322,7 +358,7 @@ class _DayColumn extends StatelessWidget {
                   _displayDay(day),
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: AppPalette.primary,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -365,8 +401,10 @@ class _TeacherSubjectItem extends StatelessWidget {
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-        color: AppPalette.surfaceContainer,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
+        ),
+        color: Theme.of(context).colorScheme.surfaceContainer,
       ),
       child: Semantics(
         container: true,
@@ -397,15 +435,17 @@ class _GradeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: AppPalette.primary.withValues(alpha: .12),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppPalette.primary.withValues(alpha: .25)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .25),
+        ),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontWeight: FontWeight.w700,
-          color: AppPalette.primary,
+          color: Theme.of(context).colorScheme.primary,
           fontSize: 12,
         ),
       ),

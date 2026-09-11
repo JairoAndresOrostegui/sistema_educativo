@@ -1,12 +1,14 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../services/route_history_service.dart';
 import '../export/utils/route_export_utils.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/user_facing_error.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../widgets/history_date_range_field.dart';
 
 class GestionRutasView extends StatefulWidget {
   const GestionRutasView({super.key});
@@ -17,10 +19,13 @@ class GestionRutasView extends StatefulWidget {
 
 class _GestionRutasViewState extends State<GestionRutasView> {
   final _service = AdminRouteHistoryService();
+  final _nameController = TextEditingController();
+  late final String _institutionId;
+  late final String _campusId;
 
   // Filtros
   String _nombreContiene = '';
-  String? _accion; // 'created'|'edited'|'deleted' (o null = todas)
+  String? _accion;
   DateTimeRange? _rango;
   bool _filtrosPendientes = false;
 
@@ -38,6 +43,9 @@ class _GestionRutasViewState extends State<GestionRutasView> {
   @override
   void initState() {
     super.initState();
+    final user = context.read<UserProviderV2>().user!;
+    _institutionId = user.institution;
+    _campusId = user.campus;
     // Rango por defecto: últimos 30 días
     final now = DateTime.now();
     _rango = DateTimeRange(
@@ -49,6 +57,12 @@ class _GestionRutasViewState extends State<GestionRutasView> {
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
     _aplicarFiltros(recargar: true);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _aplicarFiltros({bool recargar = false}) async {
@@ -63,6 +77,8 @@ class _GestionRutasViewState extends State<GestionRutasView> {
 
     try {
       final page = await _service.obtenerHistorialRutasAdmin(
+        institutionId: _institutionId,
+        campusId: _campusId,
         routeNameContains: _nombreContiene.trim().isEmpty
             ? null
             : _nombreContiene.trim(),
@@ -73,6 +89,8 @@ class _GestionRutasViewState extends State<GestionRutasView> {
       );
 
       final total = await _service.contarTotal(
+        institutionId: _institutionId,
+        campusId: _campusId,
         action: _accion,
         rango: _rango,
         routeNameContains: _nombreContiene.trim().isEmpty
@@ -145,11 +163,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(
-            ctx,
-          ).colorScheme.copyWith(primary: AppPalette.primary),
-        ),
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
         child: child!,
       ),
     );
@@ -196,6 +210,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
         body: SafeArea(
@@ -209,7 +224,7 @@ class _GestionRutasViewState extends State<GestionRutasView> {
         : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -221,14 +236,12 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  border: Border.all(
-                    color: AppPalette.error.withValues(alpha: .15),
-                  ),
+                  color: colors.surface,
+                  border: Border.all(color: colors.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.shadow.withValues(alpha: .06),
                       blurRadius: 8,
                       offset: Offset(0, 2),
                     ),
@@ -249,11 +262,11 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                   SizedBox(
                     width: 280,
                     child: TextFormField(
+                      controller: _nameController,
                       decoration: InputDecoration(
                         labelText: 'Nombre de la ruta (contiene)',
                         border: OutlineInputBorder(),
                       ),
-                      initialValue: _nombreContiene,
                       onChanged: (v) {
                         setState(() {
                           _nombreContiene = v;
@@ -272,15 +285,15 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                           child: Text('Todas las acciones'),
                         ),
                         DropdownMenuItem(
-                          value: 'created',
+                          value: 'route_created',
                           child: Text('Creada'),
                         ),
                         DropdownMenuItem(
-                          value: 'edited',
+                          value: 'route_updated',
                           child: Text('Editada'),
                         ),
                         DropdownMenuItem(
-                          value: 'deleted',
+                          value: 'route_deleted',
                           child: Text('Eliminada'),
                         ),
                       ],
@@ -298,13 +311,8 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                   ),
                   SizedBox(
                     width: 280,
-                    child: TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Rango de fechas',
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: TextEditingController(text: rangoTexto),
+                    child: HistoryDateRangeField(
+                      value: rangoTexto,
                       onTap: _pickDateRange,
                     ),
                   ),
@@ -313,14 +321,15 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                     onPressed: () => _aplicarFiltros(recargar: true),
                     label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
                     ),
                   ),
                   TextButton(
                     onPressed: () {
                       final now = DateTime.now();
                       setState(() {
+                        _nameController.clear();
                         _nombreContiene = '';
                         _accion = null;
                         _rango = DateTimeRange(
@@ -361,12 +370,12 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                       ElevatedButton.icon(
                         onPressed: _exportarExcel,
                         icon: Icon(Icons.table_view),
-                        label: Text('Exportar Excel'),
+                        label: Text('Exportar página a Excel'),
                       ),
                       ElevatedButton.icon(
                         onPressed: _exportarPDF,
                         icon: Icon(Icons.picture_as_pdf),
-                        label: Text('Exportar PDF'),
+                        label: Text('Exportar página a PDF'),
                       ),
                     ],
                   ),
@@ -393,14 +402,10 @@ class _GestionRutasViewState extends State<GestionRutasView> {
                           return Semantics(
                             label: 'Registro de log de rutas',
                             child: Card(
-                              color: AppPalette.surface,
+                              color: colors.surface,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: AppPalette.error.withValues(
-                                    alpha: .12,
-                                  ),
-                                ),
+                                side: BorderSide(color: colors.outlineVariant),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               margin: EdgeInsets.symmetric(
@@ -476,11 +481,11 @@ class _GestionRutasViewState extends State<GestionRutasView> {
 
   String _labelAccion(String? action) {
     switch (action) {
-      case 'created':
+      case 'route_created':
         return 'Creada';
-      case 'edited':
+      case 'route_updated':
         return 'Editada';
-      case 'deleted':
+      case 'route_deleted':
         return 'Eliminada';
       default:
         return (action ?? '').isEmpty ? 'Acción' : action!;

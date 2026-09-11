@@ -1,6 +1,9 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../models/messaging/push_job_status.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/user_facing_error.dart';
 
@@ -11,7 +14,7 @@ class PushStatusScreen extends StatefulWidget {
 }
 
 class _PushStatusScreenState extends State<PushStatusScreen> {
-  final _jobs = <Map<String, dynamic>>[];
+  final _jobs = <PushJobStatus>[];
   bool _busy = false;
   String? _error;
   bool _more = true;
@@ -22,6 +25,8 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
     'failed': 'Fallido',
     'partial': 'Terminado con rechazos',
     'accepted': 'Procesado por Firebase',
+    'skipped': 'Sin dispositivos vigentes',
+    'unknown': 'Estado desconocido',
   };
   @override
   void initState() {
@@ -40,10 +45,15 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
     try {
       final response = await FirebaseFunctions.instance
           .httpsCallable('consultarEstadoNotificaciones')
-          .call({if (more && _jobs.isNotEmpty) 'beforeId': _jobs.last['id']});
-      final jobs = ((response.data as Map)['jobs'] as List)
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
+          .call({if (more && _jobs.isNotEmpty) 'beforeId': _jobs.last.id});
+      final payload = response.data;
+      if (payload is! Map || payload['jobs'] is! List) {
+        throw const FormatException('Respuesta de notificaciones no válida.');
+      }
+      final jobs = <PushJobStatus>[];
+      for (final item in payload['jobs'] as List) {
+        if (item is Map) jobs.add(PushJobStatus.fromMap(item));
+      }
       if (!mounted) return;
       setState(() {
         if (!more) _jobs.clear();
@@ -57,7 +67,7 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
     }
   }
 
-  Future<void> _retry(Map<String, dynamic> job) async {
+  Future<void> _retry(PushJobStatus job) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -83,7 +93,7 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('reintentarNotificacion')
-          .call({'id': job['id']});
+          .call({'id': job.id});
       if (mounted) {
         setState(() => _busy = false);
         await _load();
@@ -103,6 +113,11 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
     final allowed = context.watch<UserProviderV2>().user?.isSuperadmin == true;
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Volver al tablero',
+          onPressed: () => context.go('/admin_dashboard'),
+          icon: const Icon(Icons.arrow_back),
+        ),
         title: const Text('Estado de notificaciones'),
         centerTitle: true,
         actions: [
@@ -141,22 +156,22 @@ class _PushStatusScreenState extends State<PushStatusScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${job['type']} · ${_labels[job['status']] ?? job['status']}',
+                              '${job.type} · ${_labels[job.status] ?? job.status}',
                             ),
                             Text(
-                              'Institución: ${job['institutionId']} · Sede: ${job['campusId']}',
+                              'Institución: ${job.institutionId} · Sede: ${job.campusId}',
                             ),
                             Text(
-                              'Fecha: ${DateTime.fromMillisecondsSinceEpoch((job['createdAt'] as num).toInt()).toLocal()}',
+                              'Fecha: ${job.createdAt == null ? 'No disponible' : DateFormat('dd/MM/yyyy, h:mm a').format(job.createdAt!.toLocal())}',
                             ),
                             Text(
-                              'Aceptados: ${job['accepted']} · Rechazados: ${job['rejected']} · '
-                              'Omitidos: ${job['skipped']} · Pendientes: ${job['pending']}',
+                              'Aceptados: ${job.accepted} · Rechazados: ${job.rejected} · '
+                              'Omitidos: ${job.skipped} · Pendientes: ${job.pending}',
                             ),
-                            Text('Intentos: ${job['attempts']}'),
-                            if (job['lastError'] != null)
-                              SelectableText('Error: ${job['lastError']}'),
-                            if (job['status'] == 'failed')
+                            Text('Intentos: ${job.attempts}'),
+                            if (job.lastError != null)
+                              SelectableText('Error: ${job.lastError}'),
+                            if (job.status == 'failed')
                               TextButton.icon(
                                 onPressed: _busy ? null : () => _retry(job),
                                 icon: const Icon(Icons.replay),

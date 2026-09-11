@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
 
@@ -35,6 +34,7 @@ class _AdminAuthorizationActionDialogState
   AuthorizationStatus? _sel;
   final _noteCtrl = TextEditingController();
   final _evidenceCtrl = TextEditingController();
+  String? _validationError;
 
   @override
   void initState() {
@@ -115,7 +115,7 @@ class _AdminAuthorizationActionDialogState
         child: Text(
           'Gestionar autorización',
           style: TextStyle(
-            color: AppPalette.primary,
+            color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -161,6 +161,14 @@ class _AdminAuthorizationActionDialogState
                 ),
               ),
             ],
+            if (_validationError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _validationError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
           ],
         ),
       ),
@@ -172,8 +180,19 @@ class _AdminAuthorizationActionDialogState
         TextButton(
           onPressed: () {
             if (_sel == null) return;
-            if (_needsNote && _noteCtrl.text.trim().isEmpty) return;
-            if (_needsEvidence && _evidenceCtrl.text.trim().isEmpty) return;
+            if (_needsNote && _noteCtrl.text.trim().isEmpty) {
+              setState(() {
+                _validationError = 'Escribe el motivo antes de guardar.';
+              });
+              return;
+            }
+            if (_needsEvidence && _evidenceCtrl.text.trim().isEmpty) {
+              setState(() {
+                _validationError =
+                    'Escribe la observación de cierre antes de guardar.';
+              });
+              return;
+            }
             Navigator.pop(
               context,
               AdminActionResult(

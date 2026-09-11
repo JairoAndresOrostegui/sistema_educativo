@@ -49,7 +49,8 @@ async function clearAuth() {
 
 async function seedUser(uid, role, extra = {}) {
   const email = `${uid}@colegio.test`;
-  await auth.createUser({uid, email, password: "Clave123!"});
+  await auth.createUser({uid, email,
+    password: "Clave123!", emailVerified: true});
   await db.collection("users").doc(uid).set(profile(role, {
     institutionalEmail: email,
     ...extra,
@@ -114,6 +115,7 @@ async function familyFixture() {
   });
   const familyToken = await signIn(await seedUser("family", "Familiar", {
     studentIds: ["student"],
+    activeStudentId: "student",
     permissions: ["autorizaciones.ver"],
   }));
   return familyToken;
@@ -141,6 +143,16 @@ describe("autorizaciones seguras", () => {
 
   it("familiar con ver crea y el servidor deriva los datos", async () => {
     const familyToken = await familyFixture();
+    await seedUser("family-second", "Familiar", {
+      studentIds: ["student"], permissions: ["autorizaciones.ver"],
+    });
+    await seedUser("family-without-permission", "Familiar", {
+      studentIds: ["student"], permissions: [],
+    });
+    await seedUser("family-foreign", "Familiar", {
+      institution: "inst-2", studentIds: ["student"],
+      permissions: ["autorizaciones.ver"],
+    });
     await seedUser("admin", "Administrador", {
       permissions: ["autorizaciones.ver"],
     });
@@ -152,8 +164,15 @@ describe("autorizaciones seguras", () => {
         .doc(response.body.result.id).get()).data();
     assert.equal(saved.requesterId, "family");
     assert.equal(saved.studentFullName, "Ana Llinas");
+    const notification = (await db
+        .collection("authorization_notification_events").get()).docs[0].data();
+    assert.ok(notification.recipientIds.includes("family-second"));
+    assert.ok(notification.recipientIds.includes("family"));
+    assert.ok(!notification.recipientIds.includes("family-without-permission"));
+    assert.ok(!notification.recipientIds.includes("family-foreign"));
     assert.equal(saved.groupId, "group-5a");
     assert.equal(saved.groupName, "Quinto A");
+    assert.equal(saved.revision, 1);
     assert.equal((await db.collection("authorization_history").get()).size, 1);
     assert.equal(
         (await db.collection("authorization_notification_events").get()).size,
@@ -195,6 +214,22 @@ describe("autorizaciones seguras", () => {
     );
   });
 
+  it("exige que el familiar opere sobre el hijo seleccionado", async () => {
+    await seedUser("student", "Estudiante");
+    await seedUser("student-2", "Estudiante", {
+      groupId: "group-5a", groupName: "Quinto A",
+    });
+    const token = await signIn(await seedUser("family-selection", "Familiar", {
+      studentIds: ["student", "student-2"],
+      activeStudentId: "student-2",
+      permissions: ["autorizaciones.ver"],
+    }));
+    assertError(
+        await callFunction("crearAutorizacion", requestData("student"), token),
+        "FAILED_PRECONDITION",
+    );
+  });
+
   it("permite correccion solamente al familiar solicitante", async () => {
     const familyToken = await familyFixture();
     const adminToken = await signIn(await seedUser("admin", "Administrador", {
@@ -213,6 +248,7 @@ describe("autorizaciones seguras", () => {
     const resubmitted = await callFunction("actualizarAutorizacion", {
       id,
       action: "resubmit",
+      expectedRevision: 2,
       ...requestData(),
       reason: "Cita medica de control con especialista",
     }, familyToken);
@@ -220,6 +256,7 @@ describe("autorizaciones seguras", () => {
     const saved = (await db.collection("authorization_requests").doc(id).get())
         .data();
     assert.equal(saved.requiresRequesterEdit, false);
+    assert.equal(saved.revision, 3);
   });
 
   it("admin solo opera su sede y superadmin cruza sedes", async () => {
@@ -286,6 +323,34 @@ describe("autorizaciones seguras", () => {
       evidence: "El estudiante salio con su acudiente a las 10:15.",
     }, adminToken);
     assert.equal(finished.body.result.status, "finished");
+  });
+
+  it("impide decisiones simultaneas sobre la misma solicitud", async () => {
+    const familyToken = await familyFixture();
+    const adminToken = await signIn(await seedUser("admin", "Administrador", {
+      permissions: ["autorizaciones.editar"],
+    }));
+    const created = await callFunction(
+        "crearAutorizacion", requestData(), familyToken,
+    );
+    const id = created.body.result.id;
+    const decisions = await Promise.all([
+      callFunction("actualizarAutorizacion", {
+        id, action: "approve", expectedRevision: 1,
+      }, adminToken),
+      callFunction("actualizarAutorizacion", {
+        id, action: "reject", note: "Solicitud no autorizada.",
+        expectedRevision: 1,
+      }, adminToken),
+    ]);
+    assert.equal(decisions.filter((item) => item.body.result).length, 1);
+    assert.equal(decisions.filter((item) =>
+      item.body.error?.status === "ABORTED").length, 1,
+    JSON.stringify(decisions));
+    const saved = (await db.collection("authorization_requests").doc(id).get())
+        .data();
+    assert.equal(saved.revision, 2);
+    assert.ok(["approved", "rejected"].includes(saved.status));
   });
 
   it("solo superadmin reabre una finalizada dejando auditoria", async () => {

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -9,13 +8,14 @@ import '../../../models/authorization/authorization_request_model.dart';
 import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../services/authorization_service.dart';
-import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/user_facing_error.dart';
 import '../widgets/teacher_authorization_dialog.dart';
 
 class AuthorizationTeacherScreen extends StatefulWidget {
-  const AuthorizationTeacherScreen({super.key});
+  final AuthorizationService? service;
+
+  const AuthorizationTeacherScreen({super.key, this.service});
 
   @override
   State<AuthorizationTeacherScreen> createState() =>
@@ -24,7 +24,7 @@ class AuthorizationTeacherScreen extends StatefulWidget {
 
 class _AuthorizationTeacherScreenState
     extends State<AuthorizationTeacherScreen> {
-  final _svc = AuthorizationService();
+  late final _svc = widget.service ?? AuthorizationService();
   StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
@@ -34,11 +34,9 @@ class _AuthorizationTeacherScreenState
   late String _campusId;
 
   final List<AuthorizationRequest> _items = [];
-  bool _loading = false;
-  bool _hasNext = false;
-  final int _pageIndex = 0;
+  bool _loading = true;
+  Object? _loadError;
   final int _perPage = 20;
-  bool _noGroupNotified = false;
 
   String? _activeGroupId;
 
@@ -59,7 +57,10 @@ class _AuthorizationTeacherScreenState
 
     _logged = u;
     _isSuperadmin = u.isSuperadmin;
-    _perms = u.permissions;
+    _perms = u.permissions
+        .map((permission) => permission.trim().toLowerCase())
+        .where((permission) => permission.isNotEmpty)
+        .toList();
     _institutionId = u.institution;
     _campusId = u.campus;
 
@@ -72,15 +73,8 @@ class _AuthorizationTeacherScreenState
     if (groupId.isEmpty) {
       setState(() {
         _activeGroupId = null;
+        _loading = false;
       });
-      if (!_noGroupNotified && mounted) {
-        _noGroupNotified = true;
-        await DialogUtils.showError(
-          context: context,
-          title: 'Sin grupo asignado',
-          message: 'El docente no tiene grupo asignado.',
-        );
-      }
       return;
     } else {
       _activeGroupId = groupId;
@@ -94,6 +88,10 @@ class _AuthorizationTeacherScreenState
       setState(() => _loading = false);
       return;
     }
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     _itemsSub?.cancel();
     _itemsSub = _svc
         .watchForGroup(
@@ -109,28 +107,18 @@ class _AuthorizationTeacherScreenState
               _items
                 ..clear()
                 ..addAll(items);
-              _hasNext = false;
+              _loading = false;
+              _loadError = null;
+            });
+          },
+          onError: (Object error) {
+            if (!mounted) return;
+            setState(() {
+              _loadError = error;
               _loading = false;
             });
           },
-          onError: (Object error) async {
-            if (!mounted) return;
-            await DialogUtils.showError(
-              context: context,
-              title: 'Error',
-              message: userFacingError(error),
-            );
-            if (mounted) setState(() => _loading = false);
-          },
         );
-  }
-
-  Future<void> _nextPage() async {
-    return;
-  }
-
-  Future<void> _prevPage() async {
-    return;
   }
 
   String _fmtD(DateTime? d) =>
@@ -150,16 +138,16 @@ class _AuthorizationTeacherScreenState
     }
   }
 
-  Color _statusColor(AuthorizationStatus s) {
+  Color _statusColor(ColorScheme colors, AuthorizationStatus s) {
     switch (s) {
       case AuthorizationStatus.pending:
-        return AppPalette.warning;
+        return colors.tertiary;
       case AuthorizationStatus.approved:
-        return AppPalette.success;
+        return colors.primary;
       case AuthorizationStatus.rejected:
-        return AppPalette.primary;
+        return colors.error;
       case AuthorizationStatus.finished:
-        return AppPalette.info;
+        return colors.secondary;
     }
   }
 
@@ -177,6 +165,7 @@ class _AuthorizationTeacherScreenState
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final session = context.watch<UserProviderV2>().user;
     if (session == null) {
       return const Scaffold(
@@ -189,22 +178,22 @@ class _AuthorizationTeacherScreenState
         appBar: AppBar(
           title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
-          backgroundColor: AppPalette.surface,
-          foregroundColor: AppPalette.primary,
+          backgroundColor: colors.surface,
+          foregroundColor: colors.primary,
           centerTitle: true,
         ),
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
       );
     }
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       appBar: AppBar(
         title: const Text('Autorizaciones (Docente)'),
         leading: const BackToDashboardButton(),
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
         centerTitle: true,
       ),
       body: SafeArea(
@@ -219,14 +208,14 @@ class _AuthorizationTeacherScreenState
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
+                  color: colors.surface,
                   border: Border.all(
-                    color: AppPalette.primary.withValues(alpha: .15),
+                    color: colors.primary.withValues(alpha: .15),
                   ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -249,6 +238,28 @@ class _AuthorizationTeacherScreenState
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
+                    : _loadError != null
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              userFacingError(
+                                _loadError!,
+                                fallback:
+                                    'No se pudieron cargar las autorizaciones.',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: _subscribeToItems,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Reintentar'),
+                            ),
+                          ],
+                        ),
+                      )
                     : _activeGroupId == null || _activeGroupId!.isEmpty
                     ? const Center(
                         child: Text('No hay grupo asignado al docente.'),
@@ -259,7 +270,7 @@ class _AuthorizationTeacherScreenState
                         itemCount: _items.length,
                         itemBuilder: (_, i) {
                           final r = _items[i];
-                          final sc = _statusColor(r.status);
+                          final sc = _statusColor(colors, r.status);
                           final chip = Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -304,16 +315,14 @@ class _AuthorizationTeacherScreenState
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: AppPalette.primary.withValues(
-                                  alpha: .12,
-                                ),
+                                color: colors.primary.withValues(alpha: .12),
                               ),
-                              color: AppPalette.surfaceContainer,
+                              color: colors.surfaceContainer,
                             ),
                             child: ListTile(
                               leading: Icon(
                                 Icons.assignment_turned_in,
-                                color: AppPalette.primary,
+                                color: colors.primary,
                               ),
                               title: Row(
                                 children: [
@@ -338,27 +347,6 @@ class _AuthorizationTeacherScreenState
                           );
                         },
                       ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Página ${_pageIndex + 1}'),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: _pageIndex == 0 || _loading
-                            ? null
-                            : _prevPage,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: !_hasNext || _loading ? null : _nextPage,
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ],
           ),

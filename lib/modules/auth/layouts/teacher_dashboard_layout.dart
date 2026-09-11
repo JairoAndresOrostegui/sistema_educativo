@@ -34,6 +34,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
 
     final role = user.role.trim().toLowerCase();
     if (!(user.isSuperadmin || role == 'docente' || role == 'auxiliar')) return;
+    final isTeacher = user.isSuperadmin || role == 'docente';
 
     final perms = user.permissions.map((e) => e.trim().toLowerCase()).toSet();
 
@@ -45,29 +46,17 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       ),
     ];
 
-    if (user.isSuperadmin ||
-        perms.contains('usuarios.ver') ||
-        perms.contains('usuarios.editar')) {
-      items.add(
-        const MenuItemData(
-          label: 'Gesti\u00f3n de usuarios',
-          icon: Icons.group,
-          route: '/admin_user',
-        ),
-      );
-    }
-
     if (user.isSuperadmin || perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Ruta escolar',
+          label: 'Operar recorrido',
           icon: Icons.directions_bus,
           route: '/execute_route',
         ),
       );
     }
 
-    if (user.isSuperadmin || perms.contains('horarios.ver')) {
+    if (isTeacher && (user.isSuperadmin || perms.contains('horarios.ver'))) {
       items.add(
         const MenuItemData(
           label: 'Horario escolar',
@@ -77,7 +66,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
-    if (user.isSuperadmin || perms.contains('archivos.ver')) {
+    if (isTeacher && (user.isSuperadmin || perms.contains('archivos.ver'))) {
       items.add(
         const MenuItemData(
           label: 'Documentos',
@@ -87,7 +76,8 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
-    if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
+    if (isTeacher &&
+        (user.isSuperadmin || perms.contains('autorizaciones.ver'))) {
       items.add(
         const MenuItemData(
           label: 'Autorizaciones',
@@ -97,9 +87,10 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
-    if (user.isSuperadmin ||
-        perms.contains('matricula.ver') ||
-        perms.contains('matricula.editar')) {
+    if (isTeacher &&
+        (user.isSuperadmin ||
+            perms.contains('matricula.ver') ||
+            perms.contains('matricula.editar'))) {
       items.add(
         const MenuItemData(
           label: 'Matrículas',
@@ -109,7 +100,7 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
-    if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
+    if (isTeacher && (user.isSuperadmin || perms.contains('mensajeria.ver'))) {
       items.add(
         const MenuItemData(
           label: 'Mensajeria',
@@ -119,11 +110,31 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       );
     }
 
+    if (isTeacher && (user.isSuperadmin || perms.contains('asistencia.ver'))) {
+      items.add(
+        const MenuItemData(
+          label: 'Lista de asistencia',
+          icon: Icons.fact_check_outlined,
+          route: '/attendance',
+        ),
+      );
+    }
+
+    if (isTeacher && (user.isSuperadmin || perms.contains('eventos.ver'))) {
+      items.add(
+        const MenuItemData(
+          label: 'Eventos',
+          icon: Icons.event_outlined,
+          route: '/events',
+        ),
+      );
+    }
+
     setState(() {
       _menuItems = items;
       isLoading = false;
     });
-    if (user.isSuperadmin || perms.contains('mensajeria.ver')) {
+    if (isTeacher && (user.isSuperadmin || perms.contains('mensajeria.ver'))) {
       _messageUnreadSub?.cancel();
       _messageUnreadSub = MessagingService().watchUnreadCount(user).listen((
         count,
@@ -146,7 +157,8 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
       }, onError: (_) {});
     }
 
-    if (user.isSuperadmin || perms.contains('autorizaciones.ver')) {
+    if (isTeacher &&
+        (user.isSuperadmin || perms.contains('autorizaciones.ver'))) {
       final groupId = (user.groupId ?? '').trim();
       if (groupId.isNotEmpty) {
         _pendingAuthSub?.cancel();

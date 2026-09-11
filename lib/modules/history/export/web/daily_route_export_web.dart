@@ -2,6 +2,7 @@
 
 import 'dart:html' as html;
 import 'package:excel/excel.dart';
+import '../../services/history_query_utils.dart';
 
 class ExportUtilsPlatform {
   static void exportarExcel(List<Map<String, dynamic>> rutas) {
@@ -27,24 +28,31 @@ class ExportUtilsPlatform {
     ]);
 
     for (final r in rutas) {
-      final inicio = r['horaInicio']?.toDate();
-      final fin = r['horaFin']?.toDate();
+      final inicio = historyDate(r['horaInicio']);
+      final fin = historyDate(r['horaFin']);
       final duracion = (inicio != null && fin != null)
           ? fin.difference(inicio).inMinutes.toString()
           : '';
 
       sheet.appendRow([
         TextCellValue(r['nombreRuta'] ?? ''),
-        TextCellValue(r['fecha']?.toDate().toString() ?? ''),
+        TextCellValue(historyDate(r['fecha'])?.toString() ?? ''),
         TextCellValue(r['gestionadaPorNombre'] ?? r['docenteNombre'] ?? ''),
-        TextCellValue(r['horaInicio']?.toDate().toString() ?? ''),
-        TextCellValue(r['horaFin']?.toDate().toString() ?? ''),
+        TextCellValue(inicio?.toString() ?? ''),
+        TextCellValue(fin?.toString() ?? ''),
         TextCellValue(r['estado'] ?? ''),
         TextCellValue(duracion),
-        TextCellValue((r['estudiantes']?.length ?? 0).toString()),
         TextCellValue(
-          (r['estudiantes']?.where((e) => e['avisoEnviado'] == true).length ??
-                  0)
+          (r['estudiantes'] is List ? (r['estudiantes'] as List).length : 0)
+              .toString(),
+        ),
+        TextCellValue(
+          (r['estudiantes'] is List
+                  ? (r['estudiantes'] as List)
+                        .whereType<Map>()
+                        .where((e) => e['avisoEnviado'] == true)
+                        .length
+                  : 0)
               .toString(),
         ),
       ]);
@@ -60,15 +68,19 @@ class ExportUtilsPlatform {
         TextCellValue('Avisos Enviados'),
       ]);
 
-      final estudiantes = List<Map<String, dynamic>>.from(
-        r['estudiantes'] ?? [],
-      );
+      final rawStudents = r['estudiantes'];
+      final estudiantes = rawStudents is List
+          ? rawStudents
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+          : <Map<String, dynamic>>[];
       for (final est in estudiantes) {
         sheet.appendRow([
           TextCellValue(''),
           TextCellValue(est['nombre'] ?? ''),
           TextCellValue(est['direccion'] ?? ''),
-          TextCellValue(est['horaRecogida']?.toDate().toString() ?? ''),
+          TextCellValue(historyDate(est['horaRecogida'])?.toString() ?? ''),
           TextCellValue(est['recogido'] == true ? 'Si' : 'No'),
           TextCellValue(est['anulado'] == true ? 'Si' : 'No'),
           TextCellValue(est['activo'] == true ? 'Si' : 'No'),

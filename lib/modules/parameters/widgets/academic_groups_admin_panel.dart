@@ -24,6 +24,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
   String? _institutionId;
   String? _campusId;
   bool _loading = true;
+  bool _saving = false;
   String? _error;
 
   @override
@@ -46,7 +47,17 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
     try {
       _institutionId = user.institution;
       _campusId = user.campus;
-      _institutions = await _parameters.getInstitutions();
+      if (user.isSuperadmin) {
+        _institutions = await _parameters.getInstitutions();
+      } else {
+        _institutions = [
+          InstitutionOption(
+            id: user.institution,
+            label: user.institution,
+            campuses: [user.campus],
+          ),
+        ];
+      }
       await _loadGroups();
     } catch (error) {
       if (mounted) {
@@ -62,7 +73,14 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
   }
 
   Future<void> _loadGroups() async {
-    if (_institutionId == null || _campusId == null) return;
+    if ((_institutionId ?? '').isEmpty || (_campusId ?? '').isEmpty) {
+      setState(() {
+        _groups = [];
+        _loading = false;
+        _error = 'Selecciona una institución y una sede válidas.';
+      });
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -93,42 +111,63 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
     final section = TextEditingController(text: group?.section ?? 'A');
     final order = TextEditingController(text: '${group?.order ?? 0}');
     var active = group?.active ?? true;
+    final formKey = GlobalKey<FormState>();
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(group == null ? 'Nuevo grupo' : 'Editar grupo'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: level,
-                  decoration: const InputDecoration(
-                    labelText: 'Nivel (ejemplo: Cuarto)',
+          content: Form(
+            key: formKey,
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: level,
+                    maxLength: 80,
+                    decoration: const InputDecoration(
+                      labelText: 'Nivel (ejemplo: Cuarto)',
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Escribe el nivel.'
+                        : null,
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: section,
-                  decoration: const InputDecoration(
-                    labelText: 'Sección (ejemplo: A)',
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: section,
+                    maxLength: 10,
+                    decoration: const InputDecoration(
+                      labelText: 'Sección (ejemplo: A)',
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Escribe la sección.'
+                        : null,
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: order,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Orden'),
-                ),
-                if (group != null)
-                  SwitchListTile(
-                    value: active,
-                    title: const Text('Grupo activo'),
-                    onChanged: (value) => setDialogState(() => active = value),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: order,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Orden'),
+                    validator: (value) {
+                      final parsed = int.tryParse((value ?? '').trim());
+                      if (parsed == null) return 'Escribe un número entero.';
+                      if (parsed < 0 || parsed > 10000) {
+                        return 'Usa un valor entre 0 y 10000.';
+                      }
+                      return null;
+                    },
                   ),
-              ],
+                  if (group != null)
+                    SwitchListTile(
+                      value: active,
+                      title: const Text('Grupo activo'),
+                      onChanged: (value) =>
+                          setDialogState(() => active = value),
+                    ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -137,14 +176,24 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
+              onPressed: () {
+                if (formKey.currentState?.validate() == true) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
               child: const Text('Guardar'),
             ),
           ],
         ),
       ),
     );
-    if (accepted != true) return;
+    if (accepted != true) {
+      level.dispose();
+      section.dispose();
+      order.dispose();
+      return;
+    }
+    setState(() => _saving = true);
     try {
       if (group == null) {
         await _service.create(
@@ -152,15 +201,16 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
           campusId: _campusId!,
           level: level.text.trim(),
           section: section.text.trim(),
-          order: int.tryParse(order.text) ?? 0,
+          order: int.parse(order.text.trim()),
         );
       } else {
         await _service.update(
           id: group.id,
           level: level.text.trim(),
           section: section.text.trim(),
-          order: int.tryParse(order.text) ?? group.order,
+          order: int.parse(order.text.trim()),
           active: active,
+          expectedRevision: group.revision,
         );
       }
       await _loadGroups();
@@ -175,6 +225,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
       level.dispose();
       section.dispose();
       order.dispose();
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -293,7 +344,7 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _loading || !canEdit ? null : _openForm,
+                  onPressed: _loading || _saving || !canEdit ? null : _openForm,
                   icon: const Icon(Icons.add),
                   label: const Text('Nuevo grupo'),
                 ),
@@ -376,9 +427,11 @@ class _AcademicGroupsAdminPanelState extends State<AcademicGroupsAdminPanel> {
                               : Icons.visibility_off_outlined,
                         ),
                         label: Text(group.name),
-                        onPressed: canEdit ? () => _openForm(group) : null,
+                        onPressed: canEdit && !_saving
+                            ? () => _openForm(group)
+                            : null,
                         onDeleted: canEdit && user.isSuperadmin && !group.active
-                            ? () => _delete(group)
+                            ? (_saving ? null : () => _delete(group))
                             : null,
                       ),
                     )

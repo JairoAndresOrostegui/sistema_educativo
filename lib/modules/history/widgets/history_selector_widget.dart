@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 import '../utils/history_types.dart';
 
@@ -28,7 +27,7 @@ class HistorySelectorWidget extends StatelessWidget {
           border: OutlineInputBorder(),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(
-              color: AppPalette.primary.withValues(alpha: .8),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),

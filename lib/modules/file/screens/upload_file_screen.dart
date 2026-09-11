@@ -11,6 +11,7 @@ import '../../../models/user/user_model_v2.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/open_external_link.dart';
 import '../../../utils/parameters_service.dart';
 import '../../../utils/user_facing_error.dart';
 import '../../schedule/services/schedule_service.dart';
@@ -36,6 +37,7 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
 
   bool _loading = true;
   bool _busy = false;
+  String? _loadError;
   double? _uploadProgress;
   List<InstitutionOption> _institutions = [];
   List<userModelv2> _children = [];
@@ -69,18 +71,17 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
   }
 
   Future<void> _bootstrap() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
       final user = _user;
       _institutionId = user.institution;
       _campusId = user.campus;
       _institutions = await _parameters.getInstitutions();
       if (user.role == 'Familiar') {
-        _children = await _schedule.getUsersByIds(
-          userIds: user.studentIds ?? const [],
-          institutionId: user.institution,
-          campusId: user.campus,
-        );
+        _children = await _schedule.getLinkedChildren();
         if (_children.isNotEmpty) {
           final saved = user.activeStudentId ?? '';
           final selected = _children.any((child) => child.id == saved)
@@ -92,10 +93,11 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       await _reloadAll();
     } catch (error) {
       if (mounted) {
-        await DialogUtils.showError(
-          context: context,
-          title: 'No fue posible cargar Archivos',
-          message: userFacingError(error),
+        setState(
+          () => _loadError = userFacingError(
+            error,
+            fallback: 'No fue posible cargar Archivos.',
+          ),
         );
       }
     } finally {
@@ -142,18 +144,37 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     });
     try {
       await _reloadAll();
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible cambiar de sede',
+          message: userFacingError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _selectChild(String id, {bool reload = true}) async {
-    await ActiveStudentService().select(
-      userProvider: context.read<UserProviderV2>(),
-      studentId: id,
-    );
-    _activeStudentId = id;
-    if (reload) await _reloadAll();
+    try {
+      await ActiveStudentService().select(
+        userProvider: context.read<UserProviderV2>(),
+        studentId: id,
+      );
+      _activeStudentId = id;
+      if (reload) await _reloadAll();
+    } catch (error) {
+      if (mounted && reload) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible seleccionar el hijo',
+          message: userFacingError(error),
+        );
+      }
+      rethrow;
+    }
   }
 
   String? _mimeFor(PlatformFile file) => switch (file.extension
@@ -247,9 +268,17 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
   Future<void> _download(FileModel file) async {
     setState(() => _busy = true);
     try {
-      final url = await _service.downloadUrl(file);
-      await descargarArchivoDesdeURL(url, file.name);
+      final bytes = await _service.downloadBytes(file);
+      await descargarArchivoDesdeBytes(bytes, file.name);
       await _service.registerDownload(file.id);
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible descargar',
+          message: userFacingError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -313,14 +342,15 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     }
   }
 
-  Future<void> _deleteSelected() async {
-    if (!_canDelete || _selectedFiles.isEmpty) return;
+  Future<void> _deleteSelected([Iterable<String>? requestedIds]) async {
+    final ids = (requestedIds ?? _selectedFiles).toList();
+    if (!_canDelete || ids.isEmpty) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Eliminar archivos'),
         content: Text(
-          'Se eliminarán ${_selectedFiles.length} archivos de Storage y sus '
+          'Se eliminarán ${ids.length} archivos de Storage y sus '
           'registros. La acción quedará auditada.',
         ),
         actions: [
@@ -338,8 +368,16 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
     if (confirmed != true) return;
     setState(() => _busy = true);
     try {
-      await _service.deleteSelected(_selectedFiles);
+      await _service.deleteSelected(ids);
       await _reloadAll();
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible eliminar',
+          message: userFacingError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -378,6 +416,14 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
           context: context,
           title: 'Limpieza finalizada',
           message: 'Se eliminaron $deleted archivos.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible completar la limpieza',
+          message: userFacingError(error),
         );
       }
     } finally {
@@ -532,6 +578,23 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _bootstrap,
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : Stack(
               children: [
                 ListView(
@@ -759,12 +822,35 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
             Text(
               'Enviado por ${file.uploaderName} • ${DateFormat('dd/MM/yyyy HH:mm').format(file.sentAt.toDate())}',
             ),
+            if (file.isDeleting) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Eliminación pendiente',
+                style: TextStyle(
+                  color: colors.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Text(
+                'Este archivo ya no está disponible para descargar. '
+                'Reintenta la eliminación para completar la limpieza.',
+              ),
+              if (_canDelete)
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _deleteSelected([file.id]),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar eliminación'),
+                ),
+            ],
             if (file.message.isNotEmpty) ...[
               const SizedBox(height: 8),
               if (isLink)
                 TextButton.icon(
-                  onPressed: () =>
-                      launchUrl(uri, mode: LaunchMode.externalApplication),
+                  onPressed: () => openExternalLink(
+                    context,
+                    uri,
+                    mode: LaunchMode.externalApplication,
+                  ),
                   icon: const Icon(Icons.link),
                   label: Text(file.message),
                 )
@@ -772,12 +858,13 @@ class _UploadFileScreenState extends State<UploadFileScreen> {
                 SelectableText(file.message),
             ],
             const SizedBox(height: 6),
-            TextButton.icon(
-              onPressed: _busy ? null : () => _download(file),
-              icon: const Icon(Icons.download),
-              label: const Text('Descargar'),
-            ),
-            if (_isAdmin || file.uploadedBy == _user.id)
+            if (!file.isDeleting)
+              TextButton.icon(
+                onPressed: _busy ? null : () => _download(file),
+                icon: const Icon(Icons.download),
+                label: const Text('Descargar'),
+              ),
+            if (!file.isDeleting && (_isAdmin || file.uploadedBy == _user.id))
               TextButton.icon(
                 onPressed: _busy ? null : () => _showDownloads(file),
                 icon: const Icon(Icons.fact_check_outlined),

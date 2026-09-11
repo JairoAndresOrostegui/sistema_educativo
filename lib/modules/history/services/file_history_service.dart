@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/academic/academic_group.dart';
 import '../../../utils/academic_group_service.dart';
+import 'history_query_utils.dart';
 
 class DocumentPage {
   final List<Map<String, dynamic>> items;
@@ -20,9 +21,9 @@ class DocumentHistoryService {
   final FirebaseFirestore _db;
   final AcademicGroupService _groups;
 
-  DocumentHistoryService({FirebaseFirestore? db})
+  DocumentHistoryService({FirebaseFirestore? db, AcademicGroupService? groups})
     : _db = db ?? FirebaseFirestore.instance,
-      _groups = AcademicGroupService(db: db);
+      _groups = groups ?? AcademicGroupService(db: db);
 
   Future<DocumentPage> obtenerHistorialDocumentos({
     required String institutionId,
@@ -45,13 +46,14 @@ class DocumentHistoryService {
       final data = document.data();
       return <String, dynamic>{
         'id': document.id,
-        'nombre': data['name'] ?? '',
+        'nombre': data['name'] ?? data['fileName'] ?? 'Documento',
         'grupo': data['groupName'] ?? '',
         'groupId': data['groupId'] ?? '',
-        'subidoPor': data['uploaderName'] ?? data['uploadedBy'] ?? '',
-        'fechaSubida': (data['createdAt'] as Timestamp?)?.toDate(),
+        'subidoPor': data['uploaderName'] ?? data['performedByName'] ?? '',
+        'fechaSubida': historyDate(data['createdAt']),
         'storagePath': data['storagePath'],
         'sizeBytes': data['sizeBytes'] ?? 0,
+        'accion': data['action'] ?? '',
       };
     }).toList();
     return DocumentPage(
@@ -68,12 +70,11 @@ class DocumentHistoryService {
     DateTimeRange? rango,
   ) {
     Query<Map<String, dynamic>> query = _db
-        .collection('files')
+        .collection('file_history')
         .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId)
-        .where('status', isEqualTo: 'active');
+        .where('campusId', isEqualTo: campusId);
     if (groupId != null && groupId.isNotEmpty) {
-      query = query.where('groupId', isEqualTo: groupId);
+      query = query.where('targetGroupIds', arrayContains: groupId);
     }
     if (rango != null) {
       query = query
@@ -92,10 +93,9 @@ class DocumentHistoryService {
   Future<List<AcademicGroup>> obtenerGrupos({
     required String institutionId,
     required String campusId,
-  }) => _groups.list(
+  }) => _groups.listForAdministration(
     institutionId: institutionId,
     campusId: campusId,
-    activeOnly: false,
   );
 
   Future<int> contarTotalDocumentos({

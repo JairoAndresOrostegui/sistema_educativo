@@ -9,13 +9,13 @@ const root = path.resolve(__dirname, "..");
 // actions/checkout credentials are local to its checkout. Pass them in memory
 // to the temporary repository, never embed them in its remote or files.
 const credential = spawnSync("git", ["config", "--get",
-  "http.https://github.com/.extraheader"], {cwd: root, encoding: "utf8"});
+  "http.https://github.com/.extraheader"], {cwd: root, encoding: "utf8", windowsHide: true});
 const gitEnv = credential.status === 0 ? {...process.env,
   GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
   GIT_CONFIG_VALUE_0: credential.stdout.trim(),
 } : process.env;
 const git = (args, cwd = root) => execFileSync("git", args,
-    {cwd, encoding: "utf8", env: gitEnv}).trim();
+    {cwd, encoding: "utf8", env: gitEnv, windowsHide: true}).trim();
 const remote = git(["remote", "get-url", "origin"]);
 if (!/^https:\/\/github\.com\/JairoAndresOrostegui\/sistema_educativo(?:\.git)?$/.test(remote)) {
   throw new Error("Unexpected production repository");

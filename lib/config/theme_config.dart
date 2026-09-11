@@ -76,6 +76,7 @@ class ThemeProvider {
     } catch (_) {
       textTheme = GoogleFonts.montserratTextTheme(base.textTheme);
     }
+    textTheme = _withNotoFallback(textTheme);
     return base.copyWith(
       scaffoldBackgroundColor: scheme.surface,
       textTheme: textTheme,
@@ -103,6 +104,28 @@ class ThemeProvider {
         fillColor: scheme.surfaceContainerLowest,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
+    );
+  }
+
+  static TextTheme _withNotoFallback(TextTheme source) {
+    TextStyle? fallback(TextStyle? style) =>
+        style?.copyWith(fontFamilyFallback: const ['NotoSans']);
+    return source.copyWith(
+      displayLarge: fallback(source.displayLarge),
+      displayMedium: fallback(source.displayMedium),
+      displaySmall: fallback(source.displaySmall),
+      headlineLarge: fallback(source.headlineLarge),
+      headlineMedium: fallback(source.headlineMedium),
+      headlineSmall: fallback(source.headlineSmall),
+      titleLarge: fallback(source.titleLarge),
+      titleMedium: fallback(source.titleMedium),
+      titleSmall: fallback(source.titleSmall),
+      bodyLarge: fallback(source.bodyLarge),
+      bodyMedium: fallback(source.bodyMedium),
+      bodySmall: fallback(source.bodySmall),
+      labelLarge: fallback(source.labelLarge),
+      labelMedium: fallback(source.labelMedium),
+      labelSmall: fallback(source.labelSmall),
     );
   }
 

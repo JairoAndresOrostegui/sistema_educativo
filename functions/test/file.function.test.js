@@ -8,8 +8,10 @@ const {getStorage} = require("firebase-admin/storage");
 const {seedAcademicYear} = require("./academic_year_fixture");
 
 const projectId = "sistema-educativo-file-test";
-const functionsBase = `http://127.0.0.1:5002/${projectId}/us-central1`;
-const authBase = "http://127.0.0.1:9098/identitytoolkit.googleapis.com/v1";
+const functionsPort = process.env.RELEASE_FUNCTIONS_PORT || "5002";
+const authPort = process.env.RELEASE_AUTH_PORT || "9098";
+const functionsBase = `http://127.0.0.1:${functionsPort}/${projectId}/us-central1`;
+const authBase = `http://127.0.0.1:${authPort}/identitytoolkit.googleapis.com/v1`;
 let app;
 let auth;
 let db;
@@ -34,7 +36,9 @@ async function clearAuth() {
 
 async function seedUser(uid, role, permissions = [], extra = {}) {
   const email = `${uid}@colegio.test`;
-  await auth.createUser({uid, email, password: "Clave123!"});
+  await auth.createUser({
+    uid, email, password: "Clave123!", emailVerified: true,
+  });
   await db.collection("users").doc(uid).set({
     firstName: uid,
     lastName: "Prueba",
@@ -234,8 +238,16 @@ describe("archivos seguros", () => {
     assert.equal((await db.collection("file_download_receipts")
         .where("fileId", "==", id).get()).empty, true);
     assert.equal((await bucket.file(storagePath).exists())[0], false);
-    assert.equal((await db.collection("file_history")
-        .where("fileId", "==", id).get()).size, 2);
+    const history = await db.collection("file_history")
+        .where("fileId", "==", id).get();
+    assert.equal(history.size, 2);
+    for (const entry of history.docs) {
+      assert.equal(entry.data().fileName, "guia.pdf");
+      assert.equal(entry.data().groupId, "group-5a");
+      assert.equal(entry.data().groupName, "Quinto A");
+      assert.ok(entry.data().performedByName);
+      assert.equal(entry.data().storagePath, storagePath);
+    }
   });
 
   it("rechaza el borrado docente aunque manipule el permiso", async () => {
@@ -246,6 +258,41 @@ describe("archivos seguros", () => {
     assertError(await callFunction(
         "eliminarArchivos", {ids: ["cualquiera"]}, token,
     ), "PERMISSION_DENIED");
+  });
+
+  it("toda la sede excluye datos de otros anios", async () => {
+    await seedUser("student-old", "Estudiante", ["archivos.ver"], {
+      groupId: "group-old", groupName: "Grupo anterior",
+    });
+    await seedUser("teacher-current", "Docente", ["archivos.ver"]);
+    await seedUser("teacher-old", "Docente", ["archivos.ver"]);
+    const activeYear = (await db.collection("academic_years")
+        .where("status", "==", "active").limit(1).get()).docs[0].id;
+    await db.collection("subjects").doc("subject-current-admin").set({
+      institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: activeYear, academicYear: 2026,
+      groupId: "group-6a", teacherId: "teacher-current",
+    });
+    await db.collection("subjects").doc("subject-old-admin").set({
+      institutionId: "inst-1", campusId: "campus-1",
+      academicYearId: "year-old", academicYear: 2025,
+      groupId: "group-6a", teacherId: "teacher-old",
+    });
+    const token = await signIn(await seedUser(
+        "admin", "Administrador", ["archivos.crear", "archivos.ver"],
+    ));
+    const result = await callFunction("solicitarCargaArchivo", {
+      ...reservation(),
+      audienceType: "all",
+      targetGroupIds: [],
+    }, token);
+    const file = (await db.collection("files")
+        .doc(result.body.result.id).get()).data();
+    assert.deepEqual(new Set(file.targetStudentIds),
+        new Set(["student-5a", "student-6a"]));
+    assert.ok(file.recipientUserIds.includes("teacher-current"));
+    assert.ok(!file.recipientUserIds.includes("teacher-old"));
+    assert.ok(!file.recipientUserIds.includes("student-old"));
   });
 
   it("solo superadmin limpia archivos de mas de 60 dias", async () => {

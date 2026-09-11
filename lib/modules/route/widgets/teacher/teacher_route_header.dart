@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/route_model.dart';
@@ -23,6 +22,7 @@ class TeacherRouteHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         DropdownButtonFormField<RouteModel>(
@@ -48,14 +48,12 @@ class TeacherRouteHeader extends StatelessWidget {
             width: double.infinity,
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: AppPalette.surface,
+              color: scheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppPalette.error.withValues(alpha: .15),
-              ),
+              border: Border.all(color: scheme.outlineVariant),
               boxShadow: [
                 BoxShadow(
-                  color: AppPalette.onSurface.withValues(alpha: .03),
+                  color: scheme.shadow.withValues(alpha: .03),
                   blurRadius: 8,
                   offset: Offset(0, 2),
                 ),

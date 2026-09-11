@@ -101,14 +101,14 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     if (esSuperadmin || perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Gesti\u00f3n de rutas',
+          label: 'Administrar rutas',
           icon: Icons.route,
           route: '/management_route',
         ),
       );
       items.add(
         const MenuItemData(
-          label: 'Mis recorridos',
+          label: 'Operar recorrido',
           icon: Icons.directions_bus,
           route: '/execute_route',
         ),
@@ -139,7 +139,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin || perms.contains('historial_rutas.ver')) {
+    if (kIsWeb && (esSuperadmin || perms.contains('historial.ver'))) {
       items.add(
         const MenuItemData(
           label: 'Historial administrativo',
@@ -179,6 +179,26 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
           label: 'Mensajeria',
           icon: Icons.chat_bubble_outline,
           route: '/messages',
+        ),
+      );
+    }
+
+    if (esSuperadmin || perms.contains('asistencia.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Lista de asistencia',
+          icon: Icons.fact_check_outlined,
+          route: '/attendance',
+        ),
+      );
+    }
+
+    if (esSuperadmin || perms.contains('eventos.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Eventos',
+          icon: Icons.event_outlined,
+          route: '/events',
         ),
       );
     }

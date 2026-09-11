@@ -56,20 +56,37 @@ describe("identificadores QR", () => {
   });
   it("consulta hijos vigentes sin conceder autorizacion de recogida", async () => {
     const qr = (await call("obtenerCredencialQr", {}, "family")).result.payload;
-    const resolved = (await call("resolverCredencialQr", {payload: qr}, "admin")).result;
+    const resolved = (await call("resolverCredencialQr", {
+      payload: qr, source: "camera", clientPlatform: "android",
+    }, "admin")).result;
     assert.equal(resolved.children[0].id, "student");
     assert.equal(resolved.identificationOnly, true);
+    const audit = await db.collection("qr_audit")
+        .where("action", "==", "resolved").get();
+    const resolution = audit.docs.map((doc) => doc.data())
+        .find((entry) => entry.targetId === "family");
+    assert.equal(resolution.result, "success");
+    assert.equal(resolution.source, "camera");
+    assert.equal(resolution.clientPlatform, "android");
     assert.ok((await call("obtenerCredencialQr", {targetId: "student"}, "family")).result);
     assert.equal((await call("obtenerCredencialQr", {targetId: "other"}, "family")).error.status, "PERMISSION_DENIED");
     await db.collection("users").doc("student").update({status: "inactivo"});
     assert.deepEqual((await call("resolverCredencialQr", {payload: qr}, "admin")).result.children, []);
   });
   it("revoca, reemplaza, aisla sedes y elimina la credencial en cascada", async () => {
-    const qr = (await call("obtenerCredencialQr", {}, "student")).result.payload;
-    assert.ok((await call("administrarCredencialQr", {targetType: "user", targetId: "student", action: "rotate", confirmation: "rotate:student"}, "admin")).result);
+    const original = (await call("obtenerCredencialQr", {}, "student")).result;
+    const qr = original.payload;
+    const rotated = await call("administrarCredencialQr", {targetType: "user", targetId: "student", action: "rotate", confirmation: "rotate:student", expectedRevision: original.revision}, "admin");
+    assert.equal(rotated.result.revision, 2);
+    assert.equal((await call("administrarCredencialQr", {targetType: "user", targetId: "student", action: "rotate", confirmation: "rotate:student", expectedRevision: original.revision}, "admin")).error.status, "ABORTED");
     assert.equal((await call("resolverCredencialQr", {payload: qr}, "admin")).error.status, "PERMISSION_DENIED");
-    assert.ok((await call("administrarCredencialQr", {targetType: "user", targetId: "student", action: "revoke", confirmation: "revoke:student"}, "admin")).result);
+    const revoked = await call("administrarCredencialQr", {targetType: "user", targetId: "student", action: "revoke", confirmation: "revoke:student", expectedRevision: rotated.result.revision}, "admin");
+    assert.equal(revoked.result.revision, 3);
     assert.equal((await call("obtenerCredencialQr", {}, "student")).error.status, "PERMISSION_DENIED");
+    const adminView = (await call("obtenerCredencialQr", {targetId: "student"}, "admin")).result;
+    assert.equal(adminView.payload, null);
+    assert.equal(adminView.status, "revoked");
+    assert.equal(adminView.revision, 3);
     await db.collection("users").doc("other").update({campus: "other-campus"});
     assert.equal((await call("obtenerCredencialQr", {targetId: "other"}, "admin")).error.status, "PERMISSION_DENIED");
     assert.ok((await call("obtenerCredencialQr", {targetId: "other"}, "super")).result);
@@ -85,6 +102,9 @@ describe("identificadores QR", () => {
     const read = (await call("resolverCredencialQr", {payload: event.payload}, "student")).result;
     assert.equal(read.targetType, "event"); assert.equal(read.identificationOnly, true);
     const source = (await db.collection("events").doc(event.targetId).get()).data();
+    await db.collection("academic_years").doc(source.academicYearId).update({campusId: "otra"});
+    assert.equal((await call("resolverCredencialQr", {payload: event.payload}, "student")).error.status, "PERMISSION_DENIED");
+    await db.collection("academic_years").doc(source.academicYearId).update({campusId: "c"});
     await db.collection("academic_years").doc(source.academicYearId).update({status: "closed"});
     assert.equal((await call("resolverCredencialQr", {payload: event.payload}, "student")).error.status, "PERMISSION_DENIED");
   });

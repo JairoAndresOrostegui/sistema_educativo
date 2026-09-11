@@ -43,6 +43,7 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   List<userModelv2> _availableStudents = [];
   String _status = 'activo';
   bool _saving = false;
+  final Set<String> _loadErrors = <String>{};
 
   String? get _selectedGroupName {
     for (final group in _groups) {
@@ -73,13 +74,19 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
   }
 
   Future<void> _loadAllParameters() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadErrors.clear();
+      });
+    }
     try {
+      await _loadInstitutions();
       await Future.wait([
         _loadDocumentTypes(),
         _loadRoles(),
         _loadPermissions(),
         _loadAvailableStudents(),
-        _loadInstitutions(),
       ]);
       await _loadGroups();
     } finally {
@@ -89,6 +96,11 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
         });
       }
     }
+  }
+
+  void _recordLoadError(String section) {
+    if (!mounted) return;
+    setState(() => _loadErrors.add(section));
   }
 
   @override
@@ -160,15 +172,6 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
     try {
       final permissions = await ParametersService().getPermissions();
       final normalized = _normalizePermissions(permissions);
-      if (!esSuperadminActual) {
-        normalized.removeWhere(
-          (permission) =>
-              permission.valor.startsWith('usuarios.') ||
-              permission.valor == 'historial.ver' ||
-              permission.valor == 'sitio_web.editar' ||
-              permission.valor == 'parametros.editar',
-        );
-      }
       if (!normalized.any((p) => p.valor == 'sitio_web.ver')) {
         normalized.add(
           Parameter(etiqueta: 'Sitio web', valor: 'sitio_web.ver', orden: 900),
@@ -201,6 +204,17 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           ),
         );
       }
+      // Filtrar DESPUÉS de completar opciones: de otro modo se reintroducían
+      // permisos reservados al superadmin y el guardado era rechazado.
+      if (!esSuperadminActual) {
+        normalized.removeWhere(
+          (permission) =>
+              permission.valor.startsWith('usuarios.') ||
+              permission.valor == 'historial.ver' ||
+              permission.valor == 'sitio_web.editar' ||
+              permission.valor == 'parametros.editar',
+        );
+      }
       final normalizedFuncionalidades =
           _normalizeUserPermissions(
             normalized,
@@ -218,7 +232,9 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           funcionalidades = normalizedFuncionalidades;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      _recordLoadError('permisos');
+    }
   }
 
   List<Parameter> _normalizePermissions(List<Parameter> input) {
@@ -271,7 +287,9 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           _selectedGroupId = selected;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      _recordLoadError('grupos académicos');
+    }
   }
 
   Future<void> _loadDocumentTypes() async {
@@ -284,7 +302,9 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           _selectedDocumentType = widget.usuario?.documentType;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      _recordLoadError('tipos de documento');
+    }
   }
 
   Future<void> _loadRoles() async {
@@ -307,23 +327,45 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
           rol = selected;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      _recordLoadError('roles');
+    }
   }
 
   Future<void> _loadAvailableStudents() async {
     try {
-      final userLogged = context.read<UserProviderV2>().user!;
+      final selectedInstitution = institucion.text.trim();
+      final selectedCampus = sede.text.trim();
+      if (selectedInstitution.isEmpty || selectedCampus.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _availableStudents = [];
+            studentIds = [];
+            activeStudentId = null;
+          });
+        }
+        return;
+      }
       final students = await ParametersService().getUsersByFilters(
-        institution: userLogged.institution,
-        campus: userLogged.campus,
+        institution: selectedInstitution,
+        campus: selectedCampus,
         role: 'Estudiante',
       );
       if (mounted) {
+        final availableIds = students.map((student) => student.id).toSet();
         setState(() {
           _availableStudents = students;
+          studentIds = studentIds
+              .where((studentId) => availableIds.contains(studentId))
+              .toList();
+          if (!studentIds.contains(activeStudentId)) {
+            activeStudentId = studentIds.isEmpty ? null : studentIds.first;
+          }
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      _recordLoadError('estudiantes vinculables');
+    }
   }
 
   Future<void> _loadInstitutions() async {
@@ -372,7 +414,19 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
         ];
         _campuses = [logged.campus];
       });
+      _recordLoadError('instituciones y sedes');
     }
+  }
+
+  Future<void> _reloadScopeData() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _loadErrors.remove('grupos académicos');
+      _loadErrors.remove('estudiantes vinculables');
+    });
+    await Future.wait([_loadGroups(), _loadAvailableStudents()]);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -454,6 +508,34 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (_loadErrors.isNotEmpty)
+                              Card(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.errorContainer,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'No se pudieron cargar: '
+                                          '${_loadErrors.join(', ')}. '
+                                          'Reintenta antes de guardar.',
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: _isLoading
+                                            ? null
+                                            : _loadAllParameters,
+                                        child: const Text('Reintentar'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             AdminUserFormBody(
                               usuario: widget.usuario,
                               soloLectura: widget.soloLectura,
@@ -532,11 +614,11 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                                       ? ''
                                       : _campuses.first;
                                 });
-                                _loadGroups();
+                                _reloadScopeData();
                               },
                               setSede: (val) {
                                 setState(() => sede.text = val);
-                                _loadGroups();
+                                _reloadScopeData();
                               },
                               onFuncionalidadChanged: (permiso, isChecked) {
                                 setState(() {
@@ -557,6 +639,17 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                                 );
                                 if (!mounted) return;
                                 if (picked == null) return;
+
+                                if (await picked.length() > 5 * 1024 * 1024) {
+                                  if (!mounted) return;
+                                  await DialogUtils.showError(
+                                    // ignore: use_build_context_synchronously
+                                    context: ctx,
+                                    title: 'Archivo demasiado grande',
+                                    message: 'La foto no puede superar 5 MB.',
+                                  );
+                                  return;
+                                }
 
                                 final lowerName = picked.name.toLowerCase();
                                 final extensionValida =
@@ -588,6 +681,11 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                               onStudentIdsChanged: (newStudentIds) {
                                 setState(() {
                                   studentIds = newStudentIds;
+                                  if (!studentIds.contains(activeStudentId)) {
+                                    activeStudentId = studentIds.isEmpty
+                                        ? null
+                                        : studentIds.first;
+                                  }
                                 });
                               },
                               status: _status,
@@ -603,7 +701,10 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
                                 child: Align(
                                   alignment: Alignment.centerRight,
                                   child: ElevatedButton.icon(
-                                    onPressed: (_isLoading || _saving)
+                                    onPressed:
+                                        (_isLoading ||
+                                            _saving ||
+                                            _loadErrors.isNotEmpty)
                                         ? null
                                         : _guardarUsuario,
                                     icon: _saving
@@ -719,11 +820,14 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       familyRelation: _capitalizeWords(familyRelation.text),
       studentIds: studentIds,
       activeStudentId: activeStudentId,
+      mustChangePassword: widget.usuario?.mustChangePassword ?? false,
+      revision: widget.usuario?.revision ?? 1,
     );
 
     try {
+      String? warning;
       if (esNuevo) {
-        await _controller.guardarNuevo(
+        warning = await _controller.guardarNuevo(
           usuario: nuevoUsuario,
           fotoBytes: _pickedImageBytes,
           fotoNombre: _pickedImageName,
@@ -732,10 +836,16 @@ class _AdminUserFormWidgetState extends State<AdminUserFormWidget> {
       } else {
         await _controller.guardarExistente(
           usuario: nuevoUsuario,
-          estadoAnterior: widget.usuario!.status,
           fotoBytes: _pickedImageBytes,
           fotoNombre: _pickedImageName,
           usuarioLogueado: usuarioLogueado,
+        );
+      }
+      if (warning != null && mounted) {
+        await DialogUtils.showInfo(
+          context: context,
+          title: 'Usuario creado con una advertencia',
+          message: warning,
         );
       }
       if (mounted) {

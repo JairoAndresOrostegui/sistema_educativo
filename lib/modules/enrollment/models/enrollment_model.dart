@@ -18,6 +18,7 @@ class Enrollment {
   final String? rechazoMotivo;
   final String institution;
   final String campus;
+  final int revision;
 
   Enrollment({
     required this.id,
@@ -36,6 +37,7 @@ class Enrollment {
     this.rechazoMotivo,
     required this.institution,
     required this.campus,
+    required this.revision,
   });
 
   factory Enrollment.fromDoc(DocumentSnapshot doc) {
@@ -57,6 +59,7 @@ class Enrollment {
       rechazoMotivo: data['rechazoMotivo'] as String?,
       institution: (data['institution'] ?? '').toString(),
       campus: (data['campus'] ?? '').toString(),
+      revision: (data['revision'] as num?)?.toInt() ?? 1,
       data: Map<String, dynamic>.from(data['data'] as Map? ?? {}),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),

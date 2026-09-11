@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,12 +7,14 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/user_facing_error.dart';
+import 'qr_scanner_screen.dart';
 
 class QrScreen extends StatefulWidget {
-  const QrScreen({super.key, this.manage = false, this.invoke});
+  const QrScreen({super.key, this.manage = false, this.invoke, this.scan});
   final bool manage;
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)?
   invoke;
+  final Future<String?> Function(BuildContext)? scan;
   @override
   State<QrScreen> createState() => _QrScreenState();
 }
@@ -20,6 +23,8 @@ class _QrScreenState extends State<QrScreen> {
   List<Map<String, dynamic>> _entities = [];
   Map<String, dynamic>? _selected;
   String? _payload, _error;
+  String? _credentialStatus;
+  int? _credentialRevision;
   String _search = '';
   bool _busy = true;
   Future<Map<String, dynamic>> _call(
@@ -92,6 +97,8 @@ class _QrScreenState extends State<QrScreen> {
     setState(() {
       _selected = entity;
       _payload = null;
+      _credentialStatus = null;
+      _credentialRevision = null;
       _busy = true;
       _error = null;
     });
@@ -110,7 +117,15 @@ class _QrScreenState extends State<QrScreen> {
         'targetType': entity['targetType'],
         'targetId': entity['targetId'],
       });
-      if (mounted) setState(() => _payload = result['payload'] as String);
+      if (mounted) {
+        setState(() {
+          _payload = result['payload'] is String
+              ? result['payload'] as String
+              : null;
+          _credentialStatus = (result['status'] ?? 'active').toString();
+          _credentialRevision = (result['revision'] as num?)?.toInt() ?? 0;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _error = userFacingError(error));
     } finally {
@@ -175,6 +190,10 @@ class _QrScreenState extends State<QrScreen> {
   }
 
   Future<void> _manage(String action) async {
+    if (_selected == null || _credentialRevision == null) {
+      setState(() => _error = 'Recarga la credencial antes de modificarla.');
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -200,13 +219,20 @@ class _QrScreenState extends State<QrScreen> {
       _error = null;
     });
     try {
-      await _call('administrarCredencialQr', {
+      final result = await _call('administrarCredencialQr', {
         'targetType': _selected!['targetType'],
         'targetId': _selected!['targetId'],
         'action': action,
         'confirmation': '$action:${_selected!['targetId']}',
+        'expectedRevision': _credentialRevision,
       });
-      if (mounted) setState(() => _payload = null);
+      if (mounted) {
+        setState(() {
+          _payload = null;
+          _credentialStatus = (result['status'] ?? '').toString();
+          _credentialRevision = (result['revision'] as num?)?.toInt();
+        });
+      }
       if (action == 'rotate') await _select(_selected!);
     } catch (error) {
       if (mounted) setState(() => _error = userFacingError(error));
@@ -218,17 +244,37 @@ class _QrScreenState extends State<QrScreen> {
   Future<void> _resolve() async {
     final payload = await _text('Validar identificador QR');
     if (payload == null || payload.isEmpty || !mounted) return;
+    await _resolvePayload(payload, source: 'manual');
+  }
+
+  Future<void> _scan() async {
+    final payload = await (widget.scan ?? scanInstitutionalQr)(context);
+    if (payload == null || !mounted) return;
+    await _resolvePayload(payload, source: 'camera');
+  }
+
+  Future<void> _resolvePayload(String payload, {required String source}) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final result = await _call('resolverCredencialQr', {'payload': payload});
+      final result = await _call('resolverCredencialQr', {
+        'payload': payload,
+        'source': source,
+        'clientPlatform': kIsWeb
+            ? 'web'
+            : defaultTargetPlatform.name.toLowerCase(),
+      });
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           scrollable: true,
-          title: Text(result['name'] as String),
+          title: Text((result['name'] ?? 'Identificador').toString()),
           content: Text(
             'Tipo: ${result['targetType'] == 'user' ? 'Usuario' : 'Evento'}\n'
-            '${(result['children'] as List).map((c) => '${c['name']} · ${c['groupName'] ?? ''}').join('\n')}\n'
+            '${(result['children'] is List ? result['children'] as List : const <dynamic>[]).whereType<Map>().map((c) => '${c['name'] ?? ''} · ${c['groupName'] ?? ''}').join('\n')}\n'
             'Identificación válida. No registra asistencia ni autoriza entregas.',
           ),
           actions: [
@@ -241,6 +287,8 @@ class _QrScreenState extends State<QrScreen> {
       );
     } catch (error) {
       if (mounted) setState(() => _error = userFacingError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -293,8 +341,14 @@ class _QrScreenState extends State<QrScreen> {
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _resolve,
                   icon: const Icon(Icons.verified_outlined),
-                  label: const Text('Validar código'),
+                  label: const Text('Validar manualmente'),
                 ),
+                if (widget.manage)
+                  FilledButton.icon(
+                    onPressed: _busy ? null : _scan,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Leer con cámara'),
+                  ),
                 if (widget.manage)
                   OutlinedButton.icon(
                     onPressed: _busy ? null : _event,
@@ -314,6 +368,8 @@ class _QrScreenState extends State<QrScreen> {
                     : () => setState(() {
                         _selected = null;
                         _payload = null;
+                        _credentialStatus = null;
+                        _credentialRevision = null;
                       }),
                 child: const Text('Elegir otra entidad'),
               ),
@@ -332,7 +388,7 @@ class _QrScreenState extends State<QrScreen> {
                     )
                     .take(widget.manage ? 20 : _entities.length))
               ListTile(
-                title: Text(entity['name'] as String),
+                title: Text((entity['name'] ?? 'Sin nombre').toString()),
                 subtitle: Text(
                   '${entity['role']} · ${entity['groupName'] ?? entity['campusId'] ?? ''}',
                 ),
@@ -344,7 +400,16 @@ class _QrScreenState extends State<QrScreen> {
               ),
             if (_selected != null) ...[
               const Divider(),
-              Text(_selected!['name'] as String, textAlign: TextAlign.center),
+              Text(
+                (_selected!['name'] ?? 'Sin nombre').toString(),
+                textAlign: TextAlign.center,
+              ),
+              if (_credentialStatus == 'revoked')
+                Text(
+                  'Credencial revocada. Puedes reemplazarla para emitir una nueva.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: scheme.error),
+                ),
               if (_payload != null) ...[
                 Center(
                   child: ConstrainedBox(
@@ -364,8 +429,13 @@ class _QrScreenState extends State<QrScreen> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () =>
-                      Clipboard.setData(ClipboardData(text: _payload!)),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: _payload!));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Identificador copiado.')),
+                    );
+                  },
                   child: const Text('Copiar identificador'),
                 ),
               ],
@@ -374,7 +444,9 @@ class _QrScreenState extends State<QrScreen> {
                   spacing: 8,
                   children: [
                     TextButton(
-                      onPressed: _busy ? null : () => _manage('revoke'),
+                      onPressed: _busy || _credentialStatus != 'active'
+                          ? null
+                          : () => _manage('revoke'),
                       child: const Text('Revocar'),
                     ),
                     TextButton(

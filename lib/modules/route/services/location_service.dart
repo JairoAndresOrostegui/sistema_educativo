@@ -6,6 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'daily_route_service.dart';
 
 class LocationService {
+  LocationService({this.onLocationError, this.onLocationRecovered});
+
+  final ValueChanged<Object>? onLocationError;
+  final VoidCallback? onLocationRecovered;
   StreamSubscription<Position>? _positionSub;
 
   static const double _kMinDeltaMeters = 30;
@@ -14,8 +18,19 @@ class LocationService {
 
   GeoPoint? _lastWrittenPoint;
   DateTime? _lastWriteAt;
+  bool _failureReported = false;
 
-  LocationService();
+  void _reportFailure(Object error) {
+    if (_failureReported) return;
+    _failureReported = true;
+    onLocationError?.call(error);
+  }
+
+  void _reportRecovery() {
+    if (!_failureReported) return;
+    _failureReported = false;
+    onLocationRecovered?.call();
+  }
 
   Future<bool> requestLocationPermission() async {
     if (kIsWeb) {
@@ -55,6 +70,7 @@ class LocationService {
       );
     } catch (e) {
       debugPrint('LocationService: error en posición inicial -> $e');
+      _reportFailure(e);
     }
 
     final settings = (defaultTargetPlatform == TargetPlatform.android)
@@ -82,6 +98,7 @@ class LocationService {
           );
         } catch (e) {
           debugPrint('LocationService: error procesando posición -> $e');
+          _reportFailure(e);
         }
       },
       onError: (Object error) {
@@ -90,6 +107,7 @@ class LocationService {
         debugPrint(
           'LocationService: flujo de ubicación interrumpido -> $error',
         );
+        _reportFailure(error);
       },
     );
   }
@@ -99,43 +117,40 @@ class LocationService {
     GeoPoint point, {
     bool force = false,
   }) async {
-    try {
-      final now = DateTime.now();
+    final now = DateTime.now();
 
-      if (!force && _lastWrittenPoint != null && _lastWriteAt != null) {
-        final moved = Geolocator.distanceBetween(
-          _lastWrittenPoint!.latitude,
-          _lastWrittenPoint!.longitude,
-          point.latitude,
-          point.longitude,
-        );
-        final elapsed = now.difference(_lastWriteAt!);
+    if (!force && _lastWrittenPoint != null && _lastWriteAt != null) {
+      final moved = Geolocator.distanceBetween(
+        _lastWrittenPoint!.latitude,
+        _lastWrittenPoint!.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      final elapsed = now.difference(_lastWriteAt!);
 
-        final byMovement =
-            moved >= _kMinDeltaMeters && elapsed >= _kMinInterval;
-        final byMaxAge = elapsed >= _kMaxInterval;
+      final byMovement = moved >= _kMinDeltaMeters && elapsed >= _kMinInterval;
+      final byMaxAge = elapsed >= _kMaxInterval;
 
-        if (!byMovement && !byMaxAge) {
-          return;
-        }
+      if (!byMovement && !byMaxAge) {
+        return;
       }
-
-      await RouteOperations.execute(docId, 'position', {
-        'latitude': point.latitude,
-        'longitude': point.longitude,
-      });
-
-      _lastWrittenPoint = point;
-      _lastWriteAt = now;
-    } catch (e) {
-      debugPrint('LocationService: error actualizando ubicación -> $e');
     }
+
+    await RouteOperations.execute(docId, 'position', {
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+    });
+
+    _lastWrittenPoint = point;
+    _lastWriteAt = now;
+    _reportRecovery();
   }
 
-  void stopLocationUpdates() {
-    _positionSub?.cancel();
+  Future<void> stopLocationUpdates() async {
+    await _positionSub?.cancel();
     _positionSub = null;
     _lastWrittenPoint = null;
     _lastWriteAt = null;
+    _failureReported = false;
   }
 }

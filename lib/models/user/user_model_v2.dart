@@ -34,6 +34,7 @@ class userModelv2 {
   final List<String>? studentIds;
   final String? activeStudentId;
   final bool mustChangePassword;
+  final int revision;
 
   userModelv2({
     required this.id,
@@ -67,6 +68,7 @@ class userModelv2 {
     this.studentIds,
     this.activeStudentId,
     this.mustChangePassword = false,
+    this.revision = 1,
   });
 
   factory userModelv2.fromFirestore(Map<String, dynamic> map, String id) {
@@ -110,6 +112,7 @@ class userModelv2 {
           : null,
       activeStudentId: map['activeStudentId'],
       mustChangePassword: map['mustChangePassword'] == true,
+      revision: (map['revision'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -152,6 +155,7 @@ class userModelv2 {
       'studentIds': studentIds,
       'activeStudentId': activeStudentId,
       if (mustChangePassword) 'mustChangePassword': true,
+      'revision': revision,
     };
 
     final tokenMap = <String, dynamic>{};
@@ -200,6 +204,7 @@ class userModelv2 {
     List<String>? studentIds,
     String? activeStudentId,
     bool? mustChangePassword,
+    int? revision,
   }) {
     return userModelv2(
       id: id ?? this.id,
@@ -233,6 +238,7 @@ class userModelv2 {
       studentIds: studentIds ?? this.studentIds,
       activeStudentId: activeStudentId ?? this.activeStudentId,
       mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+      revision: revision ?? this.revision,
     );
   }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../utils/open_external_link.dart';
 
 class WebsiteVideoEmbed extends StatelessWidget {
   final String url;
@@ -14,7 +14,9 @@ class WebsiteVideoEmbed extends StatelessWidget {
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Center(
         child: FilledButton.icon(
-          onPressed: preview ? null : () => launchUrl(Uri.parse(url)),
+          onPressed: preview
+              ? null
+              : () => openExternalLink(context, Uri.parse(url)),
           icon: const Icon(Icons.play_circle_outline),
           label: const Text('Ver video'),
         ),

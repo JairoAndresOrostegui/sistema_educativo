@@ -9,11 +9,13 @@ class RutaPage {
 }
 
 class RutaHistoryService {
-  final _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+
+  RutaHistoryService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
 
   static const dailyRoutesCollection = 'daily_routes';
   static const studentsCollectionEn = 'students';
-  static const studentsCollectionEs = 'estudiantes';
 
   Future<RutaPage> obtenerHistorialRutas({
     // ⬇️ filtros OBLIGATORIOS de organización
@@ -28,8 +30,8 @@ class RutaHistoryService {
   }) async {
     Query<Map<String, dynamic>> q = _db
         .collection(dailyRoutesCollection)
-        .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId);
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId);
 
     if (nombreRuta != null && nombreRuta.trim().isNotEmpty) {
       q = q.where('nombreRuta', isEqualTo: nombreRuta.trim());
@@ -60,19 +62,12 @@ class RutaHistoryService {
       final data = doc.data();
       data['id'] = doc.id;
 
-      // Carga de subcolección (EN primero, si no, ES)
+      // El esquema vigente usa exclusivamente `students`.
       final studentsCol = doc.reference.collection(studentsCollectionEn);
       final stSnap = await studentsCol.get();
-      if (stSnap.docs.isNotEmpty) {
-        data['estudiantes'] = stSnap.docs
-            .map((e) => _toEsStudent(e.data()))
-            .toList();
-      } else {
-        final stSnapEs = await doc.reference
-            .collection(studentsCollectionEs)
-            .get();
-        data['estudiantes'] = stSnapEs.docs.map((e) => e.data()).toList();
-      }
+      data['estudiantes'] = stSnap.docs
+          .map((e) => _toEsStudent(e.data()))
+          .toList();
 
       rutas.add(data);
     }
@@ -108,8 +103,8 @@ class RutaHistoryService {
   }) async {
     Query<Map<String, dynamic>> q = _db
         .collection(dailyRoutesCollection)
-        .where('institutionId', isEqualTo: institutionId)
-        .where('campusId', isEqualTo: campusId)
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId)
         .where('estado', isEqualTo: 'finalizada');
 
     if (nombreRuta != null && nombreRuta.trim().isNotEmpty) {
@@ -124,7 +119,6 @@ class RutaHistoryService {
           .where('fecha', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
     }
 
-    final snap = await q.get();
-    return snap.docs.length;
+    return (await q.count().get()).count ?? 0;
   }
 }

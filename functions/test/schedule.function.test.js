@@ -49,7 +49,8 @@ async function clearAuth() {
 
 async function seedUser(uid, role, extra = {}) {
   const email = `${uid}@colegio.test`;
-  await auth.createUser({uid, email, password: "Clave123!"});
+  await auth.createUser({uid, email,
+    password: "Clave123!", emailVerified: true});
   await db.collection("users").doc(uid).set(profile(role, {
     institutionalEmail: email,
     ...extra,
@@ -155,6 +156,16 @@ describe("horarios seguros", () => {
   after(async () => deleteApp(app));
 
   it("crea datos derivados, auditoria y evento de notificacion", async () => {
+    await seedUser("teacher-old", "Docente", {
+      permissions: ["horarios.ver"],
+      groupId: "group-6a",
+      groupName: "Sexto A",
+    });
+    await db.collection("subjects").doc("subject-old").set({
+      ...schedule({teacherId: "teacher-old"}),
+      academicYearId: "year-old",
+      academicYear: 2025,
+    });
     const token = await signIn(await seedUser("admin", "Administrador", {
       permissions: ["horarios.crear"],
     }));
@@ -166,10 +177,9 @@ describe("horarios seguros", () => {
     assert.equal(saved.startMinutes, 480);
     assert.equal(saved.institutionId, "inst-1");
     assert.equal((await db.collection("schedule_history").get()).size, 1);
-    assert.equal(
-        (await db.collection("schedule_notification_events").get()).size,
-        1,
-    );
+    const events = await db.collection("schedule_notification_events").get();
+    assert.equal(events.size, 1);
+    assert.ok(!events.docs[0].data().recipientIds.includes("teacher-old"));
   });
 
   it("aplica permisos de accion y rechaza docentes y estudiantes", async () => {
@@ -392,8 +402,13 @@ describe("horarios seguros", () => {
             "seleccionarHijoActivo", {studentId: "student"}, familyToken,
         );
         assert.equal(selected.body.result.studentId, "student");
-        assert.equal((await db.collection("users").doc("family").get())
-            .data().activeStudentId, "student");
+        assert.equal(selected.body.result.revision, 2);
+        const updatedFamily = (await db.collection("users").doc("family")
+            .get()).data();
+        assert.equal(updatedFamily.activeStudentId, "student");
+        assert.equal(updatedFamily.revision, 2);
+        assert.equal((await db.collection("user_directory").doc("family")
+            .get()).data().activeStudentId, "student");
         assertError(await callFunction(
             "seleccionarHijoActivo", {studentId: "unlinked"}, familyToken,
         ), "PERMISSION_DENIED");

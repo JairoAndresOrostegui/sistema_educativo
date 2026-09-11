@@ -184,21 +184,16 @@ class ParametersService {
     required String campus,
     required String role,
   }) async {
-    try {
-      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-          .collection('users')
-          .where('institution', isEqualTo: institution)
-          .where('campus', isEqualTo: campus)
-          .where('role', isEqualTo: role)
-          .where('status', isEqualTo: 'activo');
+    final result = await _firestore
+        .collection('user_directory')
+        .where('institution', isEqualTo: institution)
+        .where('campus', isEqualTo: campus)
+        .where('role', isEqualTo: role)
+        .where('status', isEqualTo: 'activo')
+        .get();
 
-      final QuerySnapshot<Map<String, dynamic>> result = await query.get();
-
-      return result.docs.map((doc) {
-        return userModelv2.fromFirestore(doc.data(), doc.id);
-      }).toList();
-    } catch (e) {
-      return [];
-    }
+    return result.docs
+        .map((doc) => userModelv2.fromFirestore(doc.data(), doc.id))
+        .toList();
   }
 }

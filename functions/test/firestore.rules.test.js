@@ -8,6 +8,7 @@ const {
 } = require("@firebase/rules-unit-testing");
 const {
   collection,
+  documentId,
   deleteDoc,
   doc,
   getDoc,
@@ -16,6 +17,7 @@ const {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } = require("firebase/firestore");
 
 const projectId = "sistema-educativo-rules-test";
@@ -46,6 +48,9 @@ describe("Reglas Firestore", () => {
         ),
       },
     });
+    const authenticatedContext = env.authenticatedContext.bind(env);
+    env.authenticatedContext = (uid, token = {}) =>
+      authenticatedContext(uid, {email_verified: true, ...token});
   });
 
   beforeEach(async () => {
@@ -58,6 +63,9 @@ describe("Reglas Firestore", () => {
           "autorizaciones.ver", "autorizaciones.editar",
           "horarios.ver", "horarios.crear", "horarios.editar",
           "archivos.ver", "archivos.eliminar",
+          "parametros.ver",
+          "mensajeria.ver",
+          "historial.ver",
         ],
       }));
       await setDoc(doc(db, "users/superadmin"), activeUser("Administrador", {
@@ -66,6 +74,12 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "users/site-editor"), activeUser("Administrador", {
         permissions: ["sitio_web.ver", "sitio_web.editar"],
       }));
+      await setDoc(doc(db, "users/site-editor-foreign"),
+          activeUser("Administrador", {
+            institution: "inst-2",
+            campus: "campus-2",
+            permissions: ["sitio_web.ver", "sitio_web.editar"],
+          }));
       await setDoc(doc(db, "users/admin-no-enrollment"), activeUser(
           "Administrador",
       ));
@@ -98,6 +112,12 @@ describe("Reglas Firestore", () => {
           "archivos.ver", "mensajeria.ver",
         ],
       }));
+      await setDoc(doc(db, "users/family-other-active"), activeUser(
+          "Familiar", {
+            studentIds: ["student", "peer"], activeStudentId: "peer",
+            permissions: ["matricula.ver"],
+          },
+      ));
       await setDoc(doc(db, "users/family-no-enrollment"), activeUser(
           "Familiar", {
             studentIds: ["student"], activeStudentId: "student",
@@ -123,6 +143,16 @@ describe("Reglas Firestore", () => {
       await setDoc(doc(db, "parameters/document-type"), {
         clave: "documentType", etiqueta: "Cedula", valor: "CC",
         orden: 1, activo: true,
+      });
+      await setDoc(doc(db, "website_submissions/example"), {
+        institutionId: "inst-1",
+        campusId: "campus-1",
+        pageId: "contact",
+        name: "Familia de prueba",
+        email: "familia@example.test",
+        phone: "3000000000",
+        message: "Solicitud de información",
+        status: "new",
       });
       await setDoc(doc(db, "enrollments/local"), {
         institution: "inst-1",
@@ -203,6 +233,41 @@ describe("Reglas Firestore", () => {
         campus: "campus-2",
         userId: "other",
       });
+      for (const collectionName of [
+        "user_history", "route_history", "file_history",
+      ]) {
+        await setDoc(doc(db, `${collectionName}/local`), {
+          institution: "inst-1",
+          campus: "campus-1",
+          institutionId: "inst-1",
+          campusId: "campus-1",
+          action: "test",
+        });
+        await setDoc(doc(db, `${collectionName}/foreign`), {
+          institution: "inst-2",
+          campus: "campus-2",
+          institutionId: "inst-2",
+          campusId: "campus-2",
+          action: "test",
+        });
+      }
+      await setDoc(doc(db, "daily_routes/history-local"), {
+        institution: "inst-1",
+        campus: "campus-1",
+        gestionador: "teacher",
+        estado: "finalizada",
+      });
+      await setDoc(doc(db, "daily_routes/history-local/students/student"), {
+        institution: "inst-1",
+        campus: "campus-1",
+        nombre: "Estudiante",
+      });
+      await setDoc(doc(db, "daily_routes/history-foreign"), {
+        institution: "inst-2",
+        campus: "campus-2",
+        gestionador: "teacher",
+        estado: "finalizada",
+      });
       await setDoc(doc(db, "files/publication"), {
         institutionId: "inst-1",
         campusId: "campus-1",
@@ -219,7 +284,7 @@ describe("Reglas Firestore", () => {
         institutionId: "inst-1", campusId: "campus-1",
         academicYearId: "year-local", academicYear: 2026,
         channelType: "academic_group", status: "active",
-        memberUserIds: ["teacher", "student", "family"],
+        memberUserIds: ["admin", "teacher", "student", "family"],
         messageSequence: 1,
       });
       await setDoc(doc(
@@ -227,6 +292,13 @@ describe("Reglas Firestore", () => {
       ), {
         senderId: "teacher", senderName: "Prueba Usuario",
         senderRole: "Docente", sequence: 1, body: "Evaluacion el viernes",
+      });
+      await setDoc(doc(db, "message_channels/private-student-teacher"), {
+        institutionId: "inst-1", campusId: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
+        channelType: "supervised_student", status: "active",
+        memberUserIds: ["teacher", "student", "family"],
+        messageSequence: 1,
       });
     });
   });
@@ -252,10 +324,10 @@ describe("Reglas Firestore", () => {
     await assertFails(getDoc(doc(db, "users/student")));
   });
 
-  it("permite actualizar solo campos propios seguros", async () => {
+  it("envia toda actualizacion del perfil propio al backend", async () => {
     const db = env.authenticatedContext("student").firestore();
     await assertSucceeds(getDoc(doc(db, "users/student")));
-    await assertSucceeds(updateDoc(doc(db, "users/student"), {
+    await assertFails(updateDoc(doc(db, "users/student"), {
       photoUrl: "https://example.test/photo.jpg",
     }));
     await assertFails(updateDoc(doc(db, "users/student"), {
@@ -273,6 +345,49 @@ describe("Reglas Firestore", () => {
     const managerDb = env.authenticatedContext("user-manager").firestore();
     await assertFails(getDoc(doc(studentDb, "users/peer")));
     await assertSucceeds(getDoc(doc(managerDb, "users/peer")));
+  });
+
+  it("exige correo verificado a adultos pero no a estudiantes", async () => {
+    const adult = env.authenticatedContext("teacher", {email_verified: false})
+        .firestore();
+    const student = env.authenticatedContext("student", {email_verified: false})
+        .firestore();
+    await assertFails(getDocs(collection(adult, "parameters")));
+    await assertSucceeds(getDocs(collection(student, "parameters")));
+    await assertSucceeds(getDoc(doc(adult, "users/teacher")));
+  });
+
+  it("consulta hijos activos de Autorizaciones con alcance", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "user_directory/student"),
+          activeUser("Estudiante", {groupId: "group-5a"}));
+      await setDoc(doc(context.firestore(), "user_directory/removed"),
+          activeUser("Estudiante", {status: "eliminado"}));
+    });
+    const db = env.authenticatedContext("family").firestore();
+    const base = [
+      where(documentId(), "in", ["student"]),
+      where("institution", "==", "inst-1"),
+      where("campus", "==", "campus-1"),
+    ];
+    // Los IDs exactos permiten evaluar candidatos. No atribuir el error de
+    // permisos reportado a una falta de índice ni a esta consulta por sí sola.
+    await assertSucceeds(getDocs(query(
+        collection(db, "user_directory"), ...base)));
+    await assertSucceeds(getDocs(query(collection(db, "user_directory"),
+        ...base, where("status", "==", "activo"),
+        where("role", "==", "Estudiante"))));
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "user_directory/foreign-child"),
+          activeUser("Estudiante", {
+            institution: "inst-2", campus: "campus-2",
+          }));
+    });
+    await assertFails(getDocs(query(collection(db, "user_directory"),
+        where(documentId(), "in", ["foreign-child"]),
+        where("institution", "==", "inst-2"),
+        where("campus", "==", "campus-2"),
+        where("status", "==", "activo"))));
   });
 
   it("oculta bajas administrativas salvo al superadministrador", async () => {
@@ -315,10 +430,38 @@ describe("Reglas Firestore", () => {
     )));
   });
 
+  it("revoca archivos del familiar al perder vigencia o vinculo del hijo",
+      async () => {
+        const familyDb = env.authenticatedContext("family").firestore();
+        const publication = doc(familyDb, "files/publication");
+        await assertSucceeds(getDoc(publication));
+        for (const changes of [
+          {status: "inactivo"},
+          {status: "activo", campus: "campus-2"},
+          {campus: "campus-1", role: "Docente"},
+        ]) {
+          await env.withSecurityRulesDisabled(async (context) => {
+            await updateDoc(doc(context.firestore(), "users/student"), changes);
+          });
+          await assertFails(getDoc(publication));
+        }
+        await env.withSecurityRulesDisabled(async (context) => {
+          await updateDoc(doc(context.firestore(), "users/student"), {
+            role: "Estudiante",
+          });
+          await updateDoc(doc(context.firestore(), "users/family"), {
+            studentIds: [],
+          });
+        });
+        await assertFails(getDoc(publication));
+      });
+
   it("protege canales, mensajes y membresia desde backend", async () => {
     const studentDb = env.authenticatedContext("student").firestore();
     const teacherDb = env.authenticatedContext("teacher").firestore();
     const outsiderDb = env.authenticatedContext("teacher-other").firestore();
+    const adminDb = env.authenticatedContext("admin").firestore();
+    const superDb = env.authenticatedContext("superadmin").firestore();
     await assertSucceeds(getDoc(doc(
         studentDb, "message_channels/group-5a",
     )));
@@ -327,6 +470,15 @@ describe("Reglas Firestore", () => {
     )));
     await assertFails(getDoc(doc(
         outsiderDb, "message_channels/group-5a",
+    )));
+    await assertSucceeds(getDoc(doc(
+        adminDb, "message_channels/group-5a",
+    )));
+    await assertFails(getDoc(doc(
+        adminDb, "message_channels/private-student-teacher",
+    )));
+    await assertSucceeds(getDoc(doc(
+        superDb, "message_channels/private-student-teacher",
     )));
     await assertFails(setDoc(doc(
         studentDb, "message_channels/group-5a/messages/forged",
@@ -391,9 +543,14 @@ describe("Reglas Firestore", () => {
     const otherTeacherDb = env.authenticatedContext("teacher-other")
         .firestore();
     const familyDb = env.authenticatedContext("family").firestore();
+    const otherActiveFamilyDb = env
+        .authenticatedContext("family-other-active").firestore();
     await assertSucceeds(getDoc(doc(teacherDb, "enrollments/grade-5a")));
     await assertFails(getDoc(doc(otherTeacherDb, "enrollments/grade-5a")));
     await assertSucceeds(getDoc(doc(familyDb, "enrollments/grade-5a")));
+    await assertFails(getDoc(doc(
+        otherActiveFamilyDb, "enrollments/grade-5a",
+    )));
     await assertFails(updateDoc(doc(teacherDb, "enrollments/grade-5a"), {
       estado: "matriculado",
     }));
@@ -425,10 +582,18 @@ describe("Reglas Firestore", () => {
     const teacherDb = env.authenticatedContext("teacher").firestore();
     const familyDb = env.authenticatedContext("family").firestore();
     const studentDb = env.authenticatedContext("student").firestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), "users/family-other-active"), {
+        permissions: ["autorizaciones.ver"],
+      });
+    });
+    const otherActiveChildDb = env
+        .authenticatedContext("family-other-active").firestore();
     const target = "authorization_requests/local-auth";
     await assertSucceeds(getDoc(doc(adminDb, target)));
     await assertSucceeds(getDoc(doc(teacherDb, target)));
     await assertSucceeds(getDoc(doc(familyDb, target)));
+    await assertFails(getDoc(doc(otherActiveChildDb, target)));
     await assertFails(getDoc(doc(studentDb, target)));
     await assertFails(updateDoc(doc(adminDb, target), {status: "approved"}));
     await assertFails(setDoc(doc(familyDb, "authorization_requests/forged"), {
@@ -440,6 +605,34 @@ describe("Reglas Firestore", () => {
       groupName: "Quinto A",
       status: "pending",
     }));
+  });
+
+  it("revoca autorizaciones y matriculas de hijos retirados", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "enrollments/family-linked"), {
+        institution: "inst-1", campus: "campus-1",
+        academicYearId: "year-local", academicYear: 2026,
+        vinculaUsuarioId: "student", data: {groupId: "group-5a"},
+      });
+    });
+    const db = env.authenticatedContext("family").firestore();
+    const targets = ["authorization_requests/local-auth",
+      "enrollments/family-linked"];
+    for (const target of targets) {
+      await assertSucceeds(getDoc(doc(db, target)));
+    }
+    for (const change of [
+      {status: "inactivo"},
+      {status: "activo", campus: "campus-2"},
+      {campus: "campus-1", role: "Docente"},
+    ]) {
+      await env.withSecurityRulesDisabled(async (context) => {
+        await updateDoc(doc(context.firestore(), "users/student"), change);
+      });
+      for (const target of targets) {
+        await assertFails(getDoc(doc(db, target)));
+      }
+    }
   });
 
   it("limita horarios por rol, grupo e hijo activo", async () => {
@@ -491,12 +684,40 @@ describe("Reglas Firestore", () => {
     }));
   });
 
-  it("mantiene parametros como lectura publica e inmutables", async () => {
+  it("exige permiso de historial para consultar auditorías", async () => {
+    const withoutHistory = env.authenticatedContext("admin-no-enrollment")
+        .firestore();
+    const withHistory = env.authenticatedContext("admin").firestore();
+    await assertFails(getDoc(doc(withoutHistory, "user_logs/local")));
+    await assertSucceeds(getDoc(doc(withHistory, "user_logs/local")));
+    for (const collectionName of [
+      "user_history", "route_history", "file_history",
+    ]) {
+      await assertFails(getDoc(doc(withoutHistory, `${collectionName}/local`)));
+      await assertSucceeds(getDoc(doc(withHistory, `${collectionName}/local`)));
+      await assertFails(getDoc(doc(withHistory, `${collectionName}/foreign`)));
+    }
+    await assertFails(getDoc(doc(
+        withoutHistory, "daily_routes/history-local",
+    )));
+    await assertSucceeds(getDoc(doc(
+        withHistory, "daily_routes/history-local",
+    )));
+    await assertSucceeds(getDoc(doc(
+        withHistory, "daily_routes/history-local/students/student",
+    )));
+    await assertFails(getDoc(doc(
+        withHistory, "daily_routes/history-foreign",
+    )));
+  });
+
+  it("mantiene parametros autenticados e inmutables", async () => {
     const publicDb = env.unauthenticatedContext().firestore();
     const adminDb = env.authenticatedContext("admin").firestore();
     const superDb = env.authenticatedContext("superadmin").firestore();
     const target = "parameters/document-type";
-    await assertSucceeds(getDoc(doc(publicDb, target)));
+    await assertFails(getDoc(doc(publicDb, target)));
+    await assertSucceeds(getDoc(doc(adminDb, target)));
     await assertFails(updateDoc(doc(adminDb, target), {valor: "Ataque"}));
     await assertFails(deleteDoc(doc(superDb, target)));
     await assertFails(setDoc(doc(superDb, "parameters/forged"), {
@@ -517,26 +738,65 @@ describe("Reglas Firestore", () => {
     const editorDb = env.authenticatedContext("site-editor").firestore();
     await assertFails(setDoc(doc(adminDb, "website/main"), {schoolName: "No"}));
     await assertSucceeds(setDoc(doc(editorDb, "website/main"), {
+      institutionId: "inst-1",
+      campusId: "campus-1",
       schoolName: "Liceo Bilingüe Rodolfo R. Llinás",
+    }));
+    await assertSucceeds(setDoc(doc(editorDb, "website/config"), {
+      institutionId: "inst-1",
+      campusId: "campus-1",
+      revision: 1,
+      schoolName: "Colegio",
     }));
     await assertFails(setDoc(doc(adminDb, "website_pages/about"), {
       label: "Ataque",
     }));
-    await assertSucceeds(setDoc(doc(editorDb, "website_pages/about"), {
+    const publication = writeBatch(editorDb);
+    publication.update(doc(editorDb, "website/config"), {revision: 2});
+    publication.set(doc(editorDb, "website_pages/about"), {
+      institutionId: "inst-1",
+      campusId: "campus-1",
+      publicationRevision: 2,
       label: "About",
       slug: "about",
-      blocks: [],
+      rows: [],
+    });
+    await assertSucceeds(publication.commit());
+    await assertFails(updateDoc(doc(editorDb, "website_pages/about"), {
+      label: "Cambio fuera de publicación",
     }));
+    const foreignDb = env.authenticatedContext("site-editor-foreign")
+        .firestore();
+    await assertFails(updateDoc(doc(foreignDb, "website/main"), {
+      schoolName: "Secuestro entre instituciones",
+    }));
+    await assertFails(deleteDoc(doc(foreignDb, "website_pages/about")));
   });
 
   it("mantiene publicas las paginas pero protege los formularios", async () => {
     const publicDb = env.unauthenticatedContext().firestore();
     const editorDb = env.authenticatedContext("site-editor").firestore();
+    const foreignDb = env.authenticatedContext("site-editor-foreign")
+        .firestore();
     await assertSucceeds(getDoc(doc(publicDb, "website_pages/about")));
     await assertFails(setDoc(doc(publicDb, "website_submissions/spam"), {
       message: "contenido no validado",
     }));
     await assertSucceeds(getDoc(doc(editorDb, "website_submissions/example")));
+    await assertFails(getDoc(doc(foreignDb, "website_submissions/example")));
+    await assertSucceeds(updateDoc(
+        doc(editorDb, "website_submissions/example"), {status: "read"}));
+    await assertFails(updateDoc(
+        doc(editorDb, "website_submissions/example"), {status: "archived"}));
+    await assertFails(updateDoc(
+        doc(editorDb, "website_submissions/example"), {
+          message: "Contenido alterado",
+        }));
+    await assertFails(deleteDoc(
+        doc(env.authenticatedContext("admin").firestore(),
+            "website_submissions/example")));
+    await assertSucceeds(deleteDoc(
+        doc(editorDb, "website_submissions/example")));
   });
 
   it("obliga a editar usuarios mediante Cloud Functions", async () => {
@@ -553,9 +813,9 @@ describe("Reglas Firestore", () => {
     }));
   });
 
-  it("limita la edicion del perfil propio a campos seguros", async () => {
+  it("bloquea la edicion directa del perfil propio", async () => {
     const studentDb = env.authenticatedContext("student").firestore();
-    await assertSucceeds(updateDoc(doc(studentDb, "users/student"), {
+    await assertFails(updateDoc(doc(studentDb, "users/student"), {
       photoUrl: "https://example.test/nueva.jpg",
     }));
     await assertFails(updateDoc(doc(studentDb, "users/student"), {
@@ -564,6 +824,43 @@ describe("Reglas Firestore", () => {
     await assertFails(updateDoc(doc(studentDb, "users/student"), {
       phones: ["3000000000"],
     }));
+  });
+
+  it("obliga a operar asistencia mediante Cloud Functions", async () => {
+    for (const uid of ["admin", "teacher", "student", "family", "superadmin"]) {
+      const clientDb = env.authenticatedContext(uid).firestore();
+      for (const collectionName of [
+        "attendance_sessions",
+        "attendance_records",
+        "attendance_history",
+        "attendance_notification_events",
+      ]) {
+        await assertFails(getDoc(doc(clientDb, collectionName, "example")));
+        await assertFails(setDoc(doc(clientDb, collectionName, "forged"), {
+          institutionId: "inst-1",
+          campusId: "campus-1",
+        }));
+      }
+    }
+  });
+
+  it("obliga a operar eventos mediante Cloud Functions", async () => {
+    for (const uid of ["admin", "teacher", "student", "family", "superadmin"]) {
+      const clientDb = env.authenticatedContext(uid).firestore();
+      for (const collectionName of [
+        "school_events",
+        "event_responses",
+        "event_attendance",
+        "event_history",
+        "event_notification_events",
+      ]) {
+        await assertFails(getDoc(doc(clientDb, collectionName, "example")));
+        await assertFails(setDoc(doc(clientDb, collectionName, "forged"), {
+          institutionId: "inst-1",
+          campusId: "campus-1",
+        }));
+      }
+    }
   });
 
   it("una clave temporal solo permite leer el perfil propio", async () => {

@@ -10,7 +10,7 @@ void main() {
     );
     expect(
       notificationDestination({'type': 'files', 'channelId': 'abc'}),
-      isNull,
+      '/student_document',
     );
     expect(
       notificationDestination({'type': 'messaging', 'channelId': 'a/b'}),
@@ -20,6 +20,33 @@ void main() {
       notificationDestination({'type': 'messaging', 'channelId': ''}),
       isNull,
     );
+  });
+  test('dirige avisos operativos al módulo permitido por rol', () {
+    expect(
+      notificationDestination({'type': 'route'}, role: 'Familiar'),
+      '/my_route',
+    );
+    expect(
+      notificationDestination({'type': 'schedule'}, role: 'Docente'),
+      '/teacher_schedule',
+    );
+    expect(
+      notificationDestination({'type': 'schedule'}, role: 'Administrador'),
+      '/management_schedule',
+    );
+    expect(
+      notificationDestination({'type': 'authorization'}, role: 'Estudiante'),
+      isNull,
+    );
+    expect(
+      notificationDestination({'type': 'attendance'}, role: 'Familiar'),
+      '/attendance',
+    );
+    expect(
+      notificationDestination({'type': 'event'}, role: 'Estudiante'),
+      '/events',
+    );
+    expect(notificationDestination({'type': 'unknown'}), isNull);
   });
   test('familia filtra grupos, privados y servicios por hijo', () {
     const child = MessagingChildContext(
@@ -65,5 +92,25 @@ void main() {
       }),
       isFalse,
     );
+  });
+
+  test('mensaje conserva metadatos seguros del adjunto', () {
+    final message = MessageItem.fromMap({
+      'sequence': 3,
+      'senderId': 'docente',
+      'senderName': 'Docente',
+      'senderRole': 'Docente',
+      'body': '',
+      'attachment': {
+        'id': 'adjunto-1',
+        'name': 'circular.pdf',
+        'contentType': 'application/pdf',
+        'sizeBytes': 1200,
+        'storagePath': 'message_attachments/canal/adjunto-1/circular.pdf',
+      },
+    }, 'mensaje-1');
+    expect(message.attachment?.id, 'adjunto-1');
+    expect(message.attachment?.name, 'circular.pdf');
+    expect(message.attachment?.sizeBytes, 1200);
   });
 }

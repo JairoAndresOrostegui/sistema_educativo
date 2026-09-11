@@ -199,6 +199,7 @@ class MessageItem {
     this.readNames = const {},
     this.readRoles = const {},
     this.createdAt,
+    this.attachment,
   });
   final String id, senderId, senderName, senderRole, body;
   final int sequence;
@@ -207,6 +208,7 @@ class MessageItem {
   final Map<String, DateTime> readAtByUser;
   final Map<String, String> readNames, readRoles;
   final DateTime? createdAt;
+  final MessageAttachment? attachment;
   factory MessageItem.fromMap(
     Map<String, dynamic> data,
     String id,
@@ -253,7 +255,82 @@ class MessageItem {
     createdAt: data['createdAt'] is Timestamp
         ? (data['createdAt'] as Timestamp).toDate()
         : null,
+    attachment: data['attachment'] is Map
+        ? MessageAttachment.fromMap(
+            Map<String, dynamic>.from(data['attachment'] as Map),
+          )
+        : null,
   );
+}
+
+class MessageAttachment {
+  const MessageAttachment({
+    required this.id,
+    required this.name,
+    required this.contentType,
+    required this.sizeBytes,
+    required this.storagePath,
+    this.expiresAt,
+  });
+
+  final String id, name, contentType, storagePath;
+  final int sizeBytes;
+  final DateTime? expiresAt;
+
+  factory MessageAttachment.fromMap(Map<String, dynamic> data) =>
+      MessageAttachment(
+        id: (data['id'] ?? '').toString(),
+        name: (data['name'] ?? 'Archivo').toString(),
+        contentType: (data['contentType'] ?? '').toString(),
+        sizeBytes: (data['sizeBytes'] as num?)?.toInt() ?? 0,
+        storagePath: (data['storagePath'] ?? '').toString(),
+        expiresAt: data['expiresAt'] is Timestamp
+            ? (data['expiresAt'] as Timestamp).toDate()
+            : null,
+      );
+}
+
+class MessageAttachmentDownload {
+  const MessageAttachmentDownload({
+    required this.userId,
+    required this.userName,
+    required this.userRole,
+    required this.downloadCount,
+    this.firstDownloadedAt,
+    this.lastDownloadedAt,
+  });
+
+  final String userId, userName, userRole;
+  final int downloadCount;
+  final DateTime? firstDownloadedAt, lastDownloadedAt;
+
+  factory MessageAttachmentDownload.fromMap(Map<String, dynamic> data) =>
+      MessageAttachmentDownload(
+        userId: (data['userId'] ?? '').toString(),
+        userName: (data['userName'] ?? 'Usuario').toString(),
+        userRole: (data['userRole'] ?? '').toString(),
+        downloadCount: (data['downloadCount'] as num?)?.toInt() ?? 0,
+        firstDownloadedAt: data['firstDownloadedAtMillis'] is num
+            ? DateTime.fromMillisecondsSinceEpoch(
+                (data['firstDownloadedAtMillis'] as num).toInt(),
+              )
+            : null,
+        lastDownloadedAt: data['lastDownloadedAtMillis'] is num
+            ? DateTime.fromMillisecondsSinceEpoch(
+                (data['lastDownloadedAtMillis'] as num).toInt(),
+              )
+            : null,
+      );
+}
+
+class MessageAttachmentDownloadSummary {
+  const MessageAttachmentDownloadSummary({
+    required this.recipientCount,
+    required this.downloads,
+  });
+
+  final int recipientCount;
+  final List<MessageAttachmentDownload> downloads;
 }
 
 class MessagingChildContext {

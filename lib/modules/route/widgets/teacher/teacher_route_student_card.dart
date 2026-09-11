@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/student_route_model.dart';
@@ -34,6 +33,7 @@ class TeacherRouteStudentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final recogido = student.recogido;
     final esActivo = student.activo;
     final esAnulado = student.anulado;
@@ -49,11 +49,11 @@ class TeacherRouteStudentCard extends StatelessWidget {
           onChanged: onAddressDraftChanged,
           onFieldSubmitted: onAddressSubmit,
           decoration: InputDecoration(
-            labelText: 'Direccion',
+            labelText: 'Dirección',
             border: OutlineInputBorder(),
             suffixIcon: rutaPendiente
                 ? IconButton(
-                    tooltip: 'Guardar direccion',
+                    tooltip: 'Guardar dirección',
                     icon: Icon(Icons.save),
                     onPressed: () => onAddressSubmit(addressValue),
                   )
@@ -80,10 +80,10 @@ class TeacherRouteStudentCard extends StatelessWidget {
                   recogido ? Icons.check_circle : Icons.directions_bus,
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: recogido
-                      ? AppPalette.success
-                      : Theme.of(context).primaryColor,
-                  foregroundColor: AppPalette.surface,
+                  backgroundColor: recogido ? scheme.primary : scheme.secondary,
+                  foregroundColor: recogido
+                      ? scheme.onPrimary
+                      : scheme.onSecondary,
                 ),
                 onPressed: esAnulado ? null : onToggleRecogido,
                 label: Text(recogido ? 'Recogido' : 'Marcar como recogido'),
@@ -93,9 +93,11 @@ class TeacherRouteStudentCard extends StatelessWidget {
                 label: Text('Aviso de llegada'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: student.avisoEnviado
-                      ? AppPalette.success
-                      : AppPalette.warning,
-                  foregroundColor: AppPalette.surface,
+                      ? scheme.primary
+                      : scheme.tertiary,
+                  foregroundColor: student.avisoEnviado
+                      ? scheme.onPrimary
+                      : scheme.onTertiary,
                 ),
                 onPressed: () async {
                   final confirm = await DialogUtils.showConfirmationDialog(
@@ -114,10 +116,10 @@ class TeacherRouteStudentCard extends StatelessWidget {
                 icon: Icon(esAnulado ? Icons.block : Icons.cancel),
                 label: Text(esAnulado ? 'Anulado' : 'Anular'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: esAnulado
-                      ? AppPalette.error
-                      : AppPalette.warning,
-                  foregroundColor: AppPalette.surface,
+                  backgroundColor: esAnulado ? scheme.error : scheme.tertiary,
+                  foregroundColor: esAnulado
+                      ? scheme.onError
+                      : scheme.onTertiary,
                 ),
                 onPressed: recogido ? null : onToggleAnulado,
               ),

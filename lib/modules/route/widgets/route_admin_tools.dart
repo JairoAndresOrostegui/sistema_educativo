@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import '../services/daily_route_service.dart';
 import '../utils/route_ui_helpers.dart';
 
-Future<String?> routeTextDialog(BuildContext context, String title) async {
-  final c = TextEditingController();
+Future<String?> routeTextDialog(
+  BuildContext context,
+  String title, {
+  String initial = '',
+}) async {
+  final c = TextEditingController(text: initial);
   final value = await showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -73,8 +77,13 @@ class _RouteToolsState extends State<_RouteTools> {
     }
   }
 
-  Future<void> _driver() async {
-    final data = <String, dynamic>{'action': 'save'};
+  Future<void> _driver([Map<String, dynamic>? current]) async {
+    final data = <String, dynamic>{
+      'action': 'save',
+      if (current != null) 'id': current['id'],
+      if (current != null) 'expectedRevision': current['revision'] ?? 0,
+      'active': current?['active'] != false,
+    };
     for (final entry in {
       'name': 'Nombre del conductor',
       'document': 'Documento',
@@ -82,7 +91,11 @@ class _RouteToolsState extends State<_RouteTools> {
       'license': 'Licencia de conducción',
       'notes': 'Observaciones de la hoja de vida',
     }.entries) {
-      final value = await routeTextDialog(context, entry.value);
+      final value = await routeTextDialog(
+        context,
+        entry.value,
+        initial: routeText(current?[entry.key]),
+      );
       if (!mounted || value == null) return;
       data[entry.key] = value;
     }
@@ -147,6 +160,31 @@ class _RouteToolsState extends State<_RouteTools> {
                                         },
                                   child: Text(approve ? 'Aprobar' : 'Rechazar'),
                                 ),
+                            ],
+                          ),
+                        if (widget.drivers)
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              TextButton(
+                                onPressed: _busy ? null : () => _driver(v),
+                                child: const Text('Editar'),
+                              ),
+                              TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _call({
+                                        ...v,
+                                        'action': 'save',
+                                        'expectedRevision': v['revision'] ?? 0,
+                                        'active': v['active'] == false,
+                                      }),
+                                child: Text(
+                                  v['active'] == false
+                                      ? 'Activar'
+                                      : 'Desactivar',
+                                ),
+                              ),
                             ],
                           ),
                       ],

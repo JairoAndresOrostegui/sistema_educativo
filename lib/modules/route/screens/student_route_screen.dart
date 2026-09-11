@@ -141,6 +141,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
           for (final d in snap.docs) {
             final u = d.data();
+            if (u['role'] != 'Estudiante') continue;
             final name =
                 '${(u['firstName'] ?? '').toString().trim()} ${(u['lastName'] ?? '').toString().trim()}'
                     .trim();
@@ -270,8 +271,10 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
             ),
           IconButton(
             tooltip: 'Historial de recogidas',
-            onPressed: () =>
-                showRouteHistory(context, studentId: _selectedStudentId),
+            onPressed: _isFamily && _selectedStudentId == null
+                ? null
+                : () =>
+                      showRouteHistory(context, studentId: _selectedStudentId),
             icon: const Icon(Icons.history),
           ),
         ],

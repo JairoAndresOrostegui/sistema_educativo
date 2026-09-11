@@ -11,11 +11,18 @@ service firebase.storage {
     }
 
     function active() {
-      return signedIn() && me().status == 'activo';
+      let user = me();
+      return signedIn() && user.status == 'activo' &&
+        (!('mustChangePassword' in user) || user.mustChangePassword != true) &&
+        (user.role == 'Estudiante' || request.auth.token.email_verified == true);
     }
 
     function admin() {
       return active() && (me().isSuperadmin == true || me().role == 'Administrador');
+    }
+
+    function superadmin() {
+      return active() && me().isSuperadmin == true;
     }
 
     function canEditWebsite() {
@@ -47,28 +54,15 @@ service firebase.storage {
       ).data;
     }
 
-    function canReadFile(file) {
-      return active() && file.status == 'active' &&
-        (me().isSuperadmin == true ||
-         (file.institutionId == me().institution &&
-          file.campusId == me().campus &&
-          ((me().role == 'Administrador' &&
-            (hasPermission('archivos.ver') ||
-             hasPermission('archivos.crear') ||
-             hasPermission('archivos.eliminar'))) ||
-           (file.recipientUserIds is list &&
-            request.auth.uid in file.recipientUserIds &&
-            ((me().role == 'Docente' && hasPermission('archivos.ver')) ||
-             (me().role == 'Estudiante' && hasPermission('archivos.ver')) ||
-             (me().role == 'Familiar' && hasPermission('archivos.ver') &&
-              me().activeStudentId is string && me().studentIds is list &&
-              me().activeStudentId in me().studentIds &&
-              file.targetStudentIds is list &&
-              me().activeStudentId in file.targetStudentIds))))));
+    function messageAttachment(attachmentId) {
+      return firestore.get(
+        /databases/(default)/documents/message_attachments/$(attachmentId)
+      ).data;
     }
 
     match /fotos_perfil/{userId}/{fileName} {
-      allow read: if active();
+      allow read: if active() &&
+        (request.auth.uid == userId || sameTenantUser(userId));
       allow create, update: if ((active() && request.auth.uid == userId) ||
         (admin() && sameTenantUser(userId))) &&
         safeUpload(5 * 1024 * 1024) &&
@@ -78,7 +72,10 @@ service firebase.storage {
     }
 
     match /files/{fileId}/{fileName} {
-      allow read: if canReadFile(fileRecord(fileId));
+      // Private reads stream through authenticated backend authorization.
+      // Storage rules permit at most two distinct Firestore document reads;
+      // current child/year/access validation cannot safely fit in that limit.
+      allow read: if false;
       allow create: if active() && request.resource.metadata.fileId == fileId &&
         request.resource.metadata.uploadedBy == request.auth.uid &&
         fileRecord(fileId).status == 'uploading' &&
@@ -91,12 +88,43 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
-    match /website/{allPaths=**} {
+    match /message_attachments/{channelId}/{attachmentId}/{fileName} {
+      allow read: if false;
+      allow create: if active() &&
+        request.resource.metadata.attachmentId == attachmentId &&
+        request.resource.metadata.channelId == channelId &&
+        request.resource.metadata.uploadedBy == request.auth.uid &&
+        messageAttachment(attachmentId).status == 'uploading' &&
+        messageAttachment(attachmentId).uploadedBy == request.auth.uid &&
+        messageAttachment(attachmentId).channelId == channelId &&
+        messageAttachment(attachmentId).storagePath ==
+          'message_attachments/' + channelId + '/' + attachmentId + '/' +
+          fileName &&
+        request.resource.size ==
+          messageAttachment(attachmentId).expectedSize &&
+        request.resource.contentType ==
+          messageAttachment(attachmentId).contentType &&
+        safeUpload(25 * 1024 * 1024);
+      allow update, delete: if false;
+    }
+
+    match /website/{institutionId}/{campusId}/{fileName} {
       allow read: if true;
       allow create, update: if canEditWebsite() &&
+        (superadmin() ||
+         (institutionId == me().institution && campusId == me().campus)) &&
         safeUpload(10 * 1024 * 1024) &&
         request.resource.contentType.matches('image/(jpeg|jpg|pjpeg|png)');
-      allow delete: if canEditWebsite();
+      allow delete: if canEditWebsite() &&
+        (superadmin() ||
+         (institutionId == me().institution && campusId == me().campus));
+    }
+
+    // Compatibilidad temporal de lectura para imágenes publicadas antes de
+    // incorporar institución/sede. Solo superadmin puede retirar estos objetos.
+    match /website/{legacyFileName} {
+      allow read: if true;
+      allow create, update, delete: if superadmin();
     }
 
     match /{allPaths=**} {

@@ -52,6 +52,15 @@ No reutiliza URLs/tokens de QA ni borra el origen. Verificar con
 `verify_production_assets.js`. Una foto cuyo objeto original falta queda vacía
 y pendiente, nunca se sustituye silenciosamente por la de otra persona.
 
+Los perfiles `users/{uid}` usan `revision` para edición optimista. La creación y
+edición administrativa reservan documento, correo personal y correo institucional
+en `user_unique_keys`; perfil, directorio, estado e historial se confirman como una
+sola operación lógica. La foto se carga primero en `fotos_perfil/{uid}/...` y
+`actualizarFotoPerfil` valida propietario, ruta, bucket, tipo, tamaño y revisión
+antes de publicar la URL; si la confirmación falla, el cliente intenta retirar el
+objeto recién cargado. La selección de hijo activo vuelve a validar vínculos y
+estado dentro de una transacción y actualiza también el directorio.
+
 ## Contrato transversal por módulo
 
 | Área | Modelo / operación | Invariantes |
@@ -64,14 +73,29 @@ y pendiente, nunca se sustituye silenciosamente por la de otra persona.
 | Autorizaciones | historial y estados | Familiar solo ver/solicitar, finalized inmutable salvo super |
 | Horarios | subjects, schedule_history | Cruces, expectedRevision, docente y grupo activos |
 | Archivos | files, cuota, Storage y file_download_receipts | Reserva, confirmación, acuse por cuenta, borrar objeto antes de metadatos |
-| Mensajería | message_channels, mensajes/lecturas | Miembros derivados, `supervised_student`, secuencia y lectura por cuenta |
-| QR | qr_credentials, events, auditoría | Token opaco, revocación, sin autorización implícita |
+| Mensajería | message_channels, mensajes/lecturas, message_attachments | Miembros derivados, `supervised_student`, secuencia, lectura y descarga por cuenta; adjuntos comparten cuota/retención; administrador normal solo accede a colectivos materializados o particulares propios |
+| QR | qr_credentials, events, qr_audit | Token opaco `LLQ1`, cámara/manual, revisión optimista, revocación recuperable por reemplazo, año/sede vigentes y sin autorización implícita |
+| Asistencia | attendance_sessions, attendance_records, attendance_history | Lista congelada, sesión única, revisión optimista, cierre completo, consulta propia e hijo activo; escritura solo por Functions |
+| Eventos | school_events, event_responses, event_attendance, event_history | Audiencia y responsables revalidados al publicar, año activo, cupo transaccional y asistencia auditada |
 | Web | website/config, website_pages | Esquema v5, filas/columnas, tema central, limpieza reintentable |
-| Rutas | routes, daily_routes, route_history | Operador asignado; paradas bloqueadas al iniciar |
-| Push | push_events/route_push_events, push_jobs | Lotes 500, reintento, tokens vigentes, sin garantía de entrega |
+| Rutas | routes, daily_routes, route_history | Ruta vigente y versionada, estudiantes activos sin duplicar, baja lógica, operador asignado y paradas bloqueadas al iniciar |
+| Push | push_events/route_push_events, push_jobs | Lotes 500, reintento, audiencia y tokens revalidados, invalidación terminal segura y sin garantía de entrega |
+| Historial | user_history, user_logs, file_history, schedule_history, route_history, daily_routes | Solo lectura, alcance por sede, filtros paginados completos y exportación explícita de visibles |
 
 Esquemas exactos y permisos se verifican en Functions/reglas; una fila no reemplaza
 validación de payload. No agregar escritura directa del cliente por conveniencia.
+
+Sitio web usa alcance institucional en configuración, páginas, imágenes y
+formularios. `revision` serializa publicaciones concurrentes y el backend
+resuelve `contactForm` exclusivamente en `rows/columns/components` de una página
+activa. Migrar documentos existentes con `migrate_website_scope.js` antes de
+publicar las reglas correspondientes.
+
+Las autorizaciones usan `revision` y todas las transiciones se confirman en una
+transacción junto con `authorization_history`. Una copia desactualizada nunca
+puede aprobar, rechazar o finalizar sobre otra decisión. El familiar debe tener
+al estudiante activo, vinculado y seleccionado tanto para crear como para
+corregir; Firestore aplica el mismo hijo seleccionado a la lectura directa.
 
 Configuración académica significa grupos y años lectivos bajo alcance
 institucional. `parametros.ver` permite consultar y `parametros.editar` permite
@@ -82,6 +106,13 @@ exclusivamente mediante Functions: se conserva el valor interno, se usa baja
 lógica y se audita en `parameter_history`. Solo el superadministrador modifica
 estos catálogos globales. Roles, permisos y banderas técnicas no forman parte
 del CRUD de la interfaz y se cambian mediante migraciones versionadas.
+Cada entrada administrable incluye `revision`; una edición desactualizada se
+rechaza sin perder el valor vigente y el historial se escribe en la misma
+transacción. Los grupos reservan de forma determinista la combinación normalizada
+institución/sede/año/nombre en `academic_group_unique_keys`, por lo que dos altas
+simultáneas no pueden crear duplicados. Sus ediciones también requieren revisión.
+`configuracion_colegios` es pública solo para lectura de marca; ninguna cuenta
+cliente puede escribir allí mediante Firestore.
 La normalización oficial se ejecuta con `sync_colombia_catalogs.js`: conserva
 opciones antiguas como inactivas, normaliza códigos usados y deja respaldo.
 
@@ -202,14 +233,81 @@ no confirman GPS físico, notificación visible ni aceptación de Google Play.
 - Pantalla bloqueada, GPS apagado, sin red, app reiniciada: probar Z Flip7.
 - Medir lecturas/escrituras/Functions y Maps por recorrido; estimaciones no son factura.
 
+## Eventos y Asistencia: controles de entrega y volumen
+
+`academic_push_access.js` revalida cada envío y reintento contra el outbox
+identificado por `push_jobs.notificationEventId`. La sede, institución, año y
+entidad deben coincidir. Sin origen verificable se omite el envío; nunca se
+amplía la audiencia recurriendo a todo el grupo.
+
+En Asistencia se intersectan los estudiantes de la novedad original con la
+lista cerrada. En Eventos se conservan los destinatarios originales y se
+comprueban responsables actuales, estudiantes activos y vínculos familiares.
+El hijo seleccionado no limita avisos sobre otros hijos vinculados. Un cambio
+de token, permisos, estado o vínculo puede omitir un destinatario pendiente.
+
+Los recordatorios de Eventos paginan en bloques de 500 y dejan un outbox
+determinista por evento; pasar por eventos ya recordados no oculta la página
+siguiente. Se recalculan vínculos actuales sin reescribir la audiencia histórica.
+Listados y reportes dejan de truncarse silenciosamente: Eventos admite hasta
+2000 eventos por consulta y Asistencia hasta 5000 registros; sobrepasarlos
+devuelve un límite explícito. Los reportes filtran fechas en la consulta y
+Asistencia permite reducir por grupo. La asistencia de un evento se guarda en
+solicitudes de hasta 400 marcas, cada una con su revisión y auditoría.
+
+Pruebas específicas: `npm run test:events`, `npm run test:attendance` y
+`node node_modules/mocha/bin/mocha.js test/academic_push_access.test.js` desde
+Functions. Los emuladores no prueban recepción física de FCM.
+
+## Descargas privadas de Archivos y Mensajería
+
+Los documentos se descargan mediante `descargarArchivoProtegido?fileId=...`
+y `descargarAdjuntoProtegido?attachmentId=...`, con el ID token de Firebase en
+`Authorization: Bearer ...`. No se generan URL públicas, firmadas ni tokens
+permanentes de Storage. GET no registra lecturas ni descargas: los acuses por
+cuenta conservan sus operaciones independientes, después de recibir el archivo.
+Las dos confirmaciones de carga revocan `firebaseStorageDownloadTokens` antes
+de publicar o adjuntar, con precondiciones de generación y metageneración.
+Se conservan las demás claves de metadata. Si Storage no confirma la revocación,
+la reserva permanece pendiente, sin contabilizarla como archivo confirmado,
+para reintentar o cancelar. El emulador Storage de Firebase CLI 15.9 mantiene
+los tokens en una lista separada y no reproduce su eliminación vía metadata;
+las pruebas verifican el rechazo seguro en ese caso. La migración QA verificó
+la eliminación real en cuatro objetos conservando sus generaciones y contenido.
+
+El backend comprueba sesión, perfil activo, permisos, institución, sede y
+audiencia antes y después de leer el objeto. Para perfiles no administrativos
+exige año vigente; los familiares deben seleccionar un hijo activo vinculado.
+Los adjuntos revalidan el canal y sus relaciones actuales, aunque una membresía
+materializada antigua todavía contenga al usuario. CORS permite solamente los
+dominios del ambiente actual; Android usa el mismo token sin necesitar Origin.
+
+La lectura usa una generación fija y verifica ruta, MIME y tamaño confirmado.
+Se acumula como máximo 25 MiB, con contador incremental y rechazo del exceso,
+antes de responder una sola vez. Functions de segunda generación admite 32 MiB
+en respuesta no streaming, pero solo 10 MiB en streaming; por eso no se conecta
+el stream de Storage directamente a HTTP. Cada instancia usa 512 MiB y admite
+cuatro descargas simultáneas. La respuesta es privada, sin caché y con nombre
+de descarga saneado. No se duplican lecturas del contenido: se consultan los
+metadatos una vez y se descarga una vez; sí se repiten las comprobaciones de
+acceso. Este control añade invocaciones, lecturas de Firestore, CPU/memoria y
+tráfico saliente de Functions; no debe presupuestarse como descarga gratuita.
+
+Pruebas: `test/protected_downloads.test.js` (límites y metadatos) y
+`test/protected_downloads.function.test.js` (Auth, Firestore, Storage y HTTP).
+Referencia del límite: [cuotas de Cloud Functions](https://firebase.google.com/docs/functions/quotas).
+
 ## Pendientes funcionales que no deben ocultarse
 
 Paradas como entidades con coordenadas/Places, planificación futura, ida/regreso,
 relevo de auxiliar, cola offline con conflictos e historial antiguo unificado.
 La agrupación actual sigue siendo por texto de dirección normalizado, no distancia.
 Automático real necesita habilitación y prueba de Google, no basta con compilar.
-Eventos completos, entregas/asistencia por QR, lonchera/restaurante operativos no
-están finalizados. Inventariar y ocultar entradas incompletas antes de release.
+Cola sin conexión y ayuda de asistencia por QR siguen pendientes. Eventos ya es
+operativo mediante Functions, reglas cerradas, historial, audiencia materializada,
+confirmación familiar, cupo, asistencia y reporte; su QR continúa siendo solo un
+identificador. Entregas por QR y lonchera/restaurante operativos no están
+finalizados. Inventariar y ocultar entradas incompletas antes de release.
 
 ## Google Play
 

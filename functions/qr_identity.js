@@ -31,7 +31,9 @@ function qrFunctions(db, getCaller, activeYear) {
     if (type === "event") {
       const yearRef = db.collection("academic_years").doc(raw.academicYearId);
       const year = tx ? await tx.get(yearRef) : await yearRef.get();
-      if (!year.exists || year.data().status !== "active") fail();
+      if (!year.exists || year.data().status !== "active" ||
+          year.data().institutionId !== scope.institutionId ||
+          year.data().campusId !== scope.campusId) fail();
     }
     return {...scope, targetType: type, targetId: id, raw};
   }
@@ -51,18 +53,24 @@ function qrFunctions(db, getCaller, activeYear) {
       const value = await target(caller, type, id, tx);
       const existing = await tx.get(ref);
       if (existing.exists) {
-        if (existing.data().status !== "active" ||
-            existing.data().institutionId !== value.institutionId ||
+        if (existing.data().institutionId !== value.institutionId ||
             existing.data().campusId !== value.campusId) fail();
-        return {payload: existing.data().payload, targetType: type, targetId: id};
+        const current = existing.data();
+        if (current.status !== "active") {
+          if (!admin(caller, "editar")) fail();
+          return {payload: null, status: current.status,
+            revision: Number(current.revision || 0), targetType: type, targetId: id};
+        }
+        return {payload: current.payload, status: "active",
+          revision: Number(current.revision || 0), targetType: type, targetId: id};
       }
       const payload = `LLQ1:${crypto.randomBytes(32).toString("base64url")}`;
       const {raw, ...identity} = value;
       void raw;
-      tx.create(ref, {...identity, payload, tokenHash: hash(payload), status: "active",
+      tx.create(ref, {...identity, payload, tokenHash: hash(payload), status: "active", revision: 1,
         createdAt: FieldValue.serverTimestamp()});
       audit(tx, caller, value, "issued");
-      return {payload, targetType: type, targetId: id};
+      return {payload, status: "active", revision: 1, targetType: type, targetId: id};
     });
   });
   const administrarCredencialQr = onCall(async (request) => {
@@ -71,27 +79,45 @@ function qrFunctions(db, getCaller, activeYear) {
     const {targetType, targetId, action} = request.data || {};
     if (!["revoke", "rotate"].includes(action)) fail();
     if (request.data?.confirmation !== `${action}:${targetId}`) fail();
+    const expectedRevision = Number(request.data?.expectedRevision);
+    if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
+      throw new HttpsError("invalid-argument", "Recarga la credencial antes de modificarla.");
+    }
     const ref = db.collection("qr_credentials").doc(credentialId(targetType, targetId));
     return db.runTransaction(async (tx) => {
       const value = await target(caller, targetType, targetId, tx);
       const existing = await tx.get(ref);
       if (!existing.exists) fail();
+      const current = existing.data();
+      if (Number(current.revision || 0) !== expectedRevision) {
+        throw new HttpsError("aborted", "La credencial cambió. Recarga antes de continuar.");
+      }
       if (action === "revoke") {
+        if (current.status !== "active") {
+          throw new HttpsError("failed-precondition", "La credencial ya está revocada.");
+        }
         tx.update(ref, {status: "revoked", payload: FieldValue.delete(),
-          tokenHash: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp()});
+          tokenHash: FieldValue.delete(), revision: expectedRevision + 1,
+          updatedAt: FieldValue.serverTimestamp()});
       } else {
         const payload = `LLQ1:${crypto.randomBytes(32).toString("base64url")}`;
         tx.update(ref, {status: "active", payload, tokenHash: hash(payload),
           institutionId: value.institutionId, campusId: value.campusId,
+          revision: expectedRevision + 1,
           updatedAt: FieldValue.serverTimestamp()});
       }
       audit(tx, caller, value, action);
-      return {success: true};
+      return {success: true, status: action === "revoke" ? "revoked" : "active",
+        revision: expectedRevision + 1};
     });
   });
   const resolverCredencialQr = onCall(async (request) => {
     const caller = await getCaller(request);
     const payload = request.data?.payload;
+    const source = ["camera", "manual"].includes(request.data?.source) ?
+      request.data.source : "manual";
+    const clientPlatform = ["android", "ios", "web"].includes(
+        request.data?.clientPlatform) ? request.data.clientPlatform : "other";
     if (typeof payload !== "string" || !/^LLQ1:[A-Za-z0-9_-]{43}$/.test(payload)) fail();
     const matches = await db.collection("qr_credentials").where("tokenHash", "==", hash(payload)).limit(1).get();
     if (matches.empty) fail();
@@ -116,7 +142,14 @@ function qrFunctions(db, getCaller, activeYear) {
         }
       }
     }
-    await db.runTransaction(async (tx) => audit(tx, caller, entity, "resolved"));
+    await db.runTransaction(async (tx) => {
+      const ref = db.collection("qr_audit").doc();
+      tx.create(ref, {action: "resolved", result: "success", source,
+        clientPlatform, performedBy: caller.uid,
+        targetType: entity.targetType, targetId: entity.targetId,
+        institutionId: entity.institutionId, campusId: entity.campusId,
+        createdAt: FieldValue.serverTimestamp()});
+    });
     return result;
   });
   const crearIdentificadorEventoQr = onCall(async (request) => {
@@ -137,7 +170,7 @@ function qrFunctions(db, getCaller, activeYear) {
       academicYear: year.year, status: "active", purpose: "identification_only",
       createdBy: caller.uid, createdAt: FieldValue.serverTimestamp()});
     batch.create(db.collection("qr_credentials").doc(credentialId("event", ref.id)), {
-      ...identity, payload, tokenHash: hash(payload), status: "active",
+      ...identity, payload, tokenHash: hash(payload), status: "active", revision: 1,
       createdAt: FieldValue.serverTimestamp(),
     });
     audit(batch, caller, identity, "event_created");

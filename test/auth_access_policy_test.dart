@@ -101,11 +101,13 @@ void main() {
         'rutas.ver': '/management_route',
         'horarios.ver': '/management_schedule',
         'archivos.ver': '/management_document',
-        'historial_rutas.ver': '/view_history',
+        'historial.ver': '/view_history',
         'autorizaciones.ver': '/admin_authorization',
         'matricula.ver': '/enrollment',
         'codigoqr.crear': '/admin_qr',
         'mensajeria.ver': '/messages',
+        'asistencia.ver': '/attendance',
+        'eventos.ver': '/events',
         'sitio_web.ver': '/website_admin',
         'sitio_web.editar': '/website_messages',
       };
@@ -143,6 +145,27 @@ void main() {
       );
     });
 
+    test('el historial administrativo solo existe en web', () {
+      expect(
+        allowed(
+          role: 'Administrador',
+          path: '/view_history',
+          permissions: const ['historial.ver'],
+          web: true,
+        ),
+        isTrue,
+      );
+      expect(
+        allowed(
+          role: 'Administrador',
+          path: '/view_history',
+          permissions: const ['historial.ver'],
+          web: false,
+        ),
+        isFalse,
+      );
+    });
+
     test('el superadmin accede a los modulos administrativos', () {
       for (final path in [
         '/admin_user',
@@ -154,6 +177,8 @@ void main() {
         '/enrollment',
         '/admin_qr',
         '/messages',
+        '/attendance',
+        '/events',
         '/website_admin',
         '/website_messages',
       ]) {
@@ -178,10 +203,26 @@ void main() {
       expect(
         allowed(
           role: 'Docente',
+          path: '/events',
+          permissions: const ['eventos.ver'],
+        ),
+        isTrue,
+      );
+      expect(
+        allowed(
+          role: 'Docente',
+          path: '/attendance',
+          permissions: const ['asistencia.ver'],
+        ),
+        isTrue,
+      );
+      expect(
+        allowed(
+          role: 'Docente',
           path: '/admin_user',
           permissions: const ['usuarios.ver'],
         ),
-        isTrue,
+        isFalse,
       );
       expect(allowed(role: 'Docente', path: '/admin_user'), isFalse);
       expect(
@@ -190,7 +231,7 @@ void main() {
           path: '/admin_user',
           permissions: const ['usuarios.editar'],
         ),
-        isTrue,
+        isFalse,
       );
       expect(allowed(role: 'Docente', path: '/enrollment'), isFalse);
       expect(
@@ -210,6 +251,22 @@ void main() {
             role: role,
             path: '/my_schedule',
             permissions: const ['horarios.ver'],
+          ),
+          isTrue,
+        );
+        expect(
+          allowed(
+            role: role,
+            path: '/events',
+            permissions: const ['eventos.ver'],
+          ),
+          isTrue,
+        );
+        expect(
+          allowed(
+            role: role,
+            path: '/attendance',
+            permissions: const ['asistencia.ver'],
           ),
           isTrue,
         );

@@ -21,7 +21,8 @@ if (process.env.WEB_VAPID_KEY) {
   args.push(`--dart-define=WEB_VAPID_KEY=${process.env.WEB_VAPID_KEY}`);
 }
 const result = spawnSync(process.platform === "win32" ? "flutter.bat" : "flutter",
-    args, {cwd: root, stdio: "inherit", shell: process.platform === "win32"});
+    args, {cwd: root, stdio: "inherit", windowsHide: true,
+      shell: process.platform === "win32"});
 if (result.error || result.status !== 0) {
   throw new Error("Flutter build failed; do not deploy this output.");
 }

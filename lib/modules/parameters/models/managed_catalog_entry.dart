@@ -5,6 +5,7 @@ class ManagedCatalogEntry {
   final String value;
   final int order;
   final bool active;
+  final int revision;
 
   const ManagedCatalogEntry({
     required this.id,
@@ -13,6 +14,7 @@ class ManagedCatalogEntry {
     required this.value,
     required this.order,
     required this.active,
+    this.revision = 1,
   });
 
   factory ManagedCatalogEntry.fromMap(Map<String, dynamic> map) {
@@ -26,6 +28,7 @@ class ManagedCatalogEntry {
           ? rawOrder.toInt()
           : int.tryParse(rawOrder?.toString() ?? '') ?? 0,
       active: map['active'] == true,
+      revision: (map['revision'] as num?)?.toInt() ?? 1,
     );
   }
 }

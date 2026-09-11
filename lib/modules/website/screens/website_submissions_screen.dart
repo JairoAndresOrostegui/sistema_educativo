@@ -1,4 +1,5 @@
-import 'package:sistema_educativo/config/app_palette.dart';
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/website_service.dart';
 
 class WebsiteSubmissionsScreen extends StatefulWidget {
@@ -21,6 +23,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
   final TextEditingController _search = TextEditingController();
   String _filter = 'all';
   String? _selectedId;
+  final Set<String> _busyIds = {};
 
   bool _canManage(BuildContext context) {
     final user = context.read<UserProviderV2>().user;
@@ -39,14 +42,15 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!kIsWeb || !_canManage(context)) {
+    final user = context.read<UserProviderV2>().user;
+    if (!kIsWeb || !_canManage(context) || user == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Mensajes del sitio')),
         body: const Center(child: Text('No tienes acceso a este panel.')),
       );
     }
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         leading: IconButton(
           tooltip: 'Volver al constructor',
@@ -64,7 +68,10 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
         ],
       ),
       body: StreamBuilder<List<WebsiteSubmission>>(
-        stream: _service.watchSubmissions(),
+        stream: _service.watchSubmissions(
+          institutionId: user.institution,
+          campusId: user.campus,
+        ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(
@@ -135,13 +142,19 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
 
   Widget _summary(int total, int unread, bool compact) => Row(
     children: [
-      _metric('Total', total, Icons.inbox_outlined, AppPalette.info, compact),
+      _metric(
+        'Total',
+        total,
+        Icons.inbox_outlined,
+        Theme.of(context).colorScheme.primary,
+        compact,
+      ),
       SizedBox(width: compact ? 6 : 12),
       _metric(
         'Sin leer',
         unread,
         Icons.mark_email_unread_outlined,
-        AppPalette.error,
+        Theme.of(context).colorScheme.error,
         compact,
       ),
       SizedBox(width: compact ? 6 : 12),
@@ -149,7 +162,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
         'Leídos',
         total - unread,
         Icons.drafts_outlined,
-        AppPalette.success,
+        Theme.of(context).colorScheme.tertiary,
         compact,
       ),
     ],
@@ -257,14 +270,16 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
                         (_selectedId ?? submissions.first.id) == item.id;
                     return ListTile(
                       selected: selected,
-                      selectedTileColor: AppPalette.error.withValues(
-                        alpha: 0.08,
-                      ),
+                      selectedTileColor: Theme.of(
+                        context,
+                      ).colorScheme.errorContainer,
                       leading: Icon(
                         item.status == 'new'
                             ? Icons.mark_email_unread_outlined
                             : Icons.drafts_outlined,
-                        color: item.status == 'new' ? AppPalette.error : null,
+                        color: item.status == 'new'
+                            ? Theme.of(context).colorScheme.error
+                            : null,
                       ),
                       title: Text(
                         item.name.isEmpty ? 'Sin nombre' : item.name,
@@ -284,7 +299,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
                       onTap: () {
                         setState(() => _selectedId = item.id);
                         if (item.status == 'new') {
-                          _service.markSubmissionRead(item.id);
+                          unawaited(_setRead(item, read: true));
                         }
                       },
                     );
@@ -329,9 +344,9 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
                       ),
                     ),
                     OutlinedButton.icon(
-                      onPressed: () => item.status == 'new'
-                          ? _service.markSubmissionRead(item.id)
-                          : _service.markSubmissionUnread(item.id),
+                      onPressed: _busyIds.contains(item.id)
+                          ? null
+                          : () => _setRead(item, read: item.status == 'new'),
                       icon: Icon(
                         item.status == 'new'
                             ? Icons.mark_email_read_outlined
@@ -346,7 +361,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
                     const SizedBox(width: 10),
                     IconButton.filledTonal(
                       tooltip: 'Eliminar mensaje',
-                      color: AppPalette.error,
+                      color: Theme.of(context).colorScheme.error,
                       onPressed: () => _delete(item),
                       icon: const Icon(Icons.delete_outline),
                     ),
@@ -390,7 +405,7 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
         Icon(
           icon,
           size: 20,
-          color: AppPalette.onSurface.withValues(alpha: .54),
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
         const SizedBox(width: 10),
         Expanded(child: SelectableText(value)),
@@ -417,7 +432,44 @@ class _WebsiteSubmissionsScreenState extends State<WebsiteSubmissionsScreen> {
       ),
     );
     if (confirmed != true) return;
-    await _service.deleteSubmission(item.id);
-    if (mounted) setState(() => _selectedId = null);
+    if (mounted) setState(() => _busyIds.add(item.id));
+    try {
+      await _service.deleteSubmission(item.id);
+      if (mounted) setState(() => _selectedId = null);
+    } catch (error) {
+      _showOperationError(error);
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(item.id));
+    }
+  }
+
+  Future<void> _setRead(WebsiteSubmission item, {required bool read}) async {
+    if (_busyIds.contains(item.id)) return;
+    if (mounted) setState(() => _busyIds.add(item.id));
+    try {
+      if (read) {
+        await _service.markSubmissionRead(item.id);
+      } else {
+        await _service.markSubmissionUnread(item.id);
+      }
+    } catch (error) {
+      _showOperationError(error);
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(item.id));
+    }
+  }
+
+  void _showOperationError(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          userFacingError(
+            error,
+            fallback: 'No fue posible actualizar el mensaje. Reintenta.',
+          ),
+        ),
+      ),
+    );
   }
 }

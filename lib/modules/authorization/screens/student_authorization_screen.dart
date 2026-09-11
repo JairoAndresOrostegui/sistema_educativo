@@ -3,7 +3,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -19,7 +18,14 @@ import '../widgets/teacher_authorization_dialog.dart';
 import '../../user/services/active_student_service.dart';
 
 class AuthorizationStudentScreen extends StatefulWidget {
-  const AuthorizationStudentScreen({super.key});
+  final AuthorizationService? service;
+  final ActiveStudentService? activeStudentService;
+
+  const AuthorizationStudentScreen({
+    super.key,
+    this.service,
+    this.activeStudentService,
+  });
 
   @override
   State<AuthorizationStudentScreen> createState() =>
@@ -28,7 +34,9 @@ class AuthorizationStudentScreen extends StatefulWidget {
 
 class _AuthorizationStudentScreenState
     extends State<AuthorizationStudentScreen> {
-  final _svc = AuthorizationService();
+  late final _svc = widget.service ?? AuthorizationService();
+  late final _activeStudentService =
+      widget.activeStudentService ?? ActiveStudentService();
   StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
@@ -37,11 +45,9 @@ class _AuthorizationStudentScreenState
   late String _campusId;
 
   final List<AuthorizationRequest> _items = [];
-  final List<dynamic> _cursors = [null];
   bool _loading = false;
   bool _busy = false;
-  bool _hasNext = false;
-  int _pageIndex = 0;
+  String? _loadError;
   final int _perPage = 20;
 
   List<_ChildLite> _children = [];
@@ -61,7 +67,31 @@ class _AuthorizationStudentScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _safeBootstrap());
+  }
+
+  Future<void> _safeBootstrap() async {
+    await _itemsSub?.cancel();
+    _itemsSub = null;
+    if (!mounted) return;
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+    try {
+      await _bootstrap();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError = userFacingError(
+          error,
+          fallback: 'No fue posible cargar Autorizaciones.',
+        );
+      });
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -84,6 +114,7 @@ class _AuthorizationStudentScreenState
         campusId: _campusId,
         studentIds: u.studentIds ?? const <String>[],
       );
+      if (!mounted) return;
       _children = kids
           .map(
             (e) => _ChildLite(
@@ -101,20 +132,14 @@ class _AuthorizationStudentScreenState
         _activeStudentId = exists ? currentActive : _children.first.id;
 
         if (!mounted) return;
-        try {
-          await ActiveStudentService().select(
-            userProvider: context.read<UserProviderV2>(),
-            studentId: _activeStudentId!,
-          );
-        } catch (_) {
-          if (!mounted) return;
-          await DialogUtils.showError(
-            context: context,
-            title: 'No fue posible seleccionar al estudiante',
-            message: 'Verifica la conexión e inténtalo nuevamente.',
-          );
-          return;
-        }
+        await _activeStudentService.select(
+          userProvider: context.read<UserProviderV2>(),
+          studentId: _activeStudentId!,
+        );
+        if (!mounted) return;
+      } else {
+        _activeStudentId = null;
+        _items.clear();
       }
 
       _subscribeToItems();
@@ -128,18 +153,13 @@ class _AuthorizationStudentScreenState
     if (_activeStudentId == null) {
       setState(() {
         _items.clear();
-        _hasNext = false;
       });
       return;
     }
     setState(() {
       _loading = true;
+      _loadError = null;
       _items.clear();
-      _hasNext = false;
-      _cursors
-        ..clear()
-        ..add(null);
-      _pageIndex = 0;
     });
     _subscribeToItems();
   }
@@ -164,32 +184,25 @@ class _AuthorizationStudentScreenState
               _items
                 ..clear()
                 ..addAll(items);
-              _hasNext = false;
               _loading = false;
+              _loadError = null;
             });
           },
-          onError: (Object error) async {
+          onError: (Object error) {
             if (!mounted) return;
-            await DialogUtils.showError(
-              context: context,
-              title: 'Error',
-              message: userFacingError(error),
-            );
-            if (mounted) setState(() => _loading = false);
+            setState(() {
+              _loading = false;
+              _loadError = userFacingError(error);
+            });
           },
         );
   }
 
-  Future<void> _nextPage() async {
-    return;
-  }
-
-  Future<void> _prevPage() async {
-    return;
-  }
-
   Future<void> _onStudentChanged(String newId) async {
     if (_activeStudentId == newId) return;
+    await _itemsSub?.cancel();
+    _itemsSub = null;
+    if (!mounted) return;
     final previousId = _activeStudentId;
     setState(() {
       _activeStudentId = newId;
@@ -197,7 +210,7 @@ class _AuthorizationStudentScreenState
     });
     final prov = context.read<UserProviderV2>();
     try {
-      await ActiveStudentService().select(userProvider: prov, studentId: newId);
+      await _activeStudentService.select(userProvider: prov, studentId: newId);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -209,8 +222,10 @@ class _AuthorizationStudentScreenState
         title: 'No fue posible cambiar de estudiante',
         message: 'Verifica la conexión e inténtalo nuevamente.',
       );
+      if (mounted) _subscribeToItems();
       return;
     }
+    if (!mounted) return;
     await _reload();
   }
 
@@ -238,15 +253,16 @@ class _AuthorizationStudentScreenState
   }
 
   Color _statusColor(AuthorizationStatus s) {
+    final colors = Theme.of(context).colorScheme;
     switch (s) {
       case AuthorizationStatus.pending:
-        return AppPalette.warning;
+        return colors.tertiary;
       case AuthorizationStatus.approved:
-        return AppPalette.success;
+        return colors.primary;
       case AuthorizationStatus.rejected:
-        return AppPalette.primary;
+        return colors.error;
       case AuthorizationStatus.finished:
-        return AppPalette.outline;
+        return colors.outline;
     }
   }
 
@@ -401,6 +417,7 @@ class _AuthorizationStudentScreenState
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final session = context.watch<UserProviderV2>().user;
     if (session == null) {
       return const Scaffold(
@@ -413,22 +430,48 @@ class _AuthorizationStudentScreenState
         appBar: AppBar(
           title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
-          backgroundColor: AppPalette.surface,
-          foregroundColor: AppPalette.primary,
+          backgroundColor: colors.surface,
+          foregroundColor: colors.primary,
           centerTitle: true,
         ),
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
-        backgroundColor: AppPalette.surface,
+        backgroundColor: colors.surface,
+      );
+    }
+
+    if (_loadError != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Autorizaciones'),
+          leading: const BackToDashboardButton(),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_loadError!, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: _safeBootstrap,
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       appBar: AppBar(
         title: const Text('Autorizaciones'),
         leading: const BackToDashboardButton(),
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
         centerTitle: true,
       ),
       floatingActionButton: _canCreate
@@ -436,8 +479,8 @@ class _AuthorizationStudentScreenState
               onPressed: _busy ? null : _onCreatePressed,
               icon: const Icon(Icons.add),
               label: const Text('Nueva'),
-              backgroundColor: AppPalette.primary,
-              foregroundColor: AppPalette.surface,
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
             )
           : null,
       body: SafeArea(
@@ -455,12 +498,12 @@ class _AuthorizationStudentScreenState
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: AppPalette.primary.withValues(alpha: .15),
+                          color: colors.primary.withValues(alpha: .15),
                         ),
-                        color: AppPalette.surfaceContainer,
+                        color: colors.surfaceContainer,
                         boxShadow: [
                           BoxShadow(
-                            color: AppPalette.onSurface.withValues(alpha: 0.03),
+                            color: colors.onSurface.withValues(alpha: 0.03),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -495,14 +538,14 @@ class _AuthorizationStudentScreenState
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
+                  color: colors.surface,
                   border: Border.all(
-                    color: AppPalette.primary.withValues(alpha: .15),
+                    color: colors.primary.withValues(alpha: .15),
                   ),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.onSurface.withValues(alpha: .03),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -566,7 +609,7 @@ class _AuthorizationStudentScreenState
 
                           return Card(
                             elevation: 0,
-                            color: AppPalette.transparent,
+                            color: colors.surface.withValues(alpha: 0),
                             margin: const EdgeInsets.symmetric(
                               horizontal: 4,
                               vertical: 6,
@@ -578,16 +621,14 @@ class _AuthorizationStudentScreenState
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: AppPalette.primary.withValues(
-                                    alpha: .12,
-                                  ),
+                                  color: colors.primary.withValues(alpha: .12),
                                 ),
-                                color: AppPalette.surfaceContainer,
+                                color: colors.surfaceContainer,
                               ),
                               child: ListTile(
                                 leading: Icon(
                                   Icons.assignment_turned_in,
-                                  color: AppPalette.primary,
+                                  color: colors.primary,
                                 ),
                                 title: Row(
                                   children: [
@@ -613,7 +654,7 @@ class _AuthorizationStudentScreenState
                                         tooltip: 'Corregir y reenviar',
                                         icon: Icon(
                                           Icons.edit,
-                                          color: AppPalette.primary,
+                                          color: colors.primary,
                                         ),
                                         onPressed: _busy
                                             ? null
@@ -630,27 +671,6 @@ class _AuthorizationStudentScreenState
                           );
                         },
                       ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Página ${_pageIndex + 1}'),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: _pageIndex == 0 || _loading
-                            ? null
-                            : _prevPage,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: !_hasNext || _loading ? null : _nextPage,
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ],
           ),

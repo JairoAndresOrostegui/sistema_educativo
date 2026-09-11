@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/schedule/subject_model.dart';
@@ -9,6 +8,7 @@ import '../../../utils/format_utils.dart';
 import '../services/schedule_service.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../user/services/active_student_service.dart';
+import '../../../utils/user_facing_error.dart';
 
 extension _Cap on String {
   String cap() => isEmpty ? this : '${this[0].toUpperCase()}${substring(1)}';
@@ -30,6 +30,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   final _service = ScheduleService();
 
   bool _loading = false;
+  String? _loadError;
   Map<String, List<SubjectModel>> _byDay = {};
   String? _selectedDay;
 
@@ -83,6 +84,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     setState(() {
       _byDay = data;
       _selectedDay = _days.contains(todayKey) ? todayKey : _days.first;
+      _loadError = null;
     });
   }
 
@@ -165,12 +167,15 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       }
 
       if (mounted) setState(() => _loading = false);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No fue posible cargar el horario.')),
-        );
+        setState(() {
+          _loading = false;
+          _loadError = userFacingError(
+            error,
+            fallback: 'No fue posible cargar el horario.',
+          );
+        });
       }
     }
   }
@@ -185,7 +190,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
     final userProv = context.read<UserProviderV2>();
     final u = userProv.user;
-    if (u == null) return;
+    if (u == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     try {
       await ActiveStudentService().select(
         userProvider: userProv,
@@ -205,20 +213,32 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
     final sel = _children.firstWhere((e) => e.id == newId);
     final groupId = sel.groupId ?? '';
-    if (groupId.isNotEmpty) {
-      await _fetchSchedules(
-        institutionId: u.institution,
-        campusId: u.campus,
-        groupId: groupId,
-        studentId: newId,
-      );
-    } else {
+    try {
+      if (groupId.isNotEmpty) {
+        await _fetchSchedules(
+          institutionId: u.institution,
+          campusId: u.campus,
+          groupId: groupId,
+          studentId: newId,
+        );
+      } else {
+        setState(() {
+          _byDay = {};
+          _selectedDay = _days.first;
+          _loadError = null;
+        });
+      }
+      if (mounted) setState(() => _loading = false);
+    } catch (error) {
+      if (!mounted) return;
       setState(() {
-        _byDay = {};
-        _selectedDay = _days.first;
+        _loading = false;
+        _loadError = userFacingError(
+          error,
+          fallback: 'No fue posible cargar el horario.',
+        );
       });
     }
-    if (mounted) setState(() => _loading = false);
   }
 
   String _todayAsKey() {
@@ -254,10 +274,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.primary,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.primary,
         title: const Text('Mi horario'),
         centerTitle: true,
         leading: const BackToDashboardButton(),
@@ -265,6 +285,21 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       body: SafeArea(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              )
             : Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
@@ -286,16 +321,19 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: AppPalette.primary.withValues(
-                                    alpha: .15,
-                                  ),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: .15),
                                 ),
-                                color: AppPalette.surfaceContainer,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainer,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppPalette.onSurface.withValues(
-                                      alpha: 0.03,
-                                    ),
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.03),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),
@@ -355,8 +393,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   selected: sel,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -453,7 +491,9 @@ class _DayColumn extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: AppPalette.primary.withValues(alpha: .08),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: .08),
             ),
             child: Semantics(
               header: true,
@@ -463,7 +503,7 @@ class _DayColumn extends StatelessWidget {
                   _displayDay(day),
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: AppPalette.primary,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
               ),
@@ -506,8 +546,10 @@ class _SubjectCard extends StatelessWidget {
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.primary.withValues(alpha: .15)),
-        color: AppPalette.surfaceContainer,
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
+        ),
+        color: Theme.of(context).colorScheme.surfaceContainer,
       ),
       child: Semantics(
         container: true,
@@ -541,15 +583,17 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: AppPalette.primary.withValues(alpha: .12),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: .12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppPalette.primary.withValues(alpha: .25)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .25),
+        ),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontWeight: FontWeight.w700,
-          color: AppPalette.primary,
+          color: Theme.of(context).colorScheme.primary,
           fontSize: 12,
         ),
       ),

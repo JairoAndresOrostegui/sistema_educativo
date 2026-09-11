@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../../models/file/file_model.dart';
+import '../../../utils/private_document_downloader.dart';
 
 class FileStorageSummary {
   final int usedBytes;
@@ -40,10 +41,15 @@ class FileUploadProgress {
 class FileService {
   final FirebaseStorage _storage;
   final FirebaseFunctions _functions;
+  final PrivateDocumentDownloader _downloads;
 
-  FileService({FirebaseStorage? storage, FirebaseFunctions? functions})
-    : _storage = storage ?? FirebaseStorage.instance,
-      _functions = functions ?? FirebaseFunctions.instance;
+  FileService({
+    FirebaseStorage? storage,
+    FirebaseFunctions? functions,
+    PrivateDocumentDownloader? downloads,
+  }) : _storage = storage ?? FirebaseStorage.instance,
+       _functions = functions ?? FirebaseFunctions.instance,
+       _downloads = downloads ?? const PrivateDocumentDownloader();
 
   Future<FileAudienceOptions> audienceOptions({
     required String institutionId,
@@ -152,8 +158,17 @@ class FileService {
     }
   }
 
-  Future<String> downloadUrl(FileModel file) =>
-      _storage.ref(file.storagePath).getDownloadURL();
+  Future<Uint8List> downloadBytes(FileModel file) async {
+    if (file.isDeleting) {
+      throw StateError(
+        'La eliminación del archivo está pendiente. No puede descargarse.',
+      );
+    }
+    return _downloads.download(
+      endpoint: 'descargarArchivoProtegido',
+      parameters: {'fileId': file.id},
+    );
+  }
 
   Future<void> registerDownload(String fileId) async {
     await _functions.httpsCallable('registrarDescargaArchivo').call({

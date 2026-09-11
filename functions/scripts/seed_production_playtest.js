@@ -55,17 +55,26 @@ const ADMIN_PERMISSIONS = [
   "horarios.ver", "horarios.crear", "horarios.editar", "horarios.eliminar",
   "archivos.ver", "archivos.crear", "archivos.eliminar", "mensajeria.ver",
   "codigoqr.crear", "codigoqr.editar", "rutas.ver", "rutas.crear", "rutas.editar",
-  "rutas.eliminar", "historial_rutas.ver", "historial.ver", "sitio_web.ver", "sitio_web.editar",
-  "parametros.ver", "parametros.editar",
+  "rutas.eliminar", "historial.ver", "sitio_web.ver", "sitio_web.editar",
+  "parametros.ver", "parametros.editar", "asistencia.ver",
+  "asistencia.crear", "asistencia.editar",
+  "eventos.ver", "eventos.crear", "eventos.editar",
 ];
 const TEACHER_PERMISSIONS = [
   "matricula.ver", "autorizaciones.ver", "horarios.ver", "archivos.ver",
-  "archivos.crear", "mensajeria.ver", "rutas.ver",
+  "archivos.crear", "mensajeria.ver", "rutas.ver", "asistencia.ver",
+  "asistencia.crear",
+  "eventos.ver", "eventos.crear", "eventos.editar",
 ];
-const STUDENT_PERMISSIONS = ["horarios.ver", "archivos.ver", "mensajeria.ver", "rutas.ver"];
+const STUDENT_PERMISSIONS = [
+  "horarios.ver", "archivos.ver", "mensajeria.ver", "rutas.ver",
+  "asistencia.ver",
+  "eventos.ver",
+];
 const FAMILY_PERMISSIONS = [
   "matricula.ver", "autorizaciones.ver", "horarios.ver", "archivos.ver",
-  "mensajeria.ver", "rutas.ver",
+  "mensajeria.ver", "rutas.ver", "asistencia.ver",
+  "eventos.ver",
 ];
 
 function passwordFor(account) {

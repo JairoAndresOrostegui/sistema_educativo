@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/student_route_model.dart';
@@ -38,6 +37,7 @@ class TeacherRouteStudentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     if (groupSameAddress) {
       return ListView.builder(
         controller: controller,
@@ -51,20 +51,11 @@ class TeacherRouteStudentList extends StatelessWidget {
             padding: EdgeInsets.all(16.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppPalette.error.withValues(alpha: .15),
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  AppPalette.error.withValues(alpha: .06),
-                  AppPalette.surface,
-                ],
-              ),
+              border: Border.all(color: scheme.outlineVariant),
+              color: scheme.surfaceContainerLow,
               boxShadow: [
                 BoxShadow(
-                  color: AppPalette.onSurface.withValues(alpha: 0.03),
+                  color: scheme.shadow.withValues(alpha: 0.03),
                   blurRadius: 8,
                   offset: Offset(0, 2),
                 ),
@@ -78,7 +69,7 @@ class TeacherRouteStudentList extends StatelessWidget {
                     addr,
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: AppPalette.onSurface.withValues(alpha: .87),
+                      color: scheme.onSurface,
                     ),
                   ),
                   SizedBox(height: 8),
@@ -117,18 +108,11 @@ class TeacherRouteStudentList extends StatelessWidget {
           padding: EdgeInsets.all(16.0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                AppPalette.error.withValues(alpha: .06),
-                AppPalette.surface,
-              ],
-            ),
+            border: Border.all(color: scheme.outlineVariant),
+            color: scheme.surfaceContainerLow,
             boxShadow: [
               BoxShadow(
-                color: AppPalette.onSurface.withValues(alpha: 0.03),
+                color: scheme.shadow.withValues(alpha: 0.03),
                 blurRadius: 8,
                 offset: Offset(0, 2),
               ),

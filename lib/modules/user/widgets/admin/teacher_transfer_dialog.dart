@@ -33,6 +33,7 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
   bool _loading = false;
   DateTime? _endsAt;
   List<ActiveTeacherTransfer> _activeTransfers = [];
+  String? _activeTransfersError;
 
   @override
   void initState() {
@@ -41,7 +42,10 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
   }
 
   Future<void> _loadActiveTransfers() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _activeTransfersError = null;
+    });
     try {
       final items = await _service.listActiveTeacherTransfers(
         institutionId: widget.institutionId,
@@ -49,8 +53,10 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
         allTenants: widget.isSuperadmin,
       );
       if (mounted) setState(() => _activeTransfers = items);
-    } catch (_) {
-      // La previsualización de un traslado nuevo sigue disponible.
+    } catch (error) {
+      if (mounted) {
+        setState(() => _activeTransfersError = userFacingError(error));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -251,6 +257,24 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
                 'Traslada toda la responsabilidad académica vigente sin '
                 'cambiar la autoría histórica de mensajes o archivos.',
               ),
+              if (_activeTransfersError != null) ...[
+                const SizedBox(height: 12),
+                Card(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  child: ListTile(
+                    leading: const Icon(Icons.error_outline),
+                    title: const Text(
+                      'No se pudieron consultar los reemplazos vigentes',
+                    ),
+                    subtitle: Text(_activeTransfersError!),
+                    trailing: IconButton(
+                      tooltip: 'Reintentar',
+                      onPressed: _loading ? null : _loadActiveTransfers,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ),
+                ),
+              ],
               if (_activeTransfers.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(
@@ -396,6 +420,7 @@ class _TeacherTransferDialogState extends State<TeacherTransferDialog> {
         FilledButton.icon(
           onPressed:
               _loading ||
+                  _activeTransfersError != null ||
                   _preview == null ||
                   _preview!.conflicts.isNotEmpty ||
                   (_preview!.targetHasLoad && !_allowMerge)

@@ -4,6 +4,7 @@ const assert = require("assert");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const {
   academicYearId,
   seedAcademicYear,
@@ -15,11 +16,13 @@ const authBase = "http://127.0.0.1:9098/identitytoolkit.googleapis.com/v1";
 let app;
 let auth;
 let db;
+let bucket;
 
 const profile = (role, extra = {}) => ({
   firstName: "Usuario",
   lastName: "Prueba",
   document: "10000000",
+  documentType: role === "Estudiante" ? "TI" : "CC",
   institutionalEmail: "usuario@colegio.test",
   role,
   status: "activo",
@@ -49,7 +52,8 @@ async function clearAuth() {
 
 async function seedUser(uid, role, extra = {}) {
   const email = extra.institutionalEmail || `${uid}@colegio.test`;
-  await auth.createUser({uid, email, password: "Clave123!"});
+  await auth.createUser({uid, email,
+    password: "Clave123!", emailVerified: true});
   await db.collection("users").doc(uid).set(profile(role, {
     institutionalEmail: email,
     ...extra,
@@ -163,6 +167,7 @@ function createPayload({
   permissions = [],
   studentIds = [],
   activeStudentId = null,
+  status = "activo",
 } = {}) {
   return {
     email,
@@ -187,6 +192,7 @@ function createPayload({
       permissions,
       studentIds,
       activeStudentId,
+      status,
     }),
   };
 }
@@ -199,6 +205,7 @@ describe("baja y eliminacion de usuarios", () => {
     }, "user-function-tests");
     auth = getAuth(app);
     db = getFirestore(app);
+    bucket = getStorage(app).bucket();
   });
 
   beforeEach(async () => {
@@ -208,6 +215,14 @@ describe("baja y eliminacion de usuarios", () => {
       institutionId: "inst-1",
       nombre: "Colegio de prueba",
       sedes: ["campus-1", "campus-2"],
+    });
+    await db.collection("parameters").doc("document-type-ti").set({
+      clave: "documentType", etiqueta: "Tarjeta de identidad", valor: "TI",
+      orden: 1, activo: true,
+    });
+    await db.collection("parameters").doc("document-type-cc").set({
+      clave: "documentType", etiqueta: "Cedula de ciudadania", valor: "CC",
+      orden: 2, activo: true,
     });
     const yearId = await seedAcademicYear(db, "inst-1", "campus-1");
     const campus2YearId = await seedAcademicYear(db, "inst-1", "campus-2");
@@ -458,6 +473,26 @@ describe("baja y eliminacion de usuarios", () => {
     assert.equal(response.body.error.status, "FAILED_PRECONDITION");
   });
 
+  it("rechaza un tipo de documento inventado desde el cliente", async () => {
+    const superEmail = await seedUser("super", "Administrador", {
+      isSuperadmin: true,
+    });
+    const payload = createPayload({
+      document: "70000054",
+      email: "catalogo.invalido@colegio.test",
+      personalEmail: "catalogo.invalido@correo.test",
+    });
+    payload.profile.documentType = "INVENTADO";
+    const response = await callFunction(
+        "crearUsuarioDesdeAdmin", payload, await signIn(superEmail),
+    );
+    assert.equal(response.body.error.status, "FAILED_PRECONDITION");
+    await assert.rejects(
+        auth.getUserByEmail("catalogo.invalido@colegio.test"),
+        /no user record/i,
+    );
+  });
+
   it("rechaza documentos y correos duplicados desde el backend", async () => {
     const superEmail = await seedUser("super", "Administrador", {
       isSuperadmin: true,
@@ -488,6 +523,104 @@ describe("baja y eliminacion de usuarios", () => {
         token,
     );
     assert.equal(duplicatedPersonal.body.error.status, "ALREADY_EXISTS");
+  });
+
+  it("reserva documentos de forma atomica en altas concurrentes", async () => {
+    const superEmail = await seedUser("super", "Administrador", {
+      isSuperadmin: true,
+    });
+    const token = await signIn(superEmail);
+    const [first, second] = await Promise.all([
+      callFunction("crearUsuarioDesdeAdmin", createPayload({
+        document: "70000055",
+        email: "concurrente1@colegio.test",
+        personalEmail: "concurrente1@correo.test",
+      }), token),
+      callFunction("crearUsuarioDesdeAdmin", createPayload({
+        document: "70000055",
+        email: "concurrente2@colegio.test",
+        personalEmail: "concurrente2@correo.test",
+      }), token),
+    ]);
+    const results = [first, second];
+    assert.equal(results.filter((item) => item.body.result).length, 1);
+    assert.equal(results.filter((item) => item.body.error).length, 1);
+    assert.equal((await db.collection("users")
+        .where("document", "==", "70000055").get()).size, 1);
+  });
+
+  it("crea deshabilitada en Auth una cuenta inactiva", async () => {
+    const superEmail = await seedUser("super", "Administrador", {
+      isSuperadmin: true,
+    });
+    const response = await callFunction(
+        "crearUsuarioDesdeAdmin",
+        createPayload({
+          document: "70000057",
+          email: "inactivo@colegio.test",
+          personalEmail: "inactivo@correo.test",
+          status: "inactivo",
+        }),
+        await signIn(superEmail),
+    );
+    assert.ok(response.body.result, JSON.stringify(response.body));
+    assert.equal((await auth.getUser(response.body.result.uid)).disabled, true);
+    assert.equal((await db.collection("users").doc(response.body.result.uid)
+        .get()).data().revision, 1);
+  });
+
+  it("guarda perfil y estado en una sola operacion", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.editar"],
+    });
+    await seedUser("target", "Estudiante", {
+      document: "70000056",
+      personalEmail: "estado@correo.test",
+      groupId: "group-5a",
+      groupName: "Quinto A",
+      notificationTokens: {mobile: "token-prueba"},
+    });
+    const token = await signIn(adminEmail);
+    const current = (await db.collection("users").doc("target").get()).data();
+    const response = await callFunction("actualizarUsuarioDesdeAdmin", {
+      uid: "target",
+      profile: {...current, firstName: "Inactivo", status: "inactivo"},
+    }, token);
+    assert.equal(
+        response.body.result.success, true, JSON.stringify(response.body),
+    );
+    const target = (await db.collection("users").doc("target").get()).data();
+    assert.equal(target.firstName, "Inactivo");
+    assert.equal(target.status, "inactivo");
+    assert.equal(target.notificationTokens, undefined);
+    assert.equal((await auth.getUser("target")).disabled, true);
+  });
+
+  it("rechaza una edicion basada en un perfil desactualizado", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.editar"],
+    });
+    await seedUser("target", "Estudiante", {
+      document: "70000058",
+      personalEmail: "revision@correo.test",
+      groupId: "group-5a",
+      groupName: "Quinto A",
+      revision: 1,
+    });
+    const token = await signIn(adminEmail);
+    const current = (await db.collection("users").doc("target").get()).data();
+    const responses = await Promise.all(["Edicion Uno", "Edicion Dos"].map(
+        (firstName) => callFunction("actualizarUsuarioDesdeAdmin", {
+          uid: "target",
+          expectedRevision: 1,
+          profile: {...current, firstName},
+        }, token),
+    ));
+    assert.equal(responses.filter((item) => item.body.result).length, 1);
+    assert.equal(responses.filter((item) =>
+      item.body.error?.status === "ABORTED").length, 1);
+    assert.equal((await db.collection("users").doc("target").get())
+        .data().revision, 2);
   });
 
   it("valida vinculos familiares activos de la misma sede", async () => {
@@ -683,7 +816,7 @@ describe("baja y eliminacion de usuarios", () => {
       firstName: "Docente", lastName: "Saliente", tutorGroupId: "group-5a",
     });
     await seedUser("target-teacher", "Docente", {
-      firstName: "Docente", lastName: "Reemplazo",
+      firstName: "Docente", lastName: "Reemplazo", tutorGroupId: "group-5a",
     });
     const yearId = academicYearId("inst-1", "campus-1");
     await db.collection("subjects").doc("source-subject").set({
@@ -739,7 +872,7 @@ describe("baja y eliminacion de usuarios", () => {
       targetTeacherId: "target-teacher",
       mode: "temporary",
       endsAtMillis: Date.now() + 7 * 24 * 60 * 60 * 1000,
-      allowMerge: false,
+      allowMerge: true,
     }, token);
     assert.ok(moved.body.result.success, JSON.stringify(moved.body));
     assert.equal((await auth.getUser("source-teacher")).disabled, true);
@@ -762,6 +895,37 @@ describe("baja y eliminacion de usuarios", () => {
     assert.equal((await auth.getUser("source-teacher")).disabled, false);
     assert.equal((await db.collection("subjects").doc("source-subject").get())
         .data().teacherId, "source-teacher");
+    assert.equal((await db.collection("users").doc("target-teacher").get())
+        .data().tutorGroupId, "group-5a");
+  });
+
+  it("impide dos traslados simultaneos del mismo docente", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.editar"],
+    });
+    await seedUser("source-teacher", "Docente");
+    await seedUser("target-a", "Docente");
+    await seedUser("target-b", "Docente");
+    const token = await signIn(adminEmail);
+    const endsAtMillis = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const responses = await Promise.all(["target-a", "target-b"].map(
+        (targetTeacherId) => callFunction("ejecutarTrasladoDocente", {
+          sourceTeacherId: "source-teacher",
+          targetTeacherId,
+          mode: "temporary",
+          endsAtMillis,
+          allowMerge: false,
+        }, token),
+    ));
+    const successes = responses.filter((response) =>
+      response.body.result?.success === true,
+    );
+    assert.equal(successes.length, 1, JSON.stringify(responses));
+    const source = (await db.collection("users").doc("source-teacher").get())
+        .data();
+    assert.equal(source.status, "inactivo");
+    assert.equal(source.activeTeacherTransferId, successes[0].body.result.id);
+    assert.equal(source.teacherTransferPreparationId, undefined);
   });
 
   it("restablece estudiante y obliga cambio de clave", async () => {
@@ -820,6 +984,70 @@ describe("baja y eliminacion de usuarios", () => {
     }));
   });
 
+  it("serializa cambios simultaneos de la clave temporal", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.editar"],
+    });
+    const studentEmail = await seedUser("student", "Estudiante");
+    const reset = await callFunction("restablecerClaveEstudiante", {
+      uid: "student",
+    }, await signIn(adminEmail));
+    const temporaryLogin = await signInWithPassword(
+        studentEmail, reset.body.result.temporaryPassword,
+    );
+    const candidates = ["PrimeraClave9!", "SegundaClave8!"];
+    const responses = await Promise.all(candidates.map((password) =>
+      callFunction("cambiarClaveTemporalEstudiante", {password},
+          temporaryLogin.idToken),
+    ));
+    const successfulIndexes = responses.map((response, index) =>
+      response.body.result?.success === true ? index : -1,
+    ).filter((index) => index >= 0);
+    assert.equal(successfulIndexes.length, 1, JSON.stringify(responses));
+    const successfulPassword = candidates[successfulIndexes[0]];
+    const rejectedPassword = candidates[1 - successfulIndexes[0]];
+    assert.ok((await signInWithPassword(studentEmail, successfulPassword))
+        .idToken);
+    assert.equal((await signInWithPassword(studentEmail, rejectedPassword))
+        .idToken, undefined);
+    const profile = (await db.collection("users").doc("student").get()).data();
+    assert.notEqual(profile.mustChangePassword, true);
+    assert.equal(profile.passwordChangeOperationId, undefined);
+  });
+
+  it("confirma la foto propia en backend y audita el cambio", async () => {
+    const email = await seedUser("student", "Estudiante", {photoUrl: ""});
+    const token = await signIn(email);
+    const storagePath = "fotos_perfil/student/perfil.png";
+    await bucket.file(storagePath).save(Buffer.from("imagen valida"), {
+      metadata: {contentType: "image/png"},
+    });
+    const photoUrl = "https://firebasestorage.googleapis.com/v0/b/" +
+      `${bucket.name}/o/${encodeURIComponent(storagePath)}` +
+      "?alt=media&token=prueba";
+    const changed = await callFunction("actualizarFotoPerfil", {
+      storagePath,
+      photoUrl,
+    }, token);
+    assert.equal(
+        changed.body.result.success, true, JSON.stringify(changed.body),
+    );
+    assert.equal((await db.collection("users").doc("student").get())
+        .data().photoUrl, photoUrl);
+    assert.equal((await db.collection("users").doc("student").get())
+        .data().revision, 2);
+    const history = await db.collection("user_history")
+        .where("usuarioId", "==", "student")
+        .where("accion", "==", "foto_perfil_actualizada").get();
+    assert.equal(history.size, 1);
+
+    const foreign = await callFunction("actualizarFotoPerfil", {
+      storagePath: "fotos_perfil/otro/perfil.png",
+      photoUrl,
+    }, token);
+    assert.equal(foreign.body.error.status, "PERMISSION_DENIED");
+  });
+
   it("prepara y activa el siguiente anio sin borrar el historico", async () => {
     const adminEmail = await seedUser("admin", "Administrador", {
       permissions: ["parametros.ver", "parametros.editar"],
@@ -873,6 +1101,25 @@ describe("baja y eliminacion de usuarios", () => {
         await signIn(deniedEmail),
     );
     assert.equal(denied.body.error.status, "PERMISSION_DENIED");
+    const historyAdmin = await seedUser("admin-history", "Administrador", {
+      permissions: ["historial.ver"],
+    });
+    const historyTeacher = await seedUser("teacher-history", "Docente", {
+      permissions: ["historial.ver"],
+    });
+    const historyGroups = await callFunction(
+        "listarGruposAcademicosAdministracion",
+        {institutionId: "inst-1", campusId: "campus-2"},
+        await signIn(historyAdmin),
+    );
+    assert.deepEqual(historyGroups.body.result.groups.map((item) => item.name),
+        ["Quinto A", "Sexto B"]);
+    const deniedTeacherGroups = await callFunction(
+        "listarGruposAcademicosAdministracion",
+        {institutionId: "inst-1", campusId: "campus-1"},
+        await signIn(historyTeacher),
+    );
+    assert.equal(deniedTeacherGroups.body.error.status, "PERMISSION_DENIED");
     const allowedToken = await signIn(allowedEmail);
     const listed = await callFunction(
         "listarGruposAcademicosAdministracion",
@@ -922,6 +1169,45 @@ describe("baja y eliminacion de usuarios", () => {
         .where("action", "==", "deleted").get()).size > 0);
   });
 
+  it("evita grupos duplicados y ediciones concurrentes", async () => {
+    const adminEmail = await seedUser("admin-groups", "Administrador", {
+      permissions: ["parametros.ver", "parametros.editar"],
+    });
+    const token = await signIn(adminEmail);
+    const payload = {
+      institutionId: "inst-1", campusId: "campus-1",
+      level: "Septimo", section: "A", order: 7,
+    };
+    const created = await Promise.all([
+      callFunction("crearGrupoAcademico", payload, token),
+      callFunction("crearGrupoAcademico", payload, token),
+    ]);
+    assert.equal(created.filter((item) => item.body.result).length, 1);
+    assert.equal(created.filter((item) =>
+      item.body.error?.status === "ALREADY_EXISTS").length, 1);
+    const id = created.find((item) => item.body.result).body.result.id;
+    const edits = await Promise.all([
+      callFunction("actualizarGrupoAcademico", {
+        id, level: "Septimo", section: "B", order: 7,
+        active: true, expectedRevision: 1,
+      }, token),
+      callFunction("actualizarGrupoAcademico", {
+        id, level: "Septimo", section: "C", order: 7,
+        active: true, expectedRevision: 1,
+      }, token),
+    ]);
+    assert.equal(edits.filter((item) => item.body.result).length, 1);
+    assert.equal(edits.filter((item) =>
+      item.body.error?.status === "ABORTED").length, 1);
+    assert.equal((await db.collection("academic_groups").doc(id).get())
+        .data().revision, 2);
+
+    const legacyCaseDuplicate = await callFunction("crearGrupoAcademico", {
+      ...payload, level: "quinto", section: "a", order: 5,
+    }, token);
+    assert.equal(legacyCaseDuplicate.body.error.status, "ALREADY_EXISTS");
+  });
+
   it("administra EPS y documentos globales solo como superadmin", async () => {
     await db.collection("parameters").doc("eps-existing").set({
       clave: "eps", etiqueta: "EPS Uno", valor: "eps-uno",
@@ -938,8 +1224,10 @@ describe("baja y eliminacion de usuarios", () => {
     const listed = await callFunction(
         "listarCatalogosAdministrables", {}, adminToken,
     );
-    assert.equal(listed.body.result.items.length, 1);
-    assert.equal(listed.body.result.items[0].value, "eps-uno");
+    assert.equal(listed.body.result.items.length, 3);
+    assert.ok(listed.body.result.items.some(
+        (item) => item.value === "eps-uno" && item.key === "eps",
+    ));
     assert.equal(listed.body.result.canEdit, false);
     const denied = await callFunction("guardarCatalogoAdministrable", {
       key: "eps", label: "EPS Dos", value: "eps-dos",
@@ -960,13 +1248,20 @@ describe("baja y eliminacion de usuarios", () => {
     const id = created.body.result.id;
     const updated = await callFunction("guardarCatalogoAdministrable", {
       id, key: "documentType", label: "Permiso por proteccion temporal",
-      value: "PEP", order: 7, active: false,
+      value: "PEP", order: 7, active: false, expectedRevision: 1,
     }, superToken);
     assert.equal(updated.body.result.success, true,
         JSON.stringify(updated.body));
+    assert.equal(updated.body.result.revision, 2);
+    const stale = await callFunction("guardarCatalogoAdministrable", {
+      id, key: "documentType", label: "Edicion desactualizada",
+      value: "PEP", order: 8, active: true, expectedRevision: 1,
+    }, superToken);
+    assert.equal(stale.body.error.status, "ABORTED");
     const stored = (await db.collection("parameters").doc(id).get()).data();
     assert.equal(stored.valor, "PEP");
     assert.equal(stored.activo, false);
+    assert.equal(stored.revision, 2);
     assert.equal((await db.collection("parameter_history")
         .where("parameterId", "==", id).get()).size, 2);
 

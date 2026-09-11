@@ -47,6 +47,7 @@ class FamilySection extends StatelessWidget {
             });
           },
           onSelected: (selection) {
+            if (soloLectura) return;
             if (!studentIds.contains(selection.id)) {
               final updatedStudentIds = List<String>.from(studentIds)
                 ..add(selection.id);
@@ -63,16 +64,19 @@ class FamilySection extends StatelessWidget {
                 return TextFormField(
                   controller: textEditingController,
                   focusNode: focusNode,
+                  enabled: !soloLectura,
                   decoration: InputDecoration(
                     labelText: 'Estudiantes a cargo',
                     border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        textEditingController.clear();
-                        onStudentIdsChanged([]);
-                      },
-                    ),
+                    suffixIcon: soloLectura
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              textEditingController.clear();
+                              onStudentIdsChanged([]);
+                            },
+                          ),
                   ),
                 );
               },

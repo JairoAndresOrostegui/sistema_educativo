@@ -36,6 +36,11 @@ class PushDeviceSession {
           'action': action,
           'token': ?token,
         });
+    if (result.data is! Map) {
+      throw const FormatException(
+        'El servidor devolvió una respuesta de notificaciones no válida.',
+      );
+    }
     final data = Map<String, dynamic>.from(result.data as Map);
     enabled.value = data['enabled'] == true;
     error.value = null;

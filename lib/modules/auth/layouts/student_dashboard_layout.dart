@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
@@ -25,44 +24,11 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
   List<MenuItemData> _menuItems = [];
   bool isLoading = true;
   StreamSubscription<int>? _messageUnreadSub;
-  StreamSubscription<RemoteMessage>? _foregroundMessageSub;
 
   @override
   void initState() {
     super.initState();
     _buildMenu();
-    _listenNotifications();
-  }
-
-  void _listenNotifications() {
-    _foregroundMessageSub?.cancel();
-    _foregroundMessageSub = FirebaseMessaging.onMessage.listen((
-      RemoteMessage message,
-    ) {
-      if (!mounted) return;
-      final notif = message.notification;
-      if (notif == null) return;
-      final titulo = notif.title ?? 'Notificación';
-      final cuerpo = notif.body ?? '';
-      _showAlert(titulo, cuerpo);
-    }, onError: (_) {});
-  }
-
-  void _showAlert(String titulo, String cuerpo) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(titulo),
-        content: Text(cuerpo),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _buildMenu() async {
@@ -106,7 +72,7 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
     if (perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Mis rutas',
+          label: 'Mi ruta escolar',
           icon: Icons.directions_bus,
           route: '/my_route',
         ),
@@ -153,6 +119,26 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
       );
     }
 
+    if (perms.contains('asistencia.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Mi asistencia',
+          icon: Icons.fact_check_outlined,
+          route: '/attendance',
+        ),
+      );
+    }
+
+    if (perms.contains('eventos.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Eventos',
+          icon: Icons.event_outlined,
+          route: '/events',
+        ),
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _menuItems = items;
@@ -184,7 +170,6 @@ class _EstudianteDashboardLayoutState extends State<EstudianteDashboardLayout> {
 
   @override
   void dispose() {
-    _foregroundMessageSub?.cancel();
     _messageUnreadSub?.cancel();
     super.dispose();
   }

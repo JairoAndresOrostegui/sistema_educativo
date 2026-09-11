@@ -1,7 +1,7 @@
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/history_query_utils.dart';
 import '../stub/export_utils_stub.dart'
     if (dart.library.html) '../web/daily_route_export_web.dart'
     if (dart.library.io) '../mobile/export_utils_mobile.dart';
@@ -30,14 +30,14 @@ class DailyRouteExportUtils {
           pw.SizedBox(height: 20),
           ...rutas.map((ruta) {
             final nombre = ruta['nombreRuta'] ?? '';
-            final fecha = ruta['fecha']?.toDate();
+            final fecha = historyDate(ruta['fecha']);
             final fechaTexto = fecha != null
                 ? DateFormat('yyyy-MM-dd').format(fecha)
                 : '-';
             final docente =
                 ruta['gestionadaPorNombre'] ?? ruta['docenteNombre'] ?? '';
-            final inicio = ruta['horaInicio']?.toDate();
-            final fin = ruta['horaFin']?.toDate();
+            final inicio = historyDate(ruta['horaInicio']);
+            final fin = historyDate(ruta['horaFin']);
             final duracion = (inicio != null && fin != null)
                 ? '${fin.difference(inicio).inMinutes} min'
                 : '-';
@@ -46,9 +46,13 @@ class DailyRouteExportUtils {
                 : '-';
             final horaFin = fin != null ? DateFormat.Hm().format(fin) : '-';
             final estado = ruta['estado'] ?? '';
-            final estudiantes = List<Map<String, dynamic>>.from(
-              ruta['estudiantes'] ?? [],
-            );
+            final rawStudents = ruta['estudiantes'];
+            final estudiantes = rawStudents is List
+                ? rawStudents
+                      .whereType<Map>()
+                      .map((item) => Map<String, dynamic>.from(item))
+                      .toList()
+                : <Map<String, dynamic>>[];
             final totalEstudiantes = estudiantes.length;
             final avisos = estudiantes
                 .where((e) => e['avisoEnviado'] == true)
@@ -85,11 +89,10 @@ class DailyRouteExportUtils {
                       'Avisos',
                     ],
                     data: estudiantes.map((e) {
-                      final hora = e['horaRecogida'] != null
-                          ? DateFormat.Hm().format(
-                              (e['horaRecogida'] as Timestamp).toDate(),
-                            )
-                          : '-';
+                      final pickupTime = historyDate(e['horaRecogida']);
+                      final hora = pickupTime == null
+                          ? '-'
+                          : DateFormat.Hm().format(pickupTime);
                       return [
                         e['nombre'] ?? '',
                         e['direccion'] ?? '',

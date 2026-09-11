@@ -1,9 +1,10 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'notification_destination.dart';
 import 'firebase_utils.dart';
+import '../providers/user_provider_v2.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -16,13 +17,16 @@ import '../config/firebase_options.dart';
 
 final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
 bool _webNotificationVisible = false;
+final _pendingWebNotifications =
+    <({String title, String body, Map<String, dynamic> data})>[];
 bool _pushListenersInitialized = false;
 String? _webVapidKey;
 Future<void> Function(String token)? _tokenHandler;
 
 void _openNotification(Map<String, dynamic> data) {
-  final destination = notificationDestination(data);
   final context = appNavigatorKey.currentContext;
+  final role = context?.read<UserProviderV2>().user?.role;
+  final destination = notificationDestination(data, role: role);
   if (destination != null && context != null) {
     GoRouter.of(context).go(destination);
   }
@@ -112,7 +116,7 @@ Future<void> initializePush({
         }
 
         await _fln.show(
-          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          id: DateTime.now().millisecondsSinceEpoch.remainder(0x7fffffff),
           title: title,
           body: body,
           payload: jsonEncode(message.data),
@@ -182,7 +186,7 @@ String _resolveTitle(RemoteMessage message) {
   if (title.isNotEmpty) return title;
   final dataTitle = message.data['title']?.toString().trim() ?? '';
   if (dataTitle.isNotEmpty) return dataTitle;
-  return 'Nueva notificacion';
+  return 'Nueva notificación';
 }
 
 String _resolveBody(RemoteMessage message) {
@@ -198,33 +202,46 @@ Future<void> _showWebNotificationDialog({
   required String body,
   Map<String, dynamic> data = const {},
 }) async {
-  if (_webNotificationVisible) return;
+  if (_webNotificationVisible) {
+    if (_pendingWebNotifications.length >= 20) {
+      _pendingWebNotifications.removeAt(0);
+    }
+    _pendingWebNotifications.add((
+      title: title,
+      body: body,
+      data: Map<String, dynamic>.from(data),
+    ));
+    return;
+  }
   final context = appNavigatorKey.currentContext;
   if (context == null) return;
+  final scheme = Theme.of(context).colorScheme;
+  final role = context.read<UserProviderV2>().user?.role;
+  final destination = notificationDestination(data, role: role);
 
   _webNotificationVisible = true;
   try {
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Cerrar notificacion',
-      barrierColor: AppPalette.onSurface.withValues(alpha: .54),
+      barrierLabel: 'Cerrar notificación',
+      barrierColor: scheme.scrim.withValues(alpha: .54),
       pageBuilder: (context, _, _) {
         return SafeArea(
           child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: 420),
               child: Material(
-                color: AppPalette.transparent,
+                color: scheme.surface.withValues(alpha: 0),
                 child: Container(
                   margin: EdgeInsets.symmetric(horizontal: 20),
                   padding: EdgeInsets.fromLTRB(20, 18, 20, 16),
                   decoration: BoxDecoration(
-                    color: AppPalette.surface,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppPalette.onSurface.withValues(alpha: 0.18),
+                        color: scheme.shadow.withValues(alpha: 0.18),
                         blurRadius: 24,
                         offset: Offset(0, 10),
                       ),
@@ -240,18 +257,18 @@ Future<void> _showWebNotificationDialog({
                             width: 42,
                             height: 42,
                             decoration: BoxDecoration(
-                              color: AppPalette.primary.withValues(alpha: 0.10),
+                              color: scheme.primaryContainer,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
                               Icons.notifications_active_outlined,
-                              color: AppPalette.primary,
+                              color: scheme.onPrimaryContainer,
                             ),
                           ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Notificacion recibida',
+                              'Notificación recibida',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
@@ -274,7 +291,7 @@ Future<void> _showWebNotificationDialog({
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.4,
-                          color: AppPalette.onSurface.withValues(alpha: .87),
+                          color: scheme.onSurfaceVariant,
                         ),
                       ),
                       SizedBox(height: 18),
@@ -282,17 +299,15 @@ Future<void> _showWebNotificationDialog({
                         alignment: Alignment.centerRight,
                         child: FilledButton(
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppPalette.primary,
-                            foregroundColor: AppPalette.surface,
+                            backgroundColor: scheme.primary,
+                            foregroundColor: scheme.onPrimary,
                           ),
                           onPressed: () {
                             Navigator.of(context).pop();
                             _openNotification(data);
                           },
                           child: Text(
-                            notificationDestination(data) == null
-                                ? 'Entendido'
-                                : 'Abrir conversación',
+                            destination == null ? 'Entendido' : 'Abrir módulo',
                           ),
                         ),
                       ),
@@ -307,6 +322,16 @@ Future<void> _showWebNotificationDialog({
     );
   } finally {
     _webNotificationVisible = false;
+    if (_pendingWebNotifications.isNotEmpty) {
+      final next = _pendingWebNotifications.removeAt(0);
+      unawaited(
+        _showWebNotificationDialog(
+          title: next.title,
+          body: next.body,
+          data: next.data,
+        ),
+      );
+    }
   }
 }
 

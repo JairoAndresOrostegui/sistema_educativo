@@ -14,7 +14,9 @@ function routeFunctions(db, getCaller, activeYear) {
   };
   const same = (u, d) => u.isSuperadmin === true || u.institution === d.institution && u.campus === d.campus;
   const admin = (u, action) => u.isSuperadmin === true || u.role === "Administrador" && (u.permissions || []).includes(`rutas.${action}`);
-  const operator = (u, d) => same(u, d) && (admin(u, "editar") || d.gestionador === u.uid && ["Docente", "Administrador", "Auxiliar"].includes(u.role) && (u.permissions || []).includes("rutas.ver"));
+  const operator = (u, d) => same(u, d) && d.gestionador === u.uid &&
+    ["Docente", "Administrador", "Auxiliar"].includes(u.role) &&
+    (u.isSuperadmin === true || (u.permissions || []).includes("rutas.ver"));
   const ident = (v) => {
     if (typeof v !== "string" || !v || v.includes("/") || v.length > 150) fail(); return v;
   };
@@ -28,7 +30,10 @@ function routeFunctions(db, getCaller, activeYear) {
   const audit = (tx, u, d, action, extra = {}) => tx.create(db.collection("route_history").doc(), {
     institution: d.institution, campus: d.campus, academicYearId: d.academicYearId,
     academicYear: d.academicYear, routeId: d.idRuta || null, dailyRouteId: d.dailyId || null,
-    performedBy: u.uid, action, createdAt: FieldValue.serverTimestamp(), ...extra,
+    routeName: d.nombreRuta || d.nombre || "",
+    performedBy: u.uid,
+    performedByName: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+    action, createdAt: FieldValue.serverTimestamp(), ...extra,
   });
   const event = (tx, id, d, studentIds, title, body) => {
     tx.set(db.collection("route_push_events").doc(hash(id)), {
@@ -68,6 +73,41 @@ function routeFunctions(db, getCaller, activeYear) {
     return d;
   }
 
+  const listarParticipantesRuta = onCall(async (request) => {
+    const u = await getCaller(request);
+    if (!admin(u, "crear") && !admin(u, "editar")) fail();
+    const s = scope(u, request.data || {});
+    await activeYear(s.institution, s.campus);
+    const snapshot = await db.collection("users")
+        .where("institution", "==", s.institution)
+        .where("campus", "==", s.campus)
+        .where("status", "==", "activo").get();
+    const students = [];
+    const managers = [];
+    for (const item of snapshot.docs) {
+      const value = item.data();
+      const participant = {
+        id: item.id,
+        firstName: value.firstName || "",
+        lastName: value.lastName || "",
+        role: value.role || "",
+      };
+      if (value.role === "Estudiante") {
+        students.push({...participant, routeAddress: cleanAddress(
+            value.routeAddress || value.direccionRuta,
+        )});
+      } else if (["Docente", "Administrador", "Auxiliar"]
+          .includes(value.role)) {
+        managers.push(participant);
+      }
+    }
+    const byName = (a, b) => `${a.firstName} ${a.lastName}`
+        .localeCompare(`${b.firstName} ${b.lastName}`, "es");
+    students.sort(byName);
+    managers.sort(byName);
+    return {students, managers};
+  });
+
   const guardarRutaSegura = onCall(async (request) => {
     const u = await getCaller(request); const data = request.data || {};
     if (!admin(u, data.id ? "editar" : "crear")) fail();
@@ -85,8 +125,24 @@ function routeFunctions(db, getCaller, activeYear) {
       if (!Number.isFinite(data[key])) throw new HttpsError("invalid-argument", "Configura fechas y horarios.");
       value[key] = Timestamp.fromMillis(data[key]);
     }
+    if (value.fechaInicio.toMillis() > value.fechaFin.toMillis()) {
+      throw new HttpsError(
+          "invalid-argument", "La fecha final debe ser igual o posterior a la inicial.",
+      );
+    }
+    if (value.horaInicio.toMillis() >= value.horaFin.toMillis()) {
+      throw new HttpsError(
+          "invalid-argument", "La hora final debe ser posterior a la inicial.",
+      );
+    }
     return db.runTransaction(async (tx) => {
       const old = await tx.get(ref);
+      if (old.exists && data.expectedRevision !== undefined &&
+          Number(data.expectedRevision) !== Number(old.data().revision || 0)) {
+        throw new HttpsError(
+            "aborted", "La ruta cambió mientras la editabas. Recarga e intenta de nuevo.",
+        );
+      }
       if (value.driverId) {
         const driver = (await tx.get(db.doc(`route_drivers/${value.driverId}`))).data();
         if (!driver || !driver.active || driver.institution !== s.institution || driver.campus !== s.campus) fail("Conductor no disponible en esta sede.");
@@ -96,10 +152,36 @@ function routeFunctions(db, getCaller, activeYear) {
       if (profiles.some((p) => !p.exists || p.data().status !== "activo" || p.data().institution !== s.institution || p.data().campus !== s.campus)) fail("Participantes no válidos en esta sede.");
       if (!["Docente", "Administrador", "Auxiliar"].includes(profiles[0].data().role) || profiles.slice(1).some((p) => p.data().role !== "Estudiante")) fail();
       if (old.exists && (!same(u, old.data()) || old.data().academicYearId !== year.id)) fail();
+      if (old.exists && old.data().status === "deleted") {
+        throw new HttpsError("failed-precondition", "La ruta fue eliminada.");
+      }
+      const otherRoutes = await tx.get(db.collection("routes")
+          .where("institution", "==", s.institution)
+          .where("campus", "==", s.campus)
+          .where("academicYearId", "==", year.id));
+      const duplicatedStudents = new Set();
+      otherRoutes.docs.forEach((item) => {
+        const other = item.data();
+        if (item.id === ref.id || other.status === "deleted" ||
+            !Array.isArray(other.estudiantes)) return;
+        other.estudiantes.forEach((studentId) => {
+          if (ids.includes(studentId)) duplicatedStudents.add(studentId);
+        });
+      });
+      if (duplicatedStudents.size) {
+        throw new HttpsError(
+            "already-exists",
+            "Uno o más estudiantes ya pertenecen a otra ruta activa.",
+        );
+      }
       const running = await tx.get(db.collection("daily_routes").where("idRuta", "==", ref.id).where("estado", "==", "activa"));
       if (!running.empty) throw new HttpsError("failed-precondition", "No se modifica una ruta iniciada.");
       tx.set(ref, {...value, revision: Number(old.data()?.revision || 0) + 1});
-      audit(tx, u, {...value, idRuta: ref.id}, old.exists ? "route_updated" : "route_created");
+      audit(tx, u, {...value, idRuta: ref.id},
+          old.exists ? "route_updated" : "route_created", {
+            before: old.exists ? old.data() : null,
+            after: value,
+          });
       return {id: ref.id};
     });
   });
@@ -112,7 +194,12 @@ function routeFunctions(db, getCaller, activeYear) {
       await checkedYear(tx, d);
       const runs = await tx.get(db.collection("daily_routes").where("idRuta", "==", ref.id).limit(1));
       if (!runs.empty) throw new HttpsError("failed-precondition", "Tiene recorridos e historial. Conserva la ruta; no se puede eliminar.");
-      tx.delete(ref); audit(tx, u, {...d, idRuta: ref.id}, "route_deleted");
+      tx.update(ref, {status: "deleted", deletedAt: FieldValue.serverTimestamp(),
+        deletedBy: u.uid, revision: Number(d.revision || 0) + 1});
+      audit(tx, u, {...d, idRuta: ref.id}, "route_deleted", {
+        before: d,
+        after: null,
+      });
       return {ok: true};
     });
   });
@@ -121,14 +208,36 @@ function routeFunctions(db, getCaller, activeYear) {
     const ref = db.doc(`daily_routes/${routeId}_${day()}`);
     return db.runTransaction(async (tx) => {
       const route = (await tx.get(db.doc(`routes/${routeId}`))).data();
-      if (!route || !operator(u, route)) fail();
+      if (!route || route.status === "deleted" || !operator(u, route)) fail();
       await checkedYear(tx, route);
+      const today = day();
+      const firstDay = route.fechaInicio instanceof Timestamp ?
+        new Intl.DateTimeFormat("en-CA", {timeZone: "America/Bogota"})
+            .format(route.fechaInicio.toDate()) : null;
+      const lastDay = route.fechaFin instanceof Timestamp ?
+        new Intl.DateTimeFormat("en-CA", {timeZone: "America/Bogota"})
+            .format(route.fechaFin.toDate()) : null;
+      if (!firstDay || !lastDay || today < firstDay || today > lastDay) {
+        throw new HttpsError(
+            "failed-precondition", "La ruta no está vigente para la fecha de hoy.",
+        );
+      }
       const existing = await tx.get(ref);
       if (existing.exists) return {id: ref.id};
       if (!Array.isArray(route.estudiantes) || !route.estudiantes.length) {
         throw new HttpsError("failed-precondition", "La ruta no tiene estudiantes configurados.");
       }
       const students = await tx.getAll(...route.estudiantes.map((id) => db.doc(`users/${ident(id)}`)));
+      if (students.some((student) => !student.exists ||
+          student.data().role !== "Estudiante" ||
+          student.data().status !== "activo" ||
+          student.data().institution !== route.institution ||
+          student.data().campus !== route.campus)) {
+        throw new HttpsError(
+            "failed-precondition",
+            "La ruta contiene estudiantes retirados o fuera de la sede. Edítala antes de preparar el recorrido.",
+        );
+      }
       const d = {institution: route.institution, campus: route.campus,
         academicYearId: route.academicYearId, academicYear: route.academicYear,
         idRuta: routeId, dailyId: ref.id, nombreRuta: route.nombre,
@@ -136,7 +245,7 @@ function routeFunctions(db, getCaller, activeYear) {
         fecha: Timestamp.now(), estado: "pendiente", revision: 0, mode: "manual",
         horaInicio: null, horaFin: null};
       tx.create(ref, d);
-      students.filter((s) => s.exists && s.data().role === "Estudiante" && s.data().status === "activo" && s.data().institution === d.institution && s.data().campus === d.campus).forEach((s, i) => {
+      students.forEach((s, i) => {
         const address = cleanAddress(s.data().routeAddress);
         tx.create(ref.collection("students").doc(s.id), {
           institution: d.institution, campus: d.campus, academicYearId: d.academicYearId,
@@ -284,7 +393,24 @@ function routeFunctions(db, getCaller, activeYear) {
         active: data.active !== false};
       await db.runTransaction(async (tx) => {
         const old = await tx.get(ref); if (old.exists && !same(u, old.data())) fail();
-        tx.set(ref, {...value, updatedAt: FieldValue.serverTimestamp()});
+        if (old.exists && data.expectedRevision !== undefined &&
+            Number(data.expectedRevision) !== Number(old.data().revision || 0)) {
+          throw new HttpsError(
+              "aborted", "El conductor cambió mientras lo editabas. Recarga.",
+          );
+        }
+        const sameDocument = await tx.get(db.collection("route_drivers")
+            .where("institution", "==", s.institution)
+            .where("campus", "==", s.campus)
+            .where("document", "==", value.document));
+        if (sameDocument.docs.some((item) => item.id !== ref.id)) {
+          throw new HttpsError(
+              "already-exists", "Ya existe un conductor con ese documento.",
+          );
+        }
+        tx.set(ref, {...value,
+          revision: Number(old.data()?.revision || 0) + 1,
+          updatedAt: FieldValue.serverTimestamp()});
         tx.create(db.collection("staff_audit").doc(), {...s, driverId: ref.id,
           performedBy: u.uid, action: "driver_saved", createdAt: FieldValue.serverTimestamp()});
       });
@@ -420,7 +546,7 @@ function routeFunctions(db, getCaller, activeYear) {
     }
     return {items};
   });
-  return {guardarRutaSegura, eliminarRutaSegura, prepararRecorrido, operarRecorrido, consultarMiRecorrido, consultarHistorialRuta,
+  return {guardarRutaSegura, eliminarRutaSegura, listarParticipantesRuta, prepararRecorrido, operarRecorrido, consultarMiRecorrido, consultarHistorialRuta,
     gestionarConductores, solicitarCambioParada, gestionarCambiosParada, calcularTiemposRuta};
 }
 module.exports = {routeFunctions};

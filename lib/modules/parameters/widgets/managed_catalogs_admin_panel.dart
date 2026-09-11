@@ -18,8 +18,10 @@ class ManagedCatalogsAdminPanel extends StatefulWidget {
 class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
   final _service = ManagedCatalogService();
   bool _loading = true;
+  bool _saving = false;
   List<ManagedCatalogEntry> _items = const [];
   String _selectedKey = 'eps';
+  String? _error;
 
   @override
   void initState() {
@@ -28,20 +30,22 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final items = await _service.list();
       if (mounted) setState(() => _items = items);
     } catch (error) {
       if (!mounted) return;
-      await DialogUtils.showError(
-        context: context,
-        title: 'No se pudieron cargar los catálogos',
-        message: userFacingError(
+      setState(() {
+        _items = const [];
+        _error = userFacingError(
           error,
           fallback: 'Revisa tu conexión e intenta nuevamente.',
-        ),
-      );
+        );
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -70,6 +74,7 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
                     decoration: const InputDecoration(
                       labelText: 'Nombre mostrado',
                     ),
+                    maxLength: 100,
                     validator: (text) => (text ?? '').trim().isEmpty
                         ? 'Escribe el nombre mostrado.'
                         : null,
@@ -84,6 +89,7 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
                           ? 'No podrá cambiarse después de crear la opción.'
                           : 'Se conserva para no dañar registros existentes.',
                     ),
+                    maxLength: 100,
                     validator: (text) => (text ?? '').trim().isEmpty
                         ? 'Escribe el código interno.'
                         : null,
@@ -93,10 +99,14 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
                     controller: order,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Orden'),
-                    validator: (text) =>
-                        int.tryParse((text ?? '').trim()) == null
-                        ? 'Escribe un número entero.'
-                        : null,
+                    validator: (text) {
+                      final parsed = int.tryParse((text ?? '').trim());
+                      if (parsed == null) return 'Escribe un número entero.';
+                      if (parsed < 0 || parsed > 10000) {
+                        return 'Usa un valor entre 0 y 10000.';
+                      }
+                      return null;
+                    },
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
@@ -128,7 +138,13 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
         ),
       ),
     );
-    if (result != true || !mounted) return;
+    if (result != true || !mounted) {
+      label.dispose();
+      value.dispose();
+      order.dispose();
+      return;
+    }
+    setState(() => _saving = true);
     try {
       await _service.save(
         id: current?.id,
@@ -137,6 +153,7 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
         value: value.text.trim(),
         order: int.parse(order.text.trim()),
         active: active,
+        expectedRevision: current?.revision,
       );
       await _load();
     } catch (error) {
@@ -153,6 +170,7 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
       label.dispose();
       value.dispose();
       order.dispose();
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -213,6 +231,8 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
             const SizedBox(height: 12),
             if (_loading)
               const Center(child: CircularProgressIndicator())
+            else if (_error != null)
+              _CatalogLoadError(message: _error!, onRetry: _load)
             else if (filtered.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
@@ -235,7 +255,7 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
                   trailing: canEdit
                       ? IconButton(
                           tooltip: 'Editar',
-                          onPressed: () => _edit(item),
+                          onPressed: _saving ? null : () => _edit(item),
                           icon: const Icon(Icons.edit_outlined),
                         )
                       : null,
@@ -246,7 +266,7 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
               Align(
                 alignment: Alignment.centerRight,
                 child: FilledButton.icon(
-                  onPressed: _loading ? null : () => _edit(),
+                  onPressed: _loading || _saving ? null : () => _edit(),
                   icon: const Icon(Icons.add),
                   label: const Text('Agregar opción'),
                 ),
@@ -254,6 +274,38 @@ class _ManagedCatalogsAdminPanelState extends State<ManagedCatalogsAdminPanel> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CatalogLoadError extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _CatalogLoadError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: colors.onErrorContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colors.onErrorContainer),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+        ],
       ),
     );
   }

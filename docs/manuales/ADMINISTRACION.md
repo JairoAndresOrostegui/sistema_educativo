@@ -12,6 +12,9 @@ El contador de autorizaciones del superadministrador suma las sedes configuradas
 cada una en su año vigente. El administrador normal solo cuenta su propia sede.
 La suma inicial espera la respuesta de todas las sedes para no mostrar un total parcial.
 Perfil modifica datos personales permitidos, no el directorio de usuarios.
+La foto debe ser PNG o JPEG y pesar máximo 5 MiB. Si otra sesión modificó el
+perfil o la opción que se estaba editando, el sistema exige recargar para evitar
+sobrescribir información más reciente.
 Un móvil nuevo reemplaza al móvil anterior; un navegador nuevo reemplaza al
 navegador anterior. Son dos registros independientes.
 
@@ -67,6 +70,8 @@ superadministrador cambia de sede. EPS y tipos de documento aparecen en
 Catálogos administrativos: el administrador de sede los consulta y solo el
 superadministrador agrega, renombra, ordena o desactiva opciones. El código
 interno de una opción existente no cambia y no se eliminan opciones con historia.
+La desactivación conserva formularios y usuarios históricos. Un cambio simultáneo
+de catálogo o grupo se rechaza y debe repetirse después de recargar.
 Roles y permisos se gestionan como matriz técnica versionada, no como texto libre.
 
 Para retirar un grupo con historia, desactivarlo. La eliminación definitiva solo
@@ -82,12 +87,19 @@ Dos decisiones simultáneas no deben sobreescribirse: ante conflicto, recargar.
 Familiar corrige la solicitud de su hijo, no crea duplicados para responder.
 No cambiar nombres de grupos a mano ni mezclar solicitudes de otras sedes.
 
+Si el formulario no logra cargar los grupos o catálogos, muestra un aviso con
+**Reintentar** y bloquea el envío. No sustituye el año lectivo por el del reloj ni
+inventa opciones de EPS. La matrícula pública consulta solo la proyección de la
+institución publicada; nunca obtiene acceso a perfiles ni solicitudes existentes.
+
 ## Autorizaciones
 
 Familiar solicita; administración revisa, aprueba o rechaza. Cuando se ejecuta
 la salida, registrar observación y finalizar. Finalizada es inmutable para admin;
 solo superadmin corrige con log. No confundir aprobado con salida efectuada.
 Las funciones docentes para ausencias/citas futuras no se consideran habilitadas.
+Los cambios avisan a los familiares activos vinculados con permiso de consulta.
+Un hijo retirado o trasladado deja de exponer sus solicitudes al vínculo anterior.
 
 ## Horarios
 
@@ -105,8 +117,13 @@ puede ocupar cuota temporalmente. No dar por publicado un archivo sin confirmaci
 Administración autorizada elimina manualmente; superadmin limpia por antigüedad
 superior a 60 días. Docentes nunca borran ni ocultan. Si Storage falla, conservar
 metadatos y reintentar por el sistema. No ajustar contadores manualmente.
+Si aparece **Eliminación pendiente**, el documento no se puede descargar. Usa
+**Reintentar eliminación** para terminar la operación; no vuelvas a publicarlo
+ni cambies su cuota manualmente.
 Usar **Ver descargas** para consultar acuses individuales; una solicitud de
 descarga no equivale a lectura efectiva del contenido.
+Las descargas exigen una sesión vigente y se validan en el servidor. El acceso
+a un enlace antiguo no sustituye los permisos de la cuenta.
 
 ## Mensajería
 
@@ -116,13 +133,69 @@ grupo lo convierte en anuncios, no elimina historia. Consultar acuses propios
 cuando estén disponibles. No confundir FCM aceptado con lectura del mensaje.
 Todo particular entre personal y estudiante es `supervised_student`: incluye al
 menor y a todos sus familiares activos, con pendiente y hora de lectura propios.
+Administración integra los canales colectivos de su sede, pero no puede abrir
+particulares ajenos ni intervenir en ellos.
 Solo superadmin abre Estado de notificaciones y reintenta fallos auditados.
 Los avisos del viaje se operan en Rutas, no requieren crear un chat paralelo.
+En un canal existente, el clip adjunta PDF, Word o Excel de hasta 25 MiB. El
+archivo comparte cuota y retención con Archivos; no envíe datos por enlaces
+externos para evadir el control. Cada descarga se registra por cuenta.
+
+## Lista de asistencia
+
+Administración puede abrir listas por grupo, asignatura y fecha dentro de su sede.
+Debe completar los cuatro estados posibles y cerrar la lista solo después de
+revisarla. Una lista cerrada es visible al estudiante y sus familiares vinculados.
+Si necesita corrección, entra de nuevo, modifica el registro y pulsa **Guardar
+corrección**; el sistema incrementa la revisión, conserva el cambio en historial y
+envía otro aviso. Un administrador normal no puede operar otra sede. El traslado
+docente mueve únicamente sesiones abiertas; nunca cambia la autoría histórica.
+El icono de reporte permite elegir rango y grupo; la vista resume estados y en
+web exporta todos los resultados a Excel.
+
+Las fechas deben existir y pertenecer al año activo. Un año cerrado queda de
+solo consulta, incluso para correcciones administrativas. El cierre comprueba
+las marcas reales de toda la lista, no solo el contador mostrado. Si falla una
+consulta, aparece un mensaje de error y **Actualizar** permite reintentar; no
+se interpreta el fallo como ausencia de datos.
+
+## Eventos
+
+Abre **Eventos**, crea el borrador y define lugar, fechas, audiencia de toda la
+sede, grupos completos o estudiantes específicos, responsables,
+confirmación, autorización familiar, cupo y enlace opcional. Revisa el borrador y
+pulsa **Publicar**; en ese momento se actualizan los estudiantes vigentes de la
+audiencia y se envía el aviso. Un evento publicado puede cancelarse antes de iniciar
+o finalizarse después del inicio. Los finalizados/cancelados pueden archivarse;
+no se borran para conservar evidencia.
+
+Desde **Asistencia** marca de forma explícita Presente o Ausente para cada alumno.
+El botón permanece deshabilitado mientras falte una marca. Si otro responsable
+guardó primero, recarga para no sobrescribirlo. El icono **Reporte de eventos**
+consulta un rango completo, muestra estado, destinatarios y confirmados y, desde
+la versión web, permite exportar todos esos resultados a Excel. Trasladar un
+docente reasigna sus eventos futuros y una reversión temporal los devuelve si
+siguen vigentes.
+
+Cada evento publicado genera un único recordatorio automático dentro de las 24
+horas anteriores a su inicio. Cancelarlo antes de esa ventana evita el aviso.
+
+La publicación vuelve a comprobar que los responsables y destinatarios sigan
+activos. Las cancelaciones de eventos ya publicados permanecen visibles para
+sus destinatarios; cancelar un borrador no lo hace público. No se permite
+modificar eventos de años cerrados. Si la lista de asistencia supera 400
+alumnos, se guarda por bloques; ante un fallo se recargan las marcas confirmadas
+y deben completarse las restantes antes de considerar terminada la operación.
+Los reportes detienen explícitamente consultas demasiado grandes; reducir el
+rango o seleccionar un grupo evita recibir un informe incompleto.
 
 ## Rutas: configurar, operar y supervisar
 
 1. Registrar conductor en Herramientas: hoja de vida sin cuenta de acceso.
 2. Crear ruta con estudiantes, responsable activo de sede, horarios y conductor.
+   Un estudiante no puede quedar en dos rutas activas del mismo año y sede.
+   Si otra persona modificó la ruta, recargar antes de guardar. Una ruta con
+   recorridos conserva su historial; una baja permitida es lógica.
 3. Responsable prepara el recorrido de hoy. Revisar direcciones e incluidos.
 4. Revisar solicitudes familiares de cambio; aprobar/rechazar con motivo antes
    del inicio. Aprobación modifica solo la parada de ese estudiante en ese recorrido.
@@ -136,6 +209,8 @@ Con ETA de 10 minutos o menos se abre la ventana GPS y se avisa. Paradas próxim
 pueden abrirse simultáneamente. El mapa permanece ante demoras y se cierra al
 recoger/no recoger o terminar. Un aviso manual de hasta 10 minutos también abre
 la ventana; uno mayor programa la estimación sin abrirla inmediatamente.
+Al cerrar el año lectivo también se revoca el mapa de sus recorridos, incluso
+para administración. El historial autorizado conserva sus registros, no GPS vivo.
 Enviar aviso general comunica una novedad a participantes, incluso ya recogidos,
 y conserva texto/actor/fecha en el historial. No es chat libre entre familias.
 
@@ -152,12 +227,28 @@ en una misma plantilla aún requieren ampliación. No prometerlos a familias.
 
 QR: buscar usuario/evento dentro de sede, obtener identificador, revocar/reemplazar
 con confirmación si se expuso. No autoriza entregar estudiantes ni registrar
-asistencia por sí solo. Eventos actuales solo tienen identidad.
+asistencia por sí solo. **Leer con cámara** solicita permiso, acepta solamente
+identificadores `LLQ1` y valida su vigencia en el servidor; si no hay cámara o
+permiso, usar **Validar manualmente**. El QR del evento solo identifica y no cambia
+la confirmación ni la asistencia del módulo Eventos.
 Sitio web: editar Header, Footer y páginas con filas/columnas/componentes; comprobar
 vista móvil y publicar. Usar enlaces YouTube/Vimeo para videos. Eliminar en borrador
 no equivale a retirar recursos publicados; la limpieza ocurre al publicar.
 Revisar formularios públicos desde su bandeja sin confundirlos con matrículas.
 Historial: consultar actor, fecha, sede y acción; no editar ni borrar evidencias.
+
+La bandeja del sitio web está aislada por institución y sede. Si el constructor
+informa que otra persona publicó primero, recargar y reaplicar conscientemente
+solo los cambios necesarios.
+Los filtros recorren todo el rango seleccionado, no solo la primera pantalla.
+Los botones de exportación descargan la página o los registros visibles que
+indica su etiqueta; avanzar o cargar más antes de exportar si se necesitan otros.
+
+QR: emitir identificadores solo para personas activas de la sede. Revocar invalida
+el código anterior; una credencial revocada permanece visible para administración
+y puede reemplazarse. Si otra sesión la modificó primero, recargar. Validar un QR
+solo confirma la identidad vigente: no registra asistencia ni autoriza entregas.
+Cada lectura correcta deja auditoría del administrador, fecha, origen y plataforma.
 
 ## Escenarios de soporte
 

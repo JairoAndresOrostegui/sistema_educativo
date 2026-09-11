@@ -1,6 +1,6 @@
 # Sistema Educativo Rodolfo Llinás
 
-Aplicación Flutter para la gestión multiinstitución y multisede de preescolar, primaria y bachillerato. Incluye autenticación por roles, usuarios, grupos académicos, matrículas, autorizaciones, horarios, archivos, mensajería, rutas, QR, auditoría y sitio web público.
+Aplicación Flutter para la gestión multiinstitución y multisede de preescolar, primaria y bachillerato. Incluye autenticación por roles, usuarios, grupos académicos, matrículas, autorizaciones, horarios, asistencia, archivos, mensajería, rutas, QR, auditoría y sitio web público.
 
 ## Documentación
 
@@ -15,10 +15,14 @@ Aplicación Flutter para la gestión multiinstitución y multisede de preescolar
 - Administrador normal: solo su institución y sede.
 - Superadministrador: único actor con alcance entre sedes.
 - Grupos académicos independientes por sede mediante `groupId`; se permiten Cuarto A, Cuarto B, etc.
+- Eventos institucionales por sede y año activo, con audiencia materializada,
+  responsables, confirmación familiar, cupos, asistencia y reporte.
 - Familiar: selector de hijo activo en todo módulo relacionado con estudiantes.
 - Estudiante: correo ficticio sin verificación y sin acceso a Autorizaciones.
 - Escrituras sensibles: Cloud Functions, validación backend y auditoría.
 - Archivos: 1 GiB por institución, 25 MiB por documento y limpieza exclusiva del superadministrador después de 60 días.
+- Mensajería admite adjuntos PDF, Word y Excel con la misma cuota y retención,
+  acceso por membresía vigente y acuse de descarga independiente por cuenta.
 - Tema: color y tipografía obtenidos de `website/config`; no se agregan colores de marca dentro de pantallas.
 - Sitio público: constructor visual v5 con Header, Footer y páginas independientes, organizados en filas, columnas y componentes dinámicos.
 - El proyecto Firebase actual funciona como QA. Producción tendrá infraestructura separada.
@@ -52,6 +56,7 @@ npm run test:schedule
 npm run test:messaging
 npm run test:push
 npm run test:qr
+npm run test:attendance
 npm run test:routes
 ```
 

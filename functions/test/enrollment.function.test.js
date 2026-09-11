@@ -49,7 +49,8 @@ async function clearAuth() {
 
 async function seedUser(uid, role, extra = {}) {
   const email = `${uid}@colegio.test`;
-  await auth.createUser({uid, email, password: "Clave123!"});
+  await auth.createUser({uid, email,
+    password: "Clave123!", emailVerified: true});
   await db.collection("users").doc(uid).set(profile(role, {
     institutionalEmail: email,
     ...extra,
@@ -164,6 +165,35 @@ describe("matriculas seguras", () => {
 
   after(async () => deleteApp(app));
 
+  it("proyecta opciones publicas sin datos privados", async () => {
+    await db.doc("website/config").set({institutionId: "inst-1",
+      campusId: "campus-1"});
+    await db.collection("parameters").add({clave: "documentType", activo: true,
+      valor: "TI", etiqueta: "Tarjeta de identidad", orden: 1,
+      internalSecret: "oculto"});
+    await db.collection("parameters").add({clave: "eps", activo: true,
+      valor: "EPS001", etiqueta: "EPS de prueba", orden: 1});
+    await db.collection("parameters").add({clave: "permission", activo: true,
+      valor: "usuarios.eliminar", etiqueta: "Privado"});
+    await db.doc("academic_groups/foreign").set({institutionId: "other",
+      campusId: "campus-1",
+      active: true, academicYearId: "other-year", name: "No publicar"});
+    const response = await callFunction("obtenerOpcionesMatriculaPublica",
+        {institutionId: "other"});
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const result = response.body.result;
+    assert.equal(result.institutions.length, 1);
+    assert.equal(result.institutions[0].id, "inst-1");
+    assert.equal(result.groups.length, 3);
+    assert.ok(result.groups.every((group) =>
+      group.institutionId === "inst-1" && group.academicYear === 2026));
+    assert.deepEqual(result.documentTypes, [{valor: "TI",
+      etiqueta: "Tarjeta de identidad", orden: 1}]);
+    assert.ok(!JSON.stringify(result).includes("usuarios.eliminar"));
+    assert.ok(!JSON.stringify(result).includes("internalSecret"));
+    assert.equal((await db.collection("enrollments").get()).size, 0);
+  });
+
   it("fuerza la solicitud publica y deja auditoria", async () => {
     const response = await callFunction(
         "crearMatricula",
@@ -269,6 +299,20 @@ describe("matriculas seguras", () => {
         superToken,
     );
     assert.equal(allowed.body.result.estado, "pendiente_revision");
+  });
+
+  it("impide que un familiar cree una matricula en otra sede", async () => {
+    await seedUser("student", "Estudiante");
+    const familyToken = await signIn(await seedUser("family", "Familiar", {
+      studentIds: ["student"], activeStudentId: "student",
+      permissions: ["matricula.ver"],
+    }));
+    const response = await callFunction("crearMatricula", createPayload({
+      campus: "campus-2",
+      data: enrollmentData("12345678", "group-5a-campus-2"),
+      vinculaUsuarioId: "student",
+    }), familyToken);
+    assertError(response, "PERMISSION_DENIED");
   });
 
   it("reserva las decisiones finales al administrador", async () => {
@@ -537,8 +581,37 @@ describe("matriculas seguras", () => {
     assert.equal((await db.collection("enrollment_history").get()).size, 2);
   });
 
+  it("impide que dos revisiones simultaneas se sobrescriban", async () => {
+    const admin = await signIn(await seedUser("admin", "Administrador", {
+      permissions: ["matricula.editar"],
+    }));
+    const created = await callFunction(
+        "crearMatricula", createPayload(), admin,
+    );
+    const id = created.body.result.id;
+    const [first, second] = await Promise.all([
+      callFunction("actualizarMatricula", {
+        id, action: "save_review", expectedRevision: 1,
+        data: {...enrollmentData(), direccionAlumno: "Direccion A"},
+      }, admin),
+      callFunction("actualizarMatricula", {
+        id, action: "save_review", expectedRevision: 1,
+        data: {...enrollmentData(), direccionAlumno: "Direccion B"},
+      }, admin),
+    ]);
+    const results = [first, second];
+    assert.equal(results.filter((item) => item.body.result).length, 1);
+    assert.equal(results.filter((item) => item.body.error).length, 1);
+    assert.equal((await db.collection("enrollments").doc(id).get())
+        .data().revision, 2);
+  });
+
   it("consulta de forma segura la matricula del hijo activo", async () => {
-    await seedUser("student", "Estudiante");
+    await seedUser("student", "Estudiante", {
+      webPushToken: "privado",
+      permissions: ["rutas.ver"],
+      mustChangePassword: true,
+    });
     const family = await signIn(await seedUser("family", "Familiar", {
       studentIds: ["student"], activeStudentId: "student",
       permissions: ["matricula.ver"],
@@ -551,5 +624,31 @@ describe("matriculas seguras", () => {
     }, family);
     assert.equal(response.body.result.exists, true);
     assert.equal(response.body.result.enrollment.estado, "prematriculado");
+    assert.equal(response.body.result.student.id, "student");
+    assert.equal(response.body.result.student.webPushToken, undefined);
+    assert.equal(response.body.result.student.permissions, undefined);
+    assert.equal(response.body.result.student.mustChangePassword, undefined);
+  });
+
+  it("permite consulta administrativa sin conceder lectura general " +
+    "de usuarios", async () => {
+    await seedUser("student", "Estudiante", {
+      document: "87654321",
+      personalEmail: "privado@familia.test",
+      notificationTokens: {web: "token-secreto"},
+    });
+    const admin = await signIn(await seedUser("admin", "Administrador", {
+      permissions: ["matricula.ver"],
+    }));
+    const response = await callFunction("consultarMatriculaEstudiante", {
+      document: "87654321", anioMatricula: 2026,
+    }, admin);
+    assert.equal(response.body.result.exists, false);
+    assert.equal(response.body.result.student.id, "student");
+    assert.equal(
+        response.body.result.student.personalEmail,
+        "privado@familia.test",
+    );
+    assert.equal(response.body.result.student.notificationTokens, undefined);
   });
 });

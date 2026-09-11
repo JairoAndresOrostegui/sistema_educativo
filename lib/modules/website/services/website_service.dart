@@ -10,10 +10,12 @@ import '../models/website_content.dart';
 class WebsitePublishResult {
   final int deletedAssets;
   final List<String> cleanupWarnings;
+  final int revision;
 
   const WebsitePublishResult({
     required this.deletedAssets,
     required this.cleanupWarnings,
+    required this.revision,
   });
 }
 
@@ -130,15 +132,21 @@ class WebsiteService {
   Future<WebsitePublishResult> publishBundle(
     WebsiteBundle bundle, {
     WebsiteBundle? previous,
+    required String institutionId,
+    required String campusId,
   }) async {
+    if (institutionId.trim().isEmpty || campusId.trim().isEmpty) {
+      throw StateError('Debes seleccionar una institución y una sede.');
+    }
     final oldBundle = previous ?? await getBundle();
     final results = await Future.wait([_pages.get(), _configDocument.get()]);
     final existingPages = results[0] as QuerySnapshot<Map<String, dynamic>>;
     final currentConfig = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+    final rawPending = currentConfig.data()?['pendingAssetCleanup'];
     final previouslyPending = <String>{
-      for (final value
-          in currentConfig.data()?['pendingAssetCleanup'] as List? ?? const [])
-        if (value is String && value.startsWith('website/')) value,
+      if (rawPending is Iterable)
+        for (final value in rawPending)
+          if (value is String && value.startsWith('website/')) value,
     };
     final obsolete = oldBundle.managedAssetPaths.difference(
       bundle.managedAssetPaths,
@@ -146,23 +154,53 @@ class WebsiteService {
     final cleanupCandidates = previouslyPending
         .union(obsolete)
         .difference(bundle.managedAssetPaths);
-    final batch = _db.batch();
-    batch.set(_configDocument, {
-      ...bundle.config.toMap(),
-      'pendingAssetCleanup': cleanupCandidates.toList()..sort(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
     final newIds = bundle.pages.map((page) => page.id).toSet();
-    for (final page in bundle.pages) {
-      batch.set(_pages.doc(page.id), {
-        ...page.toMap(),
+    final expectedRevision = bundle.config.revision;
+    final nextRevision = await _db.runTransaction<int>((transaction) async {
+      final latest = await transaction.get(_configDocument);
+      final latestData = latest.data();
+      final currentInstitution = (latestData?['institutionId'] ?? '')
+          .toString();
+      final currentCampus = (latestData?['campusId'] ?? '').toString();
+      if ((currentInstitution.isNotEmpty &&
+              currentInstitution != institutionId) ||
+          (currentCampus.isNotEmpty && currentCampus != campusId)) {
+        throw StateError('El sitio pertenece a otra institución o sede.');
+      }
+      final currentRevision = (latestData?['revision'] as num?)?.toInt() ?? 0;
+      if (currentRevision != expectedRevision) {
+        throw StateError(
+          'Otra persona publicó cambios. Recarga el editor antes de continuar.',
+        );
+      }
+      final revision = currentRevision + 1;
+      transaction.set(_configDocument, {
+        ...bundle.config
+            .copyWith(
+              institutionId: institutionId,
+              campusId: campusId,
+              revision: revision,
+            )
+            .toMap(),
+        'pendingAssetCleanup': cleanupCandidates.toList()..sort(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-    }
-    for (final existing in existingPages.docs) {
-      if (!newIds.contains(existing.id)) batch.delete(existing.reference);
-    }
-    await batch.commit();
+      for (final page in bundle.pages) {
+        transaction.set(_pages.doc(page.id), {
+          ...page
+              .copyWith(institutionId: institutionId, campusId: campusId)
+              .toMap(),
+          'publicationRevision': revision,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      for (final existing in existingPages.docs) {
+        if (!newIds.contains(existing.id)) {
+          transaction.delete(existing.reference);
+        }
+      }
+      return revision;
+    });
 
     var deleted = 0;
     final warnings = <String>[];
@@ -179,9 +217,17 @@ class WebsiteService {
       }
     }
     try {
-      await _configDocument.update({
-        'pendingAssetCleanup': stillPending,
-        'cleanupUpdatedAt': FieldValue.serverTimestamp(),
+      await _db.runTransaction<void>((transaction) async {
+        final latest = await transaction.get(_configDocument);
+        final latestRevision =
+            (latest.data()?['revision'] as num?)?.toInt() ?? 0;
+        // Una publicación más reciente heredó la cola y es responsable de
+        // actualizarla. No sobrescribir su estado con este resultado anterior.
+        if (latestRevision != nextRevision) return;
+        transaction.update(_configDocument, {
+          'pendingAssetCleanup': stillPending,
+          'cleanupUpdatedAt': FieldValue.serverTimestamp(),
+        });
       });
     } on FirebaseException catch (error) {
       warnings.add('No se pudo actualizar la cola de limpieza: ${error.code}');
@@ -189,13 +235,19 @@ class WebsiteService {
     return WebsitePublishResult(
       deletedAssets: deleted,
       cleanupWarnings: warnings,
+      revision: nextRevision,
     );
   }
 
   Future<WebsiteAsset> uploadImage({
     required Uint8List bytes,
     required String fileName,
+    required String institutionId,
+    required String campusId,
   }) async {
+    if (institutionId.trim().isEmpty || campusId.trim().isEmpty) {
+      throw StateError('Debes seleccionar una institución y una sede.');
+    }
     if (bytes.lengthInBytes > 10 * 1024 * 1024) {
       throw Exception('La imagen supera el máximo permitido de 10 MB.');
     }
@@ -207,7 +259,8 @@ class WebsiteService {
     final extension = lower.endsWith('.png') ? 'png' : 'jpg';
     final contentType = extension == 'png' ? 'image/png' : 'image/jpeg';
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final path = 'website/${DateTime.now().microsecondsSinceEpoch}_$safeName';
+    final path =
+        'website/$institutionId/$campusId/${DateTime.now().microsecondsSinceEpoch}_$safeName';
     final reference = _storage.ref(path);
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -219,7 +272,11 @@ class WebsiteService {
       bytes,
       SettableMetadata(
         contentType: contentType,
-        customMetadata: {'scope': 'website-cms-v3'},
+        customMetadata: {
+          'scope': 'website-cms-v4',
+          'institutionId': institutionId,
+          'campusId': campusId,
+        },
       ),
     );
     return WebsiteAsset(
@@ -257,8 +314,13 @@ class WebsiteService {
     });
   }
 
-  Stream<List<WebsiteSubmission>> watchSubmissions() => _db
+  Stream<List<WebsiteSubmission>> watchSubmissions({
+    required String institutionId,
+    required String campusId,
+  }) => _db
       .collection('website_submissions')
+      .where('institutionId', isEqualTo: institutionId)
+      .where('campusId', isEqualTo: campusId)
       .orderBy('createdAt', descending: true)
       .limit(100)
       .snapshots()

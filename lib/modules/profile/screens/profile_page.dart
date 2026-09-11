@@ -69,7 +69,10 @@ class _ProfilePageState extends State<ProfilePage> {
         final provider = Provider.of<UserProviderV2>(context, listen: false);
         final usuarioActual = provider.user;
         if (usuarioActual != null) {
-          final nuevoUsuario = usuarioActual.copyWith(photoUrl: url);
+          final nuevoUsuario = usuarioActual.copyWith(
+            photoUrl: url,
+            revision: usuarioActual.revision + 1,
+          );
           provider.setUser(nuevoUsuario);
           setState(() => userModel = nuevoUsuario);
         }

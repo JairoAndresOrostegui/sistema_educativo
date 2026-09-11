@@ -1,10 +1,10 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
+import '../widgets/history_date_range_field.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/user_facing_error.dart';
 import '../services/schedule_history_service.dart';
@@ -19,6 +19,8 @@ class GestionHorariosView extends StatefulWidget {
 
 class _GestionHorariosViewState extends State<GestionHorariosView> {
   final _service = AdminScheduleHistoryService();
+  final _groupController = TextEditingController();
+  final _subjectController = TextEditingController();
 
   // Filtros
   String _grupoContiene = '';
@@ -52,6 +54,13 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
     _aplicarFiltros(recargar: true);
+  }
+
+  @override
+  void dispose() {
+    _groupController.dispose();
+    _subjectController.dispose();
+    super.dispose();
   }
 
   Future<void> _aplicarFiltros({bool recargar = false}) async {
@@ -168,11 +177,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(
-            ctx,
-          ).colorScheme.copyWith(primary: AppPalette.primary),
-        ),
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
         child: child!,
       ),
     );
@@ -219,6 +224,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
         body: SafeArea(
@@ -232,7 +238,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
         : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -244,14 +250,12 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  border: Border.all(
-                    color: AppPalette.error.withValues(alpha: .15),
-                  ),
+                  color: colors.surface,
+                  border: Border.all(color: colors.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.shadow.withValues(alpha: .06),
                       blurRadius: 8,
                       offset: Offset(0, 2),
                     ),
@@ -272,11 +276,11 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   SizedBox(
                     width: 220,
                     child: TextFormField(
+                      controller: _groupController,
                       decoration: InputDecoration(
                         labelText: 'Grupo (contiene)',
                         border: OutlineInputBorder(),
                       ),
-                      initialValue: _grupoContiene,
                       onChanged: (v) {
                         setState(() {
                           _grupoContiene = v;
@@ -288,11 +292,11 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   SizedBox(
                     width: 220,
                     child: TextFormField(
+                      controller: _subjectController,
                       decoration: InputDecoration(
                         labelText: 'Materia (contiene)',
                         border: OutlineInputBorder(),
                       ),
-                      initialValue: _materiaContiene,
                       onChanged: (v) {
                         setState(() {
                           _materiaContiene = v;
@@ -384,13 +388,8 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   ),
                   SizedBox(
                     width: 280,
-                    child: TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Rango de fechas',
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: TextEditingController(text: rangoTexto),
+                    child: HistoryDateRangeField(
+                      value: rangoTexto,
                       onTap: _pickDateRange,
                     ),
                   ),
@@ -399,14 +398,16 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                     onPressed: () => _aplicarFiltros(recargar: true),
                     label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
                     ),
                   ),
                   TextButton(
                     onPressed: () {
                       final now = DateTime.now();
                       setState(() {
+                        _groupController.clear();
+                        _subjectController.clear();
                         _grupoContiene = '';
                         _materiaContiene = '';
                         _dia = null;
@@ -446,13 +447,13 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                     ElevatedButton.icon(
                       onPressed: _exportarExcel,
                       icon: Icon(Icons.table_view),
-                      label: Text('Exportar Excel'),
+                      label: Text('Exportar página a Excel'),
                     ),
                     SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _exportarPDF,
                       icon: Icon(Icons.picture_as_pdf),
-                      label: Text('Exportar PDF'),
+                      label: Text('Exportar página a PDF'),
                     ),
                   ],
                 ),
@@ -477,14 +478,10 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                           return Semantics(
                             label: 'Registro de log de horarios',
                             child: Card(
-                              color: AppPalette.surface,
+                              color: colors.surface,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: AppPalette.error.withValues(
-                                    alpha: .12,
-                                  ),
-                                ),
+                                side: BorderSide(color: colors.outlineVariant),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               margin: EdgeInsets.symmetric(

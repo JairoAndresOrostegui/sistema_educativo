@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/route/route_model.dart';
@@ -22,18 +24,34 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
   String? _selected;
   String? _dailyId;
   String? _error;
+  String? _locationError;
   bool _busy = false;
   bool _loadingRoutes = true;
-  final _location = LocationService();
+  late final LocationService _location;
   @override
   void initState() {
     super.initState();
+    _location = LocationService(
+      onLocationError: (error) {
+        if (!mounted) return;
+        setState(() {
+          _locationError = routeErrorMessage(
+            error,
+            fallback:
+                'La ubicación dejó de compartirse. Revisa GPS e Internet y pulsa Activar ubicación.',
+          );
+        });
+      },
+      onLocationRecovered: () {
+        if (mounted) setState(() => _locationError = null);
+      },
+    );
     _load();
   }
 
   @override
   void dispose() {
-    _location.stopLocationUpdates();
+    unawaited(_location.stopLocationUpdates());
     super.dispose();
   }
 
@@ -164,7 +182,7 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
               onChanged: _busy
                   ? null
                   : (id) => _run(() async {
-                      _location.stopLocationUpdates();
+                      await _location.stopLocationUpdates();
                       final result = await RouteOperations.call(
                         'prepararRecorrido',
                         {'routeId': id},
@@ -191,6 +209,26 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                       label: const Text('Reintentar'),
                     ),
                   ],
+                ),
+              ),
+            if (_locationError != null)
+              Card(
+                color: colors.errorContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.location_off, color: colors.onErrorContainer),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _locationError!,
+                          style: TextStyle(color: colors.onErrorContainer),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             if (_dailyId != null)
@@ -352,7 +390,7 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                                         _dailyId!,
                                         'finish',
                                       );
-                                      _location.stopLocationUpdates();
+                                      await _location.stopLocationUpdates();
                                     }),
                               child: const Text('Finalizar recorrido'),
                             ),

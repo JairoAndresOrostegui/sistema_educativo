@@ -33,6 +33,16 @@ String userFacingError(Object error, {String fallback = _defaultErrorMessage}) {
     if (safeMessage != null) return safeMessage;
   }
 
+  // Los puentes de plataforma y algunas bibliotecas envuelven FirebaseException
+  // como texto. También deben traducirse; nunca mostrar detalles internos.
+  final wrappedCode = RegExp(
+    r'\[(?:cloud_firestore|firebase_firestore|firebase_auth|firebase_functions|cloud_functions|firebase_storage)/([a-z-]+)\]',
+    caseSensitive: false,
+  ).firstMatch(error.toString());
+  if (wrappedCode != null) {
+    return _firebaseCodeMessage(wrappedCode.group(1)!, fallback: fallback);
+  }
+
   final safeMessage = _safeMessage(error.toString());
   return safeMessage ?? fallback;
 }
@@ -44,7 +54,9 @@ String? _safeMessage(String? value) {
   if (message.isEmpty || message.length > 300) return null;
 
   final technical = RegExp(
-    r'(\[firebase_|firebase_|package:|cloudfunctions|stacktrace|#\d+\s|'
+    r'(\[(?:firebase_|cloud_)|firebase_|cloud_firestore|cloud_functions|'
+    r'PERMISSION_DENIED|Missing or insufficient permissions|'
+    r'package:|cloudfunctions|stacktrace|#\d+\s|'
     r'error\s+(creating|editing|deleting)|https?://|\bat\s+object\b)',
     caseSensitive: false,
   );

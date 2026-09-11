@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/authorization/authorization_request_model.dart';
@@ -25,22 +24,23 @@ class AuthorizationDetailsDialog extends StatelessWidget {
     }
   }
 
-  Color _statusColor(AuthorizationStatus s) {
+  Color _statusColor(ColorScheme colors, AuthorizationStatus s) {
     switch (s) {
       case AuthorizationStatus.pending:
-        return AppPalette.warning;
+        return colors.tertiary;
       case AuthorizationStatus.approved:
-        return AppPalette.success;
+        return colors.primary;
       case AuthorizationStatus.rejected:
-        return AppPalette.primary;
+        return colors.error;
       case AuthorizationStatus.finished:
-        return AppPalette.info;
+        return colors.secondary;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final sc = _statusColor(request.status);
+    final colors = Theme.of(context).colorScheme;
+    final sc = _statusColor(colors, request.status);
     final dateLine = request.multiDay
         ? '${_fmtD(request.dateFrom)} → ${_fmtD(request.dateTo)}'
         : _fmtD(request.dateFrom);
@@ -54,10 +54,7 @@ class AuthorizationDetailsDialog extends StatelessWidget {
       title: Center(
         child: Text(
           'Detalle de autorización',
-          style: TextStyle(
-            color: AppPalette.primary,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: colors.primary, fontWeight: FontWeight.w700),
         ),
       ),
       content: SizedBox(

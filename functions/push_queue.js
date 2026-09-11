@@ -6,11 +6,17 @@ const TERMINAL = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
   "messaging/mismatched-credential",
-  "messaging/invalid-argument",
 ]);
+// INVALID_ARGUMENT can describe a malformed payload, not an invalid device.
+// Only errors that identify an unusable registration can revoke its slot.
 
 /** Persistent, leased batches. FCM acceptance is not a delivery receipt. */
-function createPushQueue(db, transport, validateTokens) {
+function createPushQueue(
+    db,
+    transport,
+    validateTokens,
+    invalidateTokens = async () => {},
+) {
   const collection = db.collection("push_jobs");
   async function enqueue(payload, scope, eventId = crypto.randomUUID()) {
     const tokens = [...new Set(payload.tokens)];
@@ -54,6 +60,7 @@ function createPushQueue(db, transport, validateTokens) {
     let rejected = 0;
     let skipped = 0;
     let lastError = null;
+    const terminalTokens = [];
     let attemptedTokens = job.pendingTokens;
     try {
       const valid = await validateTokens(job, job.pendingTokens);
@@ -67,19 +74,32 @@ function createPushQueue(db, transport, validateTokens) {
           if (response.success) accepted++;
           else {
             lastError = response.error?.code || "messaging/unknown-error";
-            if (TERMINAL.has(lastError)) rejected++;
-            else pending.push(valid[index]);
+            if (TERMINAL.has(lastError)) {
+              rejected++;
+              terminalTokens.push(valid[index]);
+            } else pending.push(valid[index]);
           }
         });
       }
     } catch (error) {
       lastError = error.code || "messaging/unknown-error";
-      if (TERMINAL.has(lastError)) rejected = attemptedTokens.length;
-      else pending = attemptedTokens;
+      if (TERMINAL.has(lastError)) {
+        rejected = attemptedTokens.length;
+        terminalTokens.push(...attemptedTokens);
+      } else pending = attemptedTokens;
+    }
+    if (terminalTokens.length) {
+      try {
+        await invalidateTokens(job, [...new Set(terminalTokens)]);
+      } catch (error) {
+        void error;
+        // El resultado FCM se conserva aunque falle la depuracion del token.
+      }
     }
     const attempts = job.attempts + 1;
     const status = pending.length ? (attempts >= 5 ? "failed" : "retry") :
-      ((job.rejected || 0) + rejected > 0 ? "partial" : "accepted");
+      ((job.rejected || 0) + rejected > 0 ? "partial" :
+       ((job.accepted || 0) + accepted > 0 ? "accepted" : "skipped"));
     await db.runTransaction(async (tx) => {
       const current = await tx.get(ref);
       if (current.data()?.lease !== lease) return;

@@ -27,6 +27,10 @@ Administración aprueba/rechaza y conserva historial. No puedes aprobar, cambiar
 estados arbitrarios ni consultar matrículas de otros niños. Una solicitud de sitio
 web no equivale automáticamente a matrícula aprobada.
 
+La matrícula pública carga únicamente los grupos y catálogos publicados por el
+colegio. Si no se pueden cargar, usa **Reintentar**; no escribas una EPS o un año
+inventado. El año corresponde al período vigente de la sede elegida.
+
 ## Autorizaciones
 
 Selecciona hijo, registra fecha/horario/motivo y envía. El permiso de uso es
@@ -35,6 +39,11 @@ Consulta decisión del colegio. Aprobada no significa salida ya realizada; el ad
 registra observación y Finalizada al ejecutar. No puedes editar una finalizada;
 solo superadmin puede corregir excepcionalmente con auditoría. El estudiante no
 accede a este módulo.
+
+Las novedades se notifican a todos los familiares activos vinculados que tengan
+permiso de Autorizaciones, no solo a quien creó la solicitud. Cada familiar entra
+con su propia cuenta y selecciona el hijo. Un error de conexión o permisos muestra
+**Reintentar** y nunca equivale a que no existan solicitudes.
 
 ## Horarios
 
@@ -49,6 +58,35 @@ abre enlaces y descarga documentos. No puedes subir/borrar publicaciones del col
 Si una publicación solo corresponde a un hermano, no tiene por qué aparecer en el
 otro contexto. Una limpieza administrativa puede retirar documentos antiguos.
 La descarga queda registrada para tu propia cuenta y no marca la de otro familiar.
+Mantén tu sesión iniciada y selecciona al hijo correspondiente antes de descargar.
+Si el vínculo fue retirado o el documento ya no está disponible, consulta al colegio.
+
+## Lista de asistencia
+
+Selecciona el hijo y abre **Lista de asistencia**. Solo aparecen listas ya cerradas,
+con fecha, estado y observación del hijo elegido. Las ausencias, tardanzas y
+correcciones generan un nuevo aviso para el estudiante y sus familiares activos.
+Cada familiar debe revisar el dato; una notificación recibida por otra persona no
+confirma que tú la hayas leído. Solicita al colegio cualquier corrección.
+
+Los avisos pueden corresponder a cualquiera de tus hijos activos vinculados,
+aunque tengas otro seleccionado en pantalla. Al consultar, elige el hijo del
+aviso. Un vínculo retirado deja de recibir avisos pendientes o reintentos.
+
+## Eventos
+
+Selecciona el hijo y abre **Eventos**. Solo aparecen actividades publicadas para
+ese estudiante. Cuando el colegio pida confirmación o autorización, pulsa
+**Confirmar** o **No asistirá** antes del inicio; el cupo se controla al guardar.
+Cada hijo conserva su propia respuesta. Después del evento podrás consultar la
+asistencia registrada, pero no modificarla. Los eventos publicados envían un
+recordatorio automático dentro de las 24 horas anteriores al inicio; no necesitas
+confirmar otra vez.
+
+Si el colegio cancela una actividad que ya había publicado, la verás como
+**Cancelada** hasta que se archive. Un error al cargar no significa que no haya
+eventos: usa **Actualizar** para consultar de nuevo. Los avisos revalidan tus
+vínculos y permisos antes de enviarse, también cuando se reintentan.
 
 ## Mensajería
 
@@ -63,6 +101,9 @@ Los mensajes del docente o administración sobre el hijo se reúnen en una
 conversación supervisada con el estudiante y todos sus familiares activos. Tu
 lectura solo elimina tu pendiente; los demás conservan el suyo. Pulsa **Leído
 por...** para consultar la hora de envío y las lecturas individuales.
+El clip permite adjuntar PDF, Word o Excel en un canal existente. Los archivos
+solo se descargan mientras conserves acceso al canal. Tu descarga queda a tu
+nombre y no sustituye la lectura o descarga del estudiante u otro familiar.
 
 ## Rutas: antes, durante y después
 
@@ -85,6 +126,8 @@ individual. Otro niño en la misma dirección no expone su perfil a tu familia.
 Si tienes dos hijos en diferentes turnos, el mapa depende del hijo seleccionado;
 no da acceso continuo a todo el recorrido. No hay chat general libre de familias
 de la ruta. Los avisos operativos los publica el responsable autorizado.
+Al cerrar el año lectivo deja de estar disponible el mapa de esos recorridos;
+el historial autorizado se conserva.
 
 Si no llega aviso o hay información incoherente, contacta al colegio; no cambies
 de punto de recogida sin aprobación. El GPS no acredita que el niño subió: lo
@@ -97,8 +140,8 @@ no son firma, contraseña, autorización de entrega ni registro de asistencia.
 Solicita reemplazo si un código se expuso. No lo compartas públicamente.
 Consulta sitio web y formularios públicos; no puedes editar Header, Footer o páginas.
 Usuarios, parámetros, grupos, años, continuidad docente, auditoría administrativa
-y panel de fallos push pertenecen al colegio. Eventos completos/restaurante/lonchera
-no se consideran implementados por existir un canal o identificador.
+y panel de fallos push pertenecen al colegio. Restaurante/lonchera no se consideran
+implementados por existir un canal. El QR de evento no reemplaza el módulo Eventos.
 
 ## Cómo colaborar en QA
 

@@ -38,5 +38,26 @@ void main() {
         'No tienes permiso para realizar esta operación.',
       );
     });
+
+    test('traduce el error Firestore de la captura incluso envuelto', () {
+      const message =
+          '[cloud_firestore/permission-denied] '
+          'PERMISSION_DENIED: Missing or insufficient permissions.';
+      for (final error in <Object>[message, Exception(message)]) {
+        expect(
+          userFacingError(error),
+          'No tienes permiso para realizar esta operación.',
+        );
+      }
+    });
+
+    test('no muestra errores nativos de permisos ni detalles internos', () {
+      expect(
+        userFacingError(
+          Exception('PERMISSION_DENIED: Missing or insufficient permissions.'),
+        ),
+        'No fue posible completar la operación. Intenta nuevamente.',
+      );
+    });
   });
 }

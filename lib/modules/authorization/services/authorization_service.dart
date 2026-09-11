@@ -53,7 +53,7 @@ class AuthorizationService {
         .where('academicYearId', isEqualTo: year.id)
         .where('studentId', isEqualTo: studentId)
         .snapshots()
-        .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
+        .map(_sortedItemsFromSnapshot);
   }
 
   Stream<List<AuthorizationRequest>> watchForGroup({
@@ -74,7 +74,7 @@ class AuthorizationService {
         .where('academicYearId', isEqualTo: year.id)
         .where('groupId', isEqualTo: groupId)
         .snapshots()
-        .map((snap) => _sortedItemsFromSnapshot(snap, limit: limit));
+        .map(_sortedItemsFromSnapshot);
   }
 
   Stream<List<AuthorizationRequest>> watchForAdmin({
@@ -95,9 +95,7 @@ class AuthorizationService {
         .where('institutionId', isEqualTo: institutionId)
         .where('campusId', isEqualTo: campusId);
     query = query.where('academicYearId', isEqualTo: year.id);
-    yield* query.snapshots().map(
-      (snap) => _sortedItemsFromSnapshot(snap, limit: limit),
-    );
+    yield* query.snapshots().map(_sortedItemsFromSnapshot);
   }
 
   Future<AuthorizationPage> listForStudent({
@@ -146,9 +144,12 @@ class AuthorizationService {
           .where(FieldPath.documentId, whereIn: chunk)
           .where('institution', isEqualTo: institutionId)
           .where('campus', isEqualTo: campusId)
+          .where('status', isEqualTo: 'activo')
+          .where('role', isEqualTo: 'Estudiante')
           .get();
       for (final d in snap.docs) {
         final m = d.data();
+        if (m['role'] != 'Estudiante' || m['status'] != 'activo') continue;
         final fn = (m['firstName'] ?? '').toString();
         final ln = (m['lastName'] ?? '').toString();
         final groupId = (m['groupId'] ?? '').toString();
@@ -186,6 +187,7 @@ class AuthorizationService {
     await _functions.httpsCallable('actualizarAutorizacion').call({
       'id': id,
       'action': 'resubmit',
+      'expectedRevision': updated.revision,
       ..._callableData(updated),
     });
   }
@@ -258,6 +260,7 @@ class AuthorizationService {
     String? adminNote,
     String? evidence,
     required userModelv2 admin,
+    required int expectedRevision,
     bool superOverride = false,
   }) async {
     final action = superOverride
@@ -271,6 +274,7 @@ class AuthorizationService {
     await _functions.httpsCallable('actualizarAutorizacion').call({
       'id': id,
       'action': action,
+      'expectedRevision': expectedRevision,
       'targetStatus': newStatus.name,
       'note': adminNote,
       'evidence': evidence,
@@ -365,9 +369,8 @@ class AuthorizationService {
   }
 
   List<AuthorizationRequest> _sortedItemsFromSnapshot(
-    QuerySnapshot<Map<String, dynamic>> snap, {
-    required int limit,
-  }) {
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) {
     final items =
         snap.docs
             .map((d) => AuthorizationRequest.fromMap(d.data(), d.id))
@@ -378,7 +381,6 @@ class AuthorizationService {
             return db.compareTo(da);
           });
 
-    if (items.length <= limit) return items;
-    return items.take(limit).toList();
+    return items;
   }
 }

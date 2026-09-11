@@ -9,10 +9,11 @@ describe("Regresiones de seguridad Rutas y slots push", () => {
   let env;
   const scope = {institution: "i", campus: "c", academicYearId: "y"};
   const user = (role, extra = {}) => ({...scope, role, status: "activo", isSuperadmin: false, permissions: ["rutas.ver"], ...extra});
-  const dbFor = (uid) => env.authenticatedContext(uid).firestore();
+  const dbFor = (uid) => env.authenticatedContext(uid, {email_verified: true}).firestore();
   before(async () => {
     assert.ok(process.env.FIRESTORE_EMULATOR_HOST);
-    env = await initializeTestEnvironment({projectId: "sistema-educativo-route-audit-test", firestore: {host: "127.0.0.1", port: 8180,
+    const port = Number(process.env.FIRESTORE_EMULATOR_HOST.split(":").at(-1));
+    env = await initializeTestEnvironment({projectId: "sistema-educativo-route-audit-test", firestore: {host: "127.0.0.1", port,
       rules: fs.readFileSync(path.resolve(__dirname, "../../firestore.rules"), "utf8")}});
   });
   after(() => env.cleanup());
@@ -24,7 +25,7 @@ describe("Regresiones de seguridad Rutas y slots push", () => {
         "users/super": user("Administrador", {isSuperadmin: true}), "users/teacher": user("Docente"),
         "users/student": user("Estudiante"), "users/stranger": user("Estudiante"),
         "users/family": user("Familiar", {studentIds: ["student"], activeStudentId: "student"}),
-        "academic_years/y": {...scope, status: "closed"},
+        "academic_years/y": {institutionId: "i", campusId: "c", status: "closed"},
         "routes/r": {...scope, gestionador: "someone-else", estudiantes: ["stranger"]},
         "daily_routes/d": {...scope, gestionador: "teacher", idRuta: "r", estado: "finalizada"},
         "daily_routes/d/students/stranger": {...scope, direccion: "Ficticia", recogido: false},
@@ -56,6 +57,7 @@ describe("Regresiones de seguridad Rutas y slots push", () => {
   });
   it("GPS exige ventana del hijo activo y se revoca al recoger", async () => {
     const patch = async (values) => env.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), "academic_years/y"), {status: "active"});
       await updateDoc(doc(c.firestore(), "daily_routes/d"), {estado: "activa"});
       await setDoc(doc(c.firestore(), "daily_routes/d/live/location"), {teacherPosition: "privada"});
       await updateDoc(doc(c.firestore(), "daily_routes/d/students/student"), {activo: true, anulado: false, ...values});
@@ -67,6 +69,23 @@ describe("Regresiones de seguridad Rutas y slots push", () => {
     await assertFails(getDoc(doc(dbFor("stranger"), "daily_routes/d/live/location")));
     await patch({recogido: true});
     await assertFails(getDoc(doc(dbFor("family"), "daily_routes/d/live/location")));
+    await assertSucceeds(getDoc(doc(dbFor("family"), "daily_routes/d/students/student")));
+  });
+  it("cerrar el año revoca GPS aunque el recorrido antiguo siga activo", async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), "academic_years/y"), {status: "active"});
+      await updateDoc(doc(c.firestore(), "daily_routes/d"), {estado: "activa"});
+      await setDoc(doc(c.firestore(), "daily_routes/d/live/location"), {teacherPosition: "privada"});
+      await updateDoc(doc(c.firestore(), "daily_routes/d/students/student"), {
+        activo: true, anulado: false, recogido: false, mapEnabled: true,
+      });
+    });
+    const viewers = ["family", "student", "teacher", "admin", "super"];
+    for (const uid of viewers) await assertSucceeds(getDoc(doc(dbFor(uid), "daily_routes/d/live/location")));
+    await env.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), "academic_years/y"), {status: "closed"});
+    });
+    for (const uid of viewers) await assertFails(getDoc(doc(dbFor(uid), "daily_routes/d/live/location")));
     await assertSucceeds(getDoc(doc(dbFor("family"), "daily_routes/d/students/student")));
   });
 });

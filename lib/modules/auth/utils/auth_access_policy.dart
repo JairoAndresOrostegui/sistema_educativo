@@ -78,11 +78,13 @@ abstract final class AuthAccessPolicy {
                 has('horarios.editar') ||
                 has('horarios.eliminar'),
           '/management_document' => has('archivos.ver'),
-          '/view_history' => has('historial_rutas.ver'),
+          '/view_history' => isWeb && has('historial.ver'),
           '/admin_authorization' =>
             has('autorizaciones.ver') || has('autorizaciones.editar'),
           '/enrollment' => has('matricula.ver') || has('matricula.editar'),
           '/admin_qr' => has('codigoqr.crear') || has('codigoqr.editar'),
+          '/attendance' => has('asistencia.ver'),
+          '/events' => has('eventos.ver'),
           '/messages' => has('mensajeria.ver'),
           '/website_admin' =>
             isWeb && (has('sitio_web.ver') || has('sitio_web.editar')),
@@ -95,13 +97,14 @@ abstract final class AuthAccessPolicy {
       case 'Docente':
         if (path == '/teacher_dashboard') return true;
         return switch (path) {
-          '/admin_user' => has('usuarios.ver') || has('usuarios.editar'),
           '/execute_route' => has('rutas.ver'),
           '/teacher_schedule' => has('horarios.ver'),
           '/teacher_document' => has('archivos.ver'),
           '/teacher_authorization' => has('autorizaciones.ver'),
           '/enrollment' => has('matricula.ver') || has('matricula.editar'),
           '/messages' => has('mensajeria.ver'),
+          '/attendance' => has('asistencia.ver'),
+          '/events' => has('eventos.ver'),
           _ => false,
         };
       case 'Estudiante':
@@ -115,6 +118,8 @@ abstract final class AuthAccessPolicy {
             normalizedRole == 'Familiar' && has('autorizaciones.ver'),
           '/enrollment' => normalizedRole == 'Familiar' && has('matricula.ver'),
           '/messages' => has('mensajeria.ver'),
+          '/attendance' => has('asistencia.ver'),
+          '/events' => has('eventos.ver'),
           _ => false,
         };
       default:

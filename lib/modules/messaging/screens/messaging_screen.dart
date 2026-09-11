@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../../models/messaging/message_models.dart';
 import '../../../models/user/user_model_v2.dart';
@@ -9,6 +10,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
 import '../../../utils/user_facing_error.dart';
+import '../../file/utils/file_utils.dart';
 import '../services/messaging_service.dart';
 import 'push_status_screen.dart';
 
@@ -34,13 +36,20 @@ class _MessagingScreenState extends State<MessagingScreen> {
   bool _loading = true;
   bool _sending = false;
   bool _openedInitial = false;
+  Object? _bootstrapError;
+  final Map<String, int> _locallyReadSequences = {};
+  final Set<String> _readRequestsInFlight = {};
 
   bool get _isFamily => _user?.role == 'Familiar';
   bool get _isAdmin =>
       _user?.isSuperadmin == true || _user?.role == 'Administrador';
   bool get _allowed {
     final permissions =
-        _user?.permissions.map((item) => item.toLowerCase()).toSet() ?? {};
+        _user?.permissions
+            .map((item) => item.trim().toLowerCase())
+            .where((item) => item.isNotEmpty)
+            .toSet() ??
+        {};
     return _user?.isSuperadmin == true ||
         permissions.contains('mensajeria.ver');
   }
@@ -48,19 +57,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await _bootstrap();
-      } catch (error) {
-        if (!mounted) return;
-        setState(() => _loading = false);
-        await DialogUtils.showError(
-          context: context,
-          title: 'No fue posible cargar Mensajería',
-          message: userFacingError(error),
-        );
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startBootstrap());
   }
 
   @override
@@ -92,16 +89,30 @@ class _MessagingScreenState extends State<MessagingScreen> {
       _activeStudentId = _user!.id;
     }
     if (_isAdmin) {
-      try {
-        await _service.syncAcademicChannels(
-          institutionId: _user!.institution,
-          campusId: _user!.campus,
-        );
-      } catch (_) {
-        // La sincronización automática de backend seguirá disponible.
-      }
+      await _service.syncAcademicChannels(
+        institutionId: _user!.institution,
+        campusId: _user!.campus,
+      );
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _startBootstrap() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _bootstrapError = null;
+      });
+    }
+    try {
+      await _bootstrap();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _bootstrapError = error;
+      });
+    }
   }
 
   Future<void> _selectChannel(MessageThreadSummary channel) async {
@@ -109,10 +120,39 @@ class _MessagingScreenState extends State<MessagingScreen> {
       _selectedChannelId = channel.id;
       _draftContact = null;
     });
+    await _markVisibleMessagesRead(channel, channel.messageSequence);
+  }
+
+  Future<void> _markVisibleMessagesRead(
+    MessageThreadSummary channel,
+    int visibleSequence,
+  ) async {
+    if (!mounted || _user == null || visibleSequence <= 0) return;
+    final knownRead = [
+      channel.readSequences[_user!.id] ?? 0,
+      _locallyReadSequences[channel.id] ?? 0,
+    ].reduce((a, b) => a > b ? a : b);
+    if (visibleSequence <= knownRead ||
+        !_readRequestsInFlight.add(channel.id)) {
+      return;
+    }
     try {
       await _service.markRead(channel.id);
-    } catch (_) {
-      // La lectura no impide consultar una conversación ya autorizada.
+      _locallyReadSequences[channel.id] = visibleSequence;
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userFacingError(
+              error,
+              fallback: 'El mensaje se abrió, pero no se registró la lectura.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      _readRequestsInFlight.remove(channel.id);
     }
   }
 
@@ -171,6 +211,146 @@ class _MessagingScreenState extends State<MessagingScreen> {
       }
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  String? _attachmentMime(PlatformFile file) => switch (file.extension
+      ?.toLowerCase()) {
+    'pdf' => 'application/pdf',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls' => 'application/vnd.ms-excel',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    _ => null,
+  };
+
+  Future<void> _attachAndSend(MessageThreadSummary? channel) async {
+    if (_sending || channel == null) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Primero inicia la conversación',
+        message:
+            'Envía el primer mensaje particular y luego podrás adjuntar archivos.',
+      );
+      return;
+    }
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty || !mounted) return;
+    final file = picked.files.single;
+    final mime = _attachmentMime(file);
+    if (file.bytes == null || mime == null) {
+      await DialogUtils.showError(
+        context: context,
+        title: 'Archivo no válido',
+        message: 'Selecciona un PDF, Word o Excel de máximo 25 MiB.',
+      );
+      return;
+    }
+    setState(() => _sending = true);
+    String? attachmentId;
+    try {
+      attachmentId = await _service.uploadAttachment(
+        channelId: channel.id,
+        name: file.name,
+        contentType: mime,
+        bytes: file.bytes!,
+      );
+      await _service.sendMessage(
+        body: _messageController.text.trim(),
+        channelId: channel.id,
+        attachmentId: attachmentId,
+      );
+      _messageController.clear();
+    } catch (error) {
+      if (attachmentId != null) {
+        await _service.cancelAttachment(attachmentId);
+      }
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No se envió el archivo',
+          message: userFacingError(error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _downloadAttachment(MessageAttachment attachment) async {
+    try {
+      final bytes = await _service.attachmentDownloadBytes(attachment);
+      await descargarArchivoDesdeBytes(bytes, attachment.name);
+      await _service.registerAttachmentDownload(attachment.id);
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible descargar',
+          message: userFacingError(error),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAttachmentDownloads(MessageAttachment attachment) async {
+    try {
+      final summary = await _service.attachmentDownloads(attachment.id);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Descargas del archivo'),
+          content: SizedBox(
+            width: 460,
+            child: summary.downloads.isEmpty
+                ? Text(
+                    'Ninguno de los ${summary.recipientCount} destinatarios lo ha descargado.',
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: summary.downloads.length,
+                    itemBuilder: (context, index) {
+                      final item = summary.downloads[index];
+                      return ListTile(
+                        leading: const Icon(Icons.download_done_outlined),
+                        title: Text(item.userName),
+                        subtitle: Text(
+                          [
+                            item.userRole,
+                            if (item.lastDownloadedAt != null)
+                              DateFormat(
+                                'dd/MM/yyyy HH:mm',
+                              ).format(item.lastDownloadedAt!),
+                            '${item.downloadCount} descarga${item.downloadCount == 1 ? '' : 's'}',
+                          ].where((value) => value.isNotEmpty).join(' • '),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        await DialogUtils.showError(
+          context: context,
+          title: 'No fue posible consultar descargas',
+          message: userFacingError(error),
+        );
+      }
     }
   }
 
@@ -259,9 +439,72 @@ class _MessagingScreenState extends State<MessagingScreen> {
         body: const Center(child: Text('Acceso denegado.')),
       );
     }
+    if (_bootstrapError != null) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: const BackToDashboardButton(),
+          title: const Text('Mensajería'),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  userFacingError(
+                    _bootstrapError!,
+                    fallback: 'No fue posible preparar la mensajería.',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _startBootstrap,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return StreamBuilder<List<MessageThreadSummary>>(
       stream: _service.watchChannels(_user!),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: const BackToDashboardButton(),
+              title: const Text('Mensajería'),
+              centerTitle: true,
+            ),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      userFacingError(
+                        snapshot.error!,
+                        fallback: 'No fue posible cargar las conversaciones.',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: () => setState(() {}),
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
         final allChannels = snapshot.data ?? const <MessageThreadSummary>[];
         if (!_openedInitial &&
             snapshot.hasData &&
@@ -433,6 +676,15 @@ class _MessagingScreenState extends State<MessagingScreen> {
                               ? null
                               : _service.watchMessages(selected.id),
                           onSend: () => _send(selected),
+                          onAttach: () => _attachAndSend(selected),
+                          onDownloadAttachment: _downloadAttachment,
+                          onShowAttachmentDownloads: _showAttachmentDownloads,
+                          onMessagesVisible: selected == null
+                              ? null
+                              : (sequence) => _markVisibleMessagesRead(
+                                  selected,
+                                  sequence,
+                                ),
                           onToggleMute:
                               _isAdmin &&
                                   selected != null &&
@@ -551,6 +803,10 @@ class _ChatPanel extends StatelessWidget {
     required this.sending,
     required this.messages,
     required this.onSend,
+    required this.onAttach,
+    required this.onDownloadAttachment,
+    required this.onShowAttachmentDownloads,
+    required this.onMessagesVisible,
     required this.onToggleMute,
   });
   final MessageThreadSummary? channel;
@@ -560,6 +816,10 @@ class _ChatPanel extends StatelessWidget {
   final bool sending;
   final Stream<List<MessageItem>>? messages;
   final VoidCallback onSend;
+  final VoidCallback onAttach;
+  final ValueChanged<MessageAttachment> onDownloadAttachment;
+  final ValueChanged<MessageAttachment> onShowAttachmentDownloads;
+  final ValueChanged<int>? onMessagesVisible;
   final VoidCallback? onToggleMute;
   @override
   Widget build(BuildContext context) {
@@ -615,12 +875,34 @@ class _ChatPanel extends StatelessWidget {
                 : StreamBuilder<List<MessageItem>>(
                     stream: messages,
                     builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              userFacingError(
+                                snapshot.error!,
+                                fallback: 'No fue posible cargar los mensajes.',
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting &&
+                          !snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
                       final items = snapshot.data ?? const <MessageItem>[];
                       if (items.isEmpty) {
                         return const Center(
                           child: Text('Aún no hay mensajes.'),
                         );
                       }
+                      final visibleSequence = items.last.sequence;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        onMessagesVisible?.call(visibleSequence);
+                      });
                       return ListView.builder(
                         padding: const EdgeInsets.all(12),
                         itemCount: items.length,
@@ -663,7 +945,22 @@ class _ChatPanel extends StatelessWidget {
                                         context,
                                       ).textTheme.labelMedium,
                                     ),
-                                  SelectableText(message.body),
+                                  if (message.body.isNotEmpty)
+                                    SelectableText(message.body),
+                                  if (message.attachment != null) ...[
+                                    if (message.body.isNotEmpty)
+                                      const SizedBox(height: 8),
+                                    _MessageAttachmentTile(
+                                      attachment: message.attachment!,
+                                      onDownload: () => onDownloadAttachment(
+                                        message.attachment!,
+                                      ),
+                                      onShowDownloads: () =>
+                                          onShowAttachmentDownloads(
+                                            message.attachment!,
+                                          ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 3),
                                   if ((mine &&
                                           (isAdmin ||
@@ -703,6 +1000,15 @@ class _ChatPanel extends StatelessWidget {
             padding: const EdgeInsets.all(10),
             child: Row(
               children: [
+                IconButton(
+                  tooltip: channel == null
+                      ? 'Envía primero un mensaje para habilitar adjuntos'
+                      : 'Adjuntar PDF, Word o Excel',
+                  onPressed: sending || title == null || blocked
+                      ? null
+                      : onAttach,
+                  icon: const Icon(Icons.attach_file_outlined),
+                ),
                 Expanded(
                   child: TextField(
                     controller: controller,
@@ -736,6 +1042,66 @@ class _ChatPanel extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MessageAttachmentTile extends StatelessWidget {
+  const _MessageAttachmentTile({
+    required this.attachment,
+    required this.onDownload,
+    required this.onShowDownloads,
+  });
+
+  final MessageAttachment attachment;
+  final VoidCallback onDownload;
+  final VoidCallback onShowDownloads;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final megabytes = attachment.sizeBytes / (1024 * 1024);
+    return Material(
+      color: scheme.surface.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onDownload,
+        child: Padding(
+          padding: const EdgeInsets.all(9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.description_outlined, color: scheme.primary),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      attachment.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '${megabytes.toStringAsFixed(megabytes < 1 ? 2 : 1)} MiB · Descargar',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.download_outlined),
+              IconButton(
+                tooltip: 'Ver quién lo descargó',
+                visualDensity: VisualDensity.compact,
+                onPressed: onShowDownloads,
+                icon: const Icon(Icons.info_outline),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

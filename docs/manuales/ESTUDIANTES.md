@@ -38,6 +38,26 @@ el documento. No puedes publicar, borrar ni ocultar archivos institucionales.
 Si un documento no abre, anota cuál es y solicita revisión; no subas copias a sitios
 externos con información de otros estudiantes.
 La apertura o descarga queda asociada únicamente a tu cuenta.
+Debes mantener la sesión iniciada; el servidor valida tu acceso en cada descarga.
+Si el documento fue retirado, solicita orientación al colegio.
+
+## Lista de asistencia
+
+Consulta tus registros cerrados en **Lista de asistencia**. Verás fecha, estado y
+observación. Una lista todavía abierta no aparece porque el docente aún puede
+estar completándola. Si existe un error, informa al colegio: el estudiante no
+puede cambiar su propia marca.
+
+## Eventos
+
+Abre **Eventos** para consultar actividades publicadas para ti o tu grupo. Verás
+fecha, lugar, responsables, descripción, enlaces y, cuando ya se registró, tu
+asistencia. La confirmación o autorización la realiza un familiar vinculado; un
+estudiante no puede responder en nombre del adulto ni ver la audiencia completa.
+
+Si se cancela un evento ya publicado, conserva el estado **Cancelado** hasta su
+archivo. Si aparece un error de carga, pulsa **Actualizar**; ese error no
+significa que el colegio haya eliminado los eventos ni tus asistencias.
 
 ## Mensajería
 
@@ -51,6 +71,9 @@ opción de borrar historial institucional para ocultar un envío.
 La conversación particular con docente o administración es supervisada: también
 incluye a tus familiares activos. La lectura de cada cuenta es independiente y
 **Leído por...** muestra la hora de envío y las lecturas registradas.
+El clip permite adjuntar PDF, Word o Excel en un canal existente. Solo los
+miembros vigentes pueden descargar; tu descarga no marca el archivo ni el
+mensaje como atendido por tus familiares.
 
 ## Rutas
 
@@ -58,6 +81,7 @@ Consulta tu recorrido y estado de recogida. El mapa se activa cuando la llegada
 estimada es de 10 minutos o menos y se cierra al registrar recogida/no recogida
 o finalizar. La ubicación es aproximada, no segundo a segundo. Si hay demora,
 el mapa puede permanecer más de 10 minutos hasta resolver tu recogida.
+El cierre del año lectivo también desactiva el mapa de esos recorridos.
 No puedes ver direcciones de compañeros ni habilitarte el mapa manualmente.
 Después de subir siguen disponibles avisos generales y finalización. Entra en
 Avisos e historial de Rutas para consultar. No es necesario abrir otro chat.
@@ -68,8 +92,8 @@ No cambies el punto de encuentro por tu cuenta al ver moverse el marcador.
 
 Obtén tu identificación desde Inicio/Perfil. No publiques el código ni lo prestes.
 Sirve para identificar, no es contraseña, firma digital ni permiso para salir.
-Asistencia por cámara, entregas y eventos completos se incorporarán en etapas
-posteriores. Si se expuso, avisa a administración para reemplazarlo.
+La cámara identifica el código, pero no marca asistencia automáticamente. Si se
+expuso, avisa a administración para reemplazarlo.
 
 ## Módulos que no te corresponden
 

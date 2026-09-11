@@ -2,7 +2,7 @@ name: sistema_educativo
 description: "Sistema educativo multiplataforma para colegios."
 publish_to: 'none'
 
-version: 1.0.0+10
+version: 1.0.0+11
 
 environment:
   sdk: ^3.12.0
@@ -36,6 +36,7 @@ dependencies:
   flutter:
     sdk: flutter
   qr_flutter: ^4.1.0
+  mobile_scanner: ^7.4.1
   google_fonts: ^8.2.1
 
   # Firebase y servicios esenciales
@@ -70,6 +71,10 @@ flutter:
     - assets/Logo.jpeg
     - assets/logo_fondo.png
     - assets/pagina_inicio/
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Variable.ttf
 
 flutter_launcher_icons:
   android: true

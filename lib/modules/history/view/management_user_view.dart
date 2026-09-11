@@ -1,13 +1,15 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../export/utils/user_export_utils.dart';
 import '../services/user_history_service.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/user_facing_error.dart';
+import '../../../providers/user_provider_v2.dart';
+import '../widgets/history_date_range_field.dart';
 
 class GestionUsuariosView extends StatefulWidget {
   const GestionUsuariosView({super.key});
@@ -18,8 +20,12 @@ class GestionUsuariosView extends StatefulWidget {
 
 class _GestionUsuariosViewState extends State<GestionUsuariosView> {
   final _svc = AdminUserHistoryService();
+  final _searchController = TextEditingController();
+  late final String _institutionId;
+  late final String _campusId;
 
   final List<Map<String, dynamic>> _items = [];
+  int _total = 0;
   bool _loading = false;
   bool _hasNext = false;
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
@@ -31,13 +37,38 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
 
   static final int _pageSize = 100;
 
-  Set<String> _roles = {};
-  Set<String> _acciones = {};
+  static const _roles = <String>{
+    'Administrador',
+    'Docente',
+    'Auxiliar',
+    'Familiar',
+    'Estudiante',
+  };
+  static const _acciones = <String>{
+    'creado',
+    'editado',
+    'reactivado',
+    'desactivado',
+    'retirado',
+    'eliminado',
+    'clave_temporal_generada',
+    'clave_temporal_cambiada',
+    'foto_perfil_actualizada',
+  };
 
   @override
   void initState() {
     super.initState();
+    final user = context.read<UserProviderV2>().user!;
+    _institutionId = user.institution;
+    _campusId = user.campus;
     _reload();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _reload() async {
@@ -50,12 +81,22 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
 
     try {
       final page = await _svc.obtenerHistorial(
-        nameContains: null,
+        institutionId: _institutionId,
+        campusId: _campusId,
+        nameContains: _query.trim().isEmpty ? null : _query.trim(),
         role: _rolSel,
         action: _accionSel,
         rango: _rango,
         limite: _pageSize,
         startAfter: null,
+      );
+      final total = await _svc.contarTotal(
+        institutionId: _institutionId,
+        campusId: _campusId,
+        nameContains: _query.trim().isEmpty ? null : _query.trim(),
+        role: _rolSel,
+        action: _accionSel,
+        rango: _rango,
       );
 
       if (!mounted) return;
@@ -63,8 +104,8 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
         _items.addAll(page.items);
         _hasNext = page.hasNext;
         _lastDoc = page.lastDoc;
+        _total = total;
         _loading = false;
-        _rebuildFiltersSourcesAndSanitizeSelection();
       });
     } catch (error) {
       await _showLoadError(error);
@@ -77,7 +118,9 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
 
     try {
       final page = await _svc.obtenerHistorial(
-        nameContains: null,
+        institutionId: _institutionId,
+        campusId: _campusId,
+        nameContains: _query.trim().isEmpty ? null : _query.trim(),
         role: _rolSel,
         action: _accionSel,
         rango: _rango,
@@ -91,7 +134,6 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
         _hasNext = page.hasNext;
         _lastDoc = page.lastDoc;
         _loading = false;
-        _rebuildFiltersSourcesAndSanitizeSelection();
       });
     } catch (error) {
       await _showLoadError(error);
@@ -106,43 +148,6 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
       title: 'No se pudo cargar el historial',
       message: userFacingError(error),
     );
-  }
-
-  void _rebuildFiltersSourcesAndSanitizeSelection() {
-    _roles = {for (final m in _items) (m['rol'] ?? '').toString()}
-      ..removeWhere((e) => e.isEmpty);
-    _acciones = {for (final m in _items) (m['accion'] ?? '').toString()}
-      ..removeWhere((e) => e.isEmpty);
-    if (_rolSel != null && !_roles.contains(_rolSel)) {
-      _rolSel = null;
-    }
-    if (_accionSel != null && !_acciones.contains(_accionSel)) {
-      _accionSel = null;
-    }
-  }
-
-  String _norm(String s) {
-    final rep = {
-      'á': 'a',
-      'é': 'e',
-      'í': 'i',
-      'ó': 'o',
-      'ú': 'u',
-      'Á': 'a',
-      'É': 'e',
-      'Í': 'i',
-      'Ó': 'o',
-      'Ú': 'u',
-      'ñ': 'n',
-      'Ñ': 'n',
-    };
-    final t = s.trim();
-    final sb = StringBuffer();
-    for (final r in t.runes) {
-      final ch = String.fromCharCode(r);
-      sb.write(rep[ch] ?? ch);
-    }
-    return sb.toString().toLowerCase();
   }
 
   Future<void> _pickRange() async {
@@ -165,6 +170,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
         body: SafeArea(
@@ -179,29 +185,10 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
         ? ''
         : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
-    final needle = _norm(_query);
-    final filtered = _items.where((u) {
-      if (_rolSel != null && _rolSel!.isNotEmpty) {
-        if ((u['rol'] ?? '') != _rolSel) return false;
-      }
-      if (_accionSel != null && _accionSel!.isNotEmpty) {
-        if ((u['accion'] ?? '') != _accionSel) return false;
-      }
-      if (needle.isNotEmpty) {
-        final haystack = _norm(
-          '${(u["nombres"] ?? "")} '
-          '${(u["apellidos"] ?? "")} '
-          '${(u["rol"] ?? "")} '
-          '${(u["accion"] ?? "")} '
-          '${(u["realizadoPor"] ?? "")}',
-        );
-        if (!haystack.contains(needle)) return false;
-      }
-      return true;
-    }).toList();
+    final filtered = _items;
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -212,14 +199,12 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  border: Border.all(
-                    color: AppPalette.error.withValues(alpha: .15),
-                  ),
+                  color: colors.surface,
+                  border: Border.all(color: colors.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.shadow.withValues(alpha: .06),
                       blurRadius: 8,
                       offset: Offset(0, 2),
                     ),
@@ -230,7 +215,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     Expanded(
                       child: Semantics(
                         label: 'Total de registros de usuario',
-                        child: Text('Total registros: ${_items.length}'),
+                        child: Text('Total registros: $_total'),
                       ),
                     ),
                     Text(
@@ -248,6 +233,7 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                   SizedBox(
                     width: 320,
                     child: TextFormField(
+                      controller: _searchController,
                       decoration: InputDecoration(
                         labelText:
                             'Buscar (nombre, apellido, rol, acción, autor)',
@@ -308,13 +294,8 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                   // ⬇️ Igual que "Documentos": TextFormField readonly para el rango
                   SizedBox(
                     width: 280,
-                    child: TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Rango de fechas',
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: TextEditingController(text: rangoTexto),
+                    child: HistoryDateRangeField(
+                      value: rangoTexto,
                       onTap: _pickRange,
                     ),
                   ),
@@ -324,13 +305,14 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     icon: Icon(Icons.filter_alt),
                     label: Text('Aplicar filtros'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
                     ),
                   ),
                   TextButton(
                     onPressed: () {
                       setState(() {
+                        _searchController.clear();
                         _query = '';
                         _rolSel = null;
                         _accionSel = null;
@@ -350,13 +332,13 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                     ElevatedButton.icon(
                       onPressed: () => UserHistoryUtils.exportarExcel(filtered),
                       icon: Icon(Icons.table_view),
-                      label: Text('Exportar Excel'),
+                      label: Text('Exportar visibles a Excel'),
                     ),
                     SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () => UserHistoryUtils.exportarPDF(filtered),
                       icon: Icon(Icons.picture_as_pdf),
-                      label: Text('Exportar PDF'),
+                      label: Text('Exportar visibles a PDF'),
                     ),
                   ],
                 ),
@@ -403,14 +385,10 @@ class _GestionUsuariosViewState extends State<GestionUsuariosView> {
                           return Semantics(
                             label: 'Registro de log de usuario',
                             child: Card(
-                              color: AppPalette.surface,
+                              color: colors.surface,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: AppPalette.error.withValues(
-                                    alpha: .12,
-                                  ),
-                                ),
+                                side: BorderSide(color: colors.outlineVariant),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               margin: EdgeInsets.symmetric(

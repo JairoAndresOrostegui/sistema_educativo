@@ -68,6 +68,9 @@ class FileModel {
   final String uploaderName;
   final Timestamp sentAt;
   final int sizeBytes;
+  final String status;
+
+  bool get isDeleting => status == 'deleting';
 
   FileModel({
     required this.id,
@@ -82,6 +85,7 @@ class FileModel {
     required this.uploaderName,
     required this.sentAt,
     required this.sizeBytes,
+    this.status = 'active',
   });
 
   factory FileModel.fromFirestore(DocumentSnapshot doc) {
@@ -115,6 +119,7 @@ class FileModel {
           ? data['createdAt'] as Timestamp
           : Timestamp.now(),
       sizeBytes: (data['sizeBytes'] as num?)?.toInt() ?? 0,
+      status: (data['status'] ?? 'active').toString(),
     );
   }
 

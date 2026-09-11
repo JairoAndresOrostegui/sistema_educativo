@@ -24,6 +24,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
   String? _institutionId;
   String? _campusId;
   bool _loading = true;
+  bool _saving = false;
   String? _error;
 
   @override
@@ -46,7 +47,17 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
     try {
       _institutionId = user.institution;
       _campusId = user.campus;
-      _institutions = await _parameters.getInstitutions();
+      if (user.isSuperadmin) {
+        _institutions = await _parameters.getInstitutions();
+      } else {
+        _institutions = [
+          InstitutionOption(
+            id: user.institution,
+            label: user.institution,
+            campuses: [user.campus],
+          ),
+        ];
+      }
       await _load();
     } catch (error) {
       if (mounted) {
@@ -62,7 +73,14 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
   }
 
   Future<void> _load() async {
-    if (_institutionId == null || _campusId == null) return;
+    if ((_institutionId ?? '').isEmpty || (_campusId ?? '').isEmpty) {
+      setState(() {
+        _years = [];
+        _loading = false;
+        _error = 'Selecciona una institución y una sede válidas.';
+      });
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -95,50 +113,62 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
     );
     var cloneGroups = true;
     var cloneSchedules = false;
+    final formKey = GlobalKey<FormState>();
     final accepted = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Preparar nuevo año lectivo'),
-          content: SizedBox(
-            width: 480,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Se crea primero como borrador. No cambia el año vigente '
-                  'ni borra información.',
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Año'),
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: cloneGroups,
-                  title: const Text('Copiar estructura de grupos'),
-                  onChanged: (value) => setDialogState(() {
-                    cloneGroups = value ?? false;
-                    if (!cloneGroups) cloneSchedules = false;
-                  }),
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: cloneSchedules,
-                  title: const Text('Copiar horarios como borrador'),
-                  subtitle: const Text(
-                    'Luego deben revisarse docentes y conflictos.',
+          content: Form(
+            key: formKey,
+            child: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Se crea primero como borrador. No cambia el año vigente '
+                    'ni borra información.',
                   ),
-                  onChanged: cloneGroups
-                      ? (value) => setDialogState(
-                          () => cloneSchedules = value ?? false,
-                        )
-                      : null,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Año'),
+                    validator: (value) {
+                      final year = int.tryParse((value ?? '').trim());
+                      if (year == null) return 'Escribe un año válido.';
+                      if (year < 2020 || year > 2100) {
+                        return 'El año debe estar entre 2020 y 2100.';
+                      }
+                      return null;
+                    },
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: cloneGroups,
+                    title: const Text('Copiar estructura de grupos'),
+                    onChanged: (value) => setDialogState(() {
+                      cloneGroups = value ?? false;
+                      if (!cloneGroups) cloneSchedules = false;
+                    }),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: cloneSchedules,
+                    title: const Text('Copiar horarios como borrador'),
+                    subtitle: const Text(
+                      'Luego deben revisarse docentes y conflictos.',
+                    ),
+                    onChanged: cloneGroups
+                        ? (value) => setDialogState(
+                            () => cloneSchedules = value ?? false,
+                          )
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -147,7 +177,11 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
+              onPressed: () {
+                if (formKey.currentState?.validate() == true) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
               child: const Text('Preparar'),
             ),
           ],
@@ -157,6 +191,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
     final year = int.tryParse(controller.text.trim());
     controller.dispose();
     if (accepted != true || year == null) return;
+    setState(() => _saving = true);
     try {
       final result = await _service.prepare(
         institutionId: _institutionId!,
@@ -183,6 +218,8 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
           message: userFacingError(error),
         );
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -222,6 +259,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
     );
     confirmation.dispose();
     if (accepted != true) return;
+    setState(() => _saving = true);
     try {
       await _service.activate(year);
       await _load();
@@ -233,6 +271,8 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
           message: userFacingError(error),
         );
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -263,7 +303,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _loading || !canEdit ? null : _prepare,
+                  onPressed: _loading || _saving || !canEdit ? null : _prepare,
                   icon: const Icon(Icons.add),
                   label: const Text('Preparar siguiente'),
                 ),
@@ -349,7 +389,7 @@ class _AcademicYearsAdminPanelState extends State<AcademicYearsAdminPanel> {
                   ),
                   trailing: year.status == 'draft' && canEdit
                       ? FilledButton.tonal(
-                          onPressed: () => _activate(year),
+                          onPressed: _saving ? null : () => _activate(year),
                           child: const Text('Activar'),
                         )
                       : null,

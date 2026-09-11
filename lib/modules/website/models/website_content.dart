@@ -478,6 +478,8 @@ class WebsiteFooterConfig {
 
 class WebsitePage {
   final String id;
+  final String institutionId;
+  final String campusId;
   final String label;
   final String slug;
   final bool enabled;
@@ -487,6 +489,8 @@ class WebsitePage {
 
   const WebsitePage({
     required this.id,
+    this.institutionId = '',
+    this.campusId = '',
     required this.label,
     required this.slug,
     this.enabled = true,
@@ -498,6 +502,8 @@ class WebsitePage {
   factory WebsitePage.fromMap(String id, Map<String, dynamic> map) =>
       WebsitePage(
         id: id,
+        institutionId: (map['institutionId'] ?? '').toString(),
+        campusId: (map['campusId'] ?? '').toString(),
         label: (map['label'] ?? id).toString(),
         slug: (map['slug'] ?? id).toString(),
         enabled: map['enabled'] != false,
@@ -507,6 +513,8 @@ class WebsitePage {
       );
 
   Map<String, dynamic> toMap() => {
+    'institutionId': institutionId,
+    'campusId': campusId,
     'label': label.trim(),
     'slug': slug.trim(),
     'enabled': enabled,
@@ -516,6 +524,8 @@ class WebsitePage {
   };
 
   WebsitePage copyWith({
+    String? institutionId,
+    String? campusId,
     String? label,
     String? slug,
     bool? enabled,
@@ -524,6 +534,8 @@ class WebsitePage {
     List<WebsiteRow>? rows,
   }) => WebsitePage(
     id: id,
+    institutionId: institutionId ?? this.institutionId,
+    campusId: campusId ?? this.campusId,
     label: label ?? this.label,
     slug: slug ?? this.slug,
     enabled: enabled ?? this.enabled,
@@ -537,6 +549,9 @@ class WebsiteSiteConfig {
   static const schemaVersion = 5;
 
   final String schoolName;
+  final String institutionId;
+  final String campusId;
+  final int revision;
   final String tagline;
   final WebsiteAsset logo;
   final String phone;
@@ -551,6 +566,9 @@ class WebsiteSiteConfig {
 
   const WebsiteSiteConfig({
     required this.schoolName,
+    this.institutionId = '',
+    this.campusId = '',
+    this.revision = 0,
     required this.tagline,
     this.logo = const WebsiteAsset(),
     this.phone = '',
@@ -572,6 +590,9 @@ class WebsiteSiteConfig {
     }
     return WebsiteSiteConfig(
       schoolName: (map['schoolName'] ?? '').toString(),
+      institutionId: (map['institutionId'] ?? '').toString(),
+      campusId: (map['campusId'] ?? '').toString(),
+      revision: _int(map['revision'], 0),
       tagline: (map['tagline'] ?? '').toString(),
       logo: WebsiteAsset.fromMap(_map(map['logo'])),
       phone: (map['phone'] ?? '').toString(),
@@ -592,6 +613,9 @@ class WebsiteSiteConfig {
 
   Map<String, dynamic> toMap() => {
     'version': schemaVersion,
+    'institutionId': institutionId,
+    'campusId': campusId,
+    'revision': revision,
     'schoolName': schoolName.trim(),
     'tagline': tagline.trim(),
     'logo': logo.toMap(),
@@ -607,6 +631,9 @@ class WebsiteSiteConfig {
   };
 
   WebsiteSiteConfig copyWith({
+    String? institutionId,
+    String? campusId,
+    int? revision,
     String? schoolName,
     String? tagline,
     WebsiteAsset? logo,
@@ -621,6 +648,9 @@ class WebsiteSiteConfig {
     WebsiteFooterConfig? footer,
   }) => WebsiteSiteConfig(
     schoolName: schoolName ?? this.schoolName,
+    institutionId: institutionId ?? this.institutionId,
+    campusId: campusId ?? this.campusId,
+    revision: revision ?? this.revision,
     tagline: tagline ?? this.tagline,
     logo: logo ?? this.logo,
     phone: phone ?? this.phone,

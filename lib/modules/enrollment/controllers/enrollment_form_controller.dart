@@ -14,19 +14,34 @@ import '../services/enrollment_rules_service.dart';
 import '../services/enrollment_service.dart';
 import '../../../utils/parameters_service.dart';
 import '../../../utils/user_facing_error.dart';
+import '../../../utils/active_academic_year_context.dart';
 import '../../user/services/active_student_service.dart';
 
 class EnrollmentFormController extends ChangeNotifier {
   final ParametersService _params;
   final EnrollmentService _enrollmentService;
   final FirebaseFirestore _firestore;
+  final Future<Map<String, dynamic>> Function()? publicOptionsLoader;
   EnrollmentRulesService _rules;
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    disposeControllers();
+    super.dispose();
+  }
 
   EnrollmentFormController({
     ParametersService? params,
     EnrollmentService? enrollmentService,
     FirebaseFirestore? firestore,
     EnrollmentRulesService? rules,
+    this.publicOptionsLoader,
   }) : _params = params ?? ParametersService(),
        _enrollmentService = enrollmentService ?? EnrollmentService(),
        _firestore = firestore ?? FirebaseFirestore.instance,
@@ -39,6 +54,8 @@ class EnrollmentFormController extends ChangeNotifier {
   final Map<String, dynamic> values = {};
 
   bool loadingOptions = false;
+  String? optionsError;
+  final Map<String, int> _scopeYears = {};
   bool loadingPrefill = false;
   int pendingCount = 0;
   bool blockedByExistingEnrollment = false;
@@ -46,7 +63,7 @@ class EnrollmentFormController extends ChangeNotifier {
   List<Map<String, dynamic>> internalGradeHistory = [];
   List<Map<String, dynamic>> externalGradeHistory = [];
 
-  List<String> tiposDocumento = ['RC', 'TI', 'CC', 'Pasaporte'];
+  List<String> tiposDocumento = [];
   List<String> grados = [];
   List<AcademicGroup> academicGroups = [];
   List<String> sedes = [];
@@ -60,6 +77,7 @@ class EnrollmentFormController extends ChangeNotifier {
   String? documentoSeleccionado;
   String? activeEnrollmentId;
   String? activeEnrollmentStatus;
+  int? activeEnrollmentRevision;
   int? anioMatricula;
   String? currentEstado;
   bool readOnlyForm = false;
@@ -85,11 +103,13 @@ class EnrollmentFormController extends ChangeNotifier {
     String? initialEstado,
     String? initialLinkedStudentId,
     Map<String, dynamic>? existingData,
+    int? initialRevision,
     bool readOnly = false,
   }) {
     final now = DateTime.now();
-    anioMatricula = anioInicial ?? now.year;
+    anioMatricula = anioInicial;
     currentEstado = initialEstado;
+    activeEnrollmentRevision = initialRevision;
     selectedChildId = initialLinkedStudentId;
     readOnlyForm = readOnly;
     _updateGradeHistoryValue();
@@ -97,8 +117,8 @@ class EnrollmentFormController extends ChangeNotifier {
     for (final f in enrollmentFieldConfig) {
       switch (f.defaultValue) {
         case 'currentYear':
-          values[f.name] = now.year.toString();
-          controllers[f.name]?.text = now.year.toString();
+          values[f.name] = anioInicial?.toString() ?? '';
+          controllers[f.name]?.text = anioInicial?.toString() ?? '';
           break;
         case 'now':
           final formatted =
@@ -119,91 +139,207 @@ class EnrollmentFormController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadAnioFromParameters() async {
-    final anio = await _params.getEnrollmentYear();
-    if (anio != null) {
-      anioMatricula = anio;
-      setValue('anioInscripcion', anio.toString());
-      notifyListeners();
-    }
-  }
-
-  Future<void> loadOptions({UserProviderV2? userProvider}) async {
+  Future<void> loadOptions({
+    UserProviderV2? userProvider,
+    bool publicMode = false,
+  }) async {
+    if (_disposed) return;
     loadingOptions = true;
+    optionsError = null;
     notifyListeners();
     try {
       final user = userProvider?.user;
-      Query<Map<String, dynamic>> groupQuery = _firestore
-          .collection('academic_groups')
-          .where('active', isEqualTo: true);
-      if (user != null && !user.isSuperadmin) {
-        groupQuery = groupQuery
-            .where('institutionId', isEqualTo: user.institution)
-            .where('campusId', isEqualTo: user.campus);
-      }
-      final groupSnapshot = await groupQuery.get();
-      academicGroups = groupSnapshot.docs
-          .map(AcademicGroup.fromDocument)
-          .toList();
-      academicGroups.sort((a, b) => a.order.compareTo(b.order));
-      grados = academicGroups.map((g) => g.level).toSet().toList();
-      gradeOrderByValue
-        ..clear()
-        ..addEntries(academicGroups.map((g) => MapEntry(g.level, g.order)));
-
-      final docTypes = await _params.getDocumentTypes();
-      if (docTypes.isNotEmpty) {
-        tiposDocumento = docTypes.map((d) => d.valor.trim()).toList();
-      }
-
-      institutionOptions = await _params.getInstitutions();
-      if (user != null && !user.isSuperadmin) {
-        institutionOptions = institutionOptions
-            .where((item) => item.id == user.institution)
-            .toList();
-        selectedInstitutionId = user.institution;
-        selectedCampusId = user.campus;
+      if (publicMode || user == null) {
+        await _loadPublicOptions();
       } else {
-        selectedInstitutionId ??= institutionOptions.isEmpty
-            ? null
-            : institutionOptions.first.id;
-        final selectedInstitution = institutionOptions.where(
-          (item) => item.id == selectedInstitutionId,
-        );
-        final availableCampuses = selectedInstitution.isEmpty
-            ? const <String>[]
-            : selectedInstitution.first.campuses;
-        selectedCampusId ??= availableCampuses.isEmpty
-            ? null
-            : availableCampuses.first;
-      }
-      _refreshCampuses();
-      if ((selectedCampusId ?? '').isNotEmpty) {
-        setValue('sedeAspirada', selectedCampusId);
-      }
+        Query<Map<String, dynamic>> groupQuery = _firestore
+            .collection('academic_groups')
+            .where('active', isEqualTo: true);
+        var shouldLoadGroups = true;
+        if (!user.isSuperadmin) {
+          final activeYear = await loadActiveAcademicYear(
+            firestore: _firestore,
+            institutionId: user.institution,
+            campusId: user.campus,
+          );
+          if (_disposed) return;
+          groupQuery = groupQuery
+              .where('institutionId', isEqualTo: user.institution)
+              .where('campusId', isEqualTo: user.campus)
+              .where('academicYearId', isEqualTo: activeYear.id);
+        } else {
+          final activeYearIds = await loadAllActiveAcademicYearIds(
+            firestore: _firestore,
+          );
+          if (_disposed) return;
+          if (activeYearIds.isEmpty) {
+            academicGroups = [];
+            grados = [];
+            shouldLoadGroups = false;
+          } else if (activeYearIds.length > 30) {
+            throw StateError('Hay demasiadas sedes para cargar sus grupos.');
+          } else {
+            groupQuery = groupQuery.where(
+              'academicYearId',
+              whereIn: activeYearIds,
+            );
+          }
+        }
+        if (shouldLoadGroups) {
+          final groupSnapshot = await groupQuery.get();
+          if (_disposed) return;
+          academicGroups = groupSnapshot.docs
+              .map(AcademicGroup.fromDocument)
+              .toList();
+          _rememberScopeYears(groupSnapshot.docs.map((doc) => doc.data()));
+        }
+        academicGroups.sort((a, b) => a.order.compareTo(b.order));
+        grados = academicGroups.map((g) => g.level).toSet().toList();
+        gradeOrderByValue
+          ..clear()
+          ..addEntries(academicGroups.map((g) => MapEntry(g.level, g.order)));
 
-      final epsParams = await _params.getEps();
-      if (epsParams.isNotEmpty) {
-        eps = epsParams.map((e) => e.valor.trim()).toList();
-        epsLabels = {
-          for (final e in epsParams) e.valor.trim(): (e.etiqueta).toString(),
-        };
+        final docTypes = await _params.getDocumentTypes();
+        if (_disposed) return;
+        if (docTypes.isNotEmpty) {
+          tiposDocumento = docTypes.map((d) => d.valor.trim()).toList();
+        }
+
+        institutionOptions = await _params.getInstitutions();
+        if (_disposed) return;
+        if (!user.isSuperadmin) {
+          institutionOptions = institutionOptions
+              .where((item) => item.id == user.institution)
+              .toList();
+          selectedInstitutionId = user.institution;
+          selectedCampusId = user.campus;
+        } else {
+          selectedInstitutionId ??= institutionOptions.isEmpty
+              ? null
+              : institutionOptions.first.id;
+          final selectedInstitution = institutionOptions.where(
+            (item) => item.id == selectedInstitutionId,
+          );
+          final availableCampuses = selectedInstitution.isEmpty
+              ? const <String>[]
+              : selectedInstitution.first.campuses;
+          selectedCampusId ??= availableCampuses.isEmpty
+              ? null
+              : availableCampuses.first;
+        }
+        _refreshCampuses();
+        if ((selectedCampusId ?? '').isNotEmpty) {
+          setValue('sedeAspirada', selectedCampusId);
+        }
+
+        final epsParams = await _params.getEps();
+        if (_disposed) return;
+        if (epsParams.isNotEmpty) {
+          eps = epsParams.map((e) => e.valor.trim()).toList();
+          epsLabels = {
+            for (final e in epsParams) e.valor.trim(): (e.etiqueta).toString(),
+          };
+        }
       }
-    } catch (_) {
-      grados = [];
-    }
-    if (tiposDocumento.isEmpty) {
-      tiposDocumento = ['RC', 'TI', 'CC', 'Pasaporte'];
-    }
-    if (eps.isEmpty) {
-      eps = ['Sura', 'Sanitas', 'Coomeva'];
-    }
-    if (epsLabels.isEmpty) {
-      epsLabels = {for (final e in eps) e: e};
+      if (_disposed) return;
+      if (academicGroups.isEmpty || institutionOptions.isEmpty) {
+        throw StateError(
+          'La institución no tiene grupos vigentes disponibles para matrícula.',
+        );
+      }
+      if (tiposDocumento.isEmpty || eps.isEmpty) {
+        throw StateError(
+          'Falta configurar los tipos de documento o las EPS. Comunícate con administración.',
+        );
+      }
+      _applyScopeYear();
+    } catch (error) {
+      if (_disposed) return;
+      optionsError = userFacingError(
+        error,
+        fallback: 'No se pudo cargar la configuración de matrícula.',
+      );
     }
     tiposSangre = ['A', 'B', 'AB', 'O'];
     loadingOptions = false;
     notifyListeners();
+  }
+
+  Future<void> _loadPublicOptions() async {
+    final loader = publicOptionsLoader;
+    final data = loader != null
+        ? await loader()
+        : Map<String, dynamic>.from(
+            (await FirebaseFunctions.instance
+                        .httpsCallable('obtenerOpcionesMatriculaPublica')
+                        .call())
+                    .data
+                as Map,
+          );
+    if (_disposed) return;
+    List<Map<String, dynamic>> entries(String key) =>
+        (data[key] as List? ?? const [])
+            .whereType<Map>()
+            .map((entry) => Map<String, dynamic>.from(entry))
+            .toList();
+    final rawGroups = entries('groups');
+    academicGroups = rawGroups.map(AcademicGroup.fromMap).toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    _rememberScopeYears(rawGroups);
+    grados = academicGroups.map((group) => group.level).toSet().toList();
+    gradeOrderByValue
+      ..clear()
+      ..addEntries(
+        academicGroups.map((group) => MapEntry(group.level, group.order)),
+      );
+    institutionOptions = entries('institutions')
+        .map(
+          (entry) => InstitutionOption(
+            id: (entry['id'] ?? '').toString(),
+            label: (entry['label'] ?? '').toString(),
+            campuses: (entry['campuses'] as List? ?? const [])
+                .map((value) => value.toString())
+                .toList(),
+          ),
+        )
+        .toList();
+    if (!institutionOptions.any((item) => item.id == selectedInstitutionId)) {
+      selectedInstitutionId = institutionOptions.firstOrNull?.id;
+    }
+    _refreshCampuses();
+    setValue('sedeAspirada', selectedCampusId ?? '');
+    tiposDocumento = entries('documentTypes')
+        .map((entry) => (entry['valor'] ?? '').toString())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    final epsEntries = entries('eps');
+    eps = epsEntries
+        .map((entry) => (entry['valor'] ?? '').toString())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    epsLabels = {
+      for (final entry in epsEntries)
+        (entry['valor'] ?? '').toString():
+            (entry['etiqueta'] ?? entry['valor'] ?? '').toString(),
+    };
+  }
+
+  void _rememberScopeYears(Iterable<Map<String, dynamic>> groups) {
+    _scopeYears.clear();
+    for (final group in groups) {
+      final year = (group['academicYear'] as num?)?.toInt();
+      if (year != null) {
+        _scopeYears['${group['institutionId']}:${group['campusId']}'] = year;
+      }
+    }
+  }
+
+  void _applyScopeYear() {
+    if (currentEstado != null || activeEnrollmentId != null || readOnlyForm) {
+      return;
+    }
+    anioMatricula = _scopeYears['$selectedInstitutionId:$selectedCampusId'];
+    setValue('anioInscripcion', anioMatricula?.toString() ?? '');
   }
 
   void _refreshCampuses() {
@@ -222,6 +358,7 @@ class EnrollmentFormController extends ChangeNotifier {
     selectedInstitutionId = institutionId;
     selectedCampusId = null;
     _refreshCampuses();
+    _applyScopeYear();
     setValue('sedeAspirada', selectedCampusId ?? '');
     setValue('groupId', '');
     notifyListeners();
@@ -230,6 +367,7 @@ class EnrollmentFormController extends ChangeNotifier {
   void selectCampus(String campusId) {
     if (!sedes.contains(campusId)) return;
     selectedCampusId = campusId;
+    _applyScopeYear();
     setValue('sedeAspirada', campusId);
     final currentGroupId = controllers['groupId']?.text ?? '';
     final groupIsValid = academicGroups.any(
@@ -259,6 +397,7 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   Future<void> loadChildrenIfNeeded(UserProviderV2 userProvider) async {
+    if (_disposed) return;
     final user = userProvider.user;
     if (user == null) return;
     final role = (user.role).trim().toLowerCase();
@@ -270,6 +409,7 @@ class EnrollmentFormController extends ChangeNotifier {
       final result = await FirebaseFunctions.instance
           .httpsCallable('obtenerHijosVinculados')
           .call();
+      if (_disposed) return;
       final raw = Map<String, dynamic>.from(result.data as Map);
       final children = (raw['children'] as List? ?? const []);
       final options = children.map((item) {
@@ -292,6 +432,7 @@ class EnrollmentFormController extends ChangeNotifier {
           userProvider: userProvider,
           studentId: selected.id,
         );
+        if (_disposed) return;
         await onChildSelected(selected, userProvider: userProvider);
       }
       notifyListeners();
@@ -387,7 +528,7 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   void setValue(String field, String? value) {
-    if (!controllers.containsKey(field) || value == null) return;
+    if (_disposed || !controllers.containsKey(field) || value == null) return;
     controllers[field]?.text = value;
     values[field] = value;
   }
@@ -487,6 +628,7 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   void recomputeAge() {
+    if (_disposed) return;
     final birthStr = controllers['fechaNacimiento']?.text ?? '';
     if (birthStr.isEmpty) return;
     try {
@@ -505,11 +647,15 @@ class EnrollmentFormController extends ChangeNotifier {
     required UserProviderV2 userProvider,
     String? document,
   }) async {
+    if (_disposed) return;
     final user = userProvider.user;
     if (user == null) return;
     final role = user.role.trim().toLowerCase();
     if (role != 'familiar' && role != 'administrador') return;
-    final year = anioMatricula ?? DateTime.now().year;
+    final year = anioMatricula;
+    if (year == null) {
+      throw StateError('Selecciona una sede con año lectivo vigente.');
+    }
     final input = <String, dynamic>{'anioMatricula': year};
     if (role == 'familiar') {
       if ((selectedChildId ?? '').isEmpty) return;
@@ -528,7 +674,16 @@ class EnrollmentFormController extends ChangeNotifier {
     final result = await FirebaseFunctions.instance
         .httpsCallable('consultarMatriculaEstudiante')
         .call(input);
+    if (_disposed) return;
     final response = Map<String, dynamic>.from(result.data as Map);
+    final rawStudent = response['student'];
+    if (rawStudent is Map) {
+      final student = Map<String, dynamic>.from(rawStudent);
+      applyPrefill(student);
+      final id = student['id']?.toString();
+      if (id != null && id.isNotEmpty) selectedChildId = id;
+      recomputeAge();
+    }
     final previous = (response['previous'] as List? ?? const [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -548,6 +703,7 @@ class EnrollmentFormController extends ChangeNotifier {
       final enrollment = Map<String, dynamic>.from(rawEnrollment);
       activeEnrollmentId = enrollment['id']?.toString();
       activeEnrollmentStatus = enrollment['estado']?.toString();
+      activeEnrollmentRevision = (enrollment['revision'] as num?)?.toInt() ?? 1;
       currentEstado = activeEnrollmentStatus;
       final storedData = enrollment['data'];
       if (storedData is Map) {
@@ -558,6 +714,7 @@ class EnrollmentFormController extends ChangeNotifier {
     } else {
       activeEnrollmentId = null;
       activeEnrollmentStatus = null;
+      activeEnrollmentRevision = null;
       currentEstado = null;
       blockedByExistingEnrollment = false;
     }
@@ -569,6 +726,7 @@ class EnrollmentFormController extends ChangeNotifier {
     bool readOnly = false,
     UserProviderV2? userProvider,
   }) async {
+    if (_disposed) return;
     final doc = documentLookupController.text.trim();
     if (doc.isEmpty || readOnly) return;
 
@@ -581,28 +739,7 @@ class EnrollmentFormController extends ChangeNotifier {
         found = linked.first.data;
         documentoSeleccionado = doc;
       } else {
-        try {
-          Query<Map<String, dynamic>> userQuery = _firestore
-              .collection('users')
-              .where('document', isEqualTo: doc);
-          final caller = userProvider?.user;
-          if (caller != null && !caller.isSuperadmin) {
-            userQuery = userQuery
-                .where('institution', isEqualTo: caller.institution)
-                .where('campus', isEqualTo: caller.campus)
-                .where('status', whereIn: ['activo', 'inactivo']);
-          }
-          final usersSnap = await userQuery.limit(1).get();
-          if (usersSnap.docs.isNotEmpty) {
-            found = usersSnap.docs.first.data();
-            if ((found['role'] ?? '').toString() == 'Estudiante') {
-              selectedChildId = usersSnap.docs.first.id;
-            }
-            documentoSeleccionado = doc;
-          }
-        } catch (_) {
-          // Un usuario normal no puede buscar perfiles ajenos por documento.
-        }
+        documentoSeleccionado = doc;
       }
 
       if (found != null) {
@@ -635,6 +772,7 @@ class EnrollmentFormController extends ChangeNotifier {
     ChildOption? selected, {
     UserProviderV2? userProvider,
   }) async {
+    if (_disposed) return;
     selectedChildId = selected?.id;
     if (selected == null) {
       notifyListeners();
@@ -725,6 +863,8 @@ class EnrollmentFormController extends ChangeNotifier {
   }
 
   void disposeControllers() {
+    if (_disposed) return;
+    _disposed = true;
     for (final c in controllers.values) {
       c.dispose();
     }
@@ -880,7 +1020,14 @@ class EnrollmentFormController extends ChangeNotifier {
           ? (currentEstadoExt ?? 'prematriculado')
           : 'prematriculado';
     }
-    final anio = anioMatricula ?? DateTime.now().year;
+    final anio = anioMatricula;
+    if (optionsError != null || anio == null) {
+      return SubmitResult(
+        success: false,
+        payload: payload,
+        error: optionsError ?? 'Selecciona una sede con año lectivo vigente.',
+      );
+    }
     anioMatricula = anio;
     if ((payload['institucion'] == null ||
             payload['institucion'].toString().isEmpty) &&
@@ -904,6 +1051,7 @@ class EnrollmentFormController extends ChangeNotifier {
               action: 'update_enrolled',
               data: payload,
               linkedStudentId: selectedChildId,
+              expectedRevision: activeEnrollmentRevision,
             );
           } else {
             await _enrollmentService.updateEnrollment(
@@ -915,6 +1063,7 @@ class EnrollmentFormController extends ChangeNotifier {
               vinculaUsuarioId: selectedChildId,
               institution: institution,
               campus: campus,
+              expectedRevision: activeEnrollmentRevision,
             );
           }
         } else {
@@ -922,6 +1071,7 @@ class EnrollmentFormController extends ChangeNotifier {
             id: enrollmentId,
             action: 'resubmit',
             data: payload,
+            expectedRevision: activeEnrollmentRevision,
           );
           estado = 'pendiente_revision';
         }
@@ -938,6 +1088,9 @@ class EnrollmentFormController extends ChangeNotifier {
       }
 
       currentEstado = estado;
+      if (isEditing) {
+        activeEnrollmentRevision = (activeEnrollmentRevision ?? 1) + 1;
+      }
       activeEnrollmentStatus = estado;
       if (!isAdmin) {
         blockedByExistingEnrollment = estado != 'correccion_solicitada';

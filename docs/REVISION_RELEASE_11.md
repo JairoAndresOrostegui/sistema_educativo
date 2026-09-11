@@ -1,0 +1,84 @@
+# Revisión y despliegue de 1.0.0 (11)
+
+## Estado al 11 de septiembre de 2026
+
+La versión 10 es la última confirmada por la API en la prueba cerrada Alpha.
+Esta revisión prepara la versión 11. Los resultados y cambios de esta página
+no significan que estén publicados hasta que se registre el despliegue.
+
+La captura de Autorizaciones no identifica la versión instalada. Se comprobaron
+accesos recientes de versiones 8, 9 y 10, pero no se puede atribuir esa captura
+a una de ellas. La consulta antigua de hijos sí pasó su reproducción en emulador;
+no se la considera causa demostrada del error del tester.
+
+## Cambios revisados
+
+| Área | Correcciones o controles de esta revisión |
+|---|---|
+| Acceso y perfil | Verificación de correo para adultos, clave temporal, estados de sesión y conservación de la foto nueva ante fallo de limpieza. |
+| Usuarios y configuración | Alcance institucional, permisos reservados, consultas administrativas y continuidad docente. |
+| Matrículas | Opciones públicas limitadas a la configuración vigente; errores recuperables sin inventar catálogos ni año. |
+| Autorizaciones | Estados sin grupo, cambio de hijo, permisos y mensajes comprensibles; notificaciones a familiares activos. |
+| Horarios | Cruces, alcance y edición concurrente con regresión automatizada. |
+| Archivos | Eliminación reintentable, Storage antes de metadatos, cuota descontada una vez y descargas autenticadas. |
+| Mensajería | Canal vigente, lecturas independientes, adjuntos privados, cancelación y retención sin huérfanos. |
+| Rutas | Privacidad del GPS, ventana de consulta, alcance familiar, avisos y estados operativos. |
+| QR | Credencial opaca, permisos, revocación y lector con alternativa manual. No ejecuta asistencia por sí solo. |
+| Historial | Selector de grupos administrativo autorizado y carga/exportación con errores controlados. |
+| Sitio web | Alcance explícito, publicación concurrente, formularios y apertura segura de enlaces. |
+| Asistencia | Cierre y corrección concurrentes, consulta familiar, avisos y alcance docente vigente. |
+| Eventos | Audiencias grandes, cancelación, recordatorios paginados, responsables y registro por bloques. |
+| Push | Revalidación de destinatarios en reintentos; un error de payload no elimina tokens válidos. |
+
+## Orden de despliegue
+
+Comprobado: 84 índices requeridos READY en cada proyecto, 32 creados en cada
+uno; se conservaron los 5 adicionales de cada entorno. Migración de alcance
+aplicada a 7 documentos por entorno. Permisos de Asistencia/Eventos verificados
+en 29 usuarios de QA y 34 de producción. Direcciones privadas retiradas de la
+proyección pública de 4 usuarios QA y 5 de producción, sin alterar su perfil.
+
+1. Crear únicamente los índices faltantes y comprobar que estén READY.
+2. Migrar alcance del sitio, permisos nuevos y proyección pública del directorio.
+   Conservar usuarios y datos temporales de las pruebas. Las migraciones son
+   idempotentes y no borran direcciones del perfil privado de los usuarios.
+3. Publicar backend, reglas y web en QA; comprobar servicios y cargas.
+4. Publicar backend y web de producción y enviar el AAB 11 a Alpha.
+5. Confirmar disponibilidad del AAB antes de activar las reglas finales de
+   descarga privada de Storage en producción. Con esas reglas, clientes antiguos
+   deberán actualizar para descargar documentos y adjuntos.
+
+Las descargas nuevas pasan por dos endpoints autenticados que revalidan sesión,
+permisos, alcance y destinatario. Responden con un buffer limitado a 25 MiB y sin
+enlaces públicos reutilizables. Las reglas Storage permiten como máximo dos
+lecturas de documentos Firestore, por lo que no se usa ese mecanismo para
+resolver toda la cadena de permisos de una descarga.
+
+Las URLs de descarga que hayan sido emitidas antes de esta revisión pueden
+seguir funcionando por su token. Las reglas por sí solas no revocan esos enlaces.
+Queda pendiente un inventario y revocación controlada exclusivamente de objetos
+privados, sin afectar las imágenes públicas del sitio ni fotos de perfil.
+
+## Límites de la validación
+
+Validación local final: `flutter analyze` sin observaciones, 100 pruebas Flutter,
+lint completo de Functions y 8 pruebas de herramientas aprobados. Compilaciones
+web QA y producción y AAB de producción 11 completadas. Firma del AAB verificada.
+SHA-256: `38e4ed25e1635bc00d670d1e940486be31c1a2027424b47d338f9da6abc3140a`.
+
+Las suites de backend incluyeron: Firestore 31, GPS 6, Usuarios 29, QR 4,
+Horarios 9, Autorizaciones 9, Matrículas 21, Archivos/limpieza 11,
+Mensajería 8, limpieza de adjuntos 7, Storage 9, Rutas operativas 18,
+Push 5, dispositivos 3, funciones de notificación 7, Sitio web 3,
+Asistencia 7, Eventos 10, acceso push académico 5 y descargas HTTP 20 más
+3 pruebas de límite de bytes y tokens. Auth conserva 4 regresiones aprobadas.
+
+Las pruebas automatizadas no garantizan ausencia absoluta de defectos. Queda
+aceptación física por rol: cámara, GPS, segundo plano, notificaciones, descarga
+en Android y navegador, red intermitente y reapertura. Las ampliaciones pendientes
+siguen en la hoja de ruta; no se consideran terminadas por publicar esta versión.
+
+Google Play no obliga automáticamente a instalar una actualización. La aplicación
+no incorpora todavía una política de versión mínima ni un flujo de actualización
+inmediata. Los verificadores actualizan desde Play o mediante actualización
+automática si la tienen habilitada.

@@ -13,6 +13,7 @@ class RouteModel {
   final String? manager;
   final String? driverId;
   final List<String> students;
+  final int revision;
 
   const RouteModel({
     required this.id,
@@ -25,6 +26,7 @@ class RouteModel {
     this.manager,
     this.driverId,
     required this.students,
+    this.revision = 0,
   });
 
   factory RouteModel.fromFirestore(DocumentSnapshot doc) {
@@ -49,6 +51,7 @@ class RouteModel {
       students: rawStudents is List
           ? rawStudents.whereType<String>().toList(growable: false)
           : const [],
+      revision: (data['revision'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -64,6 +67,7 @@ class RouteModel {
       manager: manager,
       driverId: driverId,
       students: students,
+      revision: revision,
     );
   }
 

@@ -27,13 +27,9 @@ class ScheduleService {
     required SubjectModel subject,
     required userModelv2 creator,
   }) async {
-    try {
-      await _functions
-          .httpsCallable('crearHorario')
-          .call(_callableSubject(subject));
-    } catch (e) {
-      throw Exception('Error creating subject: $e');
-    }
+    await _functions
+        .httpsCallable('crearHorario')
+        .call(_callableSubject(subject));
   }
 
   Future<void> editSubject({
@@ -41,35 +37,27 @@ class ScheduleService {
     required SubjectModel newSubject,
     required userModelv2 editor,
   }) async {
-    try {
-      if (newSubject.id == null) {
-        throw Exception('Subject ID is missing for editing');
-      }
-      await _functions.httpsCallable('editarHorario').call({
-        'id': newSubject.id,
-        'expectedRevision': oldSubject.revision,
-        ..._callableSubject(newSubject),
-      });
-    } catch (e) {
-      throw Exception('Error editing subject: $e');
+    if (newSubject.id == null) {
+      throw StateError('No se encontró el horario que deseas editar.');
     }
+    await _functions.httpsCallable('editarHorario').call({
+      'id': newSubject.id,
+      'expectedRevision': oldSubject.revision,
+      ..._callableSubject(newSubject),
+    });
   }
 
   Future<void> deleteSubject({
     required SubjectModel subject,
     required userModelv2 remover,
   }) async {
-    try {
-      if (subject.id == null) {
-        throw Exception('Subject ID is missing for deletion');
-      }
-      await _functions.httpsCallable('eliminarHorario').call({
-        'id': subject.id,
-        'expectedRevision': subject.revision,
-      });
-    } catch (e) {
-      throw Exception('Error deleting subject: $e');
+    if (subject.id == null) {
+      throw StateError('No se encontró el horario que deseas eliminar.');
     }
+    await _functions.httpsCallable('eliminarHorario').call({
+      'id': subject.id,
+      'expectedRevision': subject.revision,
+    });
   }
 
   Future<List<userModelv2>> getTeachers({
@@ -77,27 +65,24 @@ class ScheduleService {
     required String campusId,
     bool includeInactive = false,
   }) async {
-    try {
-      if (includeInactive) {
-        final snapshot = await _firestore
-            .collection('user_directory')
-            .where('institution', isEqualTo: institutionId)
-            .where('campus', isEqualTo: campusId)
-            .where('role', isEqualTo: 'Docente')
-            .get();
-        return snapshot.docs
-            .where((item) => item.data()['status'] != 'eliminado')
-            .map((item) => userModelv2.fromFirestore(item.data(), item.id))
-            .toList();
-      }
-      return await ParametersService().getUsersByFilters(
-        institution: institutionId,
-        campus: campusId,
-        role: 'Docente',
-      );
-    } catch (e) {
-      return [];
+    if (includeInactive) {
+      final snapshot = await _firestore
+          .collection('user_directory')
+          .where('institution', isEqualTo: institutionId)
+          .where('campus', isEqualTo: campusId)
+          .where('role', isEqualTo: 'Docente')
+          .where('status', whereIn: const ['activo', 'inactivo'])
+          .get();
+      return snapshot.docs
+          .where((item) => item.data()['status'] != 'eliminado')
+          .map((item) => userModelv2.fromFirestore(item.data(), item.id))
+          .toList();
     }
+    return ParametersService().getUsersByFilters(
+      institution: institutionId,
+      campus: campusId,
+      role: 'Docente',
+    );
   }
 
   Future<Map<String, List<SubjectModel>>> getSchedulesForGroup({
@@ -116,25 +101,6 @@ class ScheduleService {
       'academicYearId': ?academicYearId,
     });
     return groupByDay(response.subjects);
-  }
-
-  Future<List<userModelv2>> getUsersByIds({
-    required List<String> userIds,
-    required String institutionId,
-    required String campusId,
-  }) async {
-    if (userIds.isEmpty) {
-      return [];
-    }
-    final snapshot = await _firestore
-        .collection('user_directory')
-        .where(FieldPath.documentId, whereIn: userIds)
-        .where('institution', isEqualTo: institutionId)
-        .where('campus', isEqualTo: campusId)
-        .get();
-    return snapshot.docs
-        .map((doc) => userModelv2.fromFirestore(doc.data(), doc.id))
-        .toList();
   }
 
   Future<Map<String, List<SubjectModel>>> getSchedulesForTeacher({

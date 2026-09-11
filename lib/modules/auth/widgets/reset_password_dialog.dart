@@ -74,7 +74,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                 const SizedBox(height: 14),
                 Semantics(
                   label:
-                      'Campo de correo electronico para recuperar contrasena',
+                      'Campo de correo electrónico para recuperar contraseña',
                   hint: 'Ingrese su correo institucional',
                   textField: true,
                   enabled: true,
@@ -83,7 +83,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                      labelText: 'Correo electronico',
+                      labelText: 'Correo electrónico',
                       border: inputBorder,
                       enabledBorder: inputBorder,
                       focusedBorder: focusedBorder,
@@ -95,7 +95,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                         return 'Campo obligatorio';
                       }
                       if (!Validators.isValidEmail(value)) {
-                        return 'Correo invalido';
+                        return 'Correo inválido';
                       }
                       return null;
                     },
@@ -111,7 +111,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     Semantics(
-                      label: 'Boton para cancelar recuperacion de contrasena',
+                      label: 'Botón para cancelar recuperación de contraseña',
                       button: true,
                       child: TextButton(
                         onPressed: _loading
@@ -126,7 +126,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
                     const SizedBox(width: 8),
                     Semantics(
                       label:
-                          'Boton para enviar correo de recuperacion de contrasena',
+                          'Botón para enviar correo de recuperación de contraseña',
                       button: true,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -170,7 +170,7 @@ class _ResetPasswordDialogState extends State<ResetPasswordDialog> {
 
     try {
       await AuthService().sendPasswordResetEmail(email);
-      mensaje = 'Se ha enviado un enlace para restablecer la contrasena.';
+      mensaje = 'Se ha enviado un enlace para restablecer la contraseña.';
       envioOk = true;
     } catch (e) {
       mensaje = userFacingError(e);

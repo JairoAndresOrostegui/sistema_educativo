@@ -85,6 +85,7 @@ class AcademicGroupService {
     required String section,
     required int order,
     required bool active,
+    required int expectedRevision,
   }) async {
     await _functions.httpsCallable('actualizarGrupoAcademico').call({
       'id': id,
@@ -92,6 +93,7 @@ class AcademicGroupService {
       'section': section,
       'order': order,
       'active': active,
+      'expectedRevision': expectedRevision,
     });
   }
 

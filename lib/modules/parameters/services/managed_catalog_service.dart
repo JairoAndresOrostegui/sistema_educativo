@@ -29,6 +29,7 @@ class ManagedCatalogService {
     required String value,
     required int order,
     required bool active,
+    int? expectedRevision,
   }) async {
     await _functions.httpsCallable('guardarCatalogoAdministrable').call({
       'id': ?id,
@@ -37,6 +38,7 @@ class ManagedCatalogService {
       'value': value,
       'order': order,
       'active': active,
+      'expectedRevision': ?expectedRevision,
     });
   }
 }

@@ -22,17 +22,20 @@ Un módulo futuro o una pantalla residual no representa una función disponible.
 | Acceso, Inicio, Perfil | Cada usuario | Solo perfil propio; cuentas adultas verifican correo |
 | Usuarios y continuidad | Administración | Sede propia; superadmin transversal |
 | Grupos y años lectivos | Administración | Independientes por institución, sede y año |
-| Catálogos internos | Plataforma | Solo lectura para clientes; sin CRUD administrativo |
+| EPS y tipos de documento | Superadministración | Admin de sede consulta; superadmin crea, ordena, renombra o desactiva |
+| Roles, permisos y banderas técnicas | Plataforma | Sin edición libre desde la aplicación |
 | Matrículas | Administración; familiar en su contexto | Solicitud, revisión y decisiones auditadas |
 | Autorizaciones | Administración y familiares | Estudiante no accede; docente no adquiere funciones futuras |
 | Horarios | Administración | Consulta por grupo/docente; familiar por hijo |
 | Archivos | Administración/docente autorizado | Audiencia explícita; docente no elimina |
 | Mensajería | Miembros vigentes | Grupo y privados con reglas de relación |
 | Rutas | Admin configura; responsable opera | Familia/estudiante solo su parada y ventana GPS |
-| QR | Usuario propio; admin gestiona | Identificación, no firma ni autorización |
+| QR | Usuario propio; admin gestiona y lee | Cámara/manual identifica; no firma, asistencia ni autorización |
+| Lista de asistencia | Admin/docente registra; estudiante/familiar consulta | Grupo y año activo; familiar por hijo; solo cerradas para consulta |
+| Eventos | Admin/docente responsable; estudiante/familiar consulta | Audiencia materializada; confirmación familiar, cupo, asistencia y reporte |
 | Sitio web y formularios públicos | Admin autorizado | Público consulta; constructor no es módulo académico |
 | Historial y fallos push | Admin / superadmin según módulo | Sin edición libre ni exposición de tokens |
-| Lonchera, restaurante, eventos completos | Pendiente | Canales/identificadores no equivalen a módulos operativos |
+| Lonchera y restaurante | Pendiente | Canales con esos nombres no equivalen a módulos operativos |
 
 ## Cómo reportar un fallo
 

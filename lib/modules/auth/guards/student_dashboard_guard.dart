@@ -5,6 +5,8 @@ import '../layouts/student_dashboard_layout.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../screens/access_denied_page.dart';
 import '../screens/loginScreenV2.dart';
+import '../../user/services/active_student_service.dart';
+import '../../../utils/user_facing_error.dart';
 
 class StudentDashboardGuard extends StatelessWidget {
   const StudentDashboardGuard({super.key});
@@ -23,30 +25,82 @@ class StudentDashboardGuard extends StatelessWidget {
 
     if (!isAllowed || !isActive) return const AccessDeniedPage();
 
-    // Familiar: setear activeStudentId si falta, sin bloquear el build
+    final studentIds = user.studentIds ?? const <String>[];
+    final activeStudentId = user.activeStudentId?.trim() ?? '';
     if (role == 'familiar' &&
-        (user.studentIds?.isNotEmpty ?? false) &&
-        (user.activeStudentId == null || user.activeStudentId!.isEmpty)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final up = context.read<UserProviderV2>();
-        final current = up.user;
-        if (current == null) return;
-        final stillFamiliar = current.role.trim().toLowerCase() == 'familiar';
-        final needsActive =
-            (current.activeStudentId == null ||
-            current.activeStudentId!.isEmpty);
-        final hasKids = current.studentIds?.isNotEmpty ?? false;
-
-        if (stillFamiliar && needsActive && hasKids) {
-          up.setUser(
-            current.copyWith(activeStudentId: current.studentIds!.first),
-          );
-        }
-      });
+        studentIds.isNotEmpty &&
+        !studentIds.contains(activeStudentId)) {
+      return _InitializeActiveStudent(studentId: studentIds.first);
     }
 
     return const EstudianteDashboardLayout();
   }
+}
+
+class _InitializeActiveStudent extends StatefulWidget {
+  const _InitializeActiveStudent({required this.studentId});
+
+  final String studentId;
+
+  @override
+  State<_InitializeActiveStudent> createState() =>
+      _InitializeActiveStudentState();
+}
+
+class _InitializeActiveStudentState extends State<_InitializeActiveStudent> {
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _select();
+  }
+
+  Future<void> _select() async {
+    if (mounted) setState(() => _error = null);
+    try {
+      await ActiveStudentService().select(
+        userProvider: context.read<UserProviderV2>(),
+        studentId: widget.studentId,
+      );
+    } catch (error) {
+      if (mounted) setState(() => _error = userFacingError(error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: _error == null
+            ? const CircularProgressIndicator()
+            : Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No se pudo seleccionar el estudiante activo.\n$_error',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _select,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    ),
+  );
 }
 
 class _RedirectToLogin extends StatefulWidget {

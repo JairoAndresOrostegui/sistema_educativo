@@ -20,7 +20,10 @@ class RouteService {
         .where('campus', isEqualTo: campusId)
         .where('academicYearId', isEqualTo: year.id)
         .get();
-    return rows.docs.map(RouteModel.fromFirestore).toList();
+    return rows.docs
+        .where((doc) => doc.data()['status'] != 'deleted')
+        .map(RouteModel.fromFirestore)
+        .toList();
   }
 
   Future<void> eliminarRuta(
@@ -59,35 +62,26 @@ class RouteService {
       'id': id,
       'institution': institutionId,
       'campus': campusId,
+      if (id != null) 'expectedRevision': ruta.revision,
     });
   }
 
-  Future<List<DocumentSnapshot<Map<String, dynamic>>>>
-  obtenerEstudiantesDisponibles({
+  Future<Map<String, List<Map<String, dynamic>>>> obtenerParticipantes({
     required String institutionId,
     required String campusId,
-  }) async =>
-      (await _db
-              .collection('users')
-              .where('institution', isEqualTo: institutionId)
-              .where('campus', isEqualTo: campusId)
-              .where('role', isEqualTo: 'Estudiante')
-              .where('status', isEqualTo: 'activo')
-              .get())
-          .docs;
-  Future<List<DocumentSnapshot<Map<String, dynamic>>>>
-  obtenerGestionadoresDisponibles({
-    required String institutionId,
-    required String campusId,
-  }) async =>
-      (await _db
-              .collection('users')
-              .where('institution', isEqualTo: institutionId)
-              .where('campus', isEqualTo: campusId)
-              .where('role', whereIn: ['Docente', 'Administrador', 'Auxiliar'])
-              .where('status', isEqualTo: 'activo')
-              .get())
-          .docs;
+  }) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('listarParticipantesRuta')
+        .call({'institution': institutionId, 'campus': campusId});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    List<Map<String, dynamic>> rows(String key) =>
+        (data[key] as List<dynamic>? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    return {'students': rows('students'), 'managers': rows('managers')};
+  }
+
   Future<List<RouteModel>> getRutasAsignadas({
     required String userId,
     required String institutionId,
@@ -105,6 +99,9 @@ class RouteService {
         .where('campus', isEqualTo: campusId)
         .where('academicYearId', isEqualTo: year.id)
         .get();
-    return rows.docs.map(RouteModel.fromFirestore).toList();
+    return rows.docs
+        .where((doc) => doc.data()['status'] != 'deleted')
+        .map(RouteModel.fromFirestore)
+        .toList();
   }
 }

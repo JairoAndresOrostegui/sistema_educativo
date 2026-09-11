@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import '../../../providers/user_provider_v2.dart';
 import '../../../models/academic/academic_group.dart';
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/user_facing_error.dart';
+import '../widgets/history_date_range_field.dart';
 
 class GestionDocumentosView extends StatefulWidget {
   const GestionDocumentosView({super.key});
@@ -192,11 +192,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(
-            ctx,
-          ).colorScheme.copyWith(primary: AppPalette.primary),
-        ),
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
         child: child!,
       ),
     );
@@ -243,6 +239,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
         body: SafeArea(
@@ -256,7 +253,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
         : '${df.format(_rango!.start)}  -  ${df.format(_rango!.end)}';
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.all(16),
@@ -268,14 +265,12 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  border: Border.all(
-                    color: AppPalette.error.withValues(alpha: .15),
-                  ),
+                  color: colors.surface,
+                  border: Border.all(color: colors.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.onSurface.withValues(alpha: .03),
+                      color: colors.shadow.withValues(alpha: .06),
                       blurRadius: 8,
                       offset: Offset(0, 2),
                     ),
@@ -323,13 +318,8 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                   ),
                   SizedBox(
                     width: 280,
-                    child: TextFormField(
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'Rango de fechas',
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: TextEditingController(text: rangoTexto),
+                    child: HistoryDateRangeField(
+                      value: rangoTexto,
                       onTap: _pickDateRange,
                     ),
                   ),
@@ -338,8 +328,8 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                     onPressed: () => _aplicarFiltros(recargar: true),
                     label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: AppPalette.surface,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
                     ),
                   ),
                   TextButton(
@@ -381,13 +371,13 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                     ElevatedButton.icon(
                       onPressed: _exportarExcel,
                       icon: Icon(Icons.table_view),
-                      label: Text('Exportar Excel'),
+                      label: Text('Exportar página a Excel'),
                     ),
                     SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _exportarPDF,
                       icon: Icon(Icons.picture_as_pdf),
-                      label: Text('Exportar PDF'),
+                      label: Text('Exportar página a PDF'),
                     ),
                   ],
                 ),
@@ -410,14 +400,10 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                           return Semantics(
                             label: 'Registro de documento subido',
                             child: Card(
-                              color: AppPalette.surface,
+                              color: colors.surface,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                side: BorderSide(
-                                  color: AppPalette.error.withValues(
-                                    alpha: .12,
-                                  ),
-                                ),
+                                side: BorderSide(color: colors.outlineVariant),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               margin: EdgeInsets.symmetric(
@@ -428,6 +414,7 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
                                 leading: const Icon(Icons.description_outlined),
                                 title: Text('${r['nombre'] ?? ''}'),
                                 subtitle: Text(
+                                  'Acción: ${_labelAction(r['accion'])}\n'
                                   'Grupo: ${r['grupo'] ?? ''}\n'
                                   'Subido por: ${r['subidoPor'] ?? ''}\n'
                                   'Fecha: $fechaTexto',
@@ -469,4 +456,11 @@ class _GestionDocumentosViewState extends State<GestionDocumentosView> {
       ),
     );
   }
+
+  String _labelAction(Object? value) => switch (value?.toString()) {
+    'uploaded' => 'Cargado',
+    'deleted' => 'Eliminado',
+    final text when text != null && text.isNotEmpty => text,
+    _ => 'Sin dato',
+  };
 }

@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../../config/app_palette.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/user_facing_error.dart';
 import '../models/website_content.dart';
@@ -200,6 +199,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
 
   Future<void> _publish() async {
     final bundle = _bundle!;
+    final user = context.read<UserProviderV2>().user;
+    if (user == null || user.institution.isEmpty || user.campus.isEmpty) {
+      _message('Debes seleccionar una institución y una sede.', error: true);
+      return;
+    }
     if (bundle.config.schoolName.trim().isEmpty) {
       _message('El nombre del colegio es obligatorio.', error: true);
       return;
@@ -227,9 +231,28 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
       final result = await _service.publishBundle(
         bundle,
         previous: _publishedBundle,
+        institutionId: user.institution,
+        campusId: user.campus,
       );
       if (!mounted) return;
-      setState(() => _publishedBundle = bundle);
+      final published = WebsiteBundle(
+        config: bundle.config.copyWith(
+          institutionId: user.institution,
+          campusId: user.campus,
+          revision: result.revision,
+        ),
+        pages: [
+          for (final page in bundle.pages)
+            page.copyWith(
+              institutionId: user.institution,
+              campusId: user.campus,
+            ),
+        ],
+      );
+      setState(() {
+        _bundle = published;
+        _publishedBundle = published;
+      });
       _sessionUploads.removeAll(bundle.managedAssetPaths);
       final abandonedUploads = [..._sessionUploads];
       _sessionUploads.clear();
@@ -267,6 +290,11 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     int? itemIndex,
     bool logo = false,
   }) async {
+    final user = context.read<UserProviderV2>().user;
+    if (user == null || user.institution.isEmpty || user.campus.isEmpty) {
+      _message('Debes seleccionar una institución y una sede.', error: true);
+      return;
+    }
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null) return;
     final target = logo ? 'logo' : '${component!.id}_${itemIndex ?? 'main'}';
@@ -275,6 +303,8 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
       final asset = await _service.uploadImage(
         bytes: await picked.readAsBytes(),
         fileName: picked.name,
+        institutionId: user.institution,
+        campusId: user.campus,
       );
       _sessionUploads.add(asset.storagePath);
       WebsiteAsset previous;
@@ -632,7 +662,9 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: error ? AppPalette.error : AppPalette.success,
+        backgroundColor: error
+            ? Theme.of(context).colorScheme.error
+            : Theme.of(context).colorScheme.tertiary,
       ),
     );
   }
@@ -661,7 +693,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
         }
         final canEdit = _canEdit(context);
         return Scaffold(
-          backgroundColor: AppPalette.surfaceContainer,
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
           appBar: AppBar(
             leading: IconButton(
               tooltip: 'Volver al menú de administración',
@@ -704,25 +736,24 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
               const SizedBox(width: 16),
             ],
           ),
-          body: AbsorbPointer(
-            absorbing: !canEdit,
-            child: Row(
-              children: [
-                SizedBox(width: 310, child: _leftPanel()),
-                const VerticalDivider(width: 1),
-                Expanded(child: _preview()),
-                const VerticalDivider(width: 1),
-                SizedBox(width: 390, child: _propertiesPanel()),
-              ],
-            ),
-          ),
+          body: canEdit
+              ? Row(
+                  children: [
+                    SizedBox(width: 310, child: _leftPanel()),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _preview()),
+                    const VerticalDivider(width: 1),
+                    SizedBox(width: 390, child: _propertiesPanel()),
+                  ],
+                )
+              : PublicWebsiteScreen(slug: _page.slug),
         );
       },
     );
   }
 
   Widget _leftPanel() => ColoredBox(
-    color: AppPalette.surface,
+    color: Theme.of(context).colorScheme.surface,
     child: Column(
       children: [
         _areaTile(_EditorArea.header, 'Header', Icons.vertical_align_top),
@@ -1515,7 +1546,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
   }
 
   Widget _propertyList(List<Widget> children) => ColoredBox(
-    color: AppPalette.surface,
+    color: Theme.of(context).colorScheme.surface,
     child: ListView(
       padding: const EdgeInsets.all(20),
       children: [

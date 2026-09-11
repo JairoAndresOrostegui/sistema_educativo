@@ -32,6 +32,16 @@ Object.assign(exports, require("./routes")
     .routeFunctions(db, getCaller, requireActiveAcademicYear));
 Object.assign(exports, require("./qr_identity").qrFunctions(
     db, getCaller, requireActiveAcademicYear));
+Object.assign(exports, require("./attendance").attendanceFunctions(
+    db, getCaller, requireActiveAcademicYear));
+Object.assign(exports, require("./events").eventFunctions(
+    db, getCaller, requireActiveAcademicYear));
+Object.assign(exports, require("./protected_downloads")
+    .protectedDownloadFunctions({
+      db, auth, getBucket: () => storage.bucket(), getCaller,
+      requireFileDownloadAccess, requireAttachmentDownloadAccess,
+      runtimeEnvironment,
+    }));
 const pushTransport = process.env.FUNCTIONS_EMULATOR === "true" ? {
   sendEachForMulticast: async () => {
     throw Object.assign(new Error("FCM sin emulador; envio externo bloqueado"),
@@ -51,8 +61,12 @@ const pushQueue = createPushQueue(db, pushTransport, async (job, tokens) => {
     const allowed = new Set(current);
     return valid.filter((token) => allowed.has(token));
   }
+  if (["event", "attendance"].includes(job.message.data?.type)) {
+    return require("./academic_push_access")
+        .createAcademicPushValidator(db)(job, valid);
+  }
   return valid;
-});
+}, invalidateTerminalPushTokens);
 
 exports.procesarNotificacionPendiente = onDocumentCreated({
   document: "push_jobs/{jobId}", retry: true,
@@ -79,7 +93,7 @@ exports.encolarNotificacionMensaje = onDocumentCreated({
   }, {institutionId: value.institutionId, campusId: value.campusId,
     academicYearId: value.academicYearId, type: "messaging"},
   event.params.eventId);
-  await event.data.ref.update({queuedAt: FieldValue.serverTimestamp()});
+  await markPushEventQueued(event.data.ref);
 });
 
 exports.encolarNotificacionRuta = onDocumentCreated({
@@ -93,10 +107,80 @@ exports.encolarNotificacionRuta = onDocumentCreated({
   await pushQueue.enqueue({tokens,
     notification: {title: d.title, body: d.body},
     android: {priority: "high"},
+    data: {type: "route", dailyRouteId: d.dailyRouteId || ""},
   }, {institutionId: d.institution, campusId: d.campus,
     academicYearId: d.academicYearId, type: "route"}, event.params.eventId);
-  await event.data.ref.update({queuedAt: FieldValue.serverTimestamp()});
+  await markPushEventQueued(event.data.ref);
 });
+
+exports.encolarNotificacionAsistencia = onDocumentCreated({
+  document: "attendance_notification_events/{eventId}", retry: true,
+}, async (event) => {
+  const value = event.data?.data();
+  if (!value) return;
+  const tokens = await resolveAudienceTokens({
+    institution: value.institutionId,
+    campus: value.campusId,
+  }, {
+    studentIds: value.studentIds,
+    includeFamilies: true,
+  }, true);
+  await pushQueue.enqueue({
+    tokens,
+    notification: {title: value.title, body: value.body},
+    data: {type: "attendance", sessionId: value.sessionId || ""},
+  }, {
+    institutionId: value.institutionId,
+    campusId: value.campusId,
+    academicYearId: value.academicYearId,
+    type: "attendance",
+    notificationEventId: event.params.eventId,
+  }, event.params.eventId);
+  await markPushEventQueued(event.data.ref);
+});
+
+exports.encolarNotificacionEvento = onDocumentCreated({
+  document: "event_notification_events/{eventId}", retry: true,
+}, async (event) => {
+  const value = event.data?.data();
+  if (!value) return;
+  const tokens = await resolveAudienceTokens({
+    institution: value.institutionId,
+    campus: value.campusId,
+  }, {userIds: value.recipientUserIds || []}, true);
+  await pushQueue.enqueue({
+    tokens,
+    notification: {title: value.title, body: value.body},
+    data: {type: "event", eventId: value.eventId || ""},
+  }, {
+    institutionId: value.institutionId,
+    campusId: value.campusId,
+    academicYearId: value.academicYearId,
+    type: "event",
+    notificationEventId: event.params.eventId,
+  }, event.params.eventId);
+  await markPushEventQueued(event.data.ref);
+});
+
+/**
+ * La cola ya es idempotente por evento. Si una limpieza retiro el outbox
+ * despues de encolarlo, no se recrea ni se reintenta una actualizacion vacia.
+ * @param {FirebaseFirestore.DocumentReference} ref Evento de outbox.
+ * @return {Promise<void>}
+ */
+async function markPushEventQueued(ref) {
+  try {
+    await ref.update({queuedAt: FieldValue.serverTimestamp()});
+  } catch (error) {
+    if (!isMissingDocumentError(error)) throw error;
+  }
+}
+
+/** @param {*} error Error Firestore. @return {boolean} */
+function isMissingDocumentError(error) {
+  return error?.code === 5 || error?.code === "not-found" ||
+    error?.code === "NOT_FOUND";
+}
 
 exports.reintentarNotificacionesPendientes = onSchedule(
     "every 5 minutes", async () => {
@@ -118,6 +202,9 @@ exports.consultarEstadoNotificaciones = onCall(async (request) => {
     if (!cursor.exists) {
       throw new HttpsError("invalid-argument", "Cursor invalido");
     }
+    if (!(cursor.data()?.createdAt instanceof Timestamp)) {
+      throw new HttpsError("invalid-argument", "Cursor invalido");
+    }
     query = query.startAfter(cursor);
   }
   const snapshot = await query.limit(50).get();
@@ -127,8 +214,11 @@ exports.consultarEstadoNotificaciones = onCall(async (request) => {
       institutionId: value.institutionId, campusId: value.campusId,
       type: value.type, total: value.total, accepted: value.accepted,
       rejected: value.rejected, skipped: value.skipped,
-      pending: value.pendingTokens.length, lastError: value.lastError || null,
-      createdAt: value.createdAt?.toMillis() || null};
+      pending: Array.isArray(value.pendingTokens) ?
+        value.pendingTokens.length : 0,
+      lastError: typeof value.lastError === "string" ? value.lastError : null,
+      createdAt: value.createdAt instanceof Timestamp ?
+        value.createdAt.toMillis() : null};
   })};
 });
 
@@ -141,7 +231,8 @@ exports.reintentarNotificacion = onCall(async (request) => {
   const ref = db.collection("push_jobs").doc(id);
   await db.runTransaction(async (tx) => {
     const value = (await tx.get(ref)).data();
-    if (!value || value.status !== "failed" || !value.pendingTokens.length) {
+    if (!value || value.status !== "failed" ||
+        !Array.isArray(value.pendingTokens) || !value.pendingTokens.length) {
       throw new HttpsError("failed-precondition",
           "No hay fallos reintentables.");
     }
@@ -164,7 +255,6 @@ const ALLOWED_ROLES = new Set([
 const DIRECTORY_FIELDS = [
   "firstName", "lastName", "role", "status", "institution", "campus",
   "groupId", "groupName", "studentIds", "activeStudentId", "photoUrl",
-  "routeAddress", "direccionRuta",
 ];
 const PROFILE_FIELDS = [
   "firstName", "lastName", "personalEmail", "institutionalEmail",
@@ -186,6 +276,7 @@ const RESTRICTED_DELEGATED_PERMISSIONS = new Set([
 ]);
 const FILE_MODULE_LIMIT_BYTES = 1024 * 1024 * 1024;
 const FILE_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024;
+const PROFILE_PHOTO_LIMIT_BYTES = 5 * 1024 * 1024;
 const FILE_RETENTION_DAYS = 60;
 const MESSAGE_BODY_MAX = 4000;
 const MESSAGE_SERVICE_CATEGORIES = new Set([
@@ -415,7 +506,12 @@ async function getCaller(request) {
         "failed-precondition", "Debes cambiar la contrasena temporal.",
     );
   }
-  return {uid, ...data};
+  if (data.role !== "Estudiante" &&
+      request.auth?.token?.email_verified !== true) {
+    throw new HttpsError("permission-denied",
+        "Verifica tu correo electrónico y vuelve a iniciar sesión.");
+  }
+  return {...data, uid};
 }
 
 /** Perfil autenticado usado solo para completar una clave temporal. */
@@ -516,6 +612,9 @@ function validatedProfile(input, caller, uid) {
   profile.firstName = requiredString(profile.firstName, "nombres", 100);
   profile.lastName = requiredString(profile.lastName, "apellidos", 100);
   profile.document = requiredString(profile.document, "documento", 40);
+  profile.documentType = requiredString(
+      profile.documentType, "tipo de documento", 40,
+  );
   profile.institutionalEmail = requiredString(
       profile.institutionalEmail,
       "correo institucional",
@@ -581,6 +680,31 @@ function validatedProfile(input, caller, uid) {
 }
 
 /**
+ * Impide guardar codigos de documento inventados desde un cliente manipulado.
+ * Un codigo historico inactivo puede conservarse al editar otros campos.
+ * @param {Object} profile Perfil normalizado.
+ * @param {Object?} previous Perfil anterior, si existe.
+ */
+async function validateDocumentType(profile, previous = null) {
+  if (previous && normalizedCatalogValue(previous.documentType) ===
+      normalizedCatalogValue(profile.documentType)) return;
+  const snapshot = await db.collection("parameters")
+      .where("clave", "==", "documentType").get();
+  const exists = snapshot.docs.some((item) => {
+    const value = item.data();
+    return value.activo === true &&
+      normalizedCatalogValue(value.valor) ===
+      normalizedCatalogValue(profile.documentType);
+  });
+  if (!exists) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El tipo de documento no pertenece al catalogo vigente.",
+    );
+  }
+}
+
+/**
  * Comprueba que el grupo academico pertenezca exactamente a la sede.
  * @param {Object} profile Perfil u objeto con tenant y groupId.
  * @return {Promise<Object>} Grupo validado.
@@ -632,6 +756,32 @@ async function ensureUniqueProfile(profile, excludeUid = null) {
       throw new HttpsError("already-exists", message);
     }
   }
+}
+
+/**
+ * Genera reservas deterministas para la unicidad global que requiere el login.
+ * @param {Object} profile Perfil normalizado.
+ * @return {Array<Object>} Reservas del perfil.
+ */
+function profileUniqueEntries(profile) {
+  return [
+    ["document", profile.document],
+    ["personalEmail", profile.personalEmail],
+    ["institutionalEmail", profile.institutionalEmail],
+  ].filter(([, rawValue]) =>
+    typeof rawValue === "string" && rawValue.trim().length > 0,
+  ).map(([field, rawValue]) => {
+    const value = rawValue.trim().toLowerCase();
+    const id = crypto.createHash("sha256")
+        .update(`${field}\u0000${value}`).digest("hex");
+    return {field, value, ref: db.collection("user_unique_keys").doc(id)};
+  });
+}
+
+/** @param {*} error Error de Firestore. @return {boolean} */
+function isAlreadyExistsError(error) {
+  return error?.code === 6 || error?.code === "already-exists" ||
+    error?.code === "ALREADY_EXISTS";
 }
 
 /**
@@ -1180,6 +1330,7 @@ async function notifyEnrollment(enrollment, event) {
     const body = `Estado: ${enrollment.estado}`;
     if (tokens.size) {
       await pushQueue.enqueue({notification: {title, body},
+        data: {type: "enrollment", enrollmentId: enrollment.id || ""},
         tokens: [...tokens]}, {
         institutionId: enrollment.institution, campusId: enrollment.campus,
         academicYearId: enrollment.academicYearId, type: "enrollment",
@@ -1392,8 +1543,10 @@ async function resolveFileAudience(caller, input, institution, campus) {
         .where("academicYearId", "==", academicYear.id)
         .where("active", "==", true).get();
     targetGroupIds = groups.docs.map((item) => item.id);
+    const activeGroupIds = new Set(targetGroupIds);
     targetStudents = (await userBase.where("role", "==", "Estudiante")
-        .where("status", "==", "activo").get()).docs;
+        .where("status", "==", "activo").get()).docs
+        .filter((item) => activeGroupIds.has(item.data().groupId));
   } else if (audienceType === "groups") {
     for (const groupId of targetGroupIds) {
       const group = await requireAcademicGroup({groupId, institution, campus});
@@ -1452,6 +1605,7 @@ async function resolveFileAudience(caller, input, institution, campus) {
       const subjects = await db.collection("subjects")
           .where("institutionId", "==", institution)
           .where("campusId", "==", campus)
+          .where("academicYearId", "==", academicYear.id)
           .where("groupId", "==", groupId).get();
       subjects.docs.forEach((item) => {
         const id = item.data().teacherId;
@@ -1641,6 +1795,7 @@ async function notifySchedule(schedule, event) {
     const groupSubjects = await db.collection("subjects")
         .where("institutionId", "==", schedule.institutionId)
         .where("campusId", "==", schedule.campusId)
+        .where("academicYearId", "==", schedule.academicYearId)
         .where("groupId", "==", schedule.groupId).get();
     const groupTeacherIds = new Set(groupSubjects.docs.map((item) =>
       item.data().teacherId).filter((id) => typeof id === "string" && id));
@@ -1690,6 +1845,7 @@ async function notifySchedule(schedule, event) {
           body: `${schedule.groupName}: ${schedule.subject} ` +
             `(${schedule.day})`,
         },
+        data: {type: "schedule"},
         tokens: [...tokens],
       }, {institutionId: schedule.institutionId, campusId: schedule.campusId,
         academicYearId: schedule.academicYearId, type: "schedule"});
@@ -1784,6 +1940,8 @@ async function notifyAuthorization(authorization, event) {
         .where("institution", "==", authorization.institutionId)
         .where("campus", "==", authorization.campusId)
         .where("status", "==", "activo").get();
+    const studentIsActive = staff.docs.some((item) =>
+      item.id === authorization.studentId && item.data().role === "Estudiante");
     staff.docs.forEach((item) => {
       const user = item.data();
       const permissions = Array.isArray(user.permissions) ?
@@ -1795,11 +1953,14 @@ async function notifyAuthorization(authorization, event) {
       const teacherAllowed = user.role === "Docente" &&
         user.groupId === authorization.groupId &&
         permissions.includes("autorizaciones.ver");
-      if (adminAllowed || teacherAllowed) recipients.add(item.id);
+      const familyAllowed = studentIsActive && user.role === "Familiar" &&
+        permissions.includes("autorizaciones.ver") &&
+        Array.isArray(user.studentIds) &&
+        user.studentIds.includes(authorization.studentId);
+      if (adminAllowed || teacherAllowed || familyAllowed) {
+        recipients.add(item.id);
+      }
     });
-    if (event !== "created" && authorization.requesterId) {
-      recipients.add(authorization.requesterId);
-    }
     const tokens = new Set();
     for (const uid of recipients) {
       const user = await db.collection("users").doc(uid).get();
@@ -1814,6 +1975,10 @@ async function notifyAuthorization(authorization, event) {
           title: event === "created" ?
             "Nueva autorizacion" : "Autorizacion actualizada",
           body: `${authorization.studentFullName}: ${authorization.status}`,
+        },
+        data: {
+          type: "authorization",
+          authorizationId: authorization.id || "",
         },
         tokens: [...tokens],
       }, {institutionId: authorization.institutionId,
@@ -1867,20 +2032,58 @@ async function filterTenantTokens(caller, requested) {
 }
 
 /**
+ * Retira un token que FCM confirmo como inutilizable sin desactivar una
+ * sesion nueva que haya reemplazado el token mientras se procesaba la cola.
+ * @param {Object} job Trabajo de la cola.
+ * @param {string[]} tokens Tokens terminales.
+ * @return {Promise<void>}
+ */
+async function invalidateTerminalPushTokens(job, tokens) {
+  if (typeof job?.institutionId !== "string" ||
+      typeof job?.campusId !== "string" || !Array.isArray(tokens)) return;
+  const unique = [...new Set(tokens.filter((token) =>
+    typeof token === "string" && token.length))];
+  for (const slot of ["web", "mobile"]) {
+    for (let i = 0; i < unique.length; i += 30) {
+      const chunk = unique.slice(i, i + 30);
+      const matched = await db.collection("users")
+          .where(`notificationTokens.${slot}`, "in", chunk).get();
+      if (matched.empty) continue;
+      await db.runTransaction(async (tx) => {
+        const currentUsers = [];
+        const owners = [];
+        for (const item of matched.docs) {
+          currentUsers.push(await tx.get(item.ref));
+          owners.push(await tx.get(
+              db.collection("push_device_sessions").doc(item.id)));
+        }
+        currentUsers.forEach((current, index) => {
+          const user = current.data();
+          const token = user?.notificationTokens?.[slot];
+          if (!user || user.status !== "activo" ||
+              user.institution !== job.institutionId ||
+              user.campus !== job.campusId || !unique.includes(token)) return;
+          tx.update(current.ref, {
+            [`notificationTokens.${slot}`]: FieldValue.delete(),
+          });
+          if (owners[index].exists) {
+            tx.update(owners[index].ref, {[`${slot}.enabled`]: false});
+          }
+        });
+      });
+    }
+  }
+}
+
+/**
  * @param {Object} caller Usuario llamador.
  * @param {string} type Flujo.
  * @return {void}
  */
 function requireNotificationAccess(caller, type) {
-  const permissions = Array.isArray(caller.permissions) ?
-    caller.permissions : [];
   const privileged = caller.isSuperadmin === true ||
     caller.role === "Administrador";
-  if (type === "authorization") return;
-  if (type === "messaging" &&
-      (privileged || permissions.includes("mensajeria.ver"))) return;
-  if (["route", "schedule", "file"].includes(type) &&
-      (privileged || caller.role === "Docente")) return;
+  if (privileged && ["general", "schedule", "file"].includes(type)) return;
   throw new HttpsError(
       "permission-denied",
       "No tienes permiso para este tipo de notificacion.",
@@ -1949,6 +2152,37 @@ async function teacherCanContactStudent(teacher, student, year) {
 }
 
 /**
+ * Obtiene todos los docentes vigentes de un grupo: director y docentes con
+ * asignaturas en el año activo.
+ * @param {Object} caller Usuario que fija institución y sede.
+ * @param {string} groupId Grupo académico.
+ * @param {Object} year Año académico activo.
+ * @return {Promise<Set<string>>} Identificadores de docentes.
+ */
+async function academicTeacherIdsForGroup(caller, groupId, year) {
+  if (!groupId) return new Set();
+  const [subjects, tutors] = await Promise.all([
+    db.collection("subjects")
+        .where("institutionId", "==", caller.institution)
+        .where("campusId", "==", caller.campus)
+        .where("academicYearId", "==", year.id)
+        .where("groupId", "==", groupId).get(),
+    db.collection("users")
+        .where("institution", "==", caller.institution)
+        .where("campus", "==", caller.campus)
+        .where("role", "==", "Docente")
+        .where("status", "==", "activo")
+        .where("tutorGroupId", "==", groupId).get(),
+  ]);
+  const ids = new Set(tutors.docs.map((item) => item.id));
+  subjects.docs.forEach((item) => {
+    const teacherId = item.data().teacherId;
+    if (typeof teacherId === "string" && teacherId) ids.add(teacherId);
+  });
+  return ids;
+}
+
+/**
  * Construye la audiencia de una conversacion supervisada sin confiar en el
  * cliente. Incluye estudiante, responsable institucional y familiares activos.
  * @param {Object} student Estudiante.
@@ -2014,8 +2248,7 @@ async function syncSupervisedStudentChannel(ref, year) {
       {uid: studentSnapshot.id, ...studentSnapshot.data()},
       {uid: staffSnapshot.id, ...staffSnapshot.data()}, year,
   );
-  await ref.set({...audience, updatedAt: FieldValue.serverTimestamp()},
-      {merge: true});
+  await ref.update({...audience, updatedAt: FieldValue.serverTimestamp()});
   return {...channel, ...audience};
 }
 
@@ -2036,10 +2269,15 @@ async function syncSupervisedChannelsForStudents(studentIds) {
             channel.ref, {id: yearSnapshot.id, ...yearSnapshot.data()},
         );
       } catch (error) {
+        if (isMissingDocumentError(error)) continue;
         if (error instanceof HttpsError &&
             ["failed-precondition", "permission-denied"].includes(error.code)) {
-          await channel.ref.set({status: "archived",
-            updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+          try {
+            await channel.ref.update({status: "archived",
+              updatedAt: FieldValue.serverTimestamp()});
+          } catch (archiveError) {
+            if (!isMissingDocumentError(archiveError)) throw archiveError;
+          }
           continue;
         }
         throw error;
@@ -2089,8 +2327,10 @@ async function academicChannelAudience(group) {
             studentIds.slice(index, index + 30)).get();
     families.push(...snapshot.docs);
   }
+  const admins = await base.where("role", "==", "Administrador")
+      .where("status", "==", "activo").get();
   const members = new Map();
-  [...students, ...teachers, ...families].forEach((item) => {
+  [...students, ...teachers, ...families, ...admins.docs].forEach((item) => {
     if (item.data().status === "activo") members.set(item.id, item.data());
   });
   return {
@@ -2192,8 +2432,7 @@ function requireMessageChannelRead(caller, channel) {
   }
   const members = Array.isArray(channel.memberUserIds) ?
     channel.memberUserIds : [];
-  if (caller.isSuperadmin === true || caller.role === "Administrador" ||
-      members.includes(caller.uid)) return;
+  if (caller.isSuperadmin === true || members.includes(caller.uid)) return;
   throw new HttpsError("permission-denied", "No perteneces a este canal.");
 }
 
@@ -2232,14 +2471,6 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
   if (!sameTenant(caller, recipient) || recipient.status !== "activo") {
     throw new HttpsError("permission-denied", "Destinatario no disponible.");
   }
-  const teacherGroups = async (teacherId) => {
-    const snapshot = await db.collection("subjects")
-        .where("institutionId", "==", caller.institution)
-        .where("campusId", "==", caller.campus)
-        .where("academicYearId", "==", year.id)
-        .where("teacherId", "==", teacherId).get();
-    return new Set(snapshot.docs.map((item) => item.data().groupId));
-  };
   let contextStudent;
   if (caller.role === "Administrador" || caller.isSuperadmin === true) {
     if (recipient.role === "Estudiante") {
@@ -2252,7 +2483,7 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
       return {student: caller, supervised: true, staff: recipient};
     }
     if (recipient.role === "Docente" &&
-        (await teacherGroups(recipient.uid)).has(caller.groupId)) {
+        await teacherCanContactStudent(recipient, caller, year)) {
       return {student: caller, supervised: true, staff: recipient};
     }
   }
@@ -2260,8 +2491,8 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
     if (["Administrador", "Docente"].includes(recipient.role)) {
       return {student: null};
     }
-    const groups = await teacherGroups(caller.uid);
-    if (recipient.role === "Estudiante" && groups.has(recipient.groupId)) {
+    if (recipient.role === "Estudiante" &&
+        await teacherCanContactStudent(caller, recipient, year)) {
       return {student: recipient, supervised: true, staff: caller};
     }
   }
@@ -2299,8 +2530,9 @@ async function validatePrivateMessage(caller, recipient, studentContextId,
               child.groupId === contextStudent.groupId;
       })) return {student: contextStudent, familyGroupId: contextStudent.groupId};
     }
-    if (recipient.role === "Docente" &&
-        (await teacherGroups(recipient.uid)).has(contextStudent.groupId)) {
+    if (recipient.role === "Docente" && await teacherCanContactStudent(
+        recipient, {uid: studentContextId, ...contextStudent}, year,
+    )) {
       return {student: {uid: studentContextId, ...contextStudent},
         supervised: true, staff: recipient};
     }
@@ -2452,6 +2684,7 @@ exports.enviarNotificacion = onCall(async (request) => {
     notification: {title: titulo, body: cuerpo},
     android: {priority: "high"},
     apns: {payload: {aps: {sound: "default"}}},
+    data: {type: notificationType},
     tokens: cleanTokens,
   }, {institutionId: caller.institution, campusId: caller.campus,
     type: notificationType});
@@ -2533,7 +2766,9 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
 
   const profile = validatedProfile(data.profile, caller, "pending");
   if (profile.institutionalEmail !== email || profile.role !== rol ||
-      profile.document !== data.documento.trim()) {
+      profile.document !== data.documento.trim() ||
+      profile.firstName !== nombres.trim() ||
+      profile.lastName !== apellidos.trim()) {
     throw new HttpsError(
         "invalid-argument",
         "El perfil no coincide con las credenciales solicitadas.",
@@ -2541,8 +2776,11 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
   }
   await ensureUniqueProfile(profile);
   await validateInstitutionCampus(profile);
+  await validateDocumentType(profile);
   await attachValidatedGroup(profile);
   await validateFamilyLinks(profile);
+  profile.revision = 1;
+  profile.mustChangePassword = rol === "Estudiante";
 
   let usuario;
   try {
@@ -2556,7 +2794,18 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
       await sendInstitutionalVerificationEmail(email, password);
       await auth.revokeRefreshTokens(usuario.uid);
     }
+    if (profile.status !== "activo") {
+      await auth.updateUser(usuario.uid, {disabled: true});
+    }
     const batch = db.batch();
+    for (const entry of profileUniqueEntries(profile)) {
+      batch.create(entry.ref, {
+        uid: usuario.uid,
+        field: entry.field,
+        value: entry.value,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
     batch.create(db.collection("users").doc(usuario.uid), profile);
     batch.set(
         db.collection("user_directory").doc(usuario.uid),
@@ -2587,6 +2836,11 @@ exports.crearUsuarioDesdeAdmin = onCall(async (request) => {
     }
     if (error.code === "auth/email-already-exists") {
       throw new HttpsError("already-exists", "El correo ya esta registrado.");
+    }
+    if (isAlreadyExistsError(error)) {
+      throw new HttpsError(
+          "already-exists", "El documento o correo ya esta registrado.",
+      );
     }
     if (error instanceof HttpsError) throw error;
     throw new HttpsError(
@@ -2626,6 +2880,12 @@ exports.restablecerClaveEstudiante = onCall(async (request) => {
           "Ya hay un restablecimiento en curso. Intenta nuevamente.",
       );
     }
+    if (current.passwordChangeOperationId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "El estudiante esta cambiando su clave. Intenta nuevamente.",
+      );
+    }
     previousResetState = {
       mustChangePassword: current.mustChangePassword === true,
       operationId: current.passwordResetOperationId,
@@ -2639,6 +2899,8 @@ exports.restablecerClaveEstudiante = onCall(async (request) => {
       passwordResetRequestedAt: FieldValue.serverTimestamp(),
       passwordResetRequestedBy: caller.uid,
       passwordResetCompletedAt: FieldValue.delete(),
+      passwordChangeOperationId: FieldValue.delete(),
+      passwordChangeStartedAt: FieldValue.delete(),
     });
   });
   try {
@@ -2698,12 +2960,48 @@ exports.cambiarClaveTemporalEstudiante = onCall(async (request) => {
     throw new HttpsError("invalid-argument",
         "Usa al menos 10 caracteres, mayuscula, minuscula, numero y simbolo.");
   }
-  await auth.updateUser(caller.uid, {password});
   const targetRef = db.collection("users").doc(caller.uid);
+  const operationId = crypto.randomUUID();
   await db.runTransaction(async (tx) => {
     const current = (await tx.get(targetRef)).data();
     if (!current || current.mustChangePassword !== true) {
       throw new HttpsError("aborted", "La clave temporal ya fue atendida.");
+    }
+    if (current.passwordChangeOperationId) {
+      throw new HttpsError(
+          "failed-precondition", "Ya hay un cambio de clave en curso.",
+      );
+    }
+    tx.update(targetRef, {
+      passwordChangeOperationId: operationId,
+      passwordChangeStartedAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  try {
+    await auth.updateUser(caller.uid, {password});
+    await auth.revokeRefreshTokens(caller.uid);
+  } catch (error) {
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(targetRef);
+      if (current.data()?.passwordChangeOperationId === operationId) {
+        tx.update(targetRef, {
+          passwordChangeOperationId: FieldValue.delete(),
+          passwordChangeStartedAt: FieldValue.delete(),
+        });
+      }
+    });
+    console.error("Error cambiando clave temporal:", error.code);
+    throw new HttpsError("internal", "No se pudo cambiar la clave.");
+  }
+
+  const finalize = async () => db.runTransaction(async (tx) => {
+    const current = (await tx.get(targetRef)).data();
+    if (!current || current.mustChangePassword !== true ||
+        current.passwordChangeOperationId !== operationId) {
+      throw new HttpsError(
+          "aborted", "El estado de la cuenta cambio durante la operacion.",
+      );
     }
     tx.update(targetRef, {
       mustChangePassword: FieldValue.delete(),
@@ -2711,6 +3009,8 @@ exports.cambiarClaveTemporalEstudiante = onCall(async (request) => {
       passwordResetRequestedAt: FieldValue.delete(),
       passwordResetRequestedBy: FieldValue.delete(),
       passwordResetCompletedAt: FieldValue.delete(),
+      passwordChangeOperationId: FieldValue.delete(),
+      passwordChangeStartedAt: FieldValue.delete(),
       passwordChangedAt: FieldValue.serverTimestamp(),
     });
     tx.create(db.collection("user_history").doc(), {
@@ -2721,7 +3021,98 @@ exports.cambiarClaveTemporalEstudiante = onCall(async (request) => {
       fecha: FieldValue.serverTimestamp(),
     });
   });
+  try {
+    await finalize();
+  } catch {
+    try {
+      await finalize();
+    } catch (error) {
+      console.error("Clave cambiada; fallo finalizando estado:", error.code);
+      throw new HttpsError(
+          "internal",
+          "La clave cambio, pero la cuenta sigue protegida. Solicita una " +
+            "nueva clave temporal al administrador.",
+      );
+    }
+  }
   return {success: true};
+});
+
+/** Confirma en backend la foto propia que ya fue cargada a Storage. */
+exports.actualizarFotoPerfil = onCall(async (request) => {
+  const caller = await getCaller(request);
+  const storagePath = requiredString(
+      request.data?.storagePath, "ruta de la foto", 300,
+  );
+  const photoUrl = requiredString(request.data?.photoUrl, "URL de la foto", 1500);
+  const expectedPrefix = `fotos_perfil/${caller.uid}/`;
+  if (!storagePath.startsWith(expectedPrefix) ||
+      !/\.(?:jpe?g|png)$/i.test(storagePath)) {
+    throw new HttpsError("permission-denied", "La foto no pertenece al perfil.");
+  }
+  let parsed;
+  try {
+    parsed = new URL(photoUrl);
+  } catch {
+    throw new HttpsError("invalid-argument", "La URL de la foto no es valida.");
+  }
+  const bucket = storage.bucket();
+  const match = parsed.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+  if (parsed.protocol !== "https:" ||
+      parsed.hostname !== "firebasestorage.googleapis.com" ||
+      !match || decodeURIComponent(match[1]) !== bucket.name ||
+      decodeURIComponent(match[2]) !== storagePath ||
+      parsed.searchParams.get("alt") !== "media") {
+    throw new HttpsError("invalid-argument", "La URL de la foto no es valida.");
+  }
+  let metadata;
+  try {
+    [metadata] = await bucket.file(storagePath).getMetadata();
+  } catch (error) {
+    if (error?.code === 404) {
+      throw new HttpsError("not-found", "La foto cargada no existe.");
+    }
+    throw error;
+  }
+  const size = Number(metadata.size || 0);
+  if (!Number.isInteger(size) || size <= 0 ||
+      size > PROFILE_PHOTO_LIMIT_BYTES ||
+      !["image/jpeg", "image/png"].includes(metadata.contentType)) {
+    throw new HttpsError(
+        "failed-precondition", "La foto cargada no tiene un formato valido.",
+    );
+  }
+  const userRef = db.collection("users").doc(caller.uid);
+  let previousPhotoUrl = "";
+  await db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(userRef);
+    if (!fresh.exists || fresh.data().status !== "activo") {
+      throw new HttpsError("failed-precondition", "El perfil ya no esta activo.");
+    }
+    previousPhotoUrl = (fresh.data().photoUrl || "").toString();
+    transaction.update(userRef, {
+      photoUrl,
+      revision: Number(fresh.data().revision || 1) + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(db.collection("user_directory").doc(caller.uid), {
+      photoUrl,
+    }, {merge: true});
+    transaction.create(db.collection("user_history").doc(), {
+      usuarioId: caller.uid,
+      nombres: caller.firstName || "",
+      apellidos: caller.lastName || "",
+      rol: caller.role || "",
+      accion: "foto_perfil_actualizada",
+      realizadoPor:
+        `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
+      performedBy: caller.uid,
+      institution: caller.institution,
+      campus: caller.campus,
+      fecha: FieldValue.serverTimestamp(),
+    });
+  });
+  return {success: true, photoUrl, previousPhotoUrl};
 });
 
 exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {
@@ -2729,6 +3120,14 @@ exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {
   requireAdmin(caller);
   requireUserAction(caller, "editar");
   const uid = requiredString(request.data?.uid, "uid", 128);
+  const rawExpectedRevision = request.data?.expectedRevision;
+  if (rawExpectedRevision !== undefined &&
+      (!Number.isInteger(Number(rawExpectedRevision)) ||
+       Number(rawExpectedRevision) < 1)) {
+    throw new HttpsError(
+        "invalid-argument", "La version del perfil no es valida.",
+    );
+  }
   const targetRef = db.collection("users").doc(uid);
   const targetSnap = await targetRef.get();
   if (!targetSnap.exists || !sameTenant(caller, targetSnap.data())) {
@@ -2737,6 +3136,8 @@ exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {
     );
   }
   const target = targetSnap.data();
+  const expectedRevision = rawExpectedRevision === undefined ?
+    Number(target.revision || 1) : Number(rawExpectedRevision);
   if (target.status === "eliminado" || target.status === "eliminando") {
     throw new HttpsError(
         "failed-precondition", "No se puede editar un usuario retirado.",
@@ -2751,7 +3152,9 @@ exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {
   }
 
   const profile = validatedProfile(request.data?.profile, caller, uid);
+  const requestedStatus = profile.status;
   await validateInstitutionCampus(profile);
+  await validateDocumentType(profile, target);
   await attachValidatedGroup(profile);
   if (profile.institutionalEmail !== target.institutionalEmail) {
     throw new HttpsError(
@@ -2766,11 +3169,34 @@ exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {
         "permission-denied", "No puedes mover usuarios entre sedes.",
     );
   }
+  if (requestedStatus === "activo" && target.status !== "activo" &&
+      target.activeTeacherTransferId) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El docente tiene un traslado vigente. Gestiona primero el traslado.",
+    );
+  }
   const changesTenant = profile.institution !== target.institution ||
     profile.campus !== target.campus;
   const changesRole = profile.role !== target.role;
-  if (changesTenant || changesRole) {
+  const changesDocument = profile.document !== target.document;
+  const changesStudentGroup = target.role === "Estudiante" &&
+    profile.groupId !== target.groupId;
+  if (changesTenant || changesRole || changesDocument || changesStudentGroup) {
     const context = await userDeletionContext(targetSnap);
+    if (changesDocument && context.enrollments.length > 0) {
+      throw new HttpsError(
+          "failed-precondition",
+          "El documento esta ligado a una matricula. Corrigelo desde " +
+            "Matriculas para conservar la trazabilidad.",
+      );
+    }
+    if (changesStudentGroup && context.enrollments.length > 0) {
+      throw new HttpsError(
+          "failed-precondition",
+          "El cambio de grupo debe hacerse desde la matricula vigente.",
+      );
+    }
     const linkedRecords = context.impact
         .filter((item) => !["preserve", "sync"].includes(item.action))
         .reduce((total, item) => total + item.count, 0);
@@ -2782,40 +3208,171 @@ exports.actualizarUsuarioDesdeAdmin = onCall(async (request) => {
       );
     }
   }
-  profile.status = target.status;
+  if (uid === caller.uid && requestedStatus !== "activo") {
+    throw new HttpsError(
+        "failed-precondition", "No puedes desactivar tu propia cuenta.",
+    );
+  }
+  profile.status = requestedStatus;
   profile.isSuperadmin = target.isSuperadmin === true;
   profile.createdAt = target.createdAt || FieldValue.serverTimestamp();
   profile.updatedAt = FieldValue.serverTimestamp();
-  if (target.notificationTokens) {
+  if (requestedStatus === "activo" && target.notificationTokens) {
     profile.notificationTokens = target.notificationTokens;
+  } else if (requestedStatus === "inactivo") {
+    profile.notificationTokens = FieldValue.delete();
+    profile.fcmToken = FieldValue.delete();
+    profile.fcmTokens = FieldValue.delete();
   }
   await ensureUniqueProfile(profile, uid);
   await validateInstitutionCampus(profile);
   await validateFamilyLinks(profile);
 
-  const batch = db.batch();
-  batch.set(targetRef, profile, {merge: true});
-  batch.set(
-      db.collection("user_directory").doc(uid),
-      directoryData(profile),
-      {merge: false},
-  );
-  batch.create(db.collection("user_history").doc(), {
-    usuarioId: uid,
-    nombres: profile.firstName,
-    apellidos: profile.lastName,
-    rol: profile.role,
-    accion: "editado",
-    realizadoPor:
-      `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
-    performedBy: caller.uid,
-    institution: profile.institution,
-    campus: profile.campus,
-    fecha: FieldValue.serverTimestamp(),
+  const operationId = crypto.randomUUID();
+  await db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(targetRef);
+    const value = fresh.data() || {};
+    const startedAt = value.userEditStartedAt?.toMillis?.();
+    const editIsFresh = Number.isFinite(startedAt) &&
+      Date.now() - startedAt < 10 * 60 * 1000;
+    if (!fresh.exists || ["eliminado", "eliminando"].includes(value.status) ||
+        Number(value.revision || 1) !== expectedRevision) {
+      throw new HttpsError(
+          "aborted",
+          "Otro administrador modifico el usuario. Recarga e intenta de nuevo.",
+      );
+    }
+    if (value.userEditOperationId && editIsFresh) {
+      throw new HttpsError(
+          "aborted", "Otro administrador esta modificando el usuario.",
+      );
+    }
+    transaction.update(targetRef, {
+      userEditOperationId: operationId,
+      userEditStartedAt: FieldValue.serverTimestamp(),
+    });
   });
-  await batch.commit();
+  const releaseEdit = async () => db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(targetRef);
+    if (fresh.data()?.userEditOperationId === operationId) {
+      transaction.update(targetRef, {
+        userEditOperationId: FieldValue.delete(),
+        userEditStartedAt: FieldValue.delete(),
+      });
+    }
+  });
+
+  let authUser;
+  const changesStatus = requestedStatus !== target.status;
+  if (changesStatus) {
+    try {
+      authUser = await auth.getUser(uid);
+      await auth.updateUser(uid, {disabled: requestedStatus !== "activo"});
+    } catch (error) {
+      await releaseEdit().catch(() => null);
+      if (error.code === "auth/user-not-found") {
+        throw new HttpsError(
+            "failed-precondition", "La cuenta no existe en autenticacion.",
+        );
+      }
+      throw error;
+    }
+  }
+
+  const oldEntries = profileUniqueEntries(target);
+  const newEntries = profileUniqueEntries(profile);
+  const newIds = new Set(newEntries.map((entry) => entry.ref.id));
+  try {
+    await db.runTransaction(async (transaction) => {
+      const fresh = await transaction.get(targetRef);
+      if (!fresh.exists || ["eliminado", "eliminando"]
+          .includes(fresh.data().status) ||
+          fresh.data().userEditOperationId !== operationId) {
+        throw new HttpsError(
+            "failed-precondition", "El usuario cambio mientras lo editabas.",
+        );
+      }
+      if (Number(fresh.data().revision || 1) !== expectedRevision) {
+        throw new HttpsError(
+            "aborted",
+            "Otro administrador modifico el usuario. Recarga e intenta de nuevo.",
+        );
+      }
+      const reservations = [];
+      for (const entry of newEntries) {
+        reservations.push({entry, snapshot: await transaction.get(entry.ref)});
+      }
+      const obsoleteReservations = [];
+      for (const entry of oldEntries.filter((item) =>
+        !newIds.has(item.ref.id))) {
+        obsoleteReservations.push({
+          entry,
+          snapshot: await transaction.get(entry.ref),
+        });
+      }
+      for (const item of reservations) {
+        if (item.snapshot.exists && item.snapshot.data().uid !== uid) {
+          throw new HttpsError(
+              "already-exists", "El documento o correo ya esta registrado.",
+          );
+        }
+      }
+      for (const item of reservations) {
+        transaction.set(item.entry.ref, {
+          uid,
+          field: item.entry.field,
+          value: item.entry.value,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      for (const item of obsoleteReservations) {
+        if (item.snapshot.data()?.uid === uid) {
+          transaction.delete(item.entry.ref);
+        }
+      }
+      transaction.set(targetRef, {
+        ...profile,
+        revision: expectedRevision + 1,
+        userEditOperationId: FieldValue.delete(),
+        userEditStartedAt: FieldValue.delete(),
+      }, {merge: true});
+      transaction.set(
+          db.collection("user_directory").doc(uid),
+          directoryData(profile),
+          {merge: false},
+      );
+      transaction.create(db.collection("user_history").doc(), {
+        usuarioId: uid,
+        nombres: profile.firstName,
+        apellidos: profile.lastName,
+        rol: profile.role,
+        accion: changesStatus ?
+          (requestedStatus === "activo" ? "reactivado" : "desactivado") :
+          "editado",
+        realizadoPor:
+          `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
+        performedBy: caller.uid,
+        institution: profile.institution,
+        campus: profile.campus,
+        fecha: FieldValue.serverTimestamp(),
+      });
+    });
+  } catch (error) {
+    await releaseEdit().catch(() => null);
+    if (changesStatus && authUser) {
+      await auth.updateUser(uid, {disabled: authUser.disabled})
+          .catch((rollbackError) => console.error(
+              "No se pudo revertir Auth:", rollbackError.code,
+          ));
+    }
+    throw error;
+  }
   return {success: true};
 });
+
+exports.obtenerOpcionesMatriculaPublica = onCall(async () =>
+  require("./enrollment_public").publicEnrollmentOptions(
+      db, requireActiveAcademicYear));
 
 exports.crearMatricula = onCall(async (request) => {
   const input = request.data || {};
@@ -2847,13 +3404,13 @@ exports.crearMatricula = onCall(async (request) => {
   let authenticatedCaller = null;
   if (request.auth?.uid) {
     authenticatedCaller = await getCaller(request);
+    if (!sameTenant(authenticatedCaller, {institution, campus})) {
+      throw new HttpsError(
+          "permission-denied", "No puedes crear en otra sede.",
+      );
+    }
     if (authenticatedCaller.role === "Administrador") {
       requireEnrollmentAction(authenticatedCaller, "editar");
-      if (!sameTenant(authenticatedCaller, {institution, campus})) {
-        throw new HttpsError(
-            "permission-denied", "No puedes crear en otra sede.",
-        );
-      }
     }
   }
   const group = await requireAcademicGroup({
@@ -2971,6 +3528,7 @@ exports.crearMatricula = onCall(async (request) => {
     academicYear: academicYear.year,
     institution,
     campus,
+    revision: 1,
     data: cleanData,
     fechaDiligenciamiento: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
@@ -3013,6 +3571,21 @@ exports.actualizarMatricula = onCall(async (request) => {
     throw new HttpsError("not-found", "La matricula no existe.");
   }
   const current = snapshot.data();
+  const currentRevision = Number(current.revision || 1);
+  const requestedRevision = Number(request.data?.expectedRevision);
+  if (request.data?.expectedRevision != null &&
+      (!Number.isInteger(requestedRevision) || requestedRevision < 1)) {
+    throw new HttpsError(
+        "invalid-argument", "Revision de matricula no valida.",
+    );
+  }
+  if (request.data?.expectedRevision != null &&
+      requestedRevision !== currentRevision) {
+    throw new HttpsError(
+        "failed-precondition",
+        "La matricula cambio mientras la editabas. Vuelve a cargarla.",
+    );
+  }
   if (!sameTenant(caller, current)) {
     throw new HttpsError("permission-denied", "Matricula fuera de tu sede.");
   }
@@ -3028,7 +3601,10 @@ exports.actualizarMatricula = onCall(async (request) => {
   let groupName = (current.data?.groupName || "").toString();
   const observation = typeof request.data?.observation === "string" ?
     request.data.observation.trim().slice(0, 2000) : "";
-  const changes = {updatedAt: FieldValue.serverTimestamp()};
+  const changes = {
+    updatedAt: FieldValue.serverTimestamp(),
+    revision: currentRevision + 1,
+  };
   let nextStatus = current.estado;
   let membershipStudentId = null;
 
@@ -3229,7 +3805,8 @@ exports.actualizarMatricula = onCall(async (request) => {
   const historyRef = db.collection("enrollment_history").doc();
   await db.runTransaction(async (transaction) => {
     const latest = await transaction.get(ref);
-    if (!latest.exists || latest.data().estado !== current.estado) {
+    if (!latest.exists || latest.data().estado !== current.estado ||
+        Number(latest.data().revision || 1) !== currentRevision) {
       throw new HttpsError(
           "failed-precondition",
           "La matricula cambio mientras la editabas. Vuelve a cargarla.",
@@ -3280,6 +3857,7 @@ exports.consultarMatriculaEstudiante = onCall(async (request) => {
   let institution = caller.institution;
   let campus = caller.campus;
   let document;
+  let linkedStudent;
   if (caller.role === "Familiar") {
     const permissions = Array.isArray(caller.permissions) ?
       caller.permissions : [];
@@ -3294,10 +3872,10 @@ exports.consultarMatriculaEstudiante = onCall(async (request) => {
           "permission-denied", "El estudiante no es el hijo activo.",
       );
     }
-    const student = await requireLinkedStudent(
+    linkedStudent = await requireLinkedStudent(
         studentId, institution, campus,
     );
-    document = requiredString(student.document, "documento", 40);
+    document = requiredString(linkedStudent.document, "documento", 40);
   } else if (caller.role === "Administrador") {
     const permissions = Array.isArray(caller.permissions) ?
       caller.permissions : [];
@@ -3321,12 +3899,37 @@ exports.consultarMatriculaEstudiante = onCall(async (request) => {
     );
   }
 
+  if (!linkedStudent) {
+    const studentSnapshot = await db.collection("users")
+        .where("institution", "==", institution)
+        .where("campus", "==", campus)
+        .where("document", "==", document)
+        .where("role", "==", "Estudiante")
+        .where("status", "in", ["activo", "inactivo"])
+        .limit(1).get();
+    if (!studentSnapshot.empty) {
+      linkedStudent = {id: studentSnapshot.docs[0].id,
+        ...studentSnapshot.docs[0].data()};
+    }
+  }
+  const studentProfile = linkedStudent ? {...linkedStudent} : null;
+  if (studentProfile) {
+    studentProfile.id = studentProfile.id || studentProfile.uid;
+    delete studentProfile.uid;
+    for (const field of ["notificationTokens", "permissions", "webPushToken",
+      "mobilePushToken", "mustChangePassword", "passwordResetOperationId",
+      "passwordResetRequestedAt", "passwordResetRequestedBy",
+      "passwordResetCompletedAt"]) delete studentProfile[field];
+  }
+
   const currentSnapshot = await db.collection("enrollments")
       .where("institution", "==", institution)
+      .where("campus", "==", campus)
       .where("data.numeroIdentidad", "==", document)
       .where("anioMatricula", "==", year).limit(1).get();
   const previousSnapshot = await db.collection("enrollments")
       .where("institution", "==", institution)
+      .where("campus", "==", campus)
       .where("data.numeroIdentidad", "==", document)
       .where("anioMatricula", "<", year)
       .orderBy("anioMatricula").get();
@@ -3341,7 +3944,8 @@ exports.consultarMatriculaEstudiante = onCall(async (request) => {
         estado: item.data().estado,
       }));
   if (currentSnapshot.empty) {
-    return {exists: false, enrollment: null, previous};
+    return {exists: false, enrollment: null, previous,
+      student: studentProfile};
   }
   const item = currentSnapshot.docs[0];
   const enrollment = item.data();
@@ -3353,9 +3957,11 @@ exports.consultarMatriculaEstudiante = onCall(async (request) => {
       data: enrollment.data || {},
       vinculaUsuarioId: enrollment.vinculaUsuarioId || null,
       anioMatricula: enrollment.anioMatricula,
+      revision: Number(enrollment.revision || 1),
       updatedAt: enrollment.updatedAt || null,
     },
     previous,
+    student: studentProfile,
   };
 });
 
@@ -3376,6 +3982,12 @@ exports.crearAutorizacion = onCall(async (request) => {
       !caller.studentIds.includes(studentId)) {
     throw new HttpsError(
         "permission-denied", "El estudiante no esta vinculado a tu familia.",
+    );
+  }
+  if (caller.activeStudentId !== studentId) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Selecciona este estudiante antes de crear la autorizacion.",
     );
   }
   const student = await requireLinkedStudent(
@@ -3400,6 +4012,7 @@ exports.crearAutorizacion = onCall(async (request) => {
     adminNote: null,
     evidence: null,
     requiresRequesterEdit: false,
+    revision: 1,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -3429,6 +4042,12 @@ exports.actualizarAutorizacion = onCall(async (request) => {
   const caller = await getCaller(request);
   const id = requiredString(request.data?.id, "autorizacion", 128);
   const action = requiredString(request.data?.action, "accion", 40);
+  const rawExpectedRevision = request.data?.expectedRevision;
+  if (rawExpectedRevision !== undefined &&
+      (!Number.isInteger(Number(rawExpectedRevision)) ||
+       Number(rawExpectedRevision) < 1)) {
+    throw new HttpsError("invalid-argument", "La version no es valida.");
+  }
   const ref = db.collection("authorization_requests").doc(id);
   const snapshot = await ref.get();
   if (!snapshot.exists) {
@@ -3448,6 +4067,14 @@ exports.actualizarAutorizacion = onCall(async (request) => {
     throw new HttpsError(
         "failed-precondition",
         "Las autorizaciones historicas son de solo lectura.",
+    );
+  }
+  const currentRevision = Number(current.revision || 1);
+  const expectedRevision = rawExpectedRevision === undefined ?
+    currentRevision : Number(rawExpectedRevision);
+  if (expectedRevision !== currentRevision) {
+    throw new HttpsError(
+        "aborted", "La autorizacion cambio. Recarga antes de continuar.",
     );
   }
   const note = typeof request.data?.note === "string" ?
@@ -3475,6 +4102,12 @@ exports.actualizarAutorizacion = onCall(async (request) => {
         !caller.studentIds.includes(studentId)) {
       throw new HttpsError(
           "permission-denied", "El estudiante no esta vinculado.",
+      );
+    }
+    if (caller.activeStudentId !== studentId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Selecciona este estudiante antes de reenviar la autorizacion.",
       );
     }
     const student = await requireLinkedStudent(
@@ -3546,29 +4179,37 @@ exports.actualizarAutorizacion = onCall(async (request) => {
   }
 
   changes.status = nextStatus;
-  const batch = db.batch();
-  batch.update(ref, changes);
-  batch.create(db.collection("authorization_history").doc(), {
-    authorizationId: id,
-    action,
-    fromStatus: current.status,
-    toStatus: nextStatus,
-    note: note || null,
-    evidence: evidence || null,
-    performedBy: caller.uid,
-    performedByRole: caller.role,
-    institutionId: current.institutionId,
-    campusId: current.campusId,
-    academicYearId: current.academicYearId,
-    academicYear: current.academicYear,
-    groupId: changes.groupId || current.groupId,
-    groupName: changes.groupName || current.groupName,
-    createdAt: FieldValue.serverTimestamp(),
+  changes.revision = expectedRevision + 1;
+  await db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(ref);
+    if (!fresh.exists || Number(fresh.data().revision || 1) !==
+        expectedRevision || fresh.data().status !== current.status) {
+      throw new HttpsError(
+          "aborted", "La autorizacion cambio. Recarga antes de continuar.",
+      );
+    }
+    transaction.update(ref, changes);
+    transaction.create(db.collection("authorization_history").doc(), {
+      authorizationId: id,
+      action,
+      fromStatus: current.status,
+      toStatus: nextStatus,
+      note: note || null,
+      evidence: evidence || null,
+      performedBy: caller.uid,
+      performedByRole: caller.role,
+      institutionId: current.institutionId,
+      campusId: current.campusId,
+      academicYearId: current.academicYearId,
+      academicYear: current.academicYear,
+      groupId: changes.groupId || current.groupId,
+      groupName: changes.groupName || current.groupName,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   });
-  await batch.commit();
   await notifyAuthorization({...current, ...changes, id},
       action === "resubmit" ? "resubmitted" : "updated");
-  return {success: true, status: nextStatus};
+  return {success: true, status: nextStatus, revision: changes.revision};
 });
 
 exports.consultarHorarios = onCall(async (request) => {
@@ -3893,6 +4534,18 @@ function normalizedCatalogValue(value) {
   return String(value || "").normalize("NFKC").trim().toLocaleLowerCase("es");
 }
 
+/** @param {Object} group Grupo con alcance y nombre. @return {DocumentReference} */
+function academicGroupUniqueRef(group) {
+  const key = [
+    group.institutionId,
+    group.campusId,
+    group.academicYearId,
+    normalizedCatalogValue(group.name),
+  ].join("\u0000");
+  const id = crypto.createHash("sha256").update(key).digest("hex");
+  return db.collection("academic_group_unique_keys").doc(id);
+}
+
 /** @param {string} key Clave solicitada. */
 function requireManagedParameterKey(key) {
   if (!MANAGED_PARAMETER_KEYS.has(key)) {
@@ -3917,6 +4570,7 @@ exports.listarCatalogosAdministrables = onCall(async (request) => {
       value: String(value.valor || "").trim(),
       order: Number(value.orden || 0),
       active: value.activo === true,
+      revision: Number(value.revision || 1),
     };
   })).sort((a, b) => a.key.localeCompare(b.key) || a.order - b.order ||
     a.label.localeCompare(b.label));
@@ -3947,23 +4601,17 @@ exports.guardarCatalogoAdministrable = onCall(async (request) => {
   if (typeof request.data?.active !== "boolean") {
     throw new HttpsError("invalid-argument", "El estado no es valido.");
   }
+  const rawExpectedRevision = request.data?.expectedRevision;
+  if (rawExpectedRevision !== undefined &&
+      (!Number.isInteger(Number(rawExpectedRevision)) ||
+       Number(rawExpectedRevision) < 1)) {
+    throw new HttpsError("invalid-argument", "La version no es valida.");
+  }
 
   const requestedId = String(request.data?.id || "").trim();
   const ref = requestedId ? db.collection("parameters").doc(requestedId) :
     db.collection("parameters").doc(`${key}_${crypto.createHash("sha256")
         .update(normalizedCatalogValue(value)).digest("hex").slice(0, 24)}`);
-  const existingSnapshot = await ref.get();
-  const before = existingSnapshot.data() || null;
-  if (requestedId && (!existingSnapshot.exists || before.clave !== key)) {
-    throw new HttpsError("not-found", "La opcion ya no esta disponible.");
-  }
-  if (before && normalizedCatalogValue(before.valor) !==
-      normalizedCatalogValue(value)) {
-    throw new HttpsError(
-        "failed-precondition",
-        "El codigo interno no puede cambiarse. Crea otra opcion y desactiva esta.",
-    );
-  }
   const sameKey = await db.collection("parameters")
       .where("clave", "==", key).get();
   if (sameKey.docs.some((item) => item.id !== ref.id &&
@@ -3972,37 +4620,64 @@ exports.guardarCatalogoAdministrable = onCall(async (request) => {
     throw new HttpsError("already-exists", "La opcion ya existe.");
   }
 
-  const payload = {
-    clave: key,
-    etiqueta: label,
-    valor: before?.valor || value,
-    orden: order,
-    activo: request.data.active,
-    updatedBy: caller.uid,
-    updatedAt: FieldValue.serverTimestamp(),
-    ...(!before ? {
-      createdBy: caller.uid,
+  let revision;
+  await db.runTransaction(async (transaction) => {
+    const existingSnapshot = await transaction.get(ref);
+    const before = existingSnapshot.data() || null;
+    if (requestedId && (!existingSnapshot.exists || before.clave !== key)) {
+      throw new HttpsError("not-found", "La opcion ya no esta disponible.");
+    }
+    if (before && normalizedCatalogValue(before.valor) !==
+        normalizedCatalogValue(value)) {
+      throw new HttpsError(
+          "failed-precondition",
+          "El codigo interno no puede cambiarse. " +
+            "Crea otra opcion y desactiva esta.",
+      );
+    }
+    const currentRevision = Number(before?.revision || 1);
+    if (before && rawExpectedRevision !== undefined &&
+        Number(rawExpectedRevision) !== currentRevision) {
+      throw new HttpsError(
+          "aborted", "Otro administrador modifico la opcion. Recarga.",
+      );
+    }
+    revision = before ? currentRevision + 1 : 1;
+    const payload = {
+      clave: key,
+      etiqueta: label,
+      valor: before?.valor || value,
+      orden: order,
+      activo: request.data.active,
+      revision,
+      updatedBy: caller.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(!before ? {
+        createdBy: caller.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      } : {}),
+    };
+    if (before) transaction.update(ref, payload);
+    else transaction.create(ref, payload);
+    transaction.create(db.collection("parameter_history").doc(), {
+      parameterId: ref.id,
+      key,
+      action: before ? "updated" : "created",
+      before,
+      after: payload,
+      performedBy: caller.uid,
       createdAt: FieldValue.serverTimestamp(),
-    } : {}),
-  };
-  const batch = db.batch();
-  if (before) batch.update(ref, payload); else batch.create(ref, payload);
-  batch.create(db.collection("parameter_history").doc(), {
-    parameterId: ref.id,
-    key,
-    action: before ? "updated" : "created",
-    before,
-    after: payload,
-    performedBy: caller.uid,
-    createdAt: FieldValue.serverTimestamp(),
+    });
   });
-  await batch.commit();
-  return {success: true, id: ref.id};
+  return {success: true, id: ref.id, revision};
 });
 
 exports.listarGruposAcademicosAdministracion = onCall(async (request) => {
   const caller = await getCaller(request);
-  requireParameterAction(caller, "ver");
+  const historyAdmin = caller.role === "Administrador" &&
+    Array.isArray(caller.permissions) &&
+    caller.permissions.includes("historial.ver");
+  if (!historyAdmin) requireParameterAction(caller, "ver");
   const institution = caller.isSuperadmin === true ? requiredString(
       request.data?.institutionId, "institucion", 120,
   ) : caller.institution;
@@ -4044,11 +4719,15 @@ exports.crearGrupoAcademico = onCall(async (request) => {
       .where("institutionId", "==", institution)
       .where("campusId", "==", campus)
       .where("academicYearId", "==", academicYear.id)
-      .where("name", "==", name).limit(1).get();
-  if (!duplicate.empty) {
+      .get();
+  if (duplicate.docs.some((item) =>
+    normalizedCatalogValue(item.data().name) === normalizedCatalogValue(name))) {
     throw new HttpsError("already-exists", "El grupo ya existe en esta sede.");
   }
   const order = Number(request.data?.order);
+  if (!Number.isInteger(order) || order < 0 || order > 10000) {
+    throw new HttpsError("invalid-argument", "El orden no es valido.");
+  }
   const ref = db.collection("academic_groups").doc();
   const group = {
     institutionId: institution,
@@ -4058,26 +4737,40 @@ exports.crearGrupoAcademico = onCall(async (request) => {
     level,
     section,
     name,
-    order: Number.isInteger(order) ? order : 0,
+    order,
     active: true,
+    revision: 1,
     createdBy: caller.uid,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const batch = db.batch();
-  batch.create(ref, group);
-  batch.create(db.collection("academic_group_history").doc(), {
-    groupId: ref.id,
-    action: "created",
-    after: group,
-    performedBy: caller.uid,
-    institutionId: institution,
-    campusId: campus,
-    academicYearId: academicYear.id,
-    academicYear: academicYear.year,
-    createdAt: FieldValue.serverTimestamp(),
+  const uniqueRef = academicGroupUniqueRef(group);
+  await db.runTransaction(async (transaction) => {
+    const unique = await transaction.get(uniqueRef);
+    if (unique.exists) {
+      throw new HttpsError("already-exists", "El grupo ya existe en esta sede.");
+    }
+    transaction.create(uniqueRef, {
+      groupId: ref.id,
+      institutionId: institution,
+      campusId: campus,
+      academicYearId: academicYear.id,
+      normalizedName: normalizedCatalogValue(name),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.create(ref, group);
+    transaction.create(db.collection("academic_group_history").doc(), {
+      groupId: ref.id,
+      action: "created",
+      after: group,
+      performedBy: caller.uid,
+      institutionId: institution,
+      campusId: campus,
+      academicYearId: academicYear.id,
+      academicYear: academicYear.year,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   });
-  await batch.commit();
   return {success: true, id: ref.id, name};
 });
 
@@ -4085,6 +4778,12 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
   const caller = await getCaller(request);
   requireAcademicGroupAdmin(caller);
   const id = requiredString(request.data?.id, "grupo", 160);
+  const rawExpectedRevision = request.data?.expectedRevision;
+  if (rawExpectedRevision !== undefined &&
+      (!Number.isInteger(Number(rawExpectedRevision)) ||
+       Number(rawExpectedRevision) < 1)) {
+    throw new HttpsError("invalid-argument", "La version no es valida.");
+  }
   const ref = db.collection("academic_groups").doc(id);
   const snapshot = await ref.get();
   const current = snapshot.data() || {};
@@ -4104,6 +4803,9 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "Estado de grupo no valido.");
   }
   const order = Number(request.data?.order);
+  if (!Number.isInteger(order) || order < 0 || order > 10000) {
+    throw new HttpsError("invalid-argument", "El orden no es valido.");
+  }
   const level = requiredString(request.data?.level, "nivel", 80);
   const section = requiredString(request.data?.section, "grupo", 10)
       .toUpperCase();
@@ -4111,9 +4813,10 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
   const duplicate = await db.collection("academic_groups")
       .where("institutionId", "==", current.institutionId)
       .where("campusId", "==", current.campusId)
-      .where("academicYearId", "==", current.academicYearId)
-      .where("name", "==", name).get();
-  if (duplicate.docs.some((item) => item.id !== id)) {
+      .where("academicYearId", "==", current.academicYearId).get();
+  if (duplicate.docs.some((item) => item.id !== id &&
+      normalizedCatalogValue(item.data().name) ===
+      normalizedCatalogValue(name))) {
     throw new HttpsError("already-exists", "El grupo ya existe en esta sede.");
   }
   const changes = {
@@ -4121,26 +4824,56 @@ exports.actualizarGrupoAcademico = onCall(async (request) => {
     level,
     section,
     name,
-    order: Number.isInteger(order) ? order : Number(current.order || 0),
+    order,
+    revision: Number(current.revision || 1) + 1,
     updatedBy: caller.uid,
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const batch = db.batch();
-  batch.update(ref, changes);
-  batch.create(db.collection("academic_group_history").doc(), {
-    groupId: id,
-    action: "updated",
-    before: current,
-    after: {...current, ...changes},
-    performedBy: caller.uid,
-    institutionId: current.institutionId,
-    campusId: current.campusId,
-    academicYearId: current.academicYearId,
-    academicYear: current.academicYear,
-    createdAt: FieldValue.serverTimestamp(),
+  const expectedRevision = rawExpectedRevision === undefined ?
+    Number(current.revision || 1) : Number(rawExpectedRevision);
+  const oldUniqueRef = academicGroupUniqueRef(current);
+  const newUniqueRef = academicGroupUniqueRef({...current, name});
+  await db.runTransaction(async (transaction) => {
+    const reads = [transaction.get(ref), transaction.get(newUniqueRef)];
+    if (oldUniqueRef.path !== newUniqueRef.path) {
+      reads.push(transaction.get(oldUniqueRef));
+    }
+    const [fresh, newUnique, oldUnique] = await Promise.all(reads);
+    if (!fresh.exists || Number(fresh.data().revision || 1) !==
+        expectedRevision) {
+      throw new HttpsError(
+          "aborted", "Otro administrador modifico el grupo. Recarga.",
+      );
+    }
+    if (newUnique.exists && newUnique.data().groupId !== id) {
+      throw new HttpsError("already-exists", "El grupo ya existe en esta sede.");
+    }
+    transaction.set(newUniqueRef, {
+      groupId: id,
+      institutionId: current.institutionId,
+      campusId: current.campusId,
+      academicYearId: current.academicYearId,
+      normalizedName: normalizedCatalogValue(name),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    if (oldUnique && oldUnique.data()?.groupId === id) {
+      transaction.delete(oldUniqueRef);
+    }
+    transaction.update(ref, changes);
+    transaction.create(db.collection("academic_group_history").doc(), {
+      groupId: id,
+      action: "updated",
+      before: fresh.data(),
+      after: {...fresh.data(), ...changes},
+      performedBy: caller.uid,
+      institutionId: current.institutionId,
+      campusId: current.campusId,
+      academicYearId: current.academicYearId,
+      academicYear: current.academicYear,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   });
-  await batch.commit();
-  return {success: true};
+  return {success: true, revision: changes.revision};
 });
 
 /**
@@ -4236,6 +4969,7 @@ exports.eliminarGrupoAcademico = onCall(async (request) => {
     );
   }
   const batch = db.batch();
+  batch.delete(academicGroupUniqueRef(current));
   batch.delete(db.collection("message_channels").doc(`academic_${id}`));
   batch.delete(ref);
   batch.create(db.collection("academic_group_history").doc(), {
@@ -4321,7 +5055,8 @@ exports.listarArchivos = onCall(async (request) => {
       .where("institutionId", "==", institution)
       .where("campusId", "==", campus)
       .where("academicYearId", "==", academicYear.id)
-      .where("status", "==", "active");
+      .where("status", "in", caller.isSuperadmin === true ||
+        caller.role === "Administrador" ? ["active", "deleting"] : ["active"]);
   if (caller.role === "Familiar") {
     const studentId = requiredString(
         request.data?.activeStudentId, "hijo activo", 128,
@@ -4343,12 +5078,20 @@ exports.listarArchivos = onCall(async (request) => {
         "recipientUserIds", "array-contains", caller.uid,
     );
   }
-  const snapshot = await query.limit(500).get();
+  const snapshot = await query.limit(501).get();
+  if (snapshot.size > 500) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Hay demasiadas publicaciones para mostrar. " +
+        "Solicita a administración revisar la retención de archivos.",
+    );
+  }
   return {files: snapshot.docs.map((item) => {
     const file = item.data();
     return {
       id: item.id,
       name: file.name || "",
+      status: file.status,
       storagePath: file.storagePath || "",
       audienceType: file.audienceType || "groups",
       targetGroupIds: file.targetGroupIds || [],
@@ -4369,16 +5112,47 @@ async function requireFileDownloadAccess(caller, file) {
   if (file.status !== "active" || !sameTenant(caller, file)) {
     throw new HttpsError("permission-denied", "Archivo fuera de tu alcance.");
   }
-  if (caller.isSuperadmin === true || caller.role === "Administrador" ||
-      file.uploadedBy === caller.uid ||
-      (Array.isArray(file.recipientUserIds) &&
-       file.recipientUserIds.includes(caller.uid))) return;
-  if (caller.role === "Familiar" && caller.activeStudentId &&
-      Array.isArray(caller.studentIds) &&
-      caller.studentIds.includes(caller.activeStudentId) &&
-      Array.isArray(file.recipientContextKeys) &&
-      file.recipientContextKeys.includes(
-          `${caller.uid}:${caller.activeStudentId}`)) return;
+  if (caller.isSuperadmin === true) return;
+  if (!Array.isArray(caller.permissions) ||
+      !caller.permissions.includes("archivos.ver") ||
+      !["Administrador", "Docente", "Familiar", "Estudiante"]
+          .includes(caller.role)) {
+    throw new HttpsError("permission-denied", "No tienes acceso a Archivos.");
+  }
+  if (caller.role === "Administrador") return;
+  const year = await requireActiveAcademicYear(
+      file.institutionId, file.campusId);
+  if (file.academicYearId !== year.id) {
+    throw new HttpsError("permission-denied", "El archivo no es del año activo.");
+  }
+  if (caller.role === "Familiar") {
+    const childId = caller.activeStudentId;
+    if (!childId || !Array.isArray(caller.studentIds) ||
+        !caller.studentIds.includes(childId) ||
+        !Array.isArray(file.targetStudentIds) ||
+        !file.targetStudentIds.includes(childId) ||
+        !Array.isArray(file.recipientContextKeys) ||
+        !file.recipientContextKeys.includes(`${caller.uid}:${childId}`)) {
+      throw new HttpsError("permission-denied", "Selecciona un hijo vinculado.");
+    }
+    await requireLinkedStudent(childId, file.institutionId, file.campusId);
+    return;
+  }
+  if (caller.role === "Estudiante" &&
+      (!Array.isArray(file.targetStudentIds) ||
+       !file.targetStudentIds.includes(caller.uid))) {
+    throw new HttpsError("permission-denied", "No eres destinatario del archivo.");
+  }
+  if (caller.role === "Docente") {
+    const currentGroups = await fileTeacherGroupIds(caller);
+    if (!Array.isArray(file.targetGroupIds) ||
+        !file.targetGroupIds.some((id) => currentGroups.has(id))) {
+      throw new HttpsError("permission-denied",
+          "El archivo no pertenece a tus grupos actuales.");
+    }
+  }
+  if (Array.isArray(file.recipientUserIds) &&
+      file.recipientUserIds.includes(caller.uid)) return;
   throw new HttpsError("permission-denied", "No puedes descargar este archivo.");
 }
 
@@ -4395,6 +5169,11 @@ exports.registrarDescargaArchivo = onCall(async (request) => {
       .update(`${fileId}\u0000${caller.uid}`).digest("hex");
   const receiptRef = db.collection("file_download_receipts").doc(receiptId);
   await db.runTransaction(async (transaction) => {
+    const freshFile = await transaction.get(fileSnapshot.ref);
+    if (!freshFile.exists || freshFile.data().status !== "active") {
+      throw new HttpsError("not-found", "El archivo ya no está disponible.");
+    }
+    await requireFileDownloadAccess(caller, freshFile.data());
     const current = await transaction.get(receiptRef);
     const now = FieldValue.serverTimestamp();
     const payload = {
@@ -4553,28 +5332,17 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
   if (!Number.isInteger(actualSize) || actualSize <= 0 ||
       actualSize > file.expectedSize || actualSize > FILE_UPLOAD_LIMIT_BYTES ||
       metadata.contentType !== file.contentType) {
-    await storage.bucket().file(file.storagePath)
-        .delete({ignoreNotFound: true});
-    const usageRef = db.collection("file_storage_usage")
-        .doc(fileUsageId(file.institutionId));
-    await db.runTransaction(async (transaction) => {
-      const [fresh, usageSnapshot] = await Promise.all([
-        transaction.get(ref), transaction.get(usageRef),
-      ]);
-      if (!fresh.exists || fresh.data().status !== "uploading") return;
-      const usage = usageSnapshot.data() || {};
-      transaction.set(usageRef, {
-        reservedBytes: Math.max(
-            0, Number(usage.reservedBytes || 0) - file.expectedSize,
-        ),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
-      transaction.delete(ref);
+    await require("./file_cleanup").cancelUpload({
+      db, bucket: storage.bucket(), ref, caller, source: "invalid_upload",
+      usageRefForInstitution: (institutionId) =>
+        db.collection("file_storage_usage").doc(fileUsageId(institutionId)),
     });
     throw new HttpsError(
         "failed-precondition", "El archivo cargado no coincide con la reserva.",
     );
   }
+  await require("./protected_downloads").revokePrivateDownloadTokens(
+      storage.bucket().file(file.storagePath), metadata);
   const usageRef = db.collection("file_storage_usage")
       .doc(fileUsageId(file.institutionId));
   await db.runTransaction(async (transaction) => {
@@ -4604,14 +5372,22 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
     }, {merge: true});
     transaction.create(db.collection("file_history").doc(), {
       fileId: id,
+      fileName: file.name,
+      storagePath: file.storagePath,
       action: "uploaded",
       performedBy: caller.uid,
+      performedByName:
+        `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
       institutionId: file.institutionId,
       campusId: file.campusId,
       academicYearId: file.academicYearId,
       academicYear: file.academicYear,
       audienceType: file.audienceType,
       targetGroupIds: file.targetGroupIds,
+      groupId: file.targetGroupIds?.length === 1 ?
+        file.targetGroupIds[0] : "",
+      groupName: file.targetGroupNames?.length === 1 ?
+        file.targetGroupNames[0] : "",
       targetStudentIds: file.targetStudentIds,
       recipientCount: Array.isArray(file.recipientUserIds) ?
         file.recipientUserIds.length : 0,
@@ -4641,6 +5417,7 @@ exports.confirmarCargaArchivo = onCall(async (request) => {
           title: "Nuevo archivo disponible",
           body: file.message || file.name,
         },
+        data: {type: "files", fileId: id},
         tokens: [...tokens],
       }, {institutionId: file.institutionId, campusId: file.campusId,
         academicYearId: file.academicYearId, type: "files"});
@@ -4667,25 +5444,10 @@ exports.cancelarCargaArchivo = onCall(async (request) => {
   const caller = await getCaller(request);
   const id = requiredString(request.data?.id, "archivo", 128);
   const ref = db.collection("files").doc(id);
-  const snapshot = await ref.get();
-  const file = snapshot.data() || {};
-  if (!snapshot.exists || file.status !== "uploading" ||
-      (file.uploadedBy !== caller.uid && caller.isSuperadmin !== true)) {
-    throw new HttpsError("permission-denied", "Reserva no disponible.");
-  }
-  await storage.bucket().file(file.storagePath).delete({ignoreNotFound: true});
-  const usageRef = db.collection("file_storage_usage")
-      .doc(fileUsageId(file.institutionId));
-  await db.runTransaction(async (transaction) => {
-    const usageSnapshot = await transaction.get(usageRef);
-    const usage = usageSnapshot.data() || {};
-    transaction.set(usageRef, {
-      reservedBytes: Math.max(
-          0, Number(usage.reservedBytes || 0) - file.expectedSize,
-      ),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
-    transaction.delete(ref);
+  await require("./file_cleanup").cancelUpload({
+    db, bucket: storage.bucket(), ref, caller, source: "cancel_upload",
+    usageRefForInstitution: (institutionId) =>
+      db.collection("file_storage_usage").doc(fileUsageId(institutionId)),
   });
   return {success: true};
 });
@@ -4699,77 +5461,69 @@ exports.cancelarCargaArchivo = onCall(async (request) => {
  */
 async function deleteFileRecords(caller, ids, source) {
   const uniqueIds = [...new Set(ids)].slice(0, 100);
-  const files = [];
-  for (const id of uniqueIds) {
-    const snapshot = await db.collection("files").doc(id).get();
-    if (!snapshot.exists) continue;
-    const file = snapshot.data();
+  const refs = [];
+  const authorize = (file) => {
+    requireFileAction(caller, "eliminar");
     if (!sameTenant(caller, file) ||
         (caller.isSuperadmin !== true && caller.role !== "Administrador")) {
       throw new HttpsError("permission-denied", "Archivo fuera de tu alcance.");
     }
-    files.push({id, ref: snapshot.ref, ...file});
+  };
+  // Validate the whole selection before deleting any object.
+  for (const id of uniqueIds) {
+    const snapshot = await db.collection("files").doc(id).get();
+    if (!snapshot.exists) continue;
+    authorize(snapshot.data());
+    refs.push(snapshot.ref);
   }
-  for (const file of files) {
-    await file.ref.update({
-      status: "deleting",
-      deletionRequestedBy: caller.uid,
-      deletionRequestedAt: FieldValue.serverTimestamp(),
+  let deleted = 0;
+  for (const ref of refs) {
+    const removed = await require("./file_cleanup").deleteFile({
+      db, bucket: storage.bucket(), ref, caller, source, authorize,
+      usageRefForInstitution: (id) => db.collection("file_storage_usage")
+          .doc(fileUsageId(id)),
     });
+    if (removed) deleted += 1;
   }
-  try {
-    for (const file of files) {
-      await storage.bucket().file(file.storagePath)
-          .delete({ignoreNotFound: true});
-    }
-  } catch (error) {
-    for (const file of files) {
-      await file.ref.update({status: file.status || "active"});
-    }
-    throw error;
-  }
-  for (const file of files) {
-    const usageRef = db.collection("file_storage_usage")
-        .doc(fileUsageId(file.institutionId));
-    const receiptSnapshots = await db.collection("file_download_receipts")
-        .where("fileId", "==", file.id).get();
-    for (let index = 0; index < receiptSnapshots.docs.length; index += 400) {
-      const batch = db.batch();
-      receiptSnapshots.docs.slice(index, index + 400).forEach((receipt) =>
-        batch.delete(receipt.ref));
-      await batch.commit();
-    }
-    await db.runTransaction(async (transaction) => {
-      const usageSnapshot = await transaction.get(usageRef);
-      const usage = usageSnapshot.data() || {};
-      const usedDelta = file.status === "active" ?
-        Number(file.sizeBytes || 0) : 0;
-      const reservedDelta = file.status === "uploading" ?
-        Number(file.expectedSize || 0) : 0;
-      transaction.set(usageRef, {
-        usedBytes: Math.max(0, Number(usage.usedBytes || 0) - usedDelta),
-        reservedBytes: Math.max(
-            0, Number(usage.reservedBytes || 0) - reservedDelta,
-        ),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
-      transaction.create(db.collection("file_history").doc(), {
-        fileId: file.id,
-        action: "deleted",
-        source,
-        performedBy: caller.uid,
-        institutionId: file.institutionId,
-        campusId: file.campusId,
-        audienceType: file.audienceType,
-        targetGroupIds: file.targetGroupIds || [],
-        targetStudentIds: file.targetStudentIds || [],
-        sizeBytes: Number(file.sizeBytes || 0),
-        createdAt: FieldValue.serverTimestamp(),
+  return deleted;
+}
+
+exports.reintentarCancelacionesAdjuntos = onSchedule({
+  schedule: "every 15 minutes", timeoutSeconds: 300, maxInstances: 1,
+}, async () => {
+  const result = await require("./message_attachment_cleanup")
+      .retryMessageAttachmentCancellations({
+        db, bucket: storage.bucket(),
+        usageRefForInstitution: (id) => db.collection("file_storage_usage")
+            .doc(fileUsageId(id)),
       });
-      transaction.delete(file.ref);
-    });
+  if (result.failures.length) {
+    console.warn("Cancelaciones de adjuntos pendientes", result);
   }
-  return files.length;
+});
+
+/** Elimina adjuntos vencidos y descuenta la cuota institucional. */
+async function deleteExpiredMessageAttachments(caller, threshold) {
+  if (caller.isSuperadmin !== true) {
+    throw new HttpsError("permission-denied", "Solo el superadmin.");
+  }
+  const snapshot = await db.collection("message_attachments")
+      .where("status", "in", ["ready", "attached", "deleting"])
+      .where("retentionExpiresAt", "<=", threshold)
+      .limit(100).get();
+  let deleted = 0;
+  for (const item of snapshot.docs) {
+    const removed = await require("./message_attachment_cleanup")
+        .deleteMessageAttachment({
+          db, bucket: storage.bucket(), ref: item.ref, threshold,
+          kind: "retention", performedBy: caller.uid,
+          authorize: () => {},
+          usageRefForInstitution: (id) => db.collection("file_storage_usage")
+              .doc(fileUsageId(id)),
+        });
+    if (removed) deleted += 1;
+  }
+  return deleted;
 }
 
 exports.eliminarArchivos = onCall(async (request) => {
@@ -4797,13 +5551,17 @@ exports.limpiarArchivosAntiguos = onCall(async (request) => {
       Date.now() - FILE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
   );
   const snapshot = await db.collection("files")
-      .where("status", "==", "active")
+      .where("status", "in", ["active", "deleting"])
       .where("createdAt", "<=", threshold)
       .limit(100).get();
   const deleted = await deleteFileRecords(
       caller, snapshot.docs.map((item) => item.id), "older_than_60_days",
   );
-  return {success: true, deleted, retentionDays: FILE_RETENTION_DAYS};
+  const deletedMessageAttachments = await deleteExpiredMessageAttachments(
+      caller, Timestamp.now(),
+  );
+  return {success: true, deleted, deletedMessageAttachments,
+    retentionDays: FILE_RETENTION_DAYS};
 });
 
 exports.obtenerResumenArchivos = onCall(async (request) => {
@@ -4918,19 +5676,63 @@ exports.actualizarEstadoUsuario = onCall(async (request) => {
         "Solo el superadministrador modifica administradores.",
     );
   }
+  if (status === "activo" && target.status !== "activo" &&
+      target.activeTeacherTransferId) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El docente tiene un traslado vigente. Gestiona primero el traslado.",
+    );
+  }
 
-  let authUser = null;
+  const operationId = crypto.randomUUID();
+  const expectedRevision = Number(target.revision || 1);
+  await db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(targetRef);
+    const value = fresh.data() || {};
+    const startedAt = value.userEditStartedAt?.toMillis?.();
+    const editIsFresh = Number.isFinite(startedAt) &&
+      Date.now() - startedAt < 10 * 60 * 1000;
+    if (!fresh.exists || (value.userEditOperationId && editIsFresh) ||
+        Number(value.revision || 1) !== expectedRevision) {
+      throw new HttpsError(
+          "aborted", "Otro administrador esta modificando el usuario.",
+      );
+    }
+    transaction.update(targetRef, {
+      userEditOperationId: operationId,
+      userEditStartedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  const releaseEdit = async () => db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(targetRef);
+    if (fresh.data()?.userEditOperationId === operationId) {
+      transaction.update(targetRef, {
+        userEditOperationId: FieldValue.delete(),
+        userEditStartedAt: FieldValue.delete(),
+      });
+    }
+  });
+
+  let authUser;
   try {
     authUser = await auth.getUser(uid);
     await auth.updateUser(uid, {disabled: status !== "activo"});
   } catch (error) {
-    if (error.code !== "auth/user-not-found") throw error;
+    await releaseEdit().catch(() => null);
+    if (error.code === "auth/user-not-found") {
+      throw new HttpsError(
+          "failed-precondition", "La cuenta no existe en autenticacion.",
+      );
+    }
+    throw error;
   }
 
-  const batch = db.batch();
   const userChanges = {
     status,
     administrativeRemoval: false,
+    revision: expectedRevision + 1,
+    userEditOperationId: FieldValue.delete(),
+    userEditStartedAt: FieldValue.delete(),
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (status === "inactivo") {
@@ -4938,27 +5740,36 @@ exports.actualizarEstadoUsuario = onCall(async (request) => {
     userChanges.fcmToken = FieldValue.delete();
     userChanges.fcmTokens = FieldValue.delete();
   }
-  batch.update(targetRef, userChanges);
-  batch.set(db.collection("user_directory").doc(uid), {
-    status,
-    administrativeRemoval: false,
-  }, {merge: true});
-  batch.create(db.collection("user_history").doc(), {
-    usuarioId: uid,
-    nombres: target.firstName || "",
-    apellidos: target.lastName || "",
-    rol: target.role || "",
-    accion: status === "activo" ? "reactivado" : "desactivado",
-    realizadoPor:
-      `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
-    performedBy: caller.uid,
-    institution: target.institution,
-    campus: target.campus,
-    fecha: FieldValue.serverTimestamp(),
-  });
   try {
-    await batch.commit();
-  } catch {
+    await db.runTransaction(async (transaction) => {
+      const fresh = await transaction.get(targetRef);
+      if (fresh.data()?.userEditOperationId !== operationId ||
+          Number(fresh.data()?.revision || 1) !== expectedRevision) {
+        throw new HttpsError(
+            "aborted", "El usuario cambio durante la operacion.",
+        );
+      }
+      transaction.update(targetRef, userChanges);
+      transaction.set(db.collection("user_directory").doc(uid), {
+        status,
+        administrativeRemoval: false,
+      }, {merge: true});
+      transaction.create(db.collection("user_history").doc(), {
+        usuarioId: uid,
+        nombres: target.firstName || "",
+        apellidos: target.lastName || "",
+        rol: target.role || "",
+        accion: status === "activo" ? "reactivado" : "desactivado",
+        realizadoPor:
+          `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
+        performedBy: caller.uid,
+        institution: target.institution,
+        campus: target.campus,
+        fecha: FieldValue.serverTimestamp(),
+      });
+    });
+  } catch (error) {
+    await releaseEdit().catch(() => null);
     if (authUser) {
       try {
         await auth.updateUser(uid, {disabled: authUser.disabled});
@@ -4966,9 +5777,9 @@ exports.actualizarEstadoUsuario = onCall(async (request) => {
         console.error("No se pudo revertir Auth:", rollbackError.code);
       }
     }
-    throw new HttpsError(
-        "internal", "No se cambio el estado; la operacion se revirtio.",
-    );
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal",
+        "No se cambio el estado; la operacion se revirtio.");
   }
   return {success: true, status};
 });
@@ -5197,6 +6008,9 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
     finalBatch.delete(db.collection("user_directory").doc(uid));
     finalBatch.delete(db.collection("notification_rate_limits").doc(uid));
     finalBatch.delete(db.collection("push_device_sessions").doc(uid));
+    for (const entry of profileUniqueEntries(target)) {
+      finalBatch.delete(entry.ref);
+    }
     finalBatch.delete(targetRef);
     finalBatch.delete(db.collection("qr_credentials").doc(
         require("./qr_identity").credentialId("user", uid)));
@@ -5414,14 +6228,30 @@ exports.seleccionarHijoActivo = onCall(async (request) => {
     );
   }
   await requireLinkedStudent(studentId, caller.institution, caller.campus);
-  await db.collection("users").doc(caller.uid).update({
-    activeStudentId: studentId,
-    updatedAt: FieldValue.serverTimestamp(),
+  const userRef = db.collection("users").doc(caller.uid);
+  let revision;
+  await db.runTransaction(async (transaction) => {
+    const fresh = await transaction.get(userRef);
+    const value = fresh.data() || {};
+    if (!fresh.exists || value.status !== "activo" ||
+        value.role !== "Familiar" ||
+        !Array.isArray(value.studentIds) ||
+        !value.studentIds.includes(studentId)) {
+      throw new HttpsError(
+          "failed-precondition", "El vinculo familiar ya no esta vigente.",
+      );
+    }
+    revision = Number(value.revision || 1) + 1;
+    transaction.update(userRef, {
+      activeStudentId: studentId,
+      revision,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(db.collection("user_directory").doc(caller.uid), {
+      activeStudentId: studentId,
+    }, {merge: true});
   });
-  await db.collection("user_directory").doc(caller.uid).set({
-    activeStudentId: studentId,
-  }, {merge: true});
-  return {success: true, studentId};
+  return {success: true, studentId, revision};
 });
 
 /**
@@ -5469,7 +6299,7 @@ async function teacherTransferContext(caller, sourceId, targetId) {
       source.institution, source.campus,
   );
   const [sourceSubjects, targetSubjects, routes, dailyRoutes, threads,
-    recipientFiles, uploadedFiles] = await Promise.all([
+    recipientFiles, uploadedFiles, attendanceSessions, schoolEvents] = await Promise.all([
     db.collection("subjects")
         .where("academicYearId", "==", year.id)
         .where("teacherId", "==", sourceId).get(),
@@ -5483,6 +6313,11 @@ async function teacherTransferContext(caller, sourceId, targetId) {
     db.collection("files")
         .where("recipientUserIds", "array-contains", sourceId).get(),
     db.collection("files").where("uploadedBy", "==", sourceId).get(),
+    db.collection("attendance_sessions")
+        .where("academicYearId", "==", year.id)
+        .where("responsibleTeacherId", "==", sourceId).get(),
+    db.collection("school_events")
+        .where("responsibleUserIds", "array-contains", sourceId).get(),
   ]);
   const inScope = (item) => {
     const data = item.data();
@@ -5499,6 +6334,13 @@ async function teacherTransferContext(caller, sourceId, targetId) {
       recipientFiles.docs,
       uploadedFiles.docs,
   ).filter(inScope);
+  const scopedAttendanceSessions = attendanceSessions.docs.filter((item) =>
+    inScope(item) && item.data().status === "open");
+  const scopedSchoolEvents = schoolEvents.docs.filter((item) => {
+    const data = item.data();
+    return inScope(item) && ["draft", "published"].includes(data.status) &&
+      data.startAt?.toMillis?.() > Date.now();
+  });
   const conflicts = [];
   for (const sourceSubject of sourceSubjects.docs) {
     const current = sourceSubject.data();
@@ -5543,7 +6385,10 @@ async function teacherTransferContext(caller, sourceId, targetId) {
     dailyRoutes: scopedDailyRoutes,
     threads: scopedThreads,
     files: scopedFiles,
+    attendanceSessions: scopedAttendanceSessions,
+    schoolEvents: scopedSchoolEvents,
     sourceTutorGroupId,
+    targetTutorGroupId,
     targetHasLoad,
     conflicts,
     impact: {
@@ -5553,6 +6398,8 @@ async function teacherTransferContext(caller, sourceId, targetId) {
       dailyRoutes: scopedDailyRoutes.length,
       messageThreads: scopedThreads.length,
       accessibleFiles: scopedFiles.length,
+      openAttendanceSessions: scopedAttendanceSessions.length,
+      futureEvents: scopedSchoolEvents.length,
     },
   };
 }
@@ -5668,13 +6515,17 @@ exports.ejecutarTrasladoDocente = onCall(async (request) => {
   const targetName = `${context.target.firstName || ""} ` +
     `${context.target.lastName || ""}`.trim();
   const transferRef = db.collection("teacher_transfers").doc();
+  const sourceRef = db.collection("users").doc(sourceId);
   const changes = {
     subjectIds: context.sourceSubjects.map((item) => item.id),
     routeIds: context.routes.map((item) => item.id),
     dailyRouteIds: context.dailyRoutes.map((item) => item.id),
+    attendanceSessionIds: context.attendanceSessions.map((item) => item.id),
+    eventIds: context.schoolEvents.map((item) => item.id),
     threadIds: [],
     fileIds: [],
     tutorGroupId: context.sourceTutorGroupId,
+    targetPreviousTutorGroupId: context.targetTutorGroupId,
   };
   const operations = [];
   for (const item of context.sourceSubjects) {
@@ -5698,6 +6549,31 @@ exports.ejecutarTrasladoDocente = onCall(async (request) => {
       gestionador: targetId,
       gestionadaPorNombre: targetName,
       updatedBy: caller.uid,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const item of context.attendanceSessions) {
+    operations.push((batch) => batch.update(item.ref, {
+      responsibleTeacherId: targetId,
+      responsibleTeacherName: targetName,
+      revision: Number(item.data().revision || 1) + 1,
+      delegatedByTransferId: transferRef.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }));
+  }
+  for (const item of context.schoolEvents) {
+    const data = item.data();
+    const responsibleUserIds = (data.responsibleUserIds || [])
+        .filter((uid) => uid !== sourceId);
+    if (!responsibleUserIds.includes(targetId)) responsibleUserIds.push(targetId);
+    const responsibleNames = {...(data.responsibleNames || {})};
+    delete responsibleNames[sourceId];
+    responsibleNames[targetId] = targetName;
+    operations.push((batch) => batch.update(item.ref, {
+      responsibleUserIds,
+      responsibleNames,
+      revision: Number(data.revision || 1) + 1,
+      delegatedByTransferId: transferRef.id,
       updatedAt: FieldValue.serverTimestamp(),
     }));
   }
@@ -5743,11 +6619,13 @@ exports.ejecutarTrasladoDocente = onCall(async (request) => {
         }));
   }
   operations.push((batch) => batch.update(
-      db.collection("users").doc(sourceId), {
+      sourceRef, {
         status: "inactivo",
         tutorGroupId: FieldValue.delete(),
         transferredToTeacherId: targetId,
         activeTeacherTransferId: transferRef.id,
+        teacherTransferPreparationId: FieldValue.delete(),
+        teacherTransferPreparationAt: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       }));
   operations.push((batch) => batch.create(transferRef, {
@@ -5776,12 +6654,46 @@ exports.ejecutarTrasladoDocente = onCall(async (request) => {
         "La carga supera el limite seguro. Contacta al superadministrador.",
     );
   }
-  await auth.updateUser(sourceId, {disabled: true});
+  await db.runTransaction(async (transaction) => {
+    const fresh = (await transaction.get(sourceRef)).data();
+    const preparationAt = fresh?.teacherTransferPreparationAt?.toMillis?.();
+    const preparationIsFresh = Number.isFinite(preparationAt) &&
+      Date.now() - preparationAt < 10 * 60 * 1000;
+    if (!fresh || fresh.status !== "activo" ||
+        fresh.activeTeacherTransferId ||
+        (fresh.teacherTransferPreparationId && preparationIsFresh)) {
+      throw new HttpsError(
+          "failed-precondition", "El docente ya tiene un traslado en curso.",
+      );
+    }
+    transaction.update(sourceRef, {
+      teacherTransferPreparationId: transferRef.id,
+      teacherTransferPreparationAt: FieldValue.serverTimestamp(),
+    });
+  });
+  const releasePreparation = async () => db.runTransaction(
+      async (transaction) => {
+        const fresh = await transaction.get(sourceRef);
+        if (fresh.data()?.teacherTransferPreparationId === transferRef.id) {
+          transaction.update(sourceRef, {
+            teacherTransferPreparationId: FieldValue.delete(),
+            teacherTransferPreparationAt: FieldValue.delete(),
+          });
+        }
+      },
+  );
+  try {
+    await auth.updateUser(sourceId, {disabled: true});
+  } catch (error) {
+    await releasePreparation().catch(() => null);
+    throw error;
+  }
   try {
     const batch = db.batch();
     operations.forEach((operation) => operation(batch));
     await batch.commit();
   } catch (error) {
+    await releasePreparation().catch(() => null);
     await auth.updateUser(sourceId, {disabled: false}).catch(() => null);
     throw error;
   }
@@ -5806,6 +6718,13 @@ exports.revertirTrasladoDocenteTemporal = onCall(async (request) => {
   const sourceSnapshot = await db.collection("users")
       .doc(transfer.sourceTeacherId).get();
   const source = sourceSnapshot.data() || {};
+  if (source.status !== "inactivo" ||
+      source.activeTeacherTransferId !== id) {
+    throw new HttpsError(
+        "failed-precondition",
+        "El estado del docente ya no corresponde a este traslado.",
+    );
+  }
   const sourceName = `${source.firstName || ""} ` +
     `${source.lastName || ""}`.trim();
   const changes = transfer.changes || {};
@@ -5839,6 +6758,45 @@ exports.revertirTrasladoDocenteTemporal = onCall(async (request) => {
           updatedAt: FieldValue.serverTimestamp(),
         }));
       }
+    }
+  }
+  for (const documentId of changes.attendanceSessionIds || []) {
+    const itemRef = db.collection("attendance_sessions").doc(documentId);
+    const item = await itemRef.get();
+    const data = item.data() || {};
+    if (data.status === "open" &&
+        data.responsibleTeacherId === transfer.targetTeacherId) {
+      operations.push((batch) => batch.update(itemRef, {
+        responsibleTeacherId: transfer.sourceTeacherId,
+        responsibleTeacherName: sourceName,
+        revision: Number(data.revision || 1) + 1,
+        delegatedByTransferId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
+    }
+  }
+  for (const documentId of changes.eventIds || []) {
+    const itemRef = db.collection("school_events").doc(documentId);
+    const item = await itemRef.get();
+    const data = item.data() || {};
+    if (["draft", "published"].includes(data.status) &&
+        data.startAt?.toMillis?.() > Date.now() &&
+        data.responsibleUserIds?.includes(transfer.targetTeacherId)) {
+      const responsibleUserIds = data.responsibleUserIds
+          .filter((uid) => uid !== transfer.targetTeacherId);
+      if (!responsibleUserIds.includes(transfer.sourceTeacherId)) {
+        responsibleUserIds.push(transfer.sourceTeacherId);
+      }
+      const responsibleNames = {...(data.responsibleNames || {})};
+      delete responsibleNames[transfer.targetTeacherId];
+      responsibleNames[transfer.sourceTeacherId] = sourceName;
+      operations.push((batch) => batch.update(itemRef, {
+        responsibleUserIds,
+        responsibleNames,
+        revision: Number(data.revision || 1) + 1,
+        delegatedByTransferId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
     }
   }
   for (const documentId of changes.threadIds || []) {
@@ -5888,7 +6846,8 @@ exports.revertirTrasladoDocenteTemporal = onCall(async (request) => {
   if (changes.tutorGroupId) {
     operations.push((batch) => batch.update(
         db.collection("users").doc(transfer.targetTeacherId), {
-          tutorGroupId: FieldValue.delete(),
+          tutorGroupId: changes.targetPreviousTutorGroupId ||
+            FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp(),
         }));
   }
@@ -5973,11 +6932,12 @@ exports.prepararAnioLectivo = onCall(async (request) => {
       .where("academicYearId", "==", active.id).get() : null;
   const groupMap = new Map();
   const operations = [];
+  let writeCount = 0;
   for (const source of sourceGroups?.docs || []) {
     const target = db.collection("academic_groups").doc();
     groupMap.set(source.id, target.id);
     const data = source.data();
-    operations.push((batch) => batch.create(target, {
+    const clonedGroup = {
       institutionId: institution,
       campusId: campus,
       academicYearId: targetId,
@@ -5987,11 +6947,36 @@ exports.prepararAnioLectivo = onCall(async (request) => {
       name: data.name,
       order: Number(data.order || 0),
       active: data.active === true,
+      revision: 1,
       sourceGroupId: source.id,
       createdBy: caller.uid,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    }));
+    };
+    operations.push((batch) => {
+      batch.create(target, clonedGroup);
+      batch.create(academicGroupUniqueRef(clonedGroup), {
+        groupId: target.id,
+        institutionId: institution,
+        campusId: campus,
+        academicYearId: targetId,
+        normalizedName: normalizedCatalogValue(data.name),
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      batch.create(db.collection("academic_group_history").doc(), {
+        groupId: target.id,
+        action: "cloned_for_academic_year",
+        sourceGroupId: source.id,
+        after: clonedGroup,
+        performedBy: caller.uid,
+        institutionId: institution,
+        campusId: campus,
+        academicYearId: targetId,
+        academicYear: year,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    writeCount += 3;
   }
 
   let copiedSchedules = 0;
@@ -6020,6 +7005,7 @@ exports.prepararAnioLectivo = onCall(async (request) => {
         updatedAt: FieldValue.serverTimestamp(),
       }));
       copiedSchedules += 1;
+      writeCount += 1;
     }
   }
 
@@ -6036,16 +7022,45 @@ exports.prepararAnioLectivo = onCall(async (request) => {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   }));
-  if (operations.length > 400) {
+  operations.push((batch) => batch.create(
+      db.collection("academic_year_history").doc(), {
+        academicYearId: targetId,
+        action: "prepared",
+        institutionId: institution,
+        campusId: campus,
+        academicYear: year,
+        sourceAcademicYearId: active.id,
+        copiedGroups: groupMap.size,
+        copiedSchedules,
+        performedBy: caller.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      },
+  ));
+  writeCount += 2;
+  if (writeCount > 450) {
     throw new HttpsError(
         "resource-exhausted",
         "La preparacion supera el limite atomico seguro. " +
           "Reduce la copia de horarios o solicita soporte.",
     );
   }
-  const batch = db.batch();
-  operations.forEach((operation) => operation(batch));
-  await batch.commit();
+  const settingsRef = db.collection("academic_year_settings")
+      .doc(academicYearSettingsId(institution, campus));
+  await db.runTransaction(async (transaction) => {
+    const [freshSettings, targetSnapshot] = await Promise.all([
+      transaction.get(settingsRef),
+      transaction.get(yearRef),
+    ]);
+    if (targetSnapshot.exists) {
+      throw new HttpsError("already-exists", "Ese anio lectivo ya existe.");
+    }
+    if (freshSettings.data()?.activeYearId !== active.id) {
+      throw new HttpsError(
+          "aborted", "El anio vigente cambio. Recarga antes de preparar.",
+      );
+    }
+    operations.forEach((operation) => operation(transaction));
+  });
   return {
     success: true,
     id: targetId,
@@ -6080,10 +7095,23 @@ exports.activarAnioLectivo = onCall(async (request) => {
         .doc(academicYearSettingsId(target.institutionId, target.campusId));
     const settingsSnapshot = await transaction.get(settingsRef);
     const previousId = settingsSnapshot.data()?.activeYearId;
+    if (settingsSnapshot.exists &&
+        (settingsSnapshot.data().institutionId !== target.institutionId ||
+         settingsSnapshot.data().campusId !== target.campusId)) {
+      throw new HttpsError(
+          "failed-precondition", "La configuracion lectiva es inconsistente.",
+      );
+    }
     if (typeof previousId === "string" && previousId && previousId !== id) {
       const previousRef = db.collection("academic_years").doc(previousId);
       const previousSnapshot = await transaction.get(previousRef);
       if (previousSnapshot.exists) {
+        if (Number(target.year) <= Number(previousSnapshot.data().year)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "No puedes activar un anio anterior al periodo vigente.",
+          );
+        }
         transaction.update(previousRef, {
           status: "closed",
           closedBy: caller.uid,
@@ -6168,17 +7196,15 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
   if (caller.isSuperadmin === true || caller.role === "Administrador") {
     allowed = all.filter((item) => item.uid !== caller.uid);
   } else if (caller.role === "Estudiante") {
-    const teachers = await db.collection("subjects")
-        .where("institutionId", "==", caller.institution)
-        .where("campusId", "==", caller.campus)
-        .where("academicYearId", "==", year.id)
-        .where("groupId", "==", caller.groupId).get();
-    const teacherIds = new Set(teachers.docs.map((item) => item.data().teacherId));
+    const teacherIds = await academicTeacherIdsForGroup(
+        caller, caller.groupId, year,
+    );
     allowed = all.filter((item) => item.uid !== caller.uid &&
       (item.role === "Administrador" || teacherIds.has(item.uid)));
     studentContextId = "";
   } else if (caller.role === "Docente") {
     const groups = await fileTeacherGroupIds(caller);
+    if (caller.tutorGroupId) groups.add(caller.tutorGroupId);
     const studentIds = new Set(all.filter((item) =>
       item.role === "Estudiante" && groups.has(item.groupId))
         .map((item) => item.uid));
@@ -6199,12 +7225,9 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
     if (!child) {
       throw new HttpsError("failed-precondition", "El hijo no esta activo.");
     }
-    const teachers = await db.collection("subjects")
-        .where("institutionId", "==", caller.institution)
-        .where("campusId", "==", caller.campus)
-        .where("academicYearId", "==", year.id)
-        .where("groupId", "==", child.groupId).get();
-    const teacherIds = new Set(teachers.docs.map((item) => item.data().teacherId));
+    const teacherIds = await academicTeacherIdsForGroup(
+        caller, child.groupId, year,
+    );
     const group = child.groupId ? await db.collection("academic_groups")
         .doc(child.groupId).get() : null;
     const classmates = new Set(group?.exists && group.data().active === true &&
@@ -6226,10 +7249,382 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
   })).sort((a, b) => a.fullName.localeCompare(b.fullName, "es"))};
 });
 
+/**
+ * Valida un canal existente antes de reservar un adjunto.
+ * @param {Object} caller Remitente.
+ * @param {string} channelId Canal.
+ * @return {Promise<Object>} Canal validado.
+ */
+async function writableMessageChannel(caller, channelId) {
+  const snapshot = await db.collection("message_channels").doc(channelId).get();
+  if (!snapshot.exists) {
+    throw new HttpsError("not-found", "El canal no existe.");
+  }
+  const year = await requireActiveAcademicYear(
+      caller.institution, caller.campus,
+  );
+  let channel = snapshot.data();
+  if (channel.channelType === "supervised_student") {
+    channel = await syncSupervisedStudentChannel(snapshot.ref, year);
+  } else if (channel.channelType === "private") {
+    const peerId = (Array.isArray(channel.memberUserIds) ?
+      channel.memberUserIds : []).find((uid) => uid !== caller.uid);
+    const peerSnapshot = peerId ?
+      await db.collection("users").doc(peerId).get() : null;
+    if (!peerSnapshot?.exists) {
+      throw new HttpsError(
+          "failed-precondition", "La conversacion ya no es valida.",
+      );
+    }
+    const context = await validatePrivateMessage(
+        caller,
+        {uid: peerSnapshot.id, ...peerSnapshot.data()},
+        channel.familyGroupId ? caller.activeStudentId :
+          channel.contextStudentId || null,
+        year,
+    );
+    if (channel.familyGroupId &&
+        context.familyGroupId !== channel.familyGroupId) {
+      throw new HttpsError(
+          "permission-denied", "El vinculo compartido ya no esta activo.",
+      );
+    }
+  }
+  requireMessageChannelWrite(caller, channel);
+  if (channel.academicYearId !== year.id) {
+    throw new HttpsError(
+        "failed-precondition", "Los mensajes historicos son de solo lectura.",
+    );
+  }
+  return {channel, year};
+}
+
+exports.solicitarAdjuntoMensaje = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireMessagingAccess(caller);
+  const channelId = requiredString(request.data?.channelId, "canal", 160);
+  const {channel, year} = await writableMessageChannel(caller, channelId);
+  const name = safeFileName(request.data?.name);
+  const contentType = validatedFileMime(request.data?.contentType);
+  const expectedSize = validatedFileSize(request.data?.sizeBytes);
+  const ref = db.collection("message_attachments").doc();
+  const usageRef = db.collection("file_storage_usage")
+      .doc(fileUsageId(channel.institutionId));
+  const storagePath = `message_attachments/${channelId}/${ref.id}/${name}`;
+  await db.runTransaction(async (transaction) => {
+    const usageSnapshot = await transaction.get(usageRef);
+    const usage = usageSnapshot.data() || {};
+    const usedBytes = Number(usage.usedBytes || 0);
+    const reservedBytes = Number(usage.reservedBytes || 0);
+    if (usedBytes + reservedBytes + expectedSize > FILE_MODULE_LIMIT_BYTES) {
+      throw new HttpsError(
+          "resource-exhausted",
+          "La cuota institucional de 1 GiB no tiene espacio suficiente.",
+      );
+    }
+    transaction.set(usageRef, {
+      institutionId: channel.institutionId,
+      usedBytes,
+      reservedBytes: reservedBytes + expectedSize,
+      limitBytes: FILE_MODULE_LIMIT_BYTES,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.create(ref, {
+      id: ref.id,
+      channelId,
+      name,
+      contentType,
+      expectedSize,
+      sizeBytes: 0,
+      storagePath,
+      status: "uploading",
+      uploadedBy: caller.uid,
+      uploaderName:
+        `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
+      institutionId: channel.institutionId,
+      campusId: channel.campusId,
+      academicYearId: year.id,
+      academicYear: year.year,
+      createdAt: FieldValue.serverTimestamp(),
+      uploadExpiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+    });
+  });
+  return {id: ref.id, storagePath, maxFileBytes: FILE_UPLOAD_LIMIT_BYTES};
+});
+
+exports.confirmarAdjuntoMensaje = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireMessagingAccess(caller);
+  const id = requiredString(request.data?.id, "adjunto", 128);
+  const ref = db.collection("message_attachments").doc(id);
+  const snapshot = await ref.get();
+  const attachment = snapshot.data() || {};
+  if (!snapshot.exists || attachment.status !== "uploading" ||
+      attachment.uploadedBy !== caller.uid || !sameTenant(caller, attachment)) {
+    throw new HttpsError("permission-denied", "Reserva de adjunto no valida.");
+  }
+  await writableMessageChannel(caller, attachment.channelId);
+  const [metadata] = await storage.bucket().file(attachment.storagePath)
+      .getMetadata();
+  const actualSize = Number(metadata.size || 0);
+  if (!Number.isInteger(actualSize) || actualSize <= 0 ||
+      actualSize !== attachment.expectedSize ||
+      actualSize > FILE_UPLOAD_LIMIT_BYTES ||
+      metadata.contentType !== attachment.contentType) {
+    await releaseMessageAttachmentReservation(ref, caller, "uploading");
+    throw new HttpsError(
+        "failed-precondition", "El archivo cargado no coincide con la reserva.",
+    );
+  }
+  await require("./protected_downloads").revokePrivateDownloadTokens(
+      storage.bucket().file(attachment.storagePath), metadata);
+  const usageRef = db.collection("file_storage_usage")
+      .doc(fileUsageId(attachment.institutionId));
+  await db.runTransaction(async (transaction) => {
+    const [fresh, usageSnapshot] = await Promise.all([
+      transaction.get(ref), transaction.get(usageRef),
+    ]);
+    if (!fresh.exists || fresh.data().status !== "uploading") {
+      throw new HttpsError("failed-precondition", "La carga ya fue procesada.");
+    }
+    const usage = usageSnapshot.data() || {};
+    transaction.update(ref, {
+      status: "ready",
+      sizeBytes: actualSize,
+      expectedSize: FieldValue.delete(),
+      uploadExpiresAt: FieldValue.delete(),
+      confirmedAt: FieldValue.serverTimestamp(),
+      retentionExpiresAt: Timestamp.fromMillis(
+          Date.now() + FILE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+      ),
+    });
+    transaction.set(usageRef, {
+      institutionId: attachment.institutionId,
+      usedBytes: Number(usage.usedBytes || 0) + actualSize,
+      reservedBytes: Math.max(
+          0, Number(usage.reservedBytes || 0) - attachment.expectedSize,
+      ),
+      limitBytes: FILE_MODULE_LIMIT_BYTES,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
+  return {success: true, id, sizeBytes: actualSize};
+});
+
+/** Reserva la cancelacion antes de tocar Storage; es segura ante reintentos. */
+async function releaseMessageAttachmentReservation(ref, caller,
+    expectedStatus = null) {
+  return require("./message_attachment_cleanup").deleteMessageAttachment({
+    db, bucket: storage.bucket(), ref, expectedStatus,
+    kind: "cancel", performedBy: caller.uid,
+    usageRefForInstitution: (id) => db.collection("file_storage_usage")
+        .doc(fileUsageId(id)),
+    authorize: (attachment) => {
+      if (attachment.uploadedBy !== caller.uid ||
+          !sameTenant(caller, attachment)) {
+        throw new HttpsError("permission-denied", "Reserva de adjunto no valida.");
+      }
+    },
+  });
+}
+
+exports.cancelarAdjuntoMensaje = onCall(async (request) => {
+  const caller = await getCaller(request);
+  const id = requiredString(request.data?.id, "adjunto", 128);
+  const ref = db.collection("message_attachments").doc(id);
+  await releaseMessageAttachmentReservation(ref, caller);
+  return {success: true};
+});
+
+/**
+ * Autoriza una descarga sin sincronizar ni escribir el canal durante un GET.
+ * La membresía materializada no sustituye vínculos y grupos actuales.
+ * @param {Object} caller Usuario activo.
+ * @param {Object} attachment Reserva confirmada y asociada a un mensaje.
+ */
+async function requireAttachmentDownloadAccess(caller, attachment) {
+  requireMessagingAccess(caller);
+  if (attachment.status !== "attached" || !sameTenant(caller, attachment) ||
+      typeof attachment.channelId !== "string" ||
+      !attachment.channelId || /[/\\]/.test(attachment.channelId)) {
+    throw new HttpsError("permission-denied", "Adjunto fuera de tu alcance.");
+  }
+  const snapshot = await db.collection("message_channels")
+      .doc(attachment.channelId).get();
+  const channel = snapshot.data();
+  if (!channel || channel.institutionId !== attachment.institutionId ||
+      channel.campusId !== attachment.campusId ||
+      channel.academicYearId !== attachment.academicYearId) {
+    throw new HttpsError("permission-denied", "Canal no disponible.");
+  }
+  requireMessageChannelRead(caller, channel);
+  if (caller.isSuperadmin === true || caller.role === "Administrador") return;
+  if (!["Docente", "Estudiante", "Familiar"].includes(caller.role) ||
+      channel.status !== "active") {
+    throw new HttpsError("permission-denied", "El canal ya no está vigente.");
+  }
+  const year = await requireActiveAcademicYear(
+      attachment.institutionId, attachment.campusId);
+  if (channel.academicYearId !== year.id) {
+    throw new HttpsError("permission-denied", "El canal no es del año activo.");
+  }
+  let student = caller.role === "Estudiante" ? caller : null;
+  if (caller.role === "Familiar") {
+    if (!caller.activeStudentId || !Array.isArray(caller.studentIds) ||
+        !caller.studentIds.includes(caller.activeStudentId)) {
+      throw new HttpsError("permission-denied", "Selecciona un hijo vinculado.");
+    }
+    student = await requireLinkedStudent(caller.activeStudentId,
+        attachment.institutionId, attachment.campusId);
+  }
+  if (["academic_group", "service"].includes(channel.channelType)) {
+    const groupIds = channel.channelType === "academic_group" ?
+      [channel.groupId] : channel.targetGroupIds;
+    if (!Array.isArray(groupIds)) {
+      throw new HttpsError("permission-denied", "Grupos no disponibles.");
+    }
+    for (const groupId of groupIds.filter((id) => typeof id === "string" &&
+      id && !/[/\\]/.test(id))) {
+      if (student && student.groupId !== groupId) continue;
+      const group = await db.collection("academic_groups").doc(groupId).get();
+      if (!group.exists || !sameTenant(caller, group.data()) ||
+          group.data().active !== true ||
+          group.data().academicYearId !== year.id) continue;
+      if (student || await teacherCanContactStudent(caller, {
+        groupId, institution: attachment.institutionId,
+        campus: attachment.campusId,
+      }, year)) return;
+    }
+  } else if (channel.channelType === "supervised_student") {
+    if (student && student.uid !== channel.supervisedStudentId) {
+      throw new HttpsError("permission-denied", "El hijo no pertenece al canal.");
+    }
+    const target = await requireLinkedStudent(channel.supervisedStudentId,
+        attachment.institutionId, attachment.campusId);
+    const staff = await db.collection("users")
+        .doc(channel.supervisedStaffId || "_").get();
+    if (staff.exists) {
+      const audience = await supervisedStudentAudience(target,
+          {uid: staff.id, ...staff.data()}, year);
+      if (audience.memberUserIds.includes(caller.uid)) return;
+    }
+  } else if (channel.channelType === "private") {
+    const peerId = channel.memberUserIds.find((uid) => uid !== caller.uid);
+    const peer = peerId ? await db.collection("users").doc(peerId).get() : null;
+    if (peer?.exists) {
+      const context = await validatePrivateMessage(caller,
+          {uid: peer.id, ...peer.data()}, channel.familyGroupId ?
+            caller.activeStudentId : channel.contextStudentId || null, year);
+      if (!context.supervised && (!channel.familyGroupId ||
+          context.familyGroupId === channel.familyGroupId)) return;
+    }
+  }
+  throw new HttpsError("permission-denied", "El vínculo con el canal cambió.");
+}
+
+exports.registrarDescargaAdjuntoMensaje = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireMessagingAccess(caller);
+  const id = requiredString(request.data?.attachmentId, "adjunto", 128);
+  const snapshot = await db.collection("message_attachments").doc(id).get();
+  const attachment = snapshot.data() || {};
+  if (!snapshot.exists || attachment.status !== "attached") {
+    throw new HttpsError("not-found", "El adjunto ya no esta disponible.");
+  }
+  const channelSnapshot = await db.collection("message_channels")
+      .doc(attachment.channelId).get();
+  if (!channelSnapshot.exists) {
+    throw new HttpsError("not-found", "El canal ya no existe.");
+  }
+  requireMessageChannelRead(caller, channelSnapshot.data());
+  const receiptId = crypto.createHash("sha256")
+      .update(`${id}\u0000${caller.uid}`).digest("hex");
+  const receiptRef = db.collection("message_attachment_downloads").doc(receiptId);
+  await db.runTransaction(async (transaction) => {
+    const [current, freshAttachment, freshChannel] = await Promise.all([
+      transaction.get(receiptRef), transaction.get(snapshot.ref),
+      transaction.get(channelSnapshot.ref),
+    ]);
+    if (!freshAttachment.exists ||
+        freshAttachment.data().status !== "attached" || !freshChannel.exists) {
+      throw new HttpsError("not-found", "El adjunto ya no esta disponible.");
+    }
+    requireMessageChannelRead(caller, freshChannel.data());
+    const payload = {
+      attachmentId: id,
+      messageId: attachment.messageId,
+      channelId: attachment.channelId,
+      userId: caller.uid,
+      userName: `${caller.firstName || ""} ${caller.lastName || ""}`.trim(),
+      userRole: caller.role,
+      institutionId: attachment.institutionId,
+      campusId: attachment.campusId,
+      academicYearId: attachment.academicYearId,
+      lastDownloadedAt: FieldValue.serverTimestamp(),
+      downloadCount: Number(current.data()?.downloadCount || 0) + 1,
+    };
+    if (current.exists) {
+      transaction.update(receiptRef, payload);
+    } else {
+      transaction.create(receiptRef, {
+        ...payload, firstDownloadedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
+  return {success: true};
+});
+
+exports.listarDescargasAdjuntoMensaje = onCall(async (request) => {
+  const caller = await getCaller(request);
+  requireMessagingAccess(caller);
+  const id = requiredString(request.data?.attachmentId, "adjunto", 128);
+  const attachmentSnapshot = await db.collection("message_attachments")
+      .doc(id).get();
+  const attachment = attachmentSnapshot.data() || {};
+  if (!attachmentSnapshot.exists || attachment.status !== "attached") {
+    throw new HttpsError("not-found", "El adjunto ya no esta disponible.");
+  }
+  const channelSnapshot = await db.collection("message_channels")
+      .doc(attachment.channelId).get();
+  if (!channelSnapshot.exists) {
+    throw new HttpsError("not-found", "El canal ya no existe.");
+  }
+  const channel = channelSnapshot.data();
+  requireMessageChannelRead(caller, channel);
+  const receipts = await db.collection("message_attachment_downloads")
+      .where("attachmentId", "==", id).get();
+  return {
+    recipientCount: (Array.isArray(channel.memberUserIds) ?
+      channel.memberUserIds : []).filter((uid) =>
+      uid !== attachment.uploadedBy).length,
+    receipts: receipts.docs.map((item) => {
+      const value = item.data();
+      return {
+        userId: value.userId,
+        userName: value.userName || "Usuario",
+        userRole: value.userRole || "",
+        firstDownloadedAtMillis:
+          value.firstDownloadedAt?.toMillis?.() || null,
+        lastDownloadedAtMillis:
+          value.lastDownloadedAt?.toMillis?.() || null,
+        downloadCount: Number(value.downloadCount || 0),
+      };
+    }).sort((a, b) =>
+      (b.lastDownloadedAtMillis || 0) - (a.lastDownloadedAtMillis || 0)),
+  };
+});
+
 exports.enviarMensajeCanal = onCall(async (request) => {
   const caller = await getCaller(request);
   requireMessagingAccess(caller);
-  const body = validatedMessageBody(request.data?.body);
+  const attachmentId = typeof request.data?.attachmentId === "string" ?
+    request.data.attachmentId.trim() : "";
+  const rawBody = typeof request.data?.body === "string" ?
+    request.data.body.trim() : "";
+  if (!rawBody && !attachmentId) {
+    throw new HttpsError("invalid-argument", "Escribe un mensaje o adjunta un archivo.");
+  }
+  const body = rawBody ? validatedMessageBody(rawBody) : "";
   const year = await requireActiveAcademicYear(caller.institution, caller.campus);
   let channelId = typeof request.data?.channelId === "string" ?
     request.data.channelId.trim() : "";
@@ -6356,7 +7751,12 @@ exports.enviarMensajeCanal = onCall(async (request) => {
   }
   const messageRef = channelRef.collection("messages").doc();
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(channelRef);
+    const attachmentRef = attachmentId ?
+      db.collection("message_attachments").doc(attachmentId) : null;
+    const [snapshot, attachmentSnapshot] = await Promise.all([
+      transaction.get(channelRef),
+      attachmentRef ? transaction.get(attachmentRef) : Promise.resolve(null),
+    ]);
     if (!snapshot.exists) {
       throw new HttpsError("not-found", "El canal no existe.");
     }
@@ -6366,6 +7766,23 @@ exports.enviarMensajeCanal = onCall(async (request) => {
       throw new HttpsError(
           "failed-precondition", "Los mensajes historicos son de solo lectura.",
       );
+    }
+    let attachment = null;
+    if (attachmentRef) {
+      if (!attachmentSnapshot?.exists) {
+        throw new HttpsError("not-found", "El adjunto ya no existe.");
+      }
+      attachment = attachmentSnapshot.data();
+      if (attachment.status !== "ready" || attachment.uploadedBy !== caller.uid ||
+          attachment.channelId !== channelId || !sameTenant(caller, attachment) ||
+          attachment.academicYearId !== year.id) {
+        throw new HttpsError("permission-denied", "El adjunto no es valido para este canal.");
+      }
+      transaction.update(attachmentRef, {
+        status: "attached",
+        messageId: messageRef.id,
+        attachedAt: FieldValue.serverTimestamp(),
+      });
     }
     const sequence = Number(channel.messageSequence || 0) + 1;
     const senderName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim();
@@ -6383,6 +7800,14 @@ exports.enviarMensajeCanal = onCall(async (request) => {
       senderName,
       senderRole: caller.role,
       body,
+      attachment: attachment ? {
+        id: attachmentId,
+        name: attachment.name,
+        contentType: attachment.contentType,
+        sizeBytes: attachment.sizeBytes,
+        storagePath: attachment.storagePath,
+        expiresAt: attachment.retentionExpiresAt,
+      } : null,
       recipientUserIds: recipients,
       recipientNames,
       recipientRoles,
@@ -6395,7 +7820,7 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     });
     transaction.update(channelRef, {
       messageSequence: sequence,
-      lastMessage: body,
+      lastMessage: body || `Archivo: ${attachment.name}`,
       lastSenderId: caller.uid,
       lastSenderName: senderName,
       lastMessageAt: FieldValue.serverTimestamp(),
@@ -6405,7 +7830,8 @@ exports.enviarMensajeCanal = onCall(async (request) => {
     });
     transaction.create(db.collection("push_events").doc(messageRef.id), {
       institutionId: caller.institution, campusId: caller.campus,
-      academicYearId: year.id, channelId, senderName, body: body.slice(0, 120),
+      academicYearId: year.id, channelId, senderName,
+      body: (body || `Archivo: ${attachment.name}`).slice(0, 120),
       recipientIds: recipients, createdAt: FieldValue.serverTimestamp(),
     });
   });
@@ -6482,6 +7908,7 @@ exports.configurarSilencioCanalMensajeria = onCall(async (request) => {
   if (!snapshot.exists || !sameTenant(caller, channel)) {
     throw new HttpsError("permission-denied", "Canal fuera de tu sede.");
   }
+  requireMessageChannelRead(caller, channel);
   if (["private", "supervised_student"].includes(channel.channelType)) {
     throw new HttpsError(
         "failed-precondition",
@@ -6614,6 +8041,15 @@ exports.sincronizarCanalMensajeriaPorMatricula = onDocumentWritten(
 );
 /* eslint-enable max-len */
 
+function websitePageComponents(page) {
+  if (!Array.isArray(page?.rows)) return [];
+  return page.rows.flatMap((row) =>
+    Array.isArray(row?.columns) ? row.columns : [],
+  ).flatMap((column) =>
+    Array.isArray(column?.components) ? column.components : [],
+  );
+}
+
 exports.submitWebsiteForm = onCall(async (request) => {
   const data = request.data || {};
   if (typeof data.website === "string" && data.website.trim() !== "") {
@@ -6634,10 +8070,17 @@ exports.submitWebsiteForm = onCall(async (request) => {
   }
 
   const pageSnapshot = await db.collection("website_pages").doc(pageId).get();
-  const blocks = pageSnapshot.data()?.blocks;
-  const validForm = pageSnapshot.exists && Array.isArray(blocks) &&
-    blocks.some((block) => block?.id === blockId &&
-      block?.type === "contactForm" && block?.enabled !== false);
+  const page = pageSnapshot.data();
+  const institutionId = typeof page?.institutionId === "string" ?
+    page.institutionId.trim() : "";
+  const campusId = typeof page?.campusId === "string" ?
+    page.campusId.trim() : "";
+  const validForm = pageSnapshot.exists && page?.enabled !== false &&
+    institutionId !== "" && campusId !== "" &&
+    websitePageComponents(page).some((component) =>
+      component?.id === blockId && component?.type === "contactForm" &&
+      component?.enabled !== false,
+    );
   if (!validForm) {
     throw new HttpsError(
         "failed-precondition",
@@ -6647,7 +8090,7 @@ exports.submitWebsiteForm = onCall(async (request) => {
 
   const remoteAddress = (request.rawRequest.ip || "unknown").toString();
   const rateId = crypto.createHash("sha256")
-      .update(`website-form:${remoteAddress}`)
+      .update(`website-form:${institutionId}:${campusId}:${remoteAddress}`)
       .digest("hex");
   const rateRef = db.collection("website_form_rate_limits").doc(rateId);
   const now = Timestamp.now();
@@ -6670,6 +8113,8 @@ exports.submitWebsiteForm = onCall(async (request) => {
   });
 
   await db.collection("website_submissions").add({
+    institutionId,
+    campusId,
     pageId,
     blockId,
     name,

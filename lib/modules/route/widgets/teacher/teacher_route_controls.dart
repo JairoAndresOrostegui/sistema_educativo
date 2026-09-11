@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/route/daily_route_model.dart';
@@ -18,6 +17,7 @@ class TeacherRouteControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final estado = dailyRoute?.estado;
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
@@ -45,8 +45,8 @@ class TeacherRouteControls extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 textStyle: TextStyle(fontSize: 16),
-                backgroundColor: AppPalette.error,
-                foregroundColor: AppPalette.surface,
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
               ),
             ),
           ),

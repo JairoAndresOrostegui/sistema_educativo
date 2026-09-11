@@ -1,17 +1,12 @@
 import 'package:open_filex/open_filex.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 Future<void> descargarArchivoPlataforma(
-  String url,
+  Uint8List bytes,
   String nombreArchivo,
 ) async {
-  final ref = FirebaseStorage.instance.refFromURL(url);
-  final bytes = await ref.getData();
-
-  if (bytes == null) throw Exception('No se pudo descargar el archivo');
-
   final dir = await getTemporaryDirectory();
   final file = File('${dir.path}/$nombreArchivo');
   await file.writeAsBytes(bytes);

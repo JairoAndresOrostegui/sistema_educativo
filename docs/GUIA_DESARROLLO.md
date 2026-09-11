@@ -52,6 +52,18 @@ logs, notificaciones ni respuestas posteriores a la generación inicial.
 - Canal de mensajería: `active`, `archived`; tipos `academic_group`, `service`
   y `private`. Los mensajes son inmutables y usan una secuencia ascendente.
 
+El formulario público obtiene `obtenerOpcionesMatriculaPublica`, una proyección de
+grupos activos/año vigente, instituciones/sedes y catálogos EPS/documento. El alcance
+se deriva del sitio publicado, no del visitante. No se abren reglas privadas para
+este formulario. Un error de carga muestra reintento e impide enviar; no hay EPS
+inventadas ni sustitución silenciosa del año lectivo por el reloj del dispositivo.
+
+La foto de Perfil y la edición de foto desde Usuarios distinguen confirmación de
+limpieza: un fallo al retirar la foto anterior nunca elimina la nueva ya confirmada.
+Una respuesta RPC perdida conserva el objeto nuevo, pues el servidor podría haber
+guardado la referencia. Pueden quedar objetos recuperables tras fallos de limpieza;
+su reconciliación posterior no debe borrar referencias vigentes.
+
 ## Familias con varios hijos
 
 ### Identificadores QR
@@ -76,20 +88,55 @@ El vínculo familiar se consulta al resolver, nunca se congela en el QR.
 La credencial identifica la cuenta, no prueba la identidad del portador:
 una fotografía del símbolo se puede copiar. No usar como login o firma digital.
 
-`events` admite inicialmente solo título, sede, año y propósito
-`identification_only`; todavía no contiene asistencia, agenda, responsables ni
-permisos de recogida. El QR de evento solo se resuelve en año activo y sede
-autorizada. El futuro módulo de Eventos debe definir su audiencia y acciones,
-integrar responsabilidades docentes y eliminación de su credencial antes de
-permitir borrar eventos. No implementar eliminación directa del documento.
+La colección `events` pertenece exclusivamente a identificadores QR con propósito
+`identification_only`; no es la agenda institucional. El módulo operativo usa
+`school_events`, materializa su audiencia y conserva responsables, respuestas,
+asistencia e historial en colecciones protegidas por Functions. Un QR de evento
+solo identifica: nunca confirma asistencia ni autoriza una acción por sí mismo.
+No implementar eliminación directa de ninguna de estas entidades.
 
 Migración única QA: `node functions/scripts/migrate_qr_identity.js` (diagnóstico)
 y `--apply` para retirar campos antiguos de perfiles y reemplazar credenciales
 previamente habilitadas. No acepta el JSON antiguo ni deja lectura dual.
 Las nuevas credenciales se generan al solicitarlas, sin exigir carga masiva.
 Validación: `npm run test:qr`, `npm run test:rules`, pruebas Flutter.
-El lector de cámara y las operaciones por escaneo quedan fuera de esta etapa;
-la pantalla actual ofrece validación manual del identificador.
+El lector admite cámara o captura manual. El cliente filtra el formato `LLQ1`
+y el backend vuelve a validar vigencia, alcance y permisos; una resolución
+correcta registra actor, fecha, origen y plataforma. Escanear sigue siendo solo
+identificación: asistencia, entrega y acceso requieren entidades y confirmación
+propias.
+
+### Lista de asistencia
+
+`attendance_sessions` congela estudiantes y nombres al abrir una sesión única por
+institución, sede, año activo, grupo, fecha y asignatura o jornada. Las marcas viven
+en `attendance_records`; los estados válidos son `present`, `absent`, `late` y
+`excused`. Toda escritura usa Functions, `expectedRevision` y auditoría en
+`attendance_history`; las reglas niegan acceso directo a las cuatro colecciones.
+
+Docentes operan únicamente sesiones propias ligadas a su carga o dirección de
+grupo. Administración corrige sesiones cerradas sin reabrirlas. Estudiante y
+familiar consultan solo sesiones cerradas, el familiar exclusivamente mediante
+hijo activo. El cierre exige la lista completa y crea eventos de notificación para
+ausencias/tardanzas; una corrección crea un aviso nuevo. Traslados docentes solo
+mueven responsabilidad de sesiones abiertas y respetan la reversión temporal.
+
+### Eventos institucionales
+
+`school_events` pertenece a institución, sede y año activo. Un borrador conserva
+audiencia por sede, grupos o estudiantes y la vuelve a materializar al publicarse,
+para no incluir matrículas retiradas ni omitir altas recientes. Respuestas,
+asistencia e historial viven en `event_responses`, `event_attendance` y
+`event_history`; el cliente no accede directamente. La asistencia utiliza revisión
+optimista y nunca presume Ausente por falta de una selección.
+
+Docentes solo crean para grupos de su carga y quedan como responsables. El traslado
+docente mueve únicamente eventos futuros en borrador o publicados y una reversión
+temporal restaura la responsabilidad si todavía corresponde. Estudiante y familiar
+solo reciben eventos publicados o finalizados de su estudiante/hijo activo. Solo el
+familiar confirma o rechaza participación; el cupo se valida en transacción. Cada
+cambio de estado genera historial y los avisos se encolan sin convertir FCM en
+confirmación de entrega o lectura.
 
 `studentIds` contiene vínculos y `activeStudentId` el contexto actual. Horario, matrícula, autorizaciones, archivos, mensajería y todo módulo futuro por estudiante deben mostrar selector, persistir el hijo activo y volver a validar el vínculo en backend/reglas.
 
@@ -110,6 +157,10 @@ concurrente, cinco intentos con espera creciente y recuperación programada
 cada cinco minutos (hasta 20 lotes por ejecución). Solo se reenvían los tokens
 con errores temporales. Antes de enviar se revalidan usuario activo, sede y
 token vigente; en chats también se comprueba la membresía actual.
+Los errores terminales confirmados por FCM retiran el token del usuario y
+deshabilitan su slot, pero solo si el token continúa siendo el de esa sesión;
+un registro posterior de otro dispositivo nunca se borra por una respuesta
+atrasada. Los errores temporales permanecen en la cola.
 Si FCM acepta y el proceso muere antes de guardar el resultado, la entrega
 puede repetirse: no se promete exactamente una entrega.
 
@@ -119,9 +170,12 @@ nunca tokens, cuerpos ni credenciales. El reintento manual deja
 `push_retry_audit`. No se elimina historial operativo automáticamente.
 El planificador y las escrituras agregan consumo: no prometer costo cero.
 
-`notificationDestination` solo admite destinos de Mensajería; una notificación
-no concede acceso al canal. Las aperturas Android (frente, fondo y arranque)
-y los enlaces web pasan por la navegación autenticada. `runtime_environment.js`
+`notificationDestination` admite Mensajería, Rutas, Matrículas, Horarios,
+Autorizaciones, Archivos y Asistencia, y selecciona el destino permitido según el rol. Una
+notificación nunca concede acceso al módulo ni al canal. Las aperturas Android
+(frente, fondo y arranque) y los enlaces web pasan por la navegación autenticada.
+Los avisos web que llegan mientras hay un diálogo abierto se muestran en orden,
+sin descartar silenciosamente el segundo. `runtime_environment.js`
 deriva el origen y la clave Auth del proyecto Firebase; rechaza proyectos
 desconocidos y un `PUBLIC_APP_URL` que no coincida con su entorno.
 El worker web no vuelve a mostrar payloads `notification` que FCM ya presenta.
@@ -159,6 +213,17 @@ registra la primera lectura exacta por mensaje. `mutedByAdmin`
 convierte un canal colectivo en solo anuncios; no elimina contenido. Los
 canales `service` son extensibles por categoría e icono y almacenan
 comunicación, no el estado operativo del módulo que los origina.
+
+Los adjuntos usan `message_attachments` y Storage en
+`message_attachments/{channelId}/{attachmentId}/{safeName}`. La reserva valida
+membresía y escritura, comparte `file_storage_usage`, limita a 25 MiB y solo
+admite PDF, Word o Excel. La confirmación verifica metadatos reales y el envío
+enlaza exactamente una reserva `ready` en la misma transacción del mensaje.
+Storage revalida permiso, sede, estado y membresía actual del canal. Cada
+solicitud de descarga crea o actualiza un acuse individual en
+`message_attachment_downloads`; no altera lecturas. La limpieza global del
+superadministrador elimina adjuntos vencidos a los 60 días, sus acuses y su uso
+de cuota después de retirar primero el objeto de Storage.
 
 Al ampliar Restaurante, Lonchera u otro módulo con chat, ese módulo conserva sus
 entidades de negocio y publica o enlaza novedades con un canal de servicio.
@@ -204,6 +269,20 @@ Reglas:
 
 ## Constructor del sitio público
 
+Además del esquema v5 descrito abajo, `website/config`, cada página y cada
+mensaje recibido conservan `institutionId` y `campusId`. Las imágenes nuevas
+usan `website/{institutionId}/{campusId}/`; las rutas antiguas quedan solo para
+lectura hasta su retiro controlado.
+
+La publicación incrementa `revision` en una transacción. Si dos editores parten
+de la misma revisión, el segundo debe recargar en lugar de sobrescribir el
+trabajo publicado por el primero. `submitWebsiteForm` valida que la página esté
+activa y busca el componente vigente dentro de
+`rows -> columns -> components`; el alcance del mensaje se deriva de la página,
+nunca del cliente público. Antes de desplegar estas reglas sobre datos
+existentes se ejecuta `functions/scripts/migrate_website_scope.js` primero en
+simulación y después con `--apply`.
+
 El esquema canónico es la versión 5. `website/config` contiene identidad, tema, navegación, redes, `header.rows` y `footer.rows`; cada documento de `website_pages` contiene `rows`. La jerarquía es `WebsiteRow -> WebsiteColumn -> WebsiteComponent`. No volver a introducir `blocks`, `sections` ni lectura dual del esquema anterior.
 
 Una fila admite máximo cuatro columnas. Las columnas usan `span` relativo y en móvil se apilan cuando `stackOnMobile` está activo. Cada componente separa `widthPercent` y `componentAlignment` —posición del bloque dentro de la columna— de `alignment`, que solo alinea su contenido. Los componentes disponibles se centralizan en el modelo y el editor; cualquier tipo nuevo debe implementar serialización, edición, render adaptable y prueba.
@@ -243,6 +322,10 @@ es 100/día/proyecto; no equivale a un presupuesto de todas las APIs de Google.
 Ver [REVISION_RUTAS_Y_PUSH.md](REVISION_RUTAS_Y_PUSH.md) para límites pendientes.
 
 No hay lectura dual del esquema anterior. `functions/scripts/migrate_academic_groups.js` migra grupos y normaliza horarios, `functions/scripts/migrate_file_audiences.js` migra las audiencias de Archivos, `functions/scripts/migrate_messaging_channels.js` convierte conversaciones y crea canales académicos, y `functions/scripts/migrate_website_builder_v5.js` convierte el sitio a filas, columnas y componentes. Son secas por defecto, reales con `--apply` y verificables con `--verify`.
+
+Los permisos de Asistencia se incorporan de forma idempotente con
+`functions/scripts/migrate_attendance_permissions.js`: ejecutar diagnóstico,
+`--apply` y finalmente `--verify` en cada entorno explícito.
 
 ## Validación y despliegue
 

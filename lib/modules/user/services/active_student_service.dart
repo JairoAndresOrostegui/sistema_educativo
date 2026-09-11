@@ -16,11 +16,16 @@ class ActiveStudentService {
     if (id.isEmpty) return;
     final user = userProvider.user;
     if (user == null || user.role != 'Familiar') return;
+    var revision = user.revision;
     if (user.activeStudentId != id) {
-      await _functions.httpsCallable('seleccionarHijoActivo').call({
-        'studentId': id,
-      });
+      final result = await _functions
+          .httpsCallable('seleccionarHijoActivo')
+          .call({'studentId': id});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      revision = (data['revision'] as num?)?.toInt() ?? (revision + 1);
     }
-    userProvider.setActiveStudentId(id);
+    userProvider.setUser(
+      user.copyWith(activeStudentId: id, revision: revision),
+    );
   }
 }

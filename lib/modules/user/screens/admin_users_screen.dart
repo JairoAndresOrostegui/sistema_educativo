@@ -24,6 +24,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   String _textoBusqueda = '';
   List<userModelv2> usuarios = [];
   bool isLoading = true;
+  String? _loadError;
   bool esSuperadminActual = false;
   List<String> funcionalidadesActual = [];
   late String institutionId;
@@ -60,7 +61,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Future<void> _cargarUsuarios() async {
     if (!mounted) return;
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      _loadError = null;
+    });
 
     try {
       usuarios = await _userService.obtenerTodos(
@@ -69,13 +73,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         isSuperadmin: esSuperadminActual,
       );
     } catch (e) {
-      if (mounted) {
-        await DialogUtils.showError(
-          context: context,
-          title: 'Error al cargar usuarios',
-          message: userFacingError(e),
-        );
-      }
+      if (mounted) _loadError = userFacingError(e);
     }
 
     if (!mounted) return;
@@ -124,6 +122,33 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       body: SafeArea(
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No se pudieron cargar los usuarios.\n$_loadError',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: _cargarUsuarios,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             : Column(
                 children: [
                   Padding(
@@ -179,6 +204,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
                               final puedeEditar =
                                   user.status != 'eliminado' &&
+                                  user.status != 'eliminando' &&
                                   (esSuperadminActual ||
                                       (user.role != 'Administrador' &&
                                           !user.isSuperadmin)) &&

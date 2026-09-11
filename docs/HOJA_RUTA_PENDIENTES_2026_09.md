@@ -2,12 +2,16 @@
 
 ## Estado de las entregas
 
-- Producción web: versión vigente del código publicada.
+El estado comprobado de la revisión del 11 de septiembre y su despliegue está en
+[REVISION_RELEASE_11.md](REVISION_RELEASE_11.md). El código local de esa revisión
+no debe confundirse con la versión que tienen instalada los verificadores.
+
+- Producción web: entrega anterior publicada; actualización 11 en preparación.
 - Google Play, prueba cerrada Alpha: `1.0.0 (10)` activa.
-- QA web: versión vigente publicada en
+- QA web: entrega anterior publicada en
   `https://sistema-educativo-rl.web.app` el 9 de septiembre de 2026.
-- QA backend: reglas, Functions afectadas y migraciones de catálogos y
-  mensajería supervisada publicadas y verificadas.
+- QA backend: despliegue de la revisión 11 en curso. Índices y migraciones
+  nuevos verificados; consultar el registro de entrega para el cierre.
 
 La aprobación automatizada indica que el código soporta los casos cubiertos;
 no sustituye la aceptación funcional en navegador y dispositivos reales.
@@ -39,36 +43,50 @@ Internet, reintento, pantalla pequeña y cierre/reapertura.
 
 | Área actual | Estado técnico | Validación o ajuste pendiente |
 |---|---|---|
-| Acceso y Perfil | Operativo | Recuperación, clave temporal de estudiante, sesión vencida, foto y cierre de sesión en móvil/web. |
-| Gestión de usuarios | Operativo | Altas, bajas lógicas, vínculos familiares, importación, traslados y reversión con cada alcance de administrador. |
-| Configuración académica | Operativo | Probar grupos, años, EPS y documentos con administrador de sede, solo lectura y superadministrador. |
-| Matrículas | Operativo | Recorrer solicitud, corrección, aprobación, rechazo, retiro, cambio de grupo y selección de hijo. |
-| Horarios | Operativo | Probar cruces, edición concurrente, grupos/secciones, consulta docente y consulta familiar por hijo. |
-| Autorizaciones | Operativo | Probar solicitud familiar, decisión, corrección, finalización inmutable y ausencia total para estudiante. |
-| Documentos | Operativo | Probar audiencias, cuota, límite, enlaces, descarga, acuse individual y eliminación/limpieza reintentable. |
-| Mensajería | Actualizada | Validar el canal supervisado estudiante–personal–familiares, pendientes independientes, `Leído por`, descarga de adjuntos, silencios y cambios de grupo/vínculo. |
-| Gestión de rutas | Operativo básico | Validar creación y asignación administrativa, capacidad, solicitud familiar y bloqueo de paradas al iniciar. |
-| Mis recorridos / Ruta escolar | Operativo básico | Prueba física completa con responsable, GPS, Maps, segundo plano, red intermitente, reanudación y cierre. |
-| Historial administrativo | Operativo | Verificar filtros, paginación, alcances y exportaciones de usuarios, accesos, documentos, horarios, rutas y recorridos. |
-| QR de identificación | Parcial | Emisión, consulta, revocación y reemplazo funcionan; falta lectura por cámara y operaciones reales asociadas. |
-| Sitio web | Operativo web | Editor, publicación, formulario, imágenes, móvil/escritorio, favicon y caracteres que disparan la advertencia de fuentes Noto. |
-| Notificaciones y panel Push | Operativo | Recepción visible, apertura hacia el destino correcto, slots móvil/web, reemplazo de sesión, fallos y reintento superadmin. |
+| Acceso y Perfil | Auditado técnicamente | Backend, concurrencia, clave temporal, foto, sesión vencida y estados controlados cubiertos; falta aceptación física móvil/web. |
+| Gestión de usuarios | Auditada técnicamente | Altas, edición versionada, bajas, vínculos, importación y continuidad docente cubiertos; falta aceptación física por rol. |
+| Configuración académica | Auditada técnicamente | Grupos, años, EPS y documentos usan Functions, alcance por sede, historial y control de concurrencia; falta aceptación física admin/superadmin. |
+| Matrículas | Auditada técnicamente | Flujo, transiciones, concurrencia, año/grupo, familiar e historial cubiertos; falta aceptación física completa. |
+| Horarios | Auditados técnicamente | Cruces, edición concurrente, año activo, grupos, docente y familiar por hijo cubiertos; falta aceptación física. |
+| Autorizaciones | Auditadas técnicamente | Hijo seleccionado, corrección, decisiones concurrentes, cierre y reapertura superadmin cubiertos; falta aceptación física. |
+| Documentos | Auditados técnicamente | Audiencias, cuota, tamaño, confirmación, descargas y eliminación segura cubiertos; falta aceptación física. |
+| Mensajería | Auditada técnicamente | Canales supervisados, lecturas independientes, privacidad, cambios de vínculo, push y adjuntos con cuota/retención/descarga individual cubiertos; falta aceptación física por rol. |
+| Administrar rutas | Auditada técnicamente | Creación versionada, vigencia, responsable designado, participantes activos y únicos, conductor por sede, baja lógica, solicitudes familiares y bloqueo al iniciar cubiertos; falta aceptación física administrativa. |
+| Operar recorrido / Mi ruta escolar | Auditada técnicamente | Estados vacío/inactivo/finalizado, privacidad GPS, operación idempotente, avisos, cierre y errores controlados cubiertos; falta prueba física con GPS, Maps, segundo plano, red intermitente y reapertura. |
+| Historial administrativo | Auditado técnicamente | Alcance por sede, permiso exclusivo, recorridos y participantes, filtros sobre todo el rango, conteos exactos, cursores, fechas dañadas y exportación de la página visible cubiertos; falta aceptación web con datos reales. |
+| QR de identificación | Auditado técnicamente, incluida cámara | Token opaco, alcance, estado, año, familiar por hijo, baja en cascada, revocación/reemplazo y lectura por cámara o manual cubiertos. Falta aceptación física de permiso, linterna, cambio de cámara y dispositivo sin cámara. Las operaciones reales siguen separadas. |
+| Sitio web | Auditado técnicamente | Esquema v5, formulario vigente, página activa, aislamiento por sede, publicación concurrente, imágenes y bandeja cubiertos; falta aceptación web real y confirmar en navegador si persiste la advertencia no fatal de fuentes Noto. |
+| Notificaciones y panel Push | Auditado técnicamente | Cola de 500, reintentos, revalidación de audiencia, retiro seguro de tokens terminales, slots móvil/web, avisos web simultáneos, destinos por rol y panel superadmin cubiertos; falta aceptación física con la app en frente, fondo, cerrada y sin red. |
 
-Los dos accesos de Rutas son intencionales para administración: **Gestión de
-rutas** configura plantillas, estudiantes y responsables; **Mis recorridos**
+Los dos accesos de Rutas son intencionales para administración: **Administrar
+rutas** configura plantillas, estudiantes y responsables; **Operar recorrido**
 ejecuta el recorrido cuando ese administrador fue designado responsable. Para
-docente o auxiliar solo aparece **Ruta escolar**; para estudiante o familiar,
-**Mis rutas**. Queda pendiente hacer más clara esta diferencia en la interfaz.
+docente o auxiliar también aparece **Operar recorrido**; para estudiante o
+familiar, **Mi ruta escolar**. Esta diferencia ya está reflejada en el panel.
 
 ## Prioridad 2 — ampliaciones de módulos existentes
 
-### QR con cámara
+### Adjuntos en Mensajería — implementación técnica terminada
 
-- Escáner móvil con permiso de cámara, reintento y alternativa manual.
-- Resolver únicamente identificadores opacos mediante backend autenticado.
-- Mostrar identidad/estado/alcance antes de confirmar cualquier acción.
-- Evitar duplicados y registrar actor, fecha, dispositivo y resultado.
-- El QR identifica; nunca autoriza por sí solo asistencia, entrega o acceso.
+- PDF, Word y Excel, máximo 25 MiB, cuota institucional compartida de 1 GiB y
+  retención de 60 días.
+- Reserva y confirmación backend, enlace transaccional único al mensaje y
+  compensación de cuota ante fallos.
+- Descarga solo para miembros vigentes y acuse independiente por cuenta, sin
+  modificar la lectura de otros destinatarios.
+- Pendiente: aceptación física en web y Android con archivos reales.
+
+### QR con cámara — implementación técnica terminada
+
+- Escáner Android, iOS y web con permiso de cámara, linterna, cambio de cámara
+  y alternativa manual.
+- Solo acepta el formato opaco `LLQ1`; la resolución ocurre en backend
+  autenticado y registra actor, fecha, origen y plataforma.
+- La respuesta muestra identidad vigente y recuerda que no ejecuta ninguna
+  operación. Los códigos inválidos permanecen en el lector sin navegar.
+- Pruebas Flutter y de Functions cubren formato, resolución y auditoría.
+- Pendiente: aceptación en equipos reales de permiso denegado, reintento,
+  linterna, cámara frontal/trasera y navegador sin cámara.
 
 ### Rutas avanzadas
 
@@ -83,8 +101,11 @@ docente o auxiliar solo aparece **Ruta escolar**; para estudiante o familiar,
 
 ### Pulido transversal
 
-- Corregir o descartar con evidencia la advertencia web de glifos Noto.
-- Verificar favicon e icono del sitio después de limpiar caché y en instalación PWA.
+- Implementado fallback local Noto Sans para caracteres que no cubra la fuente
+  institucional; falta confirmar en el navegador publicado que desaparezca la
+  advertencia.
+- El favicon fuente y `web/favicon.png` son idénticos; falta confirmar después
+  de limpiar caché y en una instalación PWA.
 - Revisar accesibilidad: textos grandes, contraste, teclado, lector de pantalla
   y pantallas angostas.
 - Mantener revisión de costos y cuotas por institución, sede y módulo.
@@ -93,8 +114,8 @@ docente o auxiliar solo aparece **Ruta escolar**; para estudiante o familiar,
 
 ### Lista de asistencia
 
-Primera entrega recomendada: registro manual confiable; la cámara QR se agrega
-como mecanismo rápido, no como requisito ni prueba automática de presencia.
+El núcleo manual confiable quedó implementado. La cámara QR será una ayuda futura,
+no un requisito ni una prueba automática de presencia.
 
 - Jornada o sesión ligada a `institutionId`, `campusId`, `academicYearId` y
   `groupId`; opcionalmente horario/asignatura/docente.
@@ -105,23 +126,35 @@ como mecanismo rápido, no como requisito ni prueba automática de presencia.
   sede; superadministrador con selector de alcance.
 - Familias y estudiante consultan solo el registro propio, con hijo activo.
 - Notificación de ausencia/tardanza sin exponer otros estudiantes.
-- Reportes por fecha, grupo y estudiante, exportación e historial inmutable.
+- Implementado: sesiones únicas por fecha/grupo/asignatura, lista congelada,
+  cuatro estados, observación, revisión optimista, cierre completo, historial,
+  corrección administrativa y aviso de ausencia, tardanza o corrección.
+- Implementado: lectura propia del estudiante y por hijo activo para familiares;
+  solo se muestran sesiones cerradas.
+- Implementado: reporte de hasta un año, filtro por grupo y exportación Excel web.
+- Pendiente: cola de trabajo sin conexión, aceptación física y ayuda opcional por QR.
 - Integración obligatoria con traslado docente, reemplazo temporal y reversión
   en `REGISTRO_CARGA_DOCENTE.md`.
 - Backend, reglas, pruebas de duplicados/concurrencia y funcionamiento sin red.
 
 ### Eventos
 
+El núcleo quedó implementado localmente y está pendiente de migración, despliegue
+y aceptación física:
+
 - Creación, borrador, publicación, cierre, cancelación y archivo por sede.
-- Audiencia institucional, por grupos o estudiantes, siempre materializada y
-  validada en backend.
-- Fecha, lugar, descripción, responsables, adjuntos y recordatorios.
-- Inscripción/cupo cuando aplique y autorización familiar separada cuando el
-  evento involucre menores, salidas o recogida especial.
-- Asistencia del evento como entidad propia, manual o apoyada por QR, con
-  protección contra duplicados y auditoría.
+- Audiencia institucional, por grupos o por estudiantes específicos,
+  materializada de nuevo al publicar y validada en backend.
+- Fecha, lugar, descripción, responsables y enlaces HTTPS.
+- Confirmación/cupo y autorización familiar; solo el familiar responde por el menor.
+- Asistencia independiente, selección explícita, revisión optimista e historial.
 - Consulta familiar por hijo, notificaciones y cambios/cancelaciones.
-- Historial y reportes sin mezclar eventos con la asistencia académica diaria.
+- Reporte por rango y exportación Excel web, sin mezclar eventos con la
+  asistencia académica diaria.
+- Implementado: recordatorio automático único durante las 24 horas previas,
+  con audiencia congelada al publicar e idempotencia ante reintentos.
+- Pendiente: adjuntos propios con cuota/retención, apoyo opcional por QR y
+  trabajo sin conexión.
 
 ### Lonchera y Restaurante
 
@@ -134,10 +167,9 @@ No deben presentarse como terminados por aparecer como opción de Mensajería.
 
 1. Mantener y documentar la prueba cerrada de la versión 10.
 2. Ejecutar la matriz de aceptación de los módulos actuales y corregir hallazgos.
-3. Terminar lector QR con cámara.
-4. Construir Lista de asistencia sobre el modelo académico y QR ya definidos.
-5. Construir Eventos y su asistencia independiente.
+3. Validar físicamente el lector QR con cámara ya implementado.
+4. Validar físicamente y completar reportes/exportación de Lista de asistencia.
+5. Desplegar y validar Eventos; completar sus ampliaciones no críticas.
 6. Completar Rutas avanzadas.
 7. Definir con el colegio el alcance real de Lonchera y Restaurante antes de
    programarlos.
-

@@ -1,4 +1,3 @@
-import 'package:sistema_educativo/config/app_palette.dart';
 // Archivo: screens/admin_history/view/daily_route_view.dart
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -8,6 +7,8 @@ import 'package:provider/provider.dart'; // ⬅️ NUEVO
 import '../../../providers/user_provider_v2.dart'; // ⬅️ NUEVO
 
 import '../services/daily_route_history_service.dart';
+import '../services/history_query_utils.dart';
+import '../widgets/history_date_range_field.dart';
 import '../export/utils/daily_route_export_utils.dart';
 import '../../../utils/format_utils.dart';
 import '../../../utils/dialog_utils.dart';
@@ -175,11 +176,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(
-            ctx,
-          ).colorScheme.copyWith(primary: AppPalette.primary),
-        ),
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
         child: child!,
       ),
     );
@@ -227,6 +224,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
       return Scaffold(
         body: SafeArea(
@@ -249,14 +247,12 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
             width: double.infinity,
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: AppPalette.surface,
-              border: Border.all(
-                color: AppPalette.error.withValues(alpha: .15),
-              ),
+              color: colors.surface,
+              border: Border.all(color: colors.outlineVariant),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppPalette.onSurface.withValues(alpha: .03),
+                  color: colors.shadow.withValues(alpha: .06),
                   blurRadius: 8,
                   offset: Offset(0, 2),
                 ),
@@ -311,13 +307,8 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
               ),
               SizedBox(
                 width: 280,
-                child: TextFormField(
-                  readOnly: true,
-                  decoration: InputDecoration(
-                    labelText: 'Rango de fechas',
-                    border: OutlineInputBorder(),
-                  ),
-                  controller: TextEditingController(text: rangoTexto),
+                child: HistoryDateRangeField(
+                  value: rangoTexto,
                   onTap: _pickDateRange,
                 ),
               ),
@@ -326,8 +317,8 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                 onPressed: () => _aplicarFiltros(recargar: true),
                 label: Text('Filtrar'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.primary,
-                  foregroundColor: AppPalette.surface,
+                  backgroundColor: colors.primary,
+                  foregroundColor: colors.onPrimary,
                 ),
               ),
               TextButton(
@@ -370,13 +361,13 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                 ElevatedButton.icon(
                   onPressed: _exportarExcel,
                   icon: Icon(Icons.table_view),
-                  label: Text('Exportar Excel'),
+                  label: Text('Exportar página a Excel'),
                 ),
                 SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: _exportarPDF,
                   icon: Icon(Icons.picture_as_pdf),
-                  label: Text('Exportar PDF'),
+                  label: Text('Exportar página a PDF'),
                 ),
               ],
             ),
@@ -422,14 +413,18 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
   }
 
   Widget _buildRutaItem(Map<String, dynamic> ruta) {
-    final estudiantes = List<Map<String, dynamic>>.from(
-      ruta['estudiantes'] ?? [],
-    );
-    final fecha = (ruta['fecha'] as Timestamp).toDate();
+    final rawStudents = ruta['estudiantes'];
+    final estudiantes = rawStudents is List
+        ? rawStudents
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final fecha = historyDate(ruta['fecha']);
     final inicioTs = ruta['horaInicio'];
     final finTs = ruta['horaFin'];
-    final inicio = inicioTs is Timestamp ? inicioTs.toDate() : null;
-    final fin = finTs is Timestamp ? finTs.toDate() : null;
+    final inicio = historyDate(inicioTs);
+    final fin = historyDate(finTs);
     final duracion = (inicio != null && fin != null)
         ? fin.difference(inicio).inMinutes
         : 0;
@@ -437,17 +432,21 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
 
     return Semantics(
       label:
-          'Ruta ${ruta['nombreRuta']} realizada el ${FormatUtils.formatoFechaHora(fecha)} '
+          'Ruta ${ruta['nombreRuta']} realizada el ${fecha == null ? 'sin fecha' : FormatUtils.formatoFechaHora(fecha)} '
           'por ${ruta['gestionadaPorNombre']} estado $estado',
       child: Container(
         margin: EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: AppPalette.error.withValues(alpha: .15)),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
           borderRadius: BorderRadius.circular(14),
-          color: AppPalette.surface,
+          color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: AppPalette.onSurface.withValues(alpha: .03),
+              color: Theme.of(
+                context,
+              ).colorScheme.shadow.withValues(alpha: .06),
               blurRadius: 8,
               offset: Offset(0, 2),
             ),
@@ -461,18 +460,17 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           subtitle: Text(
-            'Por: ${ruta['gestionadaPorNombre']} • ${FormatUtils.formatoFechaHora(fecha)}\n'
+            'Por: ${ruta['gestionadaPorNombre']} • ${fecha == null ? 'Sin fecha' : FormatUtils.formatoFechaHora(fecha)}\n'
             'Estado: $estado • Duración: $duracion min',
           ),
           children: estudiantes.map((est) {
             final recogido = est['recogido'] == true ? 'Si' : 'No';
             final anulado = est['anulado'] == true ? 'Si' : 'No';
             final activo = est['activo'] == true ? 'Si' : 'No';
-            final hora = est['horaRecogida'] != null
-                ? FormatUtils.formatoHora(
-                    (est['horaRecogida'] as Timestamp).toDate(),
-                  )
-                : '-';
+            final pickupTime = historyDate(est['horaRecogida']);
+            final hora = pickupTime == null
+                ? '-'
+                : FormatUtils.formatoHora(pickupTime);
             final avisos = est['avisosEnviados'] ?? 0;
 
             return ListTile(

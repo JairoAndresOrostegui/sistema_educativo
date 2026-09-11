@@ -4,14 +4,18 @@ const assert = require("assert");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const {seedAcademicYear} = require("./academic_year_fixture");
 
 const projectId = "sistema-educativo-messaging-test";
-const functionsBase = `http://127.0.0.1:5002/${projectId}/us-central1`;
-const authBase = "http://127.0.0.1:9098/identitytoolkit.googleapis.com/v1";
+const functionsPort = process.env.RELEASE_FUNCTIONS_PORT || "5002";
+const authPort = process.env.RELEASE_AUTH_PORT || "9098";
+const functionsBase = `http://127.0.0.1:${functionsPort}/${projectId}/us-central1`;
+const authBase = `http://127.0.0.1:${authPort}/identitytoolkit.googleapis.com/v1`;
 let app;
 let auth;
 let db;
+let bucket;
 
 const profile = (role, extra = {}) => ({
   firstName: "Usuario", lastName: "Prueba", document: "10000000",
@@ -39,7 +43,9 @@ async function clearAuth() {
 
 async function seedUser(uid, role, extra = {}) {
   const email = `${uid}@colegio.test`;
-  await auth.createUser({uid, email, password: "Clave123!"});
+  await auth.createUser({
+    uid, email, password: "Clave123!", emailVerified: true,
+  });
   await db.collection("users").doc(uid).set(profile(role, {
     institutionalEmail: email, ...extra,
   }));
@@ -79,9 +85,13 @@ function assertError(response, status) {
 
 describe("mensajeria institucional", () => {
   before(() => {
-    app = initializeApp({projectId}, "messaging-function-tests");
+    app = initializeApp({
+      projectId,
+      storageBucket: `${projectId}.appspot.com`,
+    }, "messaging-function-tests");
     auth = getAuth(app);
     db = getFirestore(app);
+    bucket = getStorage(app).bucket();
   });
 
   beforeEach(async () => {
@@ -106,6 +116,9 @@ describe("mensajeria institucional", () => {
       groupId: "group-5a", groupName: "Quinto A",
     });
     await seedUser("teacher", "Docente", {firstName: "Laura"});
+    await seedUser("teacher-tutor", "Docente", {
+      firstName: "Tutor", tutorGroupId: "group-4a",
+    });
     await seedUser("family", "Familiar", {
       studentIds: ["student-1"], activeStudentId: "student-1",
     });
@@ -162,6 +175,7 @@ describe("mensajeria institucional", () => {
     );
     assert.ok(channel.memberUserIds.includes("teacher"));
     assert.ok(channel.memberUserIds.includes("family"));
+    assert.ok(channel.memberUserIds.includes("admin"));
 
     const studentToken = await signIn("student-1@colegio.test");
     const sent = await callFunction("enviarMensajeCanal", {
@@ -175,6 +189,29 @@ describe("mensajeria institucional", () => {
       channelId: ref.id, body: "No pertenezco",
     }, outsiderToken), "PERMISSION_DENIED");
   });
+
+  it("incluye al director de grupo como contacto aunque no dicte asignatura",
+      async () => {
+        const tutorToken = await signIn("teacher-tutor@colegio.test");
+        const studentToken = await signIn("student-1@colegio.test");
+        const familyToken = await signIn("family@colegio.test");
+        const studentContacts = await callFunction(
+            "listarDestinatariosMensajeria", {}, studentToken,
+        );
+        assert.ok(studentContacts.body.result.contacts.some((item) =>
+          item.id === "teacher-tutor"));
+        const familyContacts = await callFunction(
+            "listarDestinatariosMensajeria",
+            {studentContextId: "student-1"}, familyToken,
+        );
+        assert.ok(familyContacts.body.result.contacts.some((item) =>
+          item.id === "teacher-tutor"));
+        const sent = await callFunction("enviarMensajeCanal", {
+          recipientId: "student-1", body: "Mensaje del director",
+        }, tutorToken);
+        assert.equal(sent.status, 200, JSON.stringify(sent.body));
+        assert.equal(sent.body.result.success, true);
+      });
 
   it("silencia grupos, admite anuncios admin y registra lecturas", async () => {
     const adminToken = await signIn(await seedUser("admin", "Administrador"));
@@ -268,9 +305,15 @@ describe("mensajeria institucional", () => {
         const adminToken = await signIn(await seedUser(
             "admin", "Administrador",
         ));
+        assertError(await callFunction("marcarCanalMensajeriaLeido", {
+          channelId,
+        }, adminToken), "PERMISSION_DENIED");
+        assertError(await callFunction("enviarMensajeCanal", {
+          channelId, body: "No debo poder leer ni intervenir",
+        }, adminToken), "PERMISSION_DENIED");
         assertError(await callFunction("configurarSilencioCanalMensajeria", {
           channelId, muted: true,
-        }, adminToken), "FAILED_PRECONDITION");
+        }, adminToken), "PERMISSION_DENIED");
 
         await callFunction("marcarCanalMensajeriaLeido", {channelId},
             firstFamilyToken);
@@ -292,6 +335,69 @@ describe("mensajeria institucional", () => {
           "family", "family-second", "student-1",
         ]));
         assert.equal(fullyRead.readNames["family-second"], "Carlos Prueba");
+      });
+
+  it("adjunta con cuota compartida, membresia y descarga independiente",
+      async () => {
+        const adminToken = await signIn(await seedUser(
+            "admin", "Administrador",
+        ));
+        await callFunction("sincronizarCanalesMensajeria", {}, adminToken);
+        const bytes = Buffer.from("circular para el grupo");
+        const reserved = await callFunction("solicitarAdjuntoMensaje", {
+          channelId: "academic_group-4a",
+          name: "circular.pdf",
+          contentType: "application/pdf",
+          sizeBytes: bytes.length,
+        }, adminToken);
+        assert.equal(reserved.status, 200, JSON.stringify(reserved.body));
+        const {id, storagePath} = reserved.body.result;
+        await bucket.file(storagePath).save(bytes, {
+          contentType: "application/pdf",
+          metadata: {metadata: {
+            attachmentId: id,
+            channelId: "academic_group-4a",
+            uploadedBy: "admin",
+          }},
+        });
+        const confirmed = await callFunction("confirmarAdjuntoMensaje", {
+          id,
+        }, adminToken);
+        assert.equal(confirmed.body.result.sizeBytes, bytes.length);
+        const sent = await callFunction("enviarMensajeCanal", {
+          channelId: "academic_group-4a", body: "Revisar circular",
+          attachmentId: id,
+        }, adminToken);
+        assert.equal(sent.body.result.success, true);
+        const message = (await db.collection("message_channels")
+            .doc("academic_group-4a").collection("messages")
+            .doc(sent.body.result.messageId).get()).data();
+        assert.equal(message.attachment.name, "circular.pdf");
+        assert.equal((await db.collection("message_attachments").doc(id).get())
+            .data().status, "attached");
+        assertError(await callFunction("enviarMensajeCanal", {
+          channelId: "academic_group-4a", attachmentId: id,
+        }, adminToken), "PERMISSION_DENIED");
+
+        const familyToken = await signIn("family@colegio.test");
+        const downloaded = await callFunction(
+            "registrarDescargaAdjuntoMensaje", {attachmentId: id}, familyToken,
+        );
+        assert.equal(downloaded.body.result.success, true);
+        const receipts = await db.collection("message_attachment_downloads")
+            .where("attachmentId", "==", id).get();
+        assert.equal(receipts.size, 1);
+        assert.equal(receipts.docs[0].data().userId, "family");
+        const listed = await callFunction(
+            "listarDescargasAdjuntoMensaje", {attachmentId: id}, familyToken,
+        );
+        assert.equal(listed.body.result.recipientCount, 5);
+        assert.equal(listed.body.result.receipts[0].userId, "family");
+
+        const outsiderToken = await signIn("student-other@colegio.test");
+        assertError(await callFunction("registrarDescargaAdjuntoMensaje", {
+          attachmentId: id,
+        }, outsiderToken), "PERMISSION_DENIED");
       });
 
   it("permite familiares del mismo grupo y revalida vinculos al responder",

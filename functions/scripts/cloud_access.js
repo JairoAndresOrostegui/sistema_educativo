@@ -2,7 +2,7 @@
 const path = require("path");
 const {refreshToken} = require("firebase-admin/app");
 
-async function cloudAccess() {
+function cloudCredentials() {
   const base = path.join(process.env.APPDATA,
       "npm/node_modules/firebase-tools/lib");
   const account = require(path.join(base, "auth")).getGlobalDefaultAccount();
@@ -10,9 +10,17 @@ async function cloudAccess() {
   if (!account?.tokens?.refresh_token) {
     throw new Error("Firebase CLI login required");
   }
-  const credential = refreshToken({type: "authorized_user",
+  return {type: "authorized_user",
     client_id: api.clientId(), client_secret: api.clientSecret(),
-    refresh_token: account.tokens.refresh_token});
+    refresh_token: account.tokens.refresh_token};
+}
+
+function cloudCredential() {
+  return refreshToken(cloudCredentials());
+}
+
+async function cloudAccess() {
+  const credential = cloudCredential();
   return async (url, method = "GET", body) => {
     const token = await credential.getAccessToken();
     const response = await fetch(url, {method,
@@ -29,4 +37,4 @@ async function cloudAccess() {
     return data;
   };
 }
-module.exports = {cloudAccess};
+module.exports = {cloudAccess, cloudCredential, cloudCredentials};
