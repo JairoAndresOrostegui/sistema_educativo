@@ -126,7 +126,7 @@ Esta migración crea el chat general de cada grupo y mueve las conversaciones
 privadas anteriores; la aplicación no conserva lectura dual del esquema viejo.
 
 ```powershell
-flutter build web
+node tools/build_web.js qa
 firebase use default
 firebase deploy --only firestore,storage,functions,hosting
 ```

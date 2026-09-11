@@ -3,8 +3,9 @@
 ## Estado al 11 de septiembre de 2026
 
 La versión 10 es la última confirmada por la API en la prueba cerrada Alpha.
-Esta revisión prepara la versión 11. Los resultados y cambios de esta página
-no significan que estén publicados hasta que se registre el despliegue.
+QA ya tiene la versión 11: 108 Functions activas, reglas Firestore/Storage,
+índices y web. Producción tiene índices, migraciones y reglas Firestore nuevos;
+su backend se despliega en grupos de 8. Web de producción y Play aún pendientes.
 
 La captura de Autorizaciones no identifica la versión instalada. Se comprobaron
 accesos recientes de versiones 8, 9 y 10, pero no se puede atribuir esa captura
@@ -56,13 +57,16 @@ resolver toda la cadena de permisos de una descarga.
 
 Las URLs de descarga que hayan sido emitidas antes de esta revisión pueden
 seguir funcionando por su token. Las reglas por sí solas no revocan esos enlaces.
-Queda pendiente un inventario y revocación controlada exclusivamente de objetos
-privados, sin afectar las imágenes públicas del sitio ni fotos de perfil.
+En QA se inventariaron cuatro archivos privados: tres MIME corregidos por firma
+y cuatro tokens revocados, sin cambiar bytes, generación ni audiencia. Quedó
+auditoría y respaldo privado ignorado por Git. Producción no tenía archivos ni
+adjuntos en este inventario. Las nuevas confirmaciones revocan tokens antes de
+publicar; si falla la revocación conservan una reserva reintentable.
 
 ## Límites de la validación
 
 Validación local final: `flutter analyze` sin observaciones, 100 pruebas Flutter,
-lint completo de Functions y 8 pruebas de herramientas aprobados. Compilaciones
+lint completo de Functions y 11 pruebas de herramientas aprobados. Compilaciones
 web QA y producción y AAB de producción 11 completadas. Firma del AAB verificada.
 SHA-256: `38e4ed25e1635bc00d670d1e940486be31c1a2027424b47d338f9da6abc3140a`.
 
@@ -72,6 +76,20 @@ Mensajería 8, limpieza de adjuntos 7, Storage 9, Rutas operativas 18,
 Push 5, dispositivos 3, funciones de notificación 7, Sitio web 3,
 Asistencia 7, Eventos 10, acceso push académico 5 y descargas HTTP 20 más
 3 pruebas de límite de bytes y tokens. Auth conserva 4 regresiones aprobadas.
+
+Validación real QA: nueve endpoints deniegan anónimo; matrícula pública devuelve
+30 grupos, 28 EPS y 14 tipos de documento. Las 16 cuentas de la guía pertenecen a
+producción y no existen en QA, por lo que no se hicieron logins con ellas en QA.
+Los endpoints HTTP privados deniegan anónimo y origen de producción, aceptan
+preflight QA; lectura administrativa de un PDF existente comprobada, sin
+confundirla con una descarga autenticada de usuario final.
+
+Chrome headless comprobó página comercial y login de QA 11: ambas renderizan,
+sin excepciones ni fallos de red/HTTP. El primer smoke detectó un artefacto QA
+incompleto porque Flutter usa `build/web` como carpeta intermedia y mueve assets
+al compilar otra salida. Se corrigió: publicar exclusivamente `build/web-qa` o
+`build/web-prod`, verificar manifiestos, fuentes y workers antes de desplegar;
+flujos CI actualizados. Nunca publicar la carpeta intermedia `build/web`.
 
 Las pruebas automatizadas no garantizan ausencia absoluta de defectos. Queda
 aceptación física por rol: cámara, GPS, segundo plano, notificaciones, descarga

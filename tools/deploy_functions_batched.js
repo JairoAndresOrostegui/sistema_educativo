@@ -24,12 +24,13 @@ async function main() {
   const cli = path.join(process.env.APPDATA, "npm/node_modules/firebase-tools/lib/bin/firebase.js");
   if (!fs.existsSync(cli)) throw new Error("Firebase CLI entry point not found");
   const directory = path.join(root, ".buildlog");
+  const runId = Date.now();
   fs.mkdirSync(directory, {recursive: true});
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
     let succeeded = false;
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const file = path.join(directory, `${project}-functions-batch-${i + 1}-${attempt}.log`);
+      const file = path.join(directory, `${project}-functions-${runId}-batch-${i + 1}-${attempt}.log`);
       const log = fs.createWriteStream(file);
       const child = spawn(process.execPath, [cli, "deploy", "--project", project,
         "--only", batch.map((name) => `functions:${name}`).join(","),

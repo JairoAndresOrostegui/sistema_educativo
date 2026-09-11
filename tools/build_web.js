@@ -11,14 +11,16 @@ if (environment === "prod" && !process.env.WEB_VAPID_KEY) {
   throw new Error("Set production WEB_VAPID_KEY before building production web.");
 }
 const root = path.resolve(__dirname, "..");
-const output = environment === "prod" ? "build/web-prod" : "build/web";
+const vapidKey = environment === "prod" ? process.env.WEB_VAPID_KEY : process.env.QA_WEB_VAPID_KEY;
+// Flutter uses build/web as staging even for custom outputs. Never publish it.
+const output = environment === "prod" ? "build/web-prod" : "build/web-qa";
 const args = ["build", "web", "--release", `--output=${output}`,
   `--dart-define=APP_ENV=${environment}`];
-if (process.env.WEB_VAPID_KEY) {
-  if (!/^[A-Za-z0-9_-]+$/.test(process.env.WEB_VAPID_KEY)) {
+if (vapidKey) {
+  if (!/^[A-Za-z0-9_-]+$/.test(vapidKey)) {
     throw new Error("Invalid public VAPID key format");
   }
-  args.push(`--dart-define=WEB_VAPID_KEY=${process.env.WEB_VAPID_KEY}`);
+  args.push(`--dart-define=WEB_VAPID_KEY=${vapidKey}`);
 }
 const result = spawnSync(process.platform === "win32" ? "flutter.bat" : "flutter",
     args, {cwd: root, stdio: "inherit", windowsHide: true,
@@ -41,3 +43,4 @@ if (environment === "prod") {
 fs.writeFileSync(path.join(root, output, "environment.json"),
     JSON.stringify({environment, projectId: environment === "prod" ?
       "sistema-educativo-rl-prod" : "sistema-educativo-rl"}));
+require("./verify_web_artifact").verifyWebArtifact(path.join(root, output), environment);

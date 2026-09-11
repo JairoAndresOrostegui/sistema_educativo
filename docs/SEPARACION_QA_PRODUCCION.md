@@ -16,7 +16,8 @@ No cambiar DNS ni reemplazar el sitio público hasta validar el entorno nuevo.
 - Registradas y verificadas ambas huellas SHA-256: carga y firma de Google Play.
 - Alias qa/prod añadidos; default continúa en QA para preservar el flujo existente.
 - firebase.production.json separado, ubicación prevista us-central1,
-  salida web build/web-prod para no desplegar accidentalmente build/web de QA.
+  salida web build/web-prod separada de build/web-qa. build/web es una carpeta
+  intermedia de Flutter y no se publica: otra compilación puede mover sus assets.
 - Blaze habilitado y comprobado mediante Cloud Billing API.
 - Firestore `(default)` creado en `us-central1`, modo nativo y protección contra
   eliminación activada; ubicación y protección verificadas mediante lectura posterior.

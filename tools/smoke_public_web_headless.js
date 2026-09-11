@@ -180,6 +180,18 @@ async function inspectPage(browserCdp, address, url, label, folder) {
       bodyText: document.body.innerText.slice(0, 4000)
     })`);
     report.document.scripts = report.document.scripts.map(safeUrl);
+    report.build = await cdp.evaluate(`(async () => {
+      const markers = {};
+      for (const file of ['environment.json', 'version.json']) {
+        try {
+          const response = await fetch('/' + file, {
+            cache: 'no-store', credentials: 'omit'
+          });
+          markers[file] = {status: response.status, data: await response.json()};
+        } catch { markers[file] = {unavailable: true}; }
+      }
+      return markers;
+    })()`);
     await cdp.evaluate(`(() => {
       function enable(root) {
         const toggle = root.querySelector('flt-semantics-placeholder');

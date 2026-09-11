@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(__dirname, "../build/web-prod");
+require("./verify_web_artifact").verifyWebArtifact(root, "prod");
 const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const entry = index.match(/src="(flutter_bootstrap\.[a-f0-9]{20}\.js)"/);
 if (!entry) throw new Error("Production requires a content-versioned bootstrap");

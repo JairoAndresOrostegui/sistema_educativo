@@ -20,8 +20,15 @@
     }
   ],
   "hosting": {
-    "public": "build/web",
+    "public": "build/web-qa",
+    "predeploy": ["node tools/verify_web_artifact.js qa"],
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {"source": "/", "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]},
+      {"source": "**/*.html", "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]},
+      {"source": "**/*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]},
+      {"source": "**/*.json", "headers": [{"key": "Cache-Control", "value": "no-cache, must-revalidate"}]}
+    ],
     "rewrites": [{"source": "**", "destination": "/index.html"}]
   },
   "storage": {"rules": "storage.rules"},
