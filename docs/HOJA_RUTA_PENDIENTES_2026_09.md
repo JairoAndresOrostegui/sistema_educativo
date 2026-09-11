@@ -6,12 +6,14 @@ El estado comprobado de la revisión del 11 de septiembre y su despliegue está 
 [REVISION_RELEASE_11.md](REVISION_RELEASE_11.md). El código local de esa revisión
 no debe confundirse con la versión que tienen instalada los verificadores.
 
-- Producción web: entrega anterior publicada; actualización 11 en preparación.
-- Google Play, prueba cerrada Alpha: `1.0.0 (10)` activa.
-- QA web: entrega anterior publicada en
-  `https://sistema-educativo-rl.web.app` el 9 de septiembre de 2026.
-- QA backend: despliegue de la revisión 11 en curso. Índices y migraciones
-  nuevos verificados; consultar el registro de entrega para el cierre.
+- Producción web: versión 11 publicada y comprobada en Chrome.
+- Google Play, prueba cerrada Alpha: `1.0.0 (11)` enviada; la API confirma
+  `completed`. Falta comprobar en Play Console la disponibilidad para testers.
+- QA web: versión 11 publicada y comprobada en
+  `https://sistema-educativo-rl.web.app` el 11 de septiembre de 2026.
+- Backend QA y producción: 108 Functions ACTIVE por entorno; reglas, índices
+  y migraciones verificados. Pruebas finales: 124 Flutter y 190 comprobaciones
+  autenticadas/de acceso con las 16 cuentas temporales en producción.
 
 La aprobación automatizada indica que el código soporta los casos cubiertos;
 no sustituye la aceptación funcional en navegador y dispositivos reales.
@@ -19,7 +21,8 @@ no sustituye la aceptación funcional en navegador y dispositivos reales.
 ## Prioridad 0 — cerrar Google Play sin perder la prueba
 
 1. Mantener al menos 12 verificadores inscritos continuamente durante 14 días.
-2. Confirmar que todos instalaron o actualizaron a la versión 10 y conservar
+2. Confirmar que todos instalaron o actualizaron a la versión 11 cuando esté
+   disponible; documentos y adjuntos nuevos la requieren. Conservar
    evidencia de las funciones que probaron y de sus comentarios.
 3. Probar en teléfonos reales: permisos, notificaciones, archivos, cámara,
    pérdida de red, cierre y reapertura de la aplicación.
@@ -49,13 +52,15 @@ Internet, reintento, pantalla pequeña y cierre/reapertura.
 | Matrículas | Auditada técnicamente | Flujo, transiciones, concurrencia, año/grupo, familiar e historial cubiertos; falta aceptación física completa. |
 | Horarios | Auditados técnicamente | Cruces, edición concurrente, año activo, grupos, docente y familiar por hijo cubiertos; falta aceptación física. |
 | Autorizaciones | Auditadas técnicamente | Hijo seleccionado, corrección, decisiones concurrentes, cierre y reapertura superadmin cubiertos; falta aceptación física. |
+| Lista de asistencia | Auditada técnicamente y desplegada | Sesiones, cierre, corrección, reportes, consulta por hijo y recuperación de errores cubiertos; falta aceptación física y trabajo sin conexión. |
+| Eventos | Auditado técnicamente y desplegado | Audiencias, estados, respuestas familiares, asistencia, recordatorios y cambio de hijo cubiertos; falta aceptación física y ampliaciones listadas abajo. |
 | Documentos | Auditados técnicamente | Audiencias, cuota, tamaño, confirmación, descargas y eliminación segura cubiertos; falta aceptación física. |
 | Mensajería | Auditada técnicamente | Canales supervisados, lecturas independientes, privacidad, cambios de vínculo, push y adjuntos con cuota/retención/descarga individual cubiertos; falta aceptación física por rol. |
 | Administrar rutas | Auditada técnicamente | Creación versionada, vigencia, responsable designado, participantes activos y únicos, conductor por sede, baja lógica, solicitudes familiares y bloqueo al iniciar cubiertos; falta aceptación física administrativa. |
 | Operar recorrido / Mi ruta escolar | Auditada técnicamente | Estados vacío/inactivo/finalizado, privacidad GPS, operación idempotente, avisos, cierre y errores controlados cubiertos; falta prueba física con GPS, Maps, segundo plano, red intermitente y reapertura. |
 | Historial administrativo | Auditado técnicamente | Alcance por sede, permiso exclusivo, recorridos y participantes, filtros sobre todo el rango, conteos exactos, cursores, fechas dañadas y exportación de la página visible cubiertos; falta aceptación web con datos reales. |
 | QR de identificación | Auditado técnicamente, incluida cámara | Token opaco, alcance, estado, año, familiar por hijo, baja en cascada, revocación/reemplazo y lectura por cámara o manual cubiertos. Falta aceptación física de permiso, linterna, cambio de cámara y dispositivo sin cámara. Las operaciones reales siguen separadas. |
-| Sitio web | Auditado técnicamente | Esquema v5, formulario vigente, página activa, aislamiento por sede, publicación concurrente, imágenes y bandeja cubiertos; falta aceptación web real y confirmar en navegador si persiste la advertencia no fatal de fuentes Noto. |
+| Sitio web | Auditado técnicamente | Esquema v5, formulario vigente, aislamiento, publicación, imágenes y bandeja cubiertos. Público/login QA y producción cargan en Chrome sin excepciones o fallos de red; falta aceptación autenticada del editor y revisión de fuentes en el resto de pantallas. |
 | Notificaciones y panel Push | Auditado técnicamente | Cola de 500, reintentos, revalidación de audiencia, retiro seguro de tokens terminales, slots móvil/web, avisos web simultáneos, destinos por rol y panel superadmin cubiertos; falta aceptación física con la app en frente, fondo, cerrada y sin red. |
 
 Los dos accesos de Rutas son intencionales para administración: **Administrar
@@ -139,8 +144,8 @@ no un requisito ni una prueba automática de presencia.
 
 ### Eventos
 
-El núcleo quedó implementado localmente y está pendiente de migración, despliegue
-y aceptación física:
+El núcleo quedó implementado, migrado y desplegado en QA y producción. La
+versión Android 11 fue enviada a Alpha; queda aceptación física:
 
 - Creación, borrador, publicación, cierre, cancelación y archivo por sede.
 - Audiencia institucional, por grupos o por estudiantes específicos,
@@ -165,11 +170,11 @@ No deben presentarse como terminados por aparecer como opción de Mensajería.
 
 ## Orden recomendado de ejecución
 
-1. Mantener y documentar la prueba cerrada de la versión 10.
+1. Confirmar disponibilidad de la versión 11 y mantener/documentar la prueba cerrada.
 2. Ejecutar la matriz de aceptación de los módulos actuales y corregir hallazgos.
 3. Validar físicamente el lector QR con cámara ya implementado.
 4. Validar físicamente y completar reportes/exportación de Lista de asistencia.
-5. Desplegar y validar Eventos; completar sus ampliaciones no críticas.
+5. Validar Eventos en dispositivos reales; completar sus ampliaciones no críticas.
 6. Completar Rutas avanzadas.
 7. Definir con el colegio el alcance real de Lonchera y Restaurante antes de
    programarlos.

@@ -2,10 +2,15 @@
 
 ## Estado al 11 de septiembre de 2026
 
-La versión 10 es la última confirmada por la API en la prueba cerrada Alpha.
-QA ya tiene la versión 11: 108 Functions activas, reglas Firestore/Storage,
-índices y web. Producción tiene índices, migraciones, reglas Firestore y las
-108 Functions nuevas activas. Web de producción y Play aún pendientes.
+La versión 11 fue enviada a la prueba cerrada Alpha. La API aceptó y confirmó
+la entrega con `status: completed` y `versionCodes: [11]`. Esto no verifica por
+sí solo la aprobación de revisión ni que cada dispositivo ya pueda actualizar.
+No se publicó en el segmento de producción de Google Play.
+
+QA y producción tienen web 11, 108 Functions ACTIVE por proyecto, reglas
+Firestore/Storage nuevas e índices listos. Se comparó el contenido de las
+cuatro reglas publicadas con los archivos locales: coinciden. Hostinger sirve
+el código `b1f3ca8c914200208e32984f1a28637db0da61d6`; QA se compiló del mismo código.
 
 La captura de Autorizaciones no identifica la versión instalada. Se comprobaron
 accesos recientes de versiones 8, 9 y 10, pero no se puede atribuir esa captura
@@ -24,7 +29,8 @@ anterior al cambiar de selección; ahora las limpian, descartan respuestas
 antiguas y restauran solo una selección válida ante un fallo. Las tarjetas de
 Autorizaciones ocultaban la tinta Material bajo un fondo opaco, lo que el SDK
 actual reportaba en modo de pruebas; se corrigió sin atribuirle el error de
-permisos de la captura. Se reconstruyen los tres artefactos con estos cambios.
+permisos de la captura. La misma corrección se aplicó a Usuarios y a dos paneles
+del editor web. Los tres artefactos se reconstruyeron con todos estos cambios.
 
 ## Cambios revisados
 
@@ -58,10 +64,17 @@ proyección pública de 4 usuarios QA y 5 de producción, sin alterar su perfil.
    Conservar usuarios y datos temporales de las pruebas. Las migraciones son
    idempotentes y no borran direcciones del perfil privado de los usuarios.
 3. Publicar backend, reglas y web en QA; comprobar servicios y cargas.
-4. Publicar backend y web de producción y enviar el AAB 11 a Alpha.
-5. Confirmar disponibilidad del AAB antes de activar las reglas finales de
-   descarga privada de Storage en producción. Con esas reglas, clientes antiguos
-   deberán actualizar para descargar documentos y adjuntos.
+4. Publicar backend, web y reglas de producción y enviar el AAB 11 a Alpha.
+5. Confirmar disponibilidad en Play Console y pedir a los verificadores que
+   actualicen antes de probar documentos y adjuntos privados.
+
+La retención provisional de las reglas Storage se levantó al comprobar que las
+reglas productivas anteriores no contemplaban los nuevos adjuntos de Mensajería:
+conservarlas habría impedido su carga desde la web 11. Se publicaron las reglas
+finales junto con el nuevo flujo autenticado. Producción tenía cero documentos
+o adjuntos privados en el inventario final; no se borraron datos para resolverlo.
+Los clientes Android antiguos no son compatibles con las nuevas descargas y
+deben actualizar a la 11 cuando Play la tenga disponible.
 
 Las descargas nuevas pasan por dos endpoints autenticados que revalidan sesión,
 permisos, alcance y destinatario. Responden con un buffer limitado a 25 MiB y sin
@@ -79,10 +92,14 @@ publicar; si falla la revocación conservan una reserva reintentable.
 
 ## Límites de la validación
 
-Validación local final: `flutter analyze` sin observaciones, 100 pruebas Flutter,
+Validación local final: `flutter analyze` sin observaciones, 124 pruebas Flutter,
 lint completo de Functions y 11 pruebas de herramientas aprobados. Compilaciones
 web QA y producción y AAB de producción 11 completadas. Firma del AAB verificada.
-SHA-256 del AAB final recompilado: `836138f3e53235b9adbd27056731bb0692d9ef034015d32811d7b9e606654598`.
+SHA-256 del AAB final enviado: `bd20005f085bfeddcf3ff167367ccae63331db96f53649e5699ef7afe375c54e`.
+Manifiesto comprobado: código 11, cámara opcional, servicio de ubicación y sin
+permisos amplios READ_MEDIA/READ_EXTERNAL_STORAGE. Los 14 binarios nativos de
+64 bits del AAB tienen segmentos LOAD alineados al menos a 16 KiB; esto no
+sustituye la ejecución en un dispositivo con ese tamaño de página.
 
 Las suites de backend incluyeron: Firestore 31, GPS 6, Usuarios 29, QR 4,
 Horarios 9, Autorizaciones 9, Matrículas 21, Archivos/limpieza 11,
@@ -110,8 +127,10 @@ Ronda final, con backend actualizado: las 190 comprobaciones pasaron con las
 16 cuentas. El inventario confirmó 108 Functions ACTIVE, ningún índice faltante
 o pendiente y ningún adulto activo sin verificación de correo.
 
-Chrome headless comprobó página comercial y login de QA 11: ambas renderizan,
-sin excepciones ni fallos de red/HTTP. El primer smoke detectó un artefacto QA
+Chrome headless comprobó página comercial y login finales de QA y producción
+11: las cuatro pantallas renderizan sin excepciones ni fallos de red/HTTP.
+En producción, `release.json` confirmó el código `b1f3ca8`. El primer smoke
+detectó un artefacto QA
 incompleto porque Flutter usa `build/web` como carpeta intermedia y mueve assets
 al compilar otra salida. Se corrigió: publicar exclusivamente `build/web-qa` o
 `build/web-prod`, verificar manifiestos, fuentes y workers antes de desplegar;
@@ -132,3 +151,17 @@ Google Play no obliga automáticamente a instalar una actualización. La aplicac
 no incorpora todavía una política de versión mínima ni un flujo de actualización
 inmediata. Los verificadores actualizan desde Play o mediante actualización
 automática si la tienen habilitada.
+
+## Evidencia local de cierre
+
+Los registros están en `.buildlog`, excluido de Git. No publicar esa carpeta:
+otros respaldos operativos del mismo directorio contienen información privada.
+
+- `release11-verified-final-builds.log`: formato, analyze, 124 pruebas y tres builds.
+- `deployed-role-smoke-prod-final.log`: 16 cuentas y 190 comprobaciones.
+- `sistema-educativo-rl-preflight.json` y `sistema-educativo-rl-prod-preflight.json`:
+  inventarios de servicios, alcance e índices.
+- `web-smoke-qa-1789167713240` y `web-smoke-prod-1789167865686`:
+  capturas y resultados de público/login sin iniciar sesión.
+- `release11-final-production-storage.log`: publicación final de Storage.
+- `release11-play-submit.log`: envío confirmado a Alpha.
