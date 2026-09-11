@@ -617,7 +617,7 @@ class _AuthorizationStudentScreenState
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Container(
+                            child: Ink(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(

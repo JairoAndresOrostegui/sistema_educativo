@@ -4,13 +4,27 @@
 
 La versión 10 es la última confirmada por la API en la prueba cerrada Alpha.
 QA ya tiene la versión 11: 108 Functions activas, reglas Firestore/Storage,
-índices y web. Producción tiene índices, migraciones y reglas Firestore nuevos;
-su backend se despliega en grupos de 8. Web de producción y Play aún pendientes.
+índices y web. Producción tiene índices, migraciones, reglas Firestore y las
+108 Functions nuevas activas. Web de producción y Play aún pendientes.
 
 La captura de Autorizaciones no identifica la versión instalada. Se comprobaron
 accesos recientes de versiones 8, 9 y 10, pero no se puede atribuir esa captura
 a una de ellas. La consulta antigua de hijos sí pasó su reproducción en emulador;
 no se la considera causa demostrada del error del tester.
+
+El historial sí muestra un diálogo antiguo que imprimía `error.toString()` en
+la lista familiar. La versión 10 ya humanizaba ese punto, aunque su conversión
+de errores todavía podía dejar pasar cadenas envueltas con `cloud_firestore`.
+La versión 11 cubre ese formato y muestra el fallo de carga dentro de la pantalla
+con Reintentar. Esto no identifica retrospectivamente la versión de la captura.
+
+La ampliación de regresiones visuales detectó dos ajustes adicionales antes de
+enviar el AAB: Asistencia/Eventos conservaban brevemente tarjetas del hijo
+anterior al cambiar de selección; ahora las limpian, descartan respuestas
+antiguas y restauran solo una selección válida ante un fallo. Las tarjetas de
+Autorizaciones ocultaban la tinta Material bajo un fondo opaco, lo que el SDK
+actual reportaba en modo de pruebas; se corrigió sin atribuirle el error de
+permisos de la captura. Se reconstruyen los tres artefactos con estos cambios.
 
 ## Cambios revisados
 
@@ -68,7 +82,7 @@ publicar; si falla la revocación conservan una reserva reintentable.
 Validación local final: `flutter analyze` sin observaciones, 100 pruebas Flutter,
 lint completo de Functions y 11 pruebas de herramientas aprobados. Compilaciones
 web QA y producción y AAB de producción 11 completadas. Firma del AAB verificada.
-SHA-256: `38e4ed25e1635bc00d670d1e940486be31c1a2027424b47d338f9da6abc3140a`.
+SHA-256 del AAB final recompilado: `836138f3e53235b9adbd27056731bb0692d9ef034015d32811d7b9e606654598`.
 
 Las suites de backend incluyeron: Firestore 31, GPS 6, Usuarios 29, QR 4,
 Horarios 9, Autorizaciones 9, Matrículas 21, Archivos/limpieza 11,
@@ -84,12 +98,30 @@ Los endpoints HTTP privados deniegan anónimo y origen de producción, aceptan
 preflight QA; lectura administrativa de un PDF existente comprobada, sin
 confundirla con una descarga autenticada de usuario final.
 
+Validación real inicial en producción: login de las 16 cuentas temporales de la
+guía, sin cambiar contraseñas, datos, contextos familiares ni slots push. Los dos
+administradores, dos docentes y ocho familiares consultaron Autorizaciones con
+HTTP 200; los cuatro estudiantes recibieron el 403 esperado. También pasaron
+perfil, hijos/directorio, grupos, horarios, archivos, eventos, asistencia y la
+restricción del listado QR administrativo. De 190 verificaciones, la única
+pendiente durante el despliegue fue matrícula pública (404); al publicarse su
+servicio respondió 200 con 32 grupos, una institución, 28 EPS y 14 documentos.
+Ronda final, con backend actualizado: las 190 comprobaciones pasaron con las
+16 cuentas. El inventario confirmó 108 Functions ACTIVE, ningún índice faltante
+o pendiente y ningún adulto activo sin verificación de correo.
+
 Chrome headless comprobó página comercial y login de QA 11: ambas renderizan,
 sin excepciones ni fallos de red/HTTP. El primer smoke detectó un artefacto QA
 incompleto porque Flutter usa `build/web` como carpeta intermedia y mueve assets
 al compilar otra salida. Se corrigió: publicar exclusivamente `build/web-qa` o
 `build/web-prod`, verificar manifiestos, fuentes y workers antes de desplegar;
 flujos CI actualizados. Nunca publicar la carpeta intermedia `build/web`.
+
+No se inició sesión de navegador con los fixtures compartidos: el flujo real
+reclama el slot push web antes de pedir permiso de notificaciones, de modo que
+incluso un Chrome con permiso denegado desplazaría al último tester. La evidencia
+de pantallas internas corresponde a Flutter y la de permisos desplegados a
+peticiones autenticadas, no a una navegación visual de todos los roles.
 
 Las pruebas automatizadas no garantizan ausencia absoluta de defectos. Queda
 aceptación física por rol: cámara, GPS, segundo plano, notificaciones, descarga

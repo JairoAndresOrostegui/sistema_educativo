@@ -13,7 +13,9 @@ import '../widgets/admin/teacher_bulk_import_dialog.dart';
 import '../widgets/admin/teacher_transfer_dialog.dart';
 
 class AdminUsersScreen extends StatefulWidget {
-  const AdminUsersScreen({super.key});
+  final UserServiceV2? userService;
+
+  const AdminUsersScreen({super.key, this.userService});
 
   @override
   State<AdminUsersScreen> createState() => _AdminUsersScreenState();
@@ -30,7 +32,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   late String institutionId;
   late String campusId;
 
-  final UserServiceV2 _userService = UserServiceV2();
+  late final UserServiceV2 _userService = widget.userService ?? UserServiceV2();
 
   @override
   void initState() {
@@ -241,110 +243,116 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                     ),
                                     color: AppPalette.surfaceContainer,
                                   ),
-                                  child: ListTile(
-                                    leading: Semantics(
-                                      label: 'Foto de perfil',
-                                      enabled: true,
-                                      focusable: true,
-                                      child: ProfilePhotoWidget(
-                                        imageUrl: user.photoUrl ?? '',
-                                        enableHoverEdit: false,
-                                        radius: 24,
-                                        iconSize: 48,
+                                  child: Material(
+                                    type: MaterialType.transparency,
+                                    child: ListTile(
+                                      leading: Semantics(
+                                        label: 'Foto de perfil',
+                                        enabled: true,
+                                        focusable: true,
+                                        child: ProfilePhotoWidget(
+                                          imageUrl: user.photoUrl ?? '',
+                                          enableHoverEdit: false,
+                                          radius: 24,
+                                          iconSize: 48,
+                                        ),
                                       ),
-                                    ),
-                                    title: Text(
-                                      '${user.firstName} ${user.lastName}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      '${user.personalEmail} - ${user.status.toUpperCase()}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    trailing: isMobile
-                                        ? (puedeEditar || puedeEliminarEste
-                                              ? PopupMenuButton<String>(
-                                                  tooltip:
-                                                      'Acciones del usuario',
-                                                  onSelected: (action) {
-                                                    if (action == 'edit') {
-                                                      _mostrarFormulario(
-                                                        usuario: user,
-                                                      );
-                                                    } else if (action ==
-                                                        'reset_password') {
-                                                      _restablecerClave(user);
-                                                    } else if (action ==
-                                                        'delete') {
-                                                      _eliminarUsuario(user);
-                                                    }
-                                                  },
-                                                  itemBuilder: (context) => [
-                                                    if (puedeEditar)
-                                                      const PopupMenuItem(
-                                                        value: 'edit',
-                                                        child: Text('Editar'),
-                                                      ),
-                                                    if (puedeEditar &&
-                                                        user.role ==
-                                                            'Estudiante')
-                                                      const PopupMenuItem(
-                                                        value: 'reset_password',
-                                                        child: Text(
-                                                          'Restablecer contraseña',
+                                      title: Text(
+                                        '${user.firstName} ${user.lastName}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        '${user.personalEmail} - ${user.status.toUpperCase()}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      trailing: isMobile
+                                          ? (puedeEditar || puedeEliminarEste
+                                                ? PopupMenuButton<String>(
+                                                    tooltip:
+                                                        'Acciones del usuario',
+                                                    onSelected: (action) {
+                                                      if (action == 'edit') {
+                                                        _mostrarFormulario(
+                                                          usuario: user,
+                                                        );
+                                                      } else if (action ==
+                                                          'reset_password') {
+                                                        _restablecerClave(user);
+                                                      } else if (action ==
+                                                          'delete') {
+                                                        _eliminarUsuario(user);
+                                                      }
+                                                    },
+                                                    itemBuilder: (context) => [
+                                                      if (puedeEditar)
+                                                        const PopupMenuItem(
+                                                          value: 'edit',
+                                                          child: Text('Editar'),
                                                         ),
-                                                      ),
-                                                    if (puedeEliminarEste)
-                                                      const PopupMenuItem(
-                                                        value: 'delete',
-                                                        child: Text('Eliminar'),
-                                                      ),
-                                                  ],
-                                                )
-                                              : null)
-                                        : Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (puedeEditar)
-                                                IconButton(
-                                                  tooltip: 'Editar',
-                                                  icon: Icon(
-                                                    Icons.edit,
-                                                    color: AppPalette.success,
+                                                      if (puedeEditar &&
+                                                          user.role ==
+                                                              'Estudiante')
+                                                        const PopupMenuItem(
+                                                          value:
+                                                              'reset_password',
+                                                          child: Text(
+                                                            'Restablecer contraseña',
+                                                          ),
+                                                        ),
+                                                      if (puedeEliminarEste)
+                                                        const PopupMenuItem(
+                                                          value: 'delete',
+                                                          child: Text(
+                                                            'Eliminar',
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  )
+                                                : null)
+                                          : Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (puedeEditar)
+                                                  IconButton(
+                                                    tooltip: 'Editar',
+                                                    icon: Icon(
+                                                      Icons.edit,
+                                                      color: AppPalette.success,
+                                                    ),
+                                                    onPressed: () =>
+                                                        _mostrarFormulario(
+                                                          usuario: user,
+                                                        ),
                                                   ),
-                                                  onPressed: () =>
-                                                      _mostrarFormulario(
-                                                        usuario: user,
-                                                      ),
-                                                ),
-                                              if (puedeEditar &&
-                                                  user.role == 'Estudiante')
-                                                IconButton(
-                                                  tooltip:
-                                                      'Restablecer contraseña',
-                                                  icon: const Icon(
-                                                    Icons.lock_reset,
+                                                if (puedeEditar &&
+                                                    user.role == 'Estudiante')
+                                                  IconButton(
+                                                    tooltip:
+                                                        'Restablecer contraseña',
+                                                    icon: const Icon(
+                                                      Icons.lock_reset,
+                                                    ),
+                                                    onPressed: () =>
+                                                        _restablecerClave(user),
                                                   ),
-                                                  onPressed: () =>
-                                                      _restablecerClave(user),
-                                                ),
-                                              if (puedeEliminarEste)
-                                                IconButton(
-                                                  tooltip: 'Eliminar',
-                                                  icon: Icon(
-                                                    Icons.delete,
-                                                    color: AppPalette.primary,
+                                                if (puedeEliminarEste)
+                                                  IconButton(
+                                                    tooltip: 'Eliminar',
+                                                    icon: Icon(
+                                                      Icons.delete,
+                                                      color: AppPalette.primary,
+                                                    ),
+                                                    onPressed: () =>
+                                                        _eliminarUsuario(user),
                                                   ),
-                                                  onPressed: () =>
-                                                      _eliminarUsuario(user),
-                                                ),
-                                            ],
-                                          ),
-                                    onTap: () => _mostrarFormulario(
-                                      usuario: user,
-                                      soloLectura: !puedeEditar,
+                                              ],
+                                            ),
+                                      onTap: () => _mostrarFormulario(
+                                        usuario: user,
+                                        soloLectura: !puedeEditar,
+                                      ),
                                     ),
                                   ),
                                 ),

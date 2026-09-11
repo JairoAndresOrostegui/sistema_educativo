@@ -27,6 +27,9 @@ class _EventsScreenState extends State<EventsScreen> {
   String? _studentId;
   bool _loading = true;
   String? _error;
+  int _requestId = 0;
+
+  bool _isCurrent(int requestId) => mounted && requestId == _requestId;
 
   bool get _isStaff {
     final role = context.read<UserProviderV2>().user?.role;
@@ -53,9 +56,12 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    final requestId = ++_requestId;
     setState(() {
       _loading = true;
       _error = null;
+      _events = const [];
     });
     try {
       if (_isStaff) {
@@ -63,7 +69,7 @@ class _EventsScreenState extends State<EventsScreen> {
           _service.contexts(),
           _service.events(),
         ]);
-        if (!mounted) return;
+        if (!_isCurrent(requestId)) return;
         setState(() {
           _eventContext = result[0] as EventContext;
           _events = result[1] as List<SchoolEvent>;
@@ -73,7 +79,9 @@ class _EventsScreenState extends State<EventsScreen> {
         final user = provider.user!;
         if (user.role == 'Familiar') {
           _studentId = null;
-          _children = await _service.children();
+          final children = await _service.children();
+          if (!_isCurrent(requestId)) return;
+          _children = children;
           if (_children.isNotEmpty) {
             _studentId =
                 _children.any((item) => item.id == user.activeStudentId)
@@ -83,16 +91,19 @@ class _EventsScreenState extends State<EventsScreen> {
               userProvider: provider,
               studentId: _studentId!,
             );
+            if (!_isCurrent(requestId)) return;
           }
         } else {
           _studentId = user.id;
         }
-        _events = _studentId == null
-            ? const []
+        final events = _studentId == null
+            ? const <SchoolEvent>[]
             : await _service.events(studentId: _studentId);
+        if (!_isCurrent(requestId)) return;
+        _events = events;
       }
     } catch (error) {
-      if (mounted) {
+      if (_isCurrent(requestId)) {
         setState(
           () => _error = userFacingError(
             error,
@@ -101,20 +112,29 @@ class _EventsScreenState extends State<EventsScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (_isCurrent(requestId)) setState(() => _loading = false);
     }
   }
 
   Future<void> _selectChild(String? value) async {
     if (value == null || value == _studentId) return;
-    setState(() => _loading = true);
+    final requestId = ++_requestId;
+    final provider = context.read<UserProviderV2>();
+    final previousStudentId = _studentId;
+    setState(() {
+      _loading = true;
+      _studentId = value;
+      _events = const [];
+      _error = null;
+    });
     try {
       await ActiveStudentService().select(
-        userProvider: context.read<UserProviderV2>(),
+        userProvider: provider,
         studentId: value,
       );
+      if (!_isCurrent(requestId)) return;
       final events = await _service.events(studentId: value);
-      if (mounted) {
+      if (_isCurrent(requestId)) {
         setState(() {
           _studentId = value;
           _events = events;
@@ -122,9 +142,18 @@ class _EventsScreenState extends State<EventsScreen> {
         });
       }
     } catch (error) {
-      if (mounted) setState(() => _error = userFacingError(error));
+      if (_isCurrent(requestId)) {
+        setState(() {
+          _studentId = [provider.user?.activeStudentId, previousStudentId]
+              .firstWhere(
+                (id) => id != null && _children.any((child) => child.id == id),
+                orElse: () => null,
+              );
+          _error = userFacingError(error);
+        });
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (_isCurrent(requestId)) setState(() => _loading = false);
     }
   }
 
@@ -448,6 +477,7 @@ class _EventsScreenState extends State<EventsScreen> {
               ),
             if (_children.length > 1)
               DropdownButtonFormField<String>(
+                key: ValueKey(_studentId),
                 initialValue: _studentId,
                 isExpanded: true,
                 decoration: const InputDecoration(

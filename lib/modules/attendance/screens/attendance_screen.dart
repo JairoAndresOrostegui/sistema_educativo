@@ -29,6 +29,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   String _studentName = '';
   bool _loading = true;
   String? _error;
+  int _requestId = 0;
+
+  bool _isCurrent(int requestId) => mounted && requestId == _requestId;
 
   bool get _isStaff {
     final role = context.read<UserProviderV2>().user?.role;
@@ -50,9 +53,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
+    final requestId = ++_requestId;
     setState(() {
       _loading = true;
       _error = null;
+      _sessions = const [];
+      _ownRecords = const [];
+      _studentName = '';
     });
     try {
       if (_isStaff) {
@@ -60,16 +68,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           _service.contexts(),
           _service.sessions(),
         ]);
-        if (!mounted) return;
+        if (!_isCurrent(requestId)) return;
         setState(() {
           _context = values[0] as AttendanceContext;
           _sessions = values[1] as List<AttendanceSession>;
         });
       } else {
-        await _loadOwn();
+        await _loadOwn(requestId);
       }
     } catch (error) {
-      if (mounted) {
+      if (_isCurrent(requestId)) {
         setState(
           () => _error = userFacingError(
             error,
@@ -78,15 +86,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (_isCurrent(requestId)) setState(() => _loading = false);
     }
   }
 
-  Future<void> _loadOwn() async {
+  Future<void> _loadOwn(int requestId) async {
     final provider = context.read<UserProviderV2>();
     final user = provider.user!;
     if (user.role == 'Familiar') {
-      _children = await _service.children();
+      final children = await _service.children();
+      if (!_isCurrent(requestId)) return;
+      _children = children;
       if (_children.isEmpty) {
         _studentId = null;
         _studentName = '';
@@ -101,36 +111,54 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         userProvider: provider,
         studentId: _studentId!,
       );
+      if (!_isCurrent(requestId)) return;
     } else {
       _studentId = user.id;
     }
     final result = await _service.own(studentId: _studentId);
+    if (!_isCurrent(requestId)) return;
     _studentName = result.$1;
     _ownRecords = result.$2;
   }
 
   Future<void> _selectChild(String? studentId) async {
     if (studentId == null || studentId == _studentId) return;
-    setState(() => _loading = true);
-    try {
-      await ActiveStudentService().select(
-        userProvider: context.read<UserProviderV2>(),
-        studentId: studentId,
-      );
+    final requestId = ++_requestId;
+    final provider = context.read<UserProviderV2>();
+    final previousStudentId = _studentId;
+    setState(() {
+      _loading = true;
       _studentId = studentId;
       _studentName = '';
       _ownRecords = const [];
+      _error = null;
+    });
+    try {
+      await ActiveStudentService().select(
+        userProvider: provider,
+        studentId: studentId,
+      );
+      if (!_isCurrent(requestId)) return;
       final result = await _service.own(studentId: studentId);
-      if (!mounted) return;
+      if (!_isCurrent(requestId)) return;
       setState(() {
         _studentName = result.$1;
         _ownRecords = result.$2;
         _error = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = userFacingError(error));
+      if (_isCurrent(requestId)) {
+        setState(() {
+          _studentId = [provider.user?.activeStudentId, previousStudentId]
+              .firstWhere(
+                (id) => id != null && _children.any((child) => child.id == id),
+                orElse: () => null,
+              );
+          _error = userFacingError(error);
+        });
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (_isCurrent(requestId)) setState(() => _loading = false);
     }
   }
 
@@ -463,6 +491,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return [
       if (_children.length > 1)
         DropdownButtonFormField<String>(
+          key: ValueKey(_studentId),
           initialValue: _studentId,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Hijo seleccionado'),

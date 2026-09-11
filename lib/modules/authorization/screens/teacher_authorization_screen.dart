@@ -307,17 +307,18 @@ class _AuthorizationTeacherScreenState
                               'Motivo: ${_firstWords(r.reason!, 40)}',
                           ].join('\n');
 
-                          return Container(
+                          return Card(
+                            elevation: 0,
+                            color: colors.surfaceContainer,
                             margin: const EdgeInsets.symmetric(
                               horizontal: 4,
                               vertical: 6,
                             ),
-                            decoration: BoxDecoration(
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
+                              side: BorderSide(
                                 color: colors.primary.withValues(alpha: .12),
                               ),
-                              color: colors.surfaceContainer,
                             ),
                             child: ListTile(
                               leading: Icon(

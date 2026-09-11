@@ -23,7 +23,9 @@ import '../../../utils/navigation_utils.dart';
 import '../../../utils/user_facing_error.dart';
 
 class AuthorizationAdminScreen extends StatefulWidget {
-  const AuthorizationAdminScreen({super.key});
+  final AuthorizationService? service;
+
+  const AuthorizationAdminScreen({super.key, this.service});
 
   @override
   State<AuthorizationAdminScreen> createState() =>
@@ -31,7 +33,7 @@ class AuthorizationAdminScreen extends StatefulWidget {
 }
 
 class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
-  final _svc = AuthorizationService();
+  late final _svc = widget.service ?? AuthorizationService();
   StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
@@ -366,21 +368,21 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
                               'Motivo: ${_firstWords(r.reason!, 40)}',
                           ].join('\n');
 
-                          return Container(
+                          return Card(
+                            elevation: 0,
+                            color: colors.surfaceContainer,
                             margin: const EdgeInsets.symmetric(
                               horizontal: 4,
 
                               vertical: 6,
                             ),
 
-                            decoration: BoxDecoration(
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
 
-                              border: Border.all(
+                              side: BorderSide(
                                 color: colors.primary.withValues(alpha: .12),
                               ),
-
-                              color: colors.surfaceContainer,
                             ),
 
                             child: ListTile(

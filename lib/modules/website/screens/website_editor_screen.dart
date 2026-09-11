@@ -752,7 +752,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     );
   }
 
-  Widget _leftPanel() => ColoredBox(
+  Widget _leftPanel() => Material(
     color: Theme.of(context).colorScheme.surface,
     child: Column(
       children: [
@@ -1545,7 +1545,7 @@ class _WebsiteEditorScreenState extends State<WebsiteEditorScreen> {
     );
   }
 
-  Widget _propertyList(List<Widget> children) => ColoredBox(
+  Widget _propertyList(List<Widget> children) => Material(
     color: Theme.of(context).colorScheme.surface,
     child: ListView(
       padding: const EdgeInsets.all(20),
