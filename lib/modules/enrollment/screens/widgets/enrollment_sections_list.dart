@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 
 import '../../models/enrollment_field.dart';
 import '../../models/enrollment_section.dart';
@@ -32,10 +33,12 @@ class EnrollmentSectionsList extends StatelessWidget {
     final tiles = <Widget>[];
 
     for (final section in sections) {
-      final fields = section
-          .fieldsFrom(visibleFields)
-          .toList()
-          ..sort((a, b) => section.fieldNames.indexOf(a.name).compareTo(section.fieldNames.indexOf(b.name)));
+      final fields = section.fieldsFrom(visibleFields).toList()
+        ..sort(
+          (a, b) => section.fieldNames
+              .indexOf(a.name)
+              .compareTo(section.fieldNames.indexOf(b.name)),
+        );
       if (fields.isEmpty) continue;
       mappedNames.addAll(fields.map((f) => f.name));
       tiles.add(
@@ -44,19 +47,20 @@ class EnrollmentSectionsList extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: Colors.redAccent.withValues(alpha: .12),
-            ),
+            side: BorderSide(color: AppPalette.primary.withValues(alpha: .12)),
           ),
           child: ExpansionTile(
             initiallyExpanded: true,
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             title: Text(
               section.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Colors.redAccent,
+                color: AppPalette.primary,
               ),
             ),
             children: [
@@ -75,7 +79,9 @@ class EnrollmentSectionsList extends StatelessWidget {
       );
     }
 
-    final remaining = visibleFields.where((f) => !mappedNames.contains(f.name)).toList();
+    final remaining = visibleFields
+        .where((f) => !mappedNames.contains(f.name))
+        .toList();
     if (remaining.isNotEmpty) {
       tiles.add(
         Card(
@@ -83,19 +89,20 @@ class EnrollmentSectionsList extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: Colors.redAccent.withValues(alpha: .12),
-            ),
+            side: BorderSide(color: AppPalette.primary.withValues(alpha: .12)),
           ),
           child: ExpansionTile(
             initiallyExpanded: true,
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            title: const Text(
+            title: Text(
               'Otros',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Colors.redAccent,
+                color: AppPalette.primary,
               ),
             ),
             children: [

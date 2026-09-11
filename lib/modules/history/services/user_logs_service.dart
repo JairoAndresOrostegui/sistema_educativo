@@ -1,15 +1,24 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'history_query_utils.dart';
+
 class UserLogsPage {
   final List<Map<String, dynamic>> items;
   final bool hasNext;
   final DocumentSnapshot<Map<String, dynamic>>? lastDoc;
-  UserLogsPage({required this.items, required this.hasNext, required this.lastDoc});
+  UserLogsPage({
+    required this.items,
+    required this.hasNext,
+    required this.lastDoc,
+  });
 }
 
 class UserLogsService {
-  final _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
+
+  UserLogsService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
 
   static const userLogsCollection = 'user_logs';
 
@@ -19,17 +28,15 @@ class UserLogsService {
     String? event,
     String? campus,
     String? institution,
-    String? platform, // filtro local (no hace query si no tienes índice en env.platform)
+    String?
+    platform, // filtro local (no hace query si no tienes índice en env.platform)
     String? nameContains, // filtro local (contiene)
+    String? groupEquals,
     DateTimeRange? rango,
     required int limit,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    Query<Map<String, dynamic>> q =
-        _db
-            .collection(userLogsCollection)
-            .orderBy('timestamp', descending: true)
-            .limit(limit);
+    Query<Map<String, dynamic>> q = _db.collection(userLogsCollection);
 
     if (role != null && role.trim().isNotEmpty) {
       q = q.where('role', isEqualTo: role.trim());
@@ -45,23 +52,51 @@ class UserLogsService {
     }
     if (rango != null) {
       q = q
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
+          .where(
+            'timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
+          )
+          .where(
+            'timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
+          );
     }
-    if (startAfter != null) {
-      q = q.startAfterDocument(startAfter);
-    }
-
-    final snap = await q.get();
-    final docs = snap.docs;
+    q = q.orderBy('timestamp', descending: true);
+    final expectedPlatform = platform?.trim().toLowerCase() ?? '';
+    final expectedName = nameContains?.trim().toLowerCase() ?? '';
+    final expectedGroup = groupEquals?.trim().toLowerCase() ?? '';
+    final page = await scanFilteredPage(
+      query: q,
+      pageSize: limit,
+      startAfter: startAfter,
+      matches: (data) {
+        final rawEnv = data['env'];
+        final env = rawEnv is Map
+            ? Map<String, dynamic>.from(rawEnv)
+            : <String, dynamic>{};
+        return (expectedPlatform.isEmpty ||
+                (env['platform'] ?? '').toString().toLowerCase() ==
+                    expectedPlatform) &&
+            (expectedName.isEmpty ||
+                (data['fullName'] ?? '').toString().toLowerCase().contains(
+                  expectedName,
+                )) &&
+            (expectedGroup.isEmpty ||
+                (data['groupName'] ?? '').toString().toLowerCase() ==
+                    expectedGroup);
+      },
+    );
 
     // Normalización + filtros locales
     final items = <Map<String, dynamic>>[];
-    for (final d in docs) {
+    for (final d in page.documents) {
       final data = d.data();
-      final ts = (data['timestamp'] as Timestamp?)?.toDate();
+      final ts = historyDate(data['timestamp']);
 
-      final env = (data['env'] is Map<String, dynamic>) ? data['env'] as Map<String, dynamic> : <String, dynamic>{};
+      final rawEnv = data['env'];
+      final env = rawEnv is Map
+          ? Map<String, dynamic>.from(rawEnv)
+          : <String, dynamic>{};
 
       final map = {
         'id': d.id,
@@ -72,7 +107,8 @@ class UserLogsService {
         'userId': (data['userId'] ?? '').toString(),
         'campus': (data['campus'] ?? '').toString(),
         'institution': (data['institution'] ?? '').toString(),
-        'grade': (data['grade'] ?? '').toString(),
+        'groupId': (data['groupId'] ?? '').toString(),
+        'groupName': (data['groupName'] ?? '').toString(),
         // ENV
         'platform': (env['platform'] ?? '').toString(),
         'browserName': (env['browserName'] ?? '').toString(),
@@ -83,25 +119,13 @@ class UserLogsService {
         'userAgent': (env['userAgent'] ?? '').toString(),
       };
 
-      // Filtros locales (no requieren índices)
-      if (platform != null &&
-          platform.trim().isNotEmpty &&
-          map['platform'].toString().toLowerCase() != platform.trim().toLowerCase()) {
-        continue;
-      }
-      if (nameContains != null &&
-          nameContains.trim().isNotEmpty &&
-          !map['fullName'].toString().toLowerCase().contains(nameContains.trim().toLowerCase())) {
-        continue;
-      }
-
       items.add(map);
     }
-
-    final hasNext = docs.length == limit;
-    final lastDoc = docs.isNotEmpty ? docs.last : null;
-
-    return UserLogsPage(items: items, hasNext: hasNext, lastDoc: lastDoc);
+    return UserLogsPage(
+      items: items,
+      hasNext: page.hasNext,
+      lastDoc: page.lastDoc,
+    );
   }
 
   /// Conteo aproximado con los filtros que sí son indexables (no incluye contains)
@@ -110,6 +134,9 @@ class UserLogsService {
     String? event,
     String? campus,
     String? institution,
+    String? platform,
+    String? nameContains,
+    String? groupEquals,
     DateTimeRange? rango,
   }) async {
     Query<Map<String, dynamic>> q = _db.collection(userLogsCollection);
@@ -128,12 +155,42 @@ class UserLogsService {
     }
     if (rango != null) {
       q = q
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
+          .where(
+            'timestamp',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
+          )
+          .where(
+            'timestamp',
+            isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
+          );
     }
 
-    // Si tu SDK soporta agregaciones: usa q.count().get()
-    final snap = await q.get();
-    return snap.docs.length;
+    final expectedPlatform = platform?.trim().toLowerCase() ?? '';
+    final expectedName = nameContains?.trim().toLowerCase() ?? '';
+    final expectedGroup = groupEquals?.trim().toLowerCase() ?? '';
+    if (expectedPlatform.isEmpty &&
+        expectedName.isEmpty &&
+        expectedGroup.isEmpty) {
+      return (await q.count().get()).count ?? 0;
+    }
+    return countFilteredDocuments(
+      query: q.orderBy('timestamp', descending: true),
+      matches: (data) {
+        final rawEnv = data['env'];
+        final env = rawEnv is Map
+            ? Map<String, dynamic>.from(rawEnv)
+            : <String, dynamic>{};
+        return (expectedPlatform.isEmpty ||
+                (env['platform'] ?? '').toString().toLowerCase() ==
+                    expectedPlatform) &&
+            (expectedName.isEmpty ||
+                (data['fullName'] ?? '').toString().toLowerCase().contains(
+                  expectedName,
+                )) &&
+            (expectedGroup.isEmpty ||
+                (data['groupName'] ?? '').toString().toLowerCase() ==
+                    expectedGroup);
+      },
+    );
   }
 }

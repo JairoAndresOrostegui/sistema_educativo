@@ -1,11 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'history_query_utils.dart';
+
 class ScheduleHistoryPage {
   final List<Map<String, dynamic>> items;
   final bool hasNext;
   final DocumentSnapshot<Map<String, dynamic>>? lastDoc;
-  ScheduleHistoryPage({
+
+  const ScheduleHistoryPage({
     required this.items,
     required this.hasNext,
     required this.lastDoc,
@@ -13,134 +16,67 @@ class ScheduleHistoryPage {
 }
 
 class AdminScheduleHistoryService {
-  final _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
 
-  // Colecciones (nuevo / legado)
-  static const scheduleHistoryCollection = 'schedule_history'; // vigente (EN)
-  static const historialHorariosCollection = 'historial_horarios'; // legado (ES)
+  AdminScheduleHistoryService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
 
-  /// Página de historial de horarios con filtros y paginación por cursor.
-  /// Normaliza SIEMPRE a claves en español:
-  /// grado, materia, dia, accion, usuarioNombre, fecha, mensaje
-  Future<ScheduleHistoryPage> obtenerHistorialHorarios({
-    String? gradeContains,
-    String? subjectContains,
-    String? day, // lunes..domingo
-    String? action, // create_subject|update_subject|delete_subject
-    DateTimeRange? rango, // timestamp/fecha
-    required int limite,
-    DocumentSnapshot<Map<String, dynamic>>? startAfter,
-  }) async {
-    // 1) Intento en EN
-    var page = await _queryEn(
-      gradeContains: gradeContains,
-      subjectContains: subjectContains,
-      day: day,
-      action: action,
-      rango: rango,
-      limite: limite,
-      startAfter: startAfter,
-    );
-
-    // 2) Fallback ES si vacío
-    if (page.items.isEmpty) {
-      page = await _queryEs(
-        gradeContains: gradeContains,
-        subjectContains: subjectContains,
-        day: day,
-        action: action,
-        rango: rango,
-        limite: limite,
-        startAfter: startAfter,
-      );
-    }
-
-    return page;
+  Map<String, dynamic> _subject(Map<String, dynamic> data) {
+    final raw = data['after'] ?? data['before'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
   }
 
-  // ===== EN =====
-  Future<ScheduleHistoryPage> _queryEn({
-    String? gradeContains,
+  bool _matches(
+    Map<String, dynamic> data, {
+    String? groupContains,
     String? subjectContains,
     String? day,
+  }) {
+    final subject = _subject(data);
+    final groupName = (data['groupName'] ?? subject['groupName'] ?? '')
+        .toString()
+        .toLowerCase();
+    final subjectName = (subject['subject'] ?? '').toString().toLowerCase();
+    final expectedGroup = groupContains?.trim().toLowerCase() ?? '';
+    final expectedSubject = subjectContains?.trim().toLowerCase() ?? '';
+    final expectedDay = day?.trim().toLowerCase() ?? '';
+    return (expectedGroup.isEmpty || groupName.contains(expectedGroup)) &&
+        (expectedSubject.isEmpty || subjectName.contains(expectedSubject)) &&
+        (expectedDay.isEmpty ||
+            (subject['day'] ?? '').toString().toLowerCase() == expectedDay);
+  }
+
+  Query<Map<String, dynamic>> _query({
+    required String institutionId,
+    required String campusId,
     String? action,
     DateTimeRange? rango,
-    required int limite,
-    DocumentSnapshot<Map<String, dynamic>>? startAfter,
-  }) async {
-    Query<Map<String, dynamic>> q = _db
-        .collection(scheduleHistoryCollection)
-        .orderBy('timestamp', descending: true)
-        .limit(limite);
-
-    if (action != null && action.trim().isNotEmpty) {
-      q = q.where('action', isEqualTo: action.trim());
-    }
-    if (day != null && day.trim().isNotEmpty) {
-      q = q.where('subjectData.day', isEqualTo: day.trim());
+  }) {
+    Query<Map<String, dynamic>> query = _db
+        .collection('schedule_history')
+        .where('institutionId', isEqualTo: institutionId)
+        .where('campusId', isEqualTo: campusId);
+    if (action != null && action.isNotEmpty) {
+      query = query.where('action', isEqualTo: action);
     }
     if (rango != null) {
-      q = q
+      query = query
           .where(
-            'timestamp',
+            'createdAt',
             isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
           )
           .where(
-            'timestamp',
+            'createdAt',
             isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
           );
     }
-    if (startAfter != null) {
-      q = q.startAfterDocument(startAfter);
-    }
-
-    final snap = await q.get();
-    final docs = snap.docs;
-
-    final items = <Map<String, dynamic>>[];
-    for (final d in docs) {
-      final data = d.data();
-      final sd = (data['subjectData'] as Map<String, dynamic>?) ?? {};
-
-      final grado = (sd['grade'] ?? '').toString();
-      final materia = (sd['subject'] ?? '').toString();
-
-      // Filtros "contains" en memoria
-      if (gradeContains != null && gradeContains.trim().isNotEmpty) {
-        if (!grado.toLowerCase().contains(gradeContains.toLowerCase())) {
-          continue;
-        }
-      }
-      if (subjectContains != null && subjectContains.trim().isNotEmpty) {
-        if (!materia.toLowerCase().contains(subjectContains.toLowerCase())) {
-          continue;
-        }
-      }
-
-      items.add({
-        'id': d.id,
-        'grado': grado,
-        'materia': materia,
-        'dia': (sd['day'] ?? '').toString(),
-        'accion': (data['action'] ?? '').toString(),
-        'usuarioNombre': (data['userName'] ?? '').toString(),
-        'fecha': (data['timestamp'] as Timestamp?)?.toDate(),
-        'mensaje': (data['message'] ?? '').toString(),
-      });
-    }
-
-    final hasNext = docs.length == limite;
-    final lastDoc = docs.isNotEmpty ? docs.last : null;
-    return ScheduleHistoryPage(
-      items: items,
-      hasNext: hasNext,
-      lastDoc: lastDoc,
-    );
+    return query;
   }
 
-  // ===== ES (legado) =====
-  Future<ScheduleHistoryPage> _queryEs({
-    String? gradeContains,
+  Future<ScheduleHistoryPage> obtenerHistorialHorarios({
+    required String institutionId,
+    required String campusId,
+    String? groupContains,
     String? subjectContains,
     String? day,
     String? action,
@@ -148,149 +84,77 @@ class AdminScheduleHistoryService {
     required int limite,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    Query<Map<String, dynamic>> q = _db
-        .collection(historialHorariosCollection)
-        .orderBy('fecha', descending: true)
-        .limit(limite);
-
-    if (action != null && action.trim().isNotEmpty) {
-      q = q.where('accion', isEqualTo: action.trim()); // puede o no coincidir
-    }
-    if (day != null && day.trim().isNotEmpty) {
-      q = q.where('dia', isEqualTo: day.trim());
-    }
-    if (rango != null) {
-      q = q
-          .where(
-            'fecha',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
-          )
-          .where('fecha', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
-    }
-    if (startAfter != null) {
-      q = q.startAfterDocument(startAfter);
-    }
-
-    final snap = await q.get();
-    final docs = snap.docs;
-
+    final query = _query(
+      institutionId: institutionId,
+      campusId: campusId,
+      action: action,
+      rango: rango,
+    ).orderBy('createdAt', descending: true);
+    final page = await scanFilteredPage(
+      query: query,
+      pageSize: limite,
+      startAfter: startAfter,
+      matches: (data) => _matches(
+        data,
+        groupContains: groupContains,
+        subjectContains: subjectContains,
+        day: day,
+      ),
+    );
     final items = <Map<String, dynamic>>[];
-    for (final d in docs) {
-      final data = d.data();
-
-      final grado = (data['grado'] ?? '').toString();
-      final materia = (data['materia'] ?? '').toString();
-
-      if (gradeContains != null && gradeContains.trim().isNotEmpty) {
-        if (!grado.toLowerCase().contains(gradeContains.toLowerCase())) {
-          continue;
-        }
-      }
-      if (subjectContains != null && subjectContains.trim().isNotEmpty) {
-        if (!materia.toLowerCase().contains(subjectContains.toLowerCase())) {
-          continue;
-        }
-      }
-
+    for (final document in page.documents) {
+      final data = document.data();
+      final subject = _subject(data);
+      final groupName = (data['groupName'] ?? subject['groupName'] ?? '')
+          .toString();
+      final subjectName = (subject['subject'] ?? '').toString();
       items.add({
-        'id': d.id,
-        'grado': grado,
-        'materia': materia,
-        'dia': (data['dia'] ?? '').toString(),
-        'accion': (data['accion'] ?? '').toString(),
-        'usuarioNombre':
-            (data['usuarioNombre'] ?? data['userName'] ?? '').toString(),
-        'fecha': (data['fecha'] as Timestamp?)?.toDate(),
-        'mensaje': (data['mensaje'] ?? data['message'] ?? '').toString(),
+        'id': document.id,
+        'grupo': groupName,
+        'groupId': data['groupId'] ?? subject['groupId'] ?? '',
+        'materia': subjectName,
+        'dia': subject['day'] ?? '',
+        'accion': data['action'] ?? '',
+        'usuarioNombre': data['performedBy'] ?? '',
+        'fecha': historyDate(data['createdAt']),
       });
     }
-
-    final hasNext = docs.length == limite;
-    final lastDoc = docs.isNotEmpty ? docs.last : null;
     return ScheduleHistoryPage(
       items: items,
-      hasNext: hasNext,
-      lastDoc: lastDoc,
+      hasNext: page.hasNext,
+      lastDoc: page.lastDoc,
     );
   }
 
-  /// Conteo total (aprox.) con filtros por acción, día y rango.
-  /// *Los filtros "contains" (grado/materia) se aplican en UI; si quisieras
-  /// conteo exacto con 'contains' requeriría escaneo completo.*
   Future<int> contarTotal({
+    required String institutionId,
+    required String campusId,
     String? action,
     String? day,
     DateTimeRange? rango,
-    String? gradeContains,
+    String? groupContains,
     String? subjectContains,
   }) async {
-    int total =
-        await _countIn(
-      col: scheduleHistoryCollection,
-          dateField: 'timestamp',
-          actionField: 'action',
-          dayField: 'subjectData.day',
-          action: action,
-          day: day,
-          rango: rango,
-        ) ??
-        0;
-
-    if (total == 0) {
-      total =
-          await _countIn(
-            col: historialHorariosCollection,
-            dateField: 'fecha',
-            actionField: 'accion',
-            dayField: 'dia',
-            action: action,
-            day: day,
-            rango: rango,
-          ) ??
-          0;
-    }
-
-    // No ajustamos por 'contains' aquí (ver nota arriba).
-    return total;
-  }
-
-  Future<int?> _countIn({
-    required String col,
-    required String dateField,
-    required String actionField,
-    required String dayField,
-    String? action,
-    String? day,
-    DateTimeRange? rango,
-  }) async {
-    try {
-      Query<Map<String, dynamic>> q = _db.collection(col);
-      if (action != null && action.trim().isNotEmpty) {
-        q = q.where(actionField, isEqualTo: action.trim());
-      }
-      if (day != null && day.trim().isNotEmpty) {
-        q = q.where(dayField, isEqualTo: day.trim());
-      }
-      if (rango != null) {
-        q = q
-            .where(
-              dateField,
-              isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
-            )
-            .where(
-              dateField,
-              isLessThanOrEqualTo: Timestamp.fromDate(rango.end),
-            );
-      }
-
-      // Si tu SDK soporta agregaciones:
-      // final agg = await q.count().get();
-      // return agg.count;
-
-      final snap = await q.get();
-      return snap.docs.length;
-    } catch (_) {
-      return null;
-    }
+    final query = _query(
+      institutionId: institutionId,
+      campusId: campusId,
+      action: action,
+      rango: rango,
+    );
+    final hasLocalFilters = [
+      groupContains,
+      subjectContains,
+      day,
+    ].any((value) => value != null && value.trim().isNotEmpty);
+    if (!hasLocalFilters) return (await query.count().get()).count ?? 0;
+    return countFilteredDocuments(
+      query: query.orderBy('createdAt', descending: true),
+      matches: (data) => _matches(
+        data,
+        groupContains: groupContains,
+        subjectContains: subjectContains,
+        day: day,
+      ),
+    );
   }
 }

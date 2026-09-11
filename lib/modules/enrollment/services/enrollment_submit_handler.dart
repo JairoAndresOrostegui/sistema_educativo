@@ -20,7 +20,8 @@ class EnrollmentSubmitHandler {
       return;
     }
 
-    final estado = result.estado ?? controller.currentEstado ?? 'prematriculado';
+    final estado =
+        result.estado ?? controller.currentEstado ?? 'prematriculado';
     await DialogUtils.showSuccess(
       context: context,
       title: 'Guardado',

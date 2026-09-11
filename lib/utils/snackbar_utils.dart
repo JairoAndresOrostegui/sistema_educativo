@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 void mostrarSnack(BuildContext context, String mensaje) {
@@ -5,7 +6,7 @@ void mostrarSnack(BuildContext context, String mensaje) {
     SnackBar(
       content: Text(mensaje),
       behavior: SnackBarBehavior.floating,
-      backgroundColor: Colors.black87,
+      backgroundColor: AppPalette.onSurface.withValues(alpha: .87),
     ),
   );
 }

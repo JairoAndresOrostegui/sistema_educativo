@@ -1,47 +1,170 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+enum FileAudienceType { all, groups, students }
+
+extension FileAudienceTypeValue on FileAudienceType {
+  String get value => switch (this) {
+    FileAudienceType.all => 'all',
+    FileAudienceType.groups => 'groups',
+    FileAudienceType.students => 'students',
+  };
+
+  String get label => switch (this) {
+    FileAudienceType.all => 'Todos los estudiantes',
+    FileAudienceType.groups => 'Uno o más grupos',
+    FileAudienceType.students => 'Uno o más estudiantes',
+  };
+}
+
+class FileAudienceGroup {
+  final String id;
+  final String name;
+
+  const FileAudienceGroup({required this.id, required this.name});
+
+  factory FileAudienceGroup.fromMap(Map<String, dynamic> data) =>
+      FileAudienceGroup(id: data['id'] ?? '', name: data['name'] ?? '');
+}
+
+class FileAudienceStudent {
+  final String id;
+  final String name;
+  final String groupId;
+  final String groupName;
+
+  const FileAudienceStudent({
+    required this.id,
+    required this.name,
+    required this.groupId,
+    required this.groupName,
+  });
+
+  factory FileAudienceStudent.fromMap(Map<String, dynamic> data) =>
+      FileAudienceStudent(
+        id: data['id'] ?? '',
+        name: data['name'] ?? '',
+        groupId: data['groupId'] ?? '',
+        groupName: data['groupName'] ?? '',
+      );
+}
+
+class FileAudienceOptions {
+  final List<FileAudienceGroup> groups;
+  final List<FileAudienceStudent> students;
+
+  const FileAudienceOptions({required this.groups, required this.students});
+}
+
 class FileModel {
   final String id;
   final String name;
-  final String url;
-  final String grade;
+  final String storagePath;
+  final FileAudienceType audienceType;
+  final List<String> targetGroupIds;
+  final List<String> targetGroupNames;
+  final List<String> targetStudentIds;
+  final String message;
   final String uploadedBy;
   final String uploaderName;
-  final Timestamp createdAt;
+  final Timestamp sentAt;
+  final int sizeBytes;
+  final String status;
+
+  bool get isDeleting => status == 'deleting';
 
   FileModel({
     required this.id,
     required this.name,
-    required this.url,
-    required this.grade,
+    required this.storagePath,
+    required this.audienceType,
+    required this.targetGroupIds,
+    required this.targetGroupNames,
+    required this.targetStudentIds,
+    required this.message,
     required this.uploadedBy,
     required this.uploaderName,
-    required this.createdAt,
+    required this.sentAt,
+    required this.sizeBytes,
+    this.status = 'active',
   });
 
   factory FileModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    return FileModel.fromMap(data, id: doc.id);
+  }
+
+  factory FileModel.fromMap(Map<String, dynamic> data, {required String id}) {
+    final audience = FileAudienceType.values.firstWhere(
+      (item) => item.value == data['audienceType'],
+      orElse: () => FileAudienceType.groups,
+    );
     return FileModel(
-      id: doc.id,
+      id: id,
       name: data['name'] ?? '',
-      url: data['url'] ?? '',
-      grade: data['grade'] ?? '',
+      storagePath: data['storagePath'] ?? '',
+      audienceType: audience,
+      targetGroupIds: List<String>.from(data['targetGroupIds'] ?? const []),
+      targetGroupNames: List<String>.from(data['targetGroupNames'] ?? const []),
+      targetStudentIds: List<String>.from(data['targetStudentIds'] ?? const []),
+      message: data['message'] ?? '',
       uploadedBy: data['uploadedBy'] ?? '',
       uploaderName: data['uploaderName'] ?? '',
-      createdAt: data['createdAt'] is Timestamp
+      sentAt: data['sentAt'] is Timestamp
+          ? data['sentAt'] as Timestamp
+          : data['sentAtMillis'] is num
+          ? Timestamp.fromMillisecondsSinceEpoch(
+              (data['sentAtMillis'] as num).toInt(),
+            )
+          : data['createdAt'] is Timestamp
           ? data['createdAt'] as Timestamp
           : Timestamp.now(),
+      sizeBytes: (data['sizeBytes'] as num?)?.toInt() ?? 0,
+      status: (data['status'] ?? 'active').toString(),
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'url': url,
-      'grade': grade,
-      'uploadedBy': uploadedBy,
-      'uploaderName': uploaderName,
-      'createdAt': createdAt,
-    };
+  String get audienceLabel => switch (audienceType) {
+    FileAudienceType.all => 'Todos los estudiantes',
+    FileAudienceType.groups => targetGroupNames.join(', '),
+    FileAudienceType.students =>
+      '${targetStudentIds.length} estudiante${targetStudentIds.length == 1 ? '' : 's'}',
+  };
+}
+
+class FileDownloadReceipt {
+  const FileDownloadReceipt({
+    required this.userId,
+    required this.userName,
+    required this.userRole,
+    required this.firstDownloadedAt,
+    required this.lastDownloadedAt,
+    required this.downloadCount,
+  });
+
+  final String userId, userName, userRole;
+  final DateTime? firstDownloadedAt, lastDownloadedAt;
+  final int downloadCount;
+
+  factory FileDownloadReceipt.fromMap(Map<String, dynamic> data) {
+    DateTime? fromMillis(dynamic value) => value is num
+        ? DateTime.fromMillisecondsSinceEpoch(value.toInt())
+        : null;
+    return FileDownloadReceipt(
+      userId: (data['userId'] ?? '').toString(),
+      userName: (data['userName'] ?? 'Usuario').toString(),
+      userRole: (data['userRole'] ?? '').toString(),
+      firstDownloadedAt: fromMillis(data['firstDownloadedAtMillis']),
+      lastDownloadedAt: fromMillis(data['lastDownloadedAtMillis']),
+      downloadCount: (data['downloadCount'] as num?)?.toInt() ?? 0,
+    );
   }
+}
+
+class FileDownloadSummary {
+  const FileDownloadSummary({
+    required this.recipientCount,
+    required this.receipts,
+  });
+  final int recipientCount;
+  final List<FileDownloadReceipt> receipts;
 }

@@ -42,18 +42,26 @@ class RutaDiaria {
   });
 
   factory RutaDiaria.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final raw = doc.data();
+    final data = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : const <String, dynamic>{};
+    String text(String key) => data[key] is String ? data[key] as String : '';
+    Timestamp? timestamp(String key) =>
+        data[key] is Timestamp ? data[key] as Timestamp : null;
     return RutaDiaria(
       id: doc.id,
-      idRuta: data['idRuta'] ?? '',
-      nombreRuta: data['nombreRuta'] ?? '',
-      fecha: data['fecha'] ?? Timestamp.now(),
-      gestionador: data['gestionador'] ?? '',
-      gestionadaPorNombre: data['gestionadaPorNombre'] ?? '',
-      estado: (data['estado'] as String? ?? 'pendiente').toEstadoRuta(),
-      horaInicio: data['horaInicio'] as Timestamp?,
-      horaFin: data['horaFin'] as Timestamp?,
-      posicionDocente: data['posicionDocente'] as Map<String, dynamic>?,
+      idRuta: text('idRuta'),
+      nombreRuta: text('nombreRuta'),
+      fecha: timestamp('fecha') ?? Timestamp.now(),
+      gestionador: text('gestionador'),
+      gestionadaPorNombre: text('gestionadaPorNombre'),
+      estado: text('estado').toEstadoRuta(),
+      horaInicio: timestamp('horaInicio'),
+      horaFin: timestamp('horaFin'),
+      posicionDocente: data['posicionDocente'] is Map
+          ? Map<String, dynamic>.from(data['posicionDocente'] as Map)
+          : null,
     );
   }
 

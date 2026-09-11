@@ -55,22 +55,21 @@ class UserLogsExportUtils {
               'Evento',
               'Campus',
               'Institucion',
-              'Grado',
+              'Grupo',
               'Fecha',
             ],
             data: logs.map((log) {
               final fecha = asDateTime(log['timestamp']);
-              final fechaTexto =
-                  fecha != null
-                      ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
-                      : '-';
+              final fechaTexto = fecha != null
+                  ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                  : '-';
               return [
                 (log['fullName'] ?? '').toString(),
                 (log['role'] ?? '').toString(),
                 (log['event'] ?? '').toString(),
                 (log['campus'] ?? '').toString(),
                 (log['institution'] ?? '').toString(),
-                (log['grade'] ?? '').toString(),
+                (log['groupName'] ?? '').toString(),
                 fechaTexto,
               ];
             }).toList(),

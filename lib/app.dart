@@ -1,17 +1,23 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
+import 'config/theme_config.dart';
 
 import 'modules/auth/guards/admin_dashboard_guard.dart';
 import 'modules/auth/guards/student_dashboard_guard.dart';
 import 'modules/auth/guards/teacher_dashboard_guard.dart';
 import 'modules/auth/screens/access_denied_page.dart';
 import 'modules/auth/screens/loginScreenV2.dart';
+import 'modules/auth/screens/change_temporary_password_screen.dart';
 import 'modules/auth/services/auth_service_v2.dart';
+import 'modules/auth/utils/auth_access_policy.dart';
 import 'modules/authorization/screens/admin_authorization_screen.dart';
 import 'modules/authorization/screens/student_authorization_screen.dart';
 import 'modules/authorization/screens/teacher_authorization_screen.dart';
+import 'modules/attendance/screens/attendance_screen.dart';
 import 'modules/file/screens/upload_file_screen.dart';
 import 'modules/file/screens/view_file_screen.dart';
 import 'modules/history/screens/admin_history_screen.dart';
@@ -21,15 +27,19 @@ import 'modules/route/screens/admin_route_screen.dart';
 import 'modules/route/screens/student_route_screen.dart';
 import 'modules/route/screens/teacher_route_screen.dart';
 import 'modules/parameters/screens/admin_parameters_screen.dart';
-import 'modules/qr/screens/admin_qr_screen.dart';
-import 'modules/qr/screens/student_qr_screen.dart';
+import 'modules/qr/screens/qr_screen.dart';
 import 'modules/schedule/screens/admin_schedule_screen.dart';
 import 'modules/schedule/screens/student_schedule_screen.dart';
 import 'modules/schedule/screens/teacher_schedule_screen.dart';
 import 'modules/enrollment/screens/enrollment_form_screen.dart';
 import 'modules/enrollment/screens/admin_enrollment_screen.dart';
+import 'modules/events/screens/events_screen.dart';
 import 'modules/user/screens/admin_users_screen.dart';
+import 'modules/website/screens/public_website_screen.dart';
+import 'modules/website/screens/website_editor_screen.dart';
+import 'modules/website/screens/website_submissions_screen.dart';
 import 'providers/user_provider_v2.dart';
+import 'utils/app_navigator.dart';
 
 class AppRouter extends StatefulWidget {
   const AppRouter({super.key});
@@ -51,82 +61,73 @@ class _AppRouterState extends State<AppRouter> {
   }
 
   GoRouter _buildRouter(UserProviderV2 userProvider) {
-    String homeForRole(String? role) {
-      switch (role) {
-        case 'Administrador':
-          return '/admin_dashboard';
-        case 'Docente':
-          return '/teacher_dashboard';
-        case 'Estudiante':
-        case 'Familiar':
-          return '/student_dashboard';
-        default:
-          return '/access_denied';
-      }
-    }
-
-    bool allowedForRole(String? role, String path) {
-      const commons = {'/profile', '/logout', '/access_denied'};
-      if (commons.contains(path)) return true;
-
-      switch (role) {
-        case 'Administrador':
-          return {
-            '/admin_dashboard',
-            '/admin_user',
-            '/management_route',
-            '/management_schedule',
-            '/management_document',
-            '/view_history',
-            '/admin_authorization',
-            '/enrollment',
-            '/admin_parameters',
-            '/admin_qr',
-          }.contains(path);
-        case 'Docente':
-          return {
-            '/teacher_dashboard',
-            '/execute_route',
-            '/teacher_schedule',
-            '/teacher_document',
-            '/teacher_authorization',
-            '/messages',
-          }.contains(path);
-        case 'Estudiante':
-        case 'Familiar':
-          return {
-            '/student_dashboard',
-            '/my_route',
-            '/my_schedule',
-            '/student_document',
-            '/student_authorization',
-            '/enrollment',
-            '/student_qr',
-            '/messages',
-          }.contains(path);
-        default:
-          return false;
-      }
-    }
-
     return GoRouter(
-      initialLocation: '/login',
+      navigatorKey: appNavigatorKey,
+      initialLocation: kIsWeb ? '/' : '/login',
       refreshListenable: userProvider,
       errorBuilder: (context, state) => const AccessDeniedPage(),
       redirect: (context, state) {
         final user = userProvider.user;
         final currentPath = state.uri.path;
         final loggingIn = currentPath == '/login';
-        const publicPaths = {'/login', '/enrollment_public'};
+        const publicWebsitePaths = {
+          '/',
+          '/about',
+          '/admissions',
+          '/learning',
+          '/news-events',
+          '/parents',
+        };
+        const publicPaths = {
+          ...publicWebsitePaths,
+          '/login',
+          '/enrollment_public',
+        };
+
+        if (!kIsWeb && publicWebsitePaths.contains(currentPath)) {
+          return '/login';
+        }
+        if (publicWebsitePaths.contains(currentPath)) return null;
 
         if (user == null) {
-          return publicPaths.contains(currentPath) ? null : '/login';
+          return publicPaths.contains(currentPath)
+              ? null
+              : (currentPath == '/messages'
+                    ? Uri(
+                        path: '/login',
+                        queryParameters: {'next': state.uri.toString()},
+                      ).toString()
+                    : '/login');
         }
 
-        final home = homeForRole(user.role);
-        if (loggingIn) return home;
+        if (user.mustChangePassword &&
+            currentPath != '/change_temporary_password') {
+          return '/change_temporary_password';
+        }
+        if (!user.mustChangePassword &&
+            currentPath == '/change_temporary_password') {
+          return AuthAccessPolicy.homeForRole(user.role);
+        }
 
-        if (!allowedForRole(user.role, currentPath)) {
+        final home = AuthAccessPolicy.homeForRole(user.role);
+        if (loggingIn) {
+          final next = Uri.tryParse(state.uri.queryParameters['next'] ?? '');
+          if (next != null &&
+              !next.hasScheme &&
+              !next.hasAuthority &&
+              next.path == '/messages') {
+            return next.toString();
+          }
+          return home;
+        }
+
+        if (!AuthAccessPolicy.isPathAllowed(
+          role: user.role,
+          isSuperadmin: user.isSuperadmin,
+          permissions: user.permissions,
+          path: currentPath,
+          isWeb: kIsWeb,
+        )) {
           return '/access_denied';
         }
 
@@ -134,8 +135,40 @@ class _AppRouterState extends State<AppRouter> {
       },
       routes: [
         GoRoute(
+          path: '/',
+          builder: (context, state) => const PublicWebsiteScreen(slug: 'home'),
+        ),
+        GoRoute(
+          path: '/about',
+          builder: (context, state) => const PublicWebsiteScreen(slug: 'about'),
+        ),
+        GoRoute(
+          path: '/admissions',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'admissions'),
+        ),
+        GoRoute(
+          path: '/learning',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'learning'),
+        ),
+        GoRoute(
+          path: '/news-events',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'news-events'),
+        ),
+        GoRoute(
+          path: '/parents',
+          builder: (context, state) =>
+              const PublicWebsiteScreen(slug: 'parents'),
+        ),
+        GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
+        ),
+        GoRoute(
+          path: '/change_temporary_password',
+          builder: (context, state) => const ChangeTemporaryPasswordScreen(),
         ),
         GoRoute(
           path: '/enrollment_public',
@@ -191,7 +224,23 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/admin_qr',
-          builder: (context, state) => const AdminQrScreen(),
+          builder: (context, state) => const QrScreen(manage: true),
+        ),
+        GoRoute(
+          path: '/attendance',
+          builder: (context, state) => const AttendanceScreen(),
+        ),
+        GoRoute(
+          path: '/events',
+          builder: (context, state) => const EventsScreen(),
+        ),
+        GoRoute(
+          path: '/website_admin',
+          builder: (context, state) => const WebsiteEditorScreen(),
+        ),
+        GoRoute(
+          path: '/website_messages',
+          builder: (context, state) => const WebsiteSubmissionsScreen(),
         ),
         // Docente
         GoRoute(
@@ -200,7 +249,7 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/execute_route',
-          builder: (context, state) => const ManageRouteScreen(),
+          builder: (context, state) => const TeacherRouteScreen(),
         ),
         GoRoute(
           path: '/teacher_schedule',
@@ -216,7 +265,10 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/messages',
-          builder: (context, state) => const MessagingScreen(),
+          builder: (context, state) => MessagingScreen(
+            key: ValueKey(state.uri.toString()),
+            initialChannelId: state.uri.queryParameters['channelId'],
+          ),
         ),
         // Estudiante / Familiar
         GoRoute(
@@ -240,8 +292,11 @@ class _AppRouterState extends State<AppRouter> {
           builder: (context, state) {
             final user = context.read<UserProviderV2>().user;
             final role = (user?.role ?? '').trim().toLowerCase();
-            final isAdmin = (user?.isSuperadmin ?? false) || role == 'administrador';
-            if (isAdmin) return const AdminEnrollmentScreen();
+            final isAdmin =
+                (user?.isSuperadmin ?? false) || role == 'administrador';
+            if (isAdmin || role == 'docente') {
+              return const AdminEnrollmentScreen();
+            }
             return const EnrollmentFormScreen();
           },
         ),
@@ -249,10 +304,7 @@ class _AppRouterState extends State<AppRouter> {
           path: '/student_authorization',
           builder: (context, state) => const AuthorizationStudentScreen(),
         ),
-        GoRoute(
-          path: '/student_qr',
-          builder: (context, state) => const StudentQrScreen(),
-        ),
+        GoRoute(path: '/my_qr', builder: (context, state) => const QrScreen()),
       ],
     );
   }
@@ -265,7 +317,7 @@ class _AppRouterState extends State<AppRouter> {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Sistema Educativo',
-      theme: ThemeData(primarySwatch: Colors.indigo),
+      theme: ThemeProvider.themeData,
       routerConfig: router,
     );
   }
@@ -315,5 +367,3 @@ class _LogoutRedirectState extends State<_LogoutRedirect> {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
-
-

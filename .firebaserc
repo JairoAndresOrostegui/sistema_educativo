@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "sistema-educativo-rl"
+    "default": "sistema-educativo-rl",
+    "qa": "sistema-educativo-rl",
+    "prod": "sistema-educativo-rl-prod"
   }
 }

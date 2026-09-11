@@ -7,7 +7,11 @@ import 'package:provider/provider.dart';
 import '../../../providers/user_provider_v2.dart';
 import '../../../utils/navigation_utils.dart';
 import '../services/student_route_service.dart';
+import '../utils/route_ui_helpers.dart';
 import '../widgets/student/route_live_view.dart';
+import '../widgets/route_history_dialog.dart';
+import '../services/daily_route_service.dart';
+import '../widgets/route_admin_tools.dart';
 
 class MyRoutesScreen extends StatefulWidget {
   const MyRoutesScreen({super.key});
@@ -20,16 +24,15 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   late final MyRouteService _myRouteService;
 
   GoogleMapController? _mapController;
-  LatLng? _teacherPosition;
-
   bool _isLoading = true;
   String? _currentUserId;
 
   bool _isFamily = false;
-  List<_StudentRef> _students = const [];
+  List<_StudentRef> _students = [];
   String? _selectedStudentId;
 
   String? _dailyRouteId;
+  String? _loadError;
 
   late String _institutionId;
   late String _campusId;
@@ -41,36 +44,79 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     _bootstrap();
   }
 
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
+
   Future<void> _bootstrap() async {
-    final session = context.read<UserProviderV2>().user;
-    if (session == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
+    try {
+      final session = context.read<UserProviderV2>().user;
+      if (session == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
-    _currentUserId = session.id;
-    _institutionId = session.institution;
-    _campusId = session.campus;
+      _currentUserId = session.id;
+      _institutionId = session.institution;
+      _campusId = session.campus;
 
-    await _loadRoleAndStudents(_currentUserId!);
+      await _loadRoleAndStudents(_currentUserId!);
 
-    _selectedStudentId ??=
-        _isFamily
-            ? (session.activeStudentId?.isNotEmpty == true
+      _selectedStudentId ??= _isFamily
+          ? (_students.any((s) => s.id == session.activeStudentId)
                 ? session.activeStudentId
                 : (_students.isNotEmpty ? _students.first.id : null))
-            : _currentUserId;
+          : _currentUserId;
 
-    if (_selectedStudentId != null) {
-      final ruta = await _myRouteService.getMyDailyRoute(
-        studentId: _selectedStudentId!,
-        institutionId: _institutionId,
-        campusId: _campusId,
-      );
-      _dailyRouteId = ruta?.id;
+      if (_selectedStudentId != null) {
+        if (_isFamily) {
+          await RouteOperations.call('seleccionarHijoActivo', {
+            'studentId': _selectedStudentId,
+          });
+          if (!mounted) return;
+          context.read<UserProviderV2>().setActiveStudentId(
+            _selectedStudentId!,
+          );
+        }
+        await _loadSelectedStudent(_selectedStudentId!);
+      }
+
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) {
+        final message = routeErrorMessage(
+          e,
+          fallback: 'No fue posible consultar el recorrido.',
+        );
+        setState(() {
+          _isLoading = false;
+          _loadError = message;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
     }
+  }
 
-    if (mounted) setState(() => _isLoading = false);
+  Future<void> _loadSelectedStudent(String studentId) async {
+    final ruta = await _myRouteService.getMyDailyRoute(
+      studentId: studentId,
+      institutionId: _institutionId,
+      campusId: _campusId,
+    );
+    _dailyRouteId = ruta?.id;
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+      _dailyRouteId = null;
+    });
+    await _bootstrap();
   }
 
   Future<void> _loadRoleAndStudents(String uid) async {
@@ -79,22 +125,23 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
 
     if (session.role == 'Familiar') {
       _isFamily = true;
-      final ids = session.studentIds ?? const <String>[];
+      final ids = session.studentIds ?? <String>[];
 
       if (ids.isNotEmpty) {
-        final users = FirebaseFirestore.instance.collection('users');
+        final users = FirebaseFirestore.instance.collection('user_directory');
         final List<_StudentRef> list = [];
 
         for (final chunk in _chunks(ids, 10)) {
-          final snap =
-              await users
-                  .where('institution', isEqualTo: _institutionId)
-                  .where('campus', isEqualTo: _campusId)
-                  .where(FieldPath.documentId, whereIn: chunk)
-                  .get();
+          final snap = await users
+              .where('institution', isEqualTo: _institutionId)
+              .where('campus', isEqualTo: _campusId)
+              .where('status', isEqualTo: 'activo')
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get();
 
           for (final d in snap.docs) {
             final u = d.data();
+            if (u['role'] != 'Estudiante') continue;
             final name =
                 '${(u['firstName'] ?? '').toString().trim()} ${(u['lastName'] ?? '').toString().trim()}'
                     .trim();
@@ -103,11 +150,11 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
         }
         _students = list;
       } else {
-        _students = const [];
+        _students = [];
       }
     } else {
       _isFamily = false;
-      _students = const [];
+      _students = [];
     }
   }
 
@@ -121,83 +168,24 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     _mapController = controller;
   }
 
-  void _updateTeacherPosition(LatLng pos) {
-    setState(() {
-      _teacherPosition = pos;
-      _mapController?.animateCamera(CameraUpdate.newLatLng(pos));
-    });
-  }
-
-  String _str(Map<String, dynamic> d, List<String> keys, [String def = '']) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is String && v.trim().isNotEmpty) return v;
-    }
-    return def;
-  }
-
-  bool _bool(Map<String, dynamic> d, List<String> keys, [bool def = false]) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is bool) return v;
-    }
-    return def;
-  }
-
-  int _int(Map<String, dynamic> d, List<String> keys, [int def = 0]) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is int) return v;
-    }
-    return def;
-  }
-
-  Timestamp? _ts(Map<String, dynamic> d, List<String> keys) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is Timestamp) return v;
-    }
-    return null;
-  }
-
-  Map<String, dynamic>? _map(Map<String, dynamic> d, List<String> keys) {
-    for (final k in keys) {
-      final v = d[k];
-      if (v is Map<String, dynamic>) return v;
-    }
-    return null;
-  }
-
-  String _normalizeStatus(String raw) {
-    switch (raw.trim().toLowerCase()) {
-      case 'activa':
-        return 'active';
-      case 'finalizada':
-        return 'finished';
-      case 'pendiente':
-        return 'pending';
-      default:
-        return raw;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
+      final colors = Theme.of(context).colorScheme;
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: colors.surface,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: colors.surface,
           centerTitle: true,
-          title: const Text(
+          title: Text(
             'Mi Ruta de Hoy',
-            style: TextStyle(color: Colors.red),
+            style: TextStyle(color: colors.primary),
             semanticsLabel: 'Mi Ruta de Hoy',
           ),
-          leading: const BackToDashboardButton(),
-          iconTheme: const IconThemeData(color: Colors.red),
+          leading: BackToDashboardButton(),
+          iconTheme: IconThemeData(color: colors.primary),
         ),
-        body: const Center(
+        body: Center(
           child: Padding(
             padding: EdgeInsets.all(16),
             child: Text(
@@ -214,7 +202,7 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
     }
 
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_currentUserId == null) {
@@ -222,91 +210,154 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
         body: Center(
           child: Semantics(
             label: 'Usuario no autenticado. No se puede mostrar la ruta.',
-            child: const Text('Usuario no autenticado.'),
+            child: Text('Usuario no autenticado.'),
           ),
         ),
       );
     }
 
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
         centerTitle: true,
-        title: const Text('Mi Ruta de Hoy'),
-        leading: const BackToDashboardButton(),
-        iconTheme: const IconThemeData(color: Colors.redAccent),
+        title: Text('Mi Ruta de Hoy'),
+        actions: [
+          if (_isFamily && _dailyRouteId != null)
+            IconButton(
+              tooltip: 'Solicitar cambio de parada para hoy',
+              onPressed: () async {
+                final address = await routeTextDialog(
+                  context,
+                  'Nueva dirección para hoy',
+                );
+                if (!context.mounted || address == null || address.isEmpty) {
+                  return;
+                }
+                final reason = await routeTextDialog(
+                  context,
+                  'Motivo del cambio',
+                );
+                if (!context.mounted || reason == null || reason.isEmpty) {
+                  return;
+                }
+                try {
+                  await RouteOperations.call('solicitarCambioParada', {
+                    'dailyRouteId': _dailyRouteId,
+                    'studentId': _selectedStudentId,
+                    'address': address,
+                    'reason': reason,
+                  });
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Solicitud enviada. La parada no cambia hasta que el colegio la apruebe.',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(routeErrorMessage(e))),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.edit_location_alt_outlined),
+            ),
+          IconButton(
+            tooltip: 'Historial de recogidas',
+            onPressed: _isFamily && _selectedStudentId == null
+                ? null
+                : () =>
+                      showRouteHistory(context, studentId: _selectedStudentId),
+            icon: const Icon(Icons.history),
+          ),
+        ],
+        leading: BackToDashboardButton(),
+        iconTheme: IconThemeData(color: colors.primary),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             children: [
               if (_isFamily)
                 DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
+                  isExpanded: true,
+                  decoration: InputDecoration(
                     labelText: 'Selecciona estudiante',
                     border: OutlineInputBorder(),
                   ),
                   initialValue: _selectedStudentId,
-                  items:
-                      _students
-                          .map(
-                            (s) => DropdownMenuItem(
-                              value: s.id,
-                              child: Text(s.name),
-                            ),
-                          )
-                          .toList(),
+                  items: _students
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s.id,
+                          child: Text(s.name, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (id) async {
                     if (id == null) return;
                     setState(() {
                       _selectedStudentId = id;
                       _dailyRouteId = null;
-                      _teacherPosition = null;
+                      _loadError = null;
                       _isLoading = true;
                     });
-                    final ruta = await _myRouteService.getMyDailyRoute(
-                      studentId: id,
-                      institutionId: _institutionId,
-                      campusId: _campusId,
-                    );
-                    if (!mounted) return;
-                    setState(() {
-                      _dailyRouteId = ruta?.id;
-                      _isLoading = false;
-                    });
+                    try {
+                      await RouteOperations.call('seleccionarHijoActivo', {
+                        'studentId': id,
+                      });
+                      if (!mounted || !context.mounted) return;
+                      context.read<UserProviderV2>().setActiveStudentId(id);
+                      await _loadSelectedStudent(id);
+                    } catch (e) {
+                      _loadError = routeErrorMessage(
+                        e,
+                        fallback: 'No fue posible consultar este recorrido.',
+                      );
+                    } finally {
+                      if (mounted) setState(() => _isLoading = false);
+                    }
                   },
                 ),
 
-              if (_isFamily) const SizedBox(height: 12),
+              if (_isFamily) SizedBox(height: 12),
 
               Expanded(
-                child:
-                    (_selectedStudentId == null)
-                        ? const Center(
-                          child: Text('No hay estudiantes vinculados.'),
-                        )
-                        : (_dailyRouteId == null)
-                        ? const Center(
-                          child: Text(
-                            'No hay ruta activa para hoy o no estás asignado.',
-                          ),
-                        )
-                        : RouteLiveView(
-                          dailyRouteId: _dailyRouteId!,
-                          studentId: _selectedStudentId!,
-                          onMapCreated: _onMapCreated,
-                          teacherPosition: _teacherPosition,
-                          updateTeacherPosition: _updateTeacherPosition,
-                          str: _str,
-                          boolf: _bool,
-                          intf: _int,
-                          ts: _ts,
-                          mapf: _map,
-                          normalizeStatus: _normalizeStatus,
+                child: (_loadError != null)
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_loadError!, textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: _retry,
+                              child: const Text('Reintentar'),
+                            ),
+                          ],
                         ),
+                      )
+                    : (_selectedStudentId == null)
+                    ? Center(child: Text('No hay estudiantes vinculados.'))
+                    : (_dailyRouteId == null)
+                    ? Center(
+                        child: Text(
+                          'No tienes un recorrido asignado para hoy.',
+                        ),
+                      )
+                    : RouteLiveView(
+                        dailyRouteId: _dailyRouteId!,
+                        studentId: _selectedStudentId!,
+                        onMapCreated: _onMapCreated,
+                      ),
               ),
             ],
           ),
@@ -316,10 +367,8 @@ class _MyRoutesScreenState extends State<MyRoutesScreen> {
   }
 }
 
-
-
 class _StudentRef {
   final String id;
   final String name;
-  const _StudentRef({required this.id, required this.name});
+  _StudentRef({required this.id, required this.name});
 }

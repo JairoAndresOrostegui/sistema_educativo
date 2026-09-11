@@ -1,0 +1,59 @@
+# Pendientes de publicación y Rutas — 5 de septiembre de 2026
+
+## Play Console
+
+La captura del propietario muestra registro de aplicaciones completo, pero
+riesgo de cierre por inactividad con acción requerida antes del 19 de septiembre.
+No confundir ese plazo con el 30 de septiembre del registro Android.
+Cuenta personal de 2025: acceso público a producción sujeto a prueba cerrada
+de 12 participantes durante 14 días continuos y posterior solicitud/revisión.
+
+- Solicitar captura de «Ver detalles» del aviso y del rechazo previo.
+- Verificar correo y teléfono de contacto y completar las acciones que indique
+  Play Console. No dar por cerrado el aviso solo por cargar un AAB.
+- El paquete visible en Console difiere de
+  `co.edu.liceobilinguerodolfollinas.sistemaeducativo`, configurado localmente.
+  Confirmar identificador exacto, certificado de subida y mayor versionCode
+  usado antes de cambiar configuración Android/Firebase o volver a compilar.
+- No publicar al público mientras falten pruebas de permisos, privacidad,
+  datos de menores, acceso del revisor y funcionamiento real Android.
+- Se recomienda una prueba interna estable antes del plazo, sin esperar a
+  terminar todos los módulos; no subir sin resolver firma/paquete y rechazo.
+
+Referencias:
+- https://support.google.com/googleplay/android-developer/answer/11605267?hl=es
+- https://support.google.com/googleplay/android-developer/answer/14151465?hl=es
+
+## Endurecimiento durante la prueba cerrada
+
+La prueba cerrada está activa con el AAB de producción `1.0.0 (9)`. Publicar una
+versión superior en la misma pista no sustituye ni reinicia la exigencia de mantener
+al menos 12 cuentas inscritas continuamente durante 14 días; conservar la lista y
+el enlace de inscripción. La siguiente entrega que se suba debe usar como mínimo el
+`versionCode 10`; nunca intentar reemplazar el código 9 ya aceptado.
+
+Durante este período se completó el endurecimiento previsto:
+
+- QR: validar sesión y tipos de todas las respuestas antes de dibujar o resolver.
+- Mensajería y panel Push: estado vacío ante sesión ausente, respuestas defensivas
+  y mensajes de dominio sin excepciones técnicas.
+- Matrículas e Historial: tolerar fechas, listas y documentos heredados incompletos.
+- Usuarios y Perfil: eliminar usos restantes de sesión forzada y texto técnico
+  en errores recuperables. Parámetros quedó sustituido por Configuración
+  académica con permisos, alcance y errores controlados para la próxima entrega.
+- Se ejecutaron pruebas de regresión y compilaciones de producción. Aún corresponde
+  conservar evidencia del recorrido físico de cada perfil y revisar el informe
+  previo al lanzamiento antes de promover a producción pública.
+
+Los testers no tienen que abrir la aplicación todos los días para conservar la
+inscripción, pero la solicitud de acceso pregunta por uso real, funciones probadas
+y retroalimentación. Reclutar personas reales, preferiblemente más de 12, registrar
+las pruebas y no simular testers mediante varias cuentas de una sola persona.
+
+## Rutas y avisos: decisión vigente
+
+La propuesta anterior de crear un canal de Mensajería por ruta fue descartada.
+Los avisos de retraso, cambio, cancelación, proximidad, recogida e incidentes se
+operan y consultan dentro de Rutas, con eventos, historial, audiencia validada y
+cola push propios. No se crea un chat paralelo ni se copia ubicación, direcciones
+o estado operativo a Mensajería.

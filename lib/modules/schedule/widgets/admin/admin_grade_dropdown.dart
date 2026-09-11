@@ -1,54 +1,38 @@
 import 'package:flutter/material.dart';
 
+import '../../../../models/academic/academic_group.dart';
+import '../searchable_schedule_selector.dart';
+
 class AdminGradeDropdown extends StatelessWidget {
-  final String? selectedGrade;
+  final String? selectedGroupId;
   final ValueChanged<String?> onChanged;
-  final List<String> availableGrades;
+  final List<AcademicGroup> availableGroups;
 
   const AdminGradeDropdown({
     super.key,
-    required this.selectedGrade,
+    required this.selectedGroupId,
     required this.onChanged,
-    required this.availableGrades,
+    required this.availableGroups,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12.0),
-        border: Border.all(color: Colors.red.withValues(alpha: .15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .06), Colors.white],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedGrade,
-          hint: const Text('Selecciona un grado'),
-          isExpanded: true,
-          items:
-              availableGrades
-                  .map(
-                    (String grade) => DropdownMenuItem<String>(
-                      value: grade,
-                      child: Text(grade),
-                    ),
-                  )
-                  .toList(),
-          onChanged: onChanged,
-        ),
-      ),
+    return SearchableScheduleSelector(
+      label: 'Grupo',
+      hint: 'Selecciona un grupo',
+      searchHint: 'Buscar grupo',
+      emptyMessage: 'No se encontraron grupos.',
+      selectedId: selectedGroupId,
+      options: availableGroups
+          .map(
+            (group) => ScheduleSelectorOption(
+              id: group.id,
+              label: group.name,
+              searchText: '${group.level} ${group.section}',
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
     );
   }
 }

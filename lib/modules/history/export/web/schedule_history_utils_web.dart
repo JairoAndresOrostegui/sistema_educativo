@@ -17,7 +17,7 @@ class ExportUtilsPlatform {
     final Sheet sheet = excel[sheetName];
 
     sheet.appendRow([
-      TextCellValue('Grado'),
+      TextCellValue('Grupo'),
       TextCellValue('Dia'),
       TextCellValue('Materia'),
       TextCellValue('Accion'),
@@ -45,7 +45,7 @@ class ExportUtilsPlatform {
       final fechaTexto = fecha != null ? df.format(fecha) : '';
 
       sheet.appendRow([
-        TextCellValue(log['grado']?.toString() ?? ''),
+        TextCellValue(log['grupo']?.toString() ?? ''),
         TextCellValue(log['dia']?.toString() ?? ''),
         TextCellValue(log['materia']?.toString() ?? ''),
         TextCellValue(log['accion']?.toString() ?? ''),

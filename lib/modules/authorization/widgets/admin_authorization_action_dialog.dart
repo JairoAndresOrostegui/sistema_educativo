@@ -15,9 +15,13 @@ class AdminActionResult {
 
 class AdminAuthorizationActionDialog extends StatefulWidget {
   final AuthorizationStatus currentStatus;
+  final bool requiresRequesterEdit;
+  final bool isSuperadmin;
   const AdminAuthorizationActionDialog({
     super.key,
     required this.currentStatus,
+    this.requiresRequesterEdit = false,
+    this.isSuperadmin = false,
   });
 
   @override
@@ -30,11 +34,14 @@ class _AdminAuthorizationActionDialogState
   AuthorizationStatus? _sel;
   final _noteCtrl = TextEditingController();
   final _evidenceCtrl = TextEditingController();
+  String? _validationError;
 
   @override
   void initState() {
     super.initState();
-    _sel = widget.currentStatus;
+    _sel = widget.currentStatus == AuthorizationStatus.approved
+        ? AuthorizationStatus.finished
+        : AuthorizationStatus.pending;
   }
 
   @override
@@ -44,11 +51,62 @@ class _AdminAuthorizationActionDialogState
     super.dispose();
   }
 
+  bool get _isOverride =>
+      widget.isSuperadmin &&
+      widget.currentStatus == AuthorizationStatus.finished;
+
   bool get _needsNote =>
+      _isOverride ||
       _sel == AuthorizationStatus.pending ||
       _sel == AuthorizationStatus.rejected;
 
   bool get _needsEvidence => _sel == AuthorizationStatus.finished;
+
+  List<DropdownMenuItem<AuthorizationStatus>> get _items {
+    if (_isOverride) {
+      return const [
+        DropdownMenuItem(
+          value: AuthorizationStatus.pending,
+          child: Text('Reabrir como pendiente'),
+        ),
+        DropdownMenuItem(
+          value: AuthorizationStatus.approved,
+          child: Text('Reabrir como aprobada'),
+        ),
+        DropdownMenuItem(
+          value: AuthorizationStatus.rejected,
+          child: Text('Reabrir como rechazada'),
+        ),
+      ];
+    }
+    if (widget.currentStatus == AuthorizationStatus.approved) {
+      return const [
+        DropdownMenuItem(
+          value: AuthorizationStatus.finished,
+          child: Text('Finalizada'),
+        ),
+      ];
+    }
+
+    if (widget.currentStatus == AuthorizationStatus.pending) {
+      return const [
+        DropdownMenuItem(
+          value: AuthorizationStatus.pending,
+          child: Text('Pendiente para correccion'),
+        ),
+        DropdownMenuItem(
+          value: AuthorizationStatus.approved,
+          child: Text('Aprobada'),
+        ),
+        DropdownMenuItem(
+          value: AuthorizationStatus.rejected,
+          child: Text('Rechazada'),
+        ),
+      ];
+    }
+
+    return const [];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +114,8 @@ class _AdminAuthorizationActionDialogState
       title: Center(
         child: Text(
           'Gestionar autorización',
-          style: const TextStyle(
-            color: Colors.redAccent,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -74,24 +132,7 @@ class _AdminAuthorizationActionDialogState
                 labelText: 'Nuevo estado',
                 border: OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: AuthorizationStatus.pending,
-                  child: Text('Pendiente'),
-                ),
-                DropdownMenuItem(
-                  value: AuthorizationStatus.approved,
-                  child: Text('Aprobada'),
-                ),
-                DropdownMenuItem(
-                  value: AuthorizationStatus.rejected,
-                  child: Text('Rechazada'),
-                ),
-                DropdownMenuItem(
-                  value: AuthorizationStatus.finished,
-                  child: Text('Finalizada'),
-                ),
-              ],
+              items: _items,
               onChanged: (v) => setState(() => _sel = v),
             ),
             const SizedBox(height: 12),
@@ -100,8 +141,12 @@ class _AdminAuthorizationActionDialogState
                 controller: _noteCtrl,
                 minLines: 3,
                 maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Nota para el padre/estudiante',
+                decoration: InputDecoration(
+                  labelText: _isOverride
+                      ? 'Motivo obligatorio de reapertura'
+                      : _sel == AuthorizationStatus.rejected
+                      ? 'Motivo del rechazo'
+                      : 'Motivo para correccion',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -111,9 +156,17 @@ class _AdminAuthorizationActionDialogState
                 minLines: 3,
                 maxLines: 6,
                 decoration: const InputDecoration(
-                  labelText: 'Evidencia de salida',
+                  labelText: 'Observacion de cierre',
                   border: OutlineInputBorder(),
                 ),
+              ),
+            ],
+            if (_validationError != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _validationError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
           ],
@@ -127,8 +180,19 @@ class _AdminAuthorizationActionDialogState
         TextButton(
           onPressed: () {
             if (_sel == null) return;
-            if (_needsNote && _noteCtrl.text.trim().isEmpty) return;
-            if (_needsEvidence && _evidenceCtrl.text.trim().isEmpty) return;
+            if (_needsNote && _noteCtrl.text.trim().isEmpty) {
+              setState(() {
+                _validationError = 'Escribe el motivo antes de guardar.';
+              });
+              return;
+            }
+            if (_needsEvidence && _evidenceCtrl.text.trim().isEmpty) {
+              setState(() {
+                _validationError =
+                    'Escribe la observación de cierre antes de guardar.';
+              });
+              return;
+            }
             Navigator.pop(
               context,
               AdminActionResult(

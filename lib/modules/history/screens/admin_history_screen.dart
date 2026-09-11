@@ -22,40 +22,41 @@ class _AdminHistoryScreenState extends State<AdminHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
+      return Scaffold(
+        backgroundColor: colors.surface,
+        appBar: AppBar(
+          title: Text('Historial administrativo'),
+          centerTitle: true,
+          backgroundColor: colors.surface,
+          foregroundColor: colors.primary,
+          leading: BackToDashboardButton(),
+        ),
+        body: SafeArea(
+          child: Center(child: Text('Disponible solo en la versión web.')),
+        ),
+      );
+    }
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colors.surface,
       appBar: AppBar(
-        title: const Text('History system'),
+        title: Text('Historial administrativo'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
-        leading: const BackToDashboardButton(),
-      ),
-      body: SafeArea(
-        child: Center(child: Text('Disponible solo en la versión web.')),
-      ),
-    );
-  }
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('History system'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.redAccent,
-        leading: const BackToDashboardButton(),
+        backgroundColor: colors.surface,
+        foregroundColor: colors.primary,
+        leading: BackToDashboardButton(),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             children: [
               HistorySelectorWidget(
                 selected: _selected,
                 onChanged: (value) => setState(() => _selected = value),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               Expanded(child: _renderVista()),
             ],
           ),
@@ -67,19 +68,19 @@ class _AdminHistoryScreenState extends State<AdminHistoryScreen> {
   Widget _renderVista() {
     switch (_selected) {
       case HistoryType.rutasDiarias:
-        return const RutasDiariasView();
+        return RutasDiariasView();
       case HistoryType.gestionRutas:
-        return const GestionRutasView();
+        return GestionRutasView();
       case HistoryType.gestionUsuarios:
-        return const GestionUsuariosView();
+        return GestionUsuariosView();
       case HistoryType.gestionHorarios:
-        return const GestionHorariosView();
+        return GestionHorariosView();
       case HistoryType.gestionDocumentos:
-        return const GestionDocumentosView();
+        return GestionDocumentosView();
       case HistoryType.userLogs:
-        return const GestionLogsUsuariosView();
+        return GestionLogsUsuariosView();
       default:
-        return const Center(
+        return Center(
           child: Text('Selecciona un historial para ver los detalles.'),
         );
     }

@@ -42,46 +42,33 @@ class ScheduleHistoryUtils {
     pdf.addPage(
       pw.MultiPage(
         theme: pw.ThemeData.withFont(base: font, bold: fontBold),
-        build:
-            (context) => [
-              pw.Text(
-                'Historial de Horarios',
-                style: pw.TextStyle(
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 20),
-              pw.TableHelper.fromTextArray(
-                headers: [
-                  'Grado',
-                  'Dia',
-                  'Materia',
-                  'Accion',
-                  'Usuario',
-                  'Fecha',
-                ],
-                data:
-                    logs.map((log) {
-                      final fecha = asDateTime(log['fecha']);
-                      final fechaTexto =
-                          fecha != null
-                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
-                              : '-';
-                      return [
-                        log['grado'] ?? '',
-                        log['dia'] ?? '',
-                        log['materia'] ?? '',
-                        log['accion'] ?? '',
-                        log['usuarioNombre'] ?? '',
-                        fechaTexto,
-                      ];
-                    }).toList(),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                cellAlignment: pw.Alignment.centerLeft,
-                cellStyle: const pw.TextStyle(fontSize: 10),
-              ),
-            ],
+        build: (context) => [
+          pw.Text(
+            'Historial de Horarios',
+            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 20),
+          pw.TableHelper.fromTextArray(
+            headers: ['Grupo', 'Día', 'Materia', 'Acción', 'Usuario', 'Fecha'],
+            data: logs.map((log) {
+              final fecha = asDateTime(log['fecha']);
+              final fechaTexto = fecha != null
+                  ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                  : '-';
+              return [
+                log['grupo'] ?? '',
+                log['dia'] ?? '',
+                log['materia'] ?? '',
+                log['accion'] ?? '',
+                log['usuarioNombre'] ?? '',
+                fechaTexto,
+              ];
+            }).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            cellAlignment: pw.Alignment.centerLeft,
+            cellStyle: const pw.TextStyle(fontSize: 10),
+          ),
+        ],
       ),
     );
 

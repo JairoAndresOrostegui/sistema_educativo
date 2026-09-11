@@ -17,19 +17,17 @@ class HistorySelectorWidget extends StatelessWidget {
       label: 'Selector de historial',
       child: DropdownButtonFormField<HistoryType>(
         initialValue: selected,
-        items:
-            HistoryType.values
-                .map(
-                  (type) =>
-                      DropdownMenuItem(value: type, child: Text(type.label)),
-                )
-                .toList(),
+        items: HistoryType.values
+            .map(
+              (type) => DropdownMenuItem(value: type, child: Text(type.label)),
+            )
+            .toList(),
         decoration: InputDecoration(
           labelText: 'Selecciona un historial',
-          border: const OutlineInputBorder(),
+          border: OutlineInputBorder(),
           focusedBorder: OutlineInputBorder(
             borderSide: BorderSide(
-              color: Colors.redAccent.withValues(alpha: .8),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),

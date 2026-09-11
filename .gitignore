@@ -48,3 +48,11 @@ app.*.map.json
 # Local temp/debug files
 /flutter_01.png
 /pglite-debug.log
+/.gradle-local/
+/.firebase/
+/.vscode/
+
+# Credenciales privadas (usar ADC/Secret Manager en backend)
+/functions/keys/
+*service-account*.json
+*service_account*.json

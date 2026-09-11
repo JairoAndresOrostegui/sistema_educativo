@@ -6,24 +6,11 @@ class ShrinkOneLine extends StatelessWidget {
   const ShrinkOneLine(this.text, {super.key, this.style});
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder:
-          (ctx, constraints) => SizedBox(
-            width: constraints.maxWidth,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                text,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.visible,
-                textAlign: TextAlign.left,
-                style: style,
-              ),
-            ),
-          ),
-    );
-  }
+  Widget build(BuildContext context) => Text(
+    text,
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    textAlign: TextAlign.left,
+    style: style,
+  );
 }

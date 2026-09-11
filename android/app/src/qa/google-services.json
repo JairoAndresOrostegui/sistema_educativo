@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "732639994966",
+    "project_id": "sistema-educativo-rl",
+    "storage_bucket": "sistema-educativo-rl.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:732639994966:android:ad6ec170c7f782b8e847f7",
+        "android_client_info": {
+          "package_name": "co.edu.liceobilinguerodolfollinas.sistemaeducativo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBEpoXpp68zQHoSEvR00ToIggiiaHOLufI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

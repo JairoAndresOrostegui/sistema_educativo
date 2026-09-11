@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:intl/intl.dart';
@@ -18,9 +20,12 @@ import '../widgets/teacher_authorization_dialog.dart';
 
 import '../../../utils/dialog_utils.dart';
 import '../../../utils/navigation_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class AuthorizationAdminScreen extends StatefulWidget {
-  const AuthorizationAdminScreen({super.key});
+  final AuthorizationService? service;
+
+  const AuthorizationAdminScreen({super.key, this.service});
 
   @override
   State<AuthorizationAdminScreen> createState() =>
@@ -28,7 +33,8 @@ class AuthorizationAdminScreen extends StatefulWidget {
 }
 
 class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
-  final _svc = AuthorizationService();
+  late final _svc = widget.service ?? AuthorizationService();
+  StreamSubscription<List<AuthorizationRequest>>? _itemsSub;
 
   userModelv2? _logged;
 
@@ -42,6 +48,8 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
   bool _loading = true;
 
+  String? _loadError;
+
   String? _updatingRequestId;
 
   List<AuthorizationRequest> _items = [];
@@ -49,7 +57,9 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   bool get _canView {
     if (_logged == null) return false;
 
-    return _isSuperadmin || _perms.contains('autorizaciones.ver');
+    return _isSuperadmin ||
+        _perms.contains('autorizaciones.ver') ||
+        _perms.contains('autorizaciones.editar');
   }
 
   bool get _canEdit {
@@ -86,25 +96,37 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
       return;
     }
 
-    await _loadAll();
+    _subscribeToItems();
   }
 
-  Future<void> _loadAll({bool showLoading = true}) async {
-    if (showLoading) {
-      setState(() => _loading = true);
-    }
-
-    final page = await _svc.listForAdmin(
-      institutionId: _institutionId,
-
-      campusId: _campusId,
-    );
-
+  void _subscribeToItems() {
+    _itemsSub?.cancel();
     setState(() {
-      _items = page.items;
-
-      if (showLoading) _loading = false;
+      _loading = true;
+      _loadError = null;
     });
+    _itemsSub = _svc
+        .watchForAdmin(institutionId: _institutionId, campusId: _campusId)
+        .listen(
+          (items) {
+            if (!mounted) return;
+            setState(() {
+              _items = items;
+              _loading = false;
+              _loadError = null;
+            });
+          },
+          onError: (Object error) {
+            if (!mounted) return;
+            setState(() {
+              _loading = false;
+              _loadError = userFacingError(
+                error,
+                fallback: 'No se pudieron cargar las autorizaciones.',
+              );
+            });
+          },
+        );
   }
 
   String _fmtD(DateTime? d) =>
@@ -129,18 +151,19 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   }
 
   Color _statusColor(AuthorizationStatus s) {
+    final colors = Theme.of(context).colorScheme;
     switch (s) {
       case AuthorizationStatus.pending:
-        return Colors.orange;
+        return colors.tertiary;
 
       case AuthorizationStatus.approved:
-        return Colors.green;
+        return colors.primary;
 
       case AuthorizationStatus.rejected:
-        return Colors.redAccent;
+        return colors.error;
 
       case AuthorizationStatus.finished:
-        return Colors.blueGrey;
+        return colors.outline;
     }
   }
 
@@ -157,8 +180,11 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
     final res = await showDialog<AdminActionResult>(
       context: context,
-
-      builder: (_) => AdminAuthorizationActionDialog(currentStatus: r.status),
+      builder: (_) => AdminAuthorizationActionDialog(
+        currentStatus: r.status,
+        requiresRequesterEdit: r.requiresRequesterEdit,
+        isSuperadmin: _isSuperadmin,
+      ),
     );
 
     if (res == null) return;
@@ -176,9 +202,12 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
         evidence: res.evidence,
 
         admin: _logged!,
-      );
 
-      await _loadAll(showLoading: false);
+        expectedRevision: r.revision,
+
+        superOverride:
+            _isSuperadmin && r.status == AuthorizationStatus.finished,
+      );
 
       if (!mounted) return;
 
@@ -197,7 +226,7 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
 
         title: 'Error',
 
-        message: e.toString(),
+        message: userFacingError(e),
       );
     } finally {
       if (mounted) setState(() => _updatingRequestId = null);
@@ -205,7 +234,14 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
   }
 
   @override
+  void dispose() {
+    _itemsSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final session = context.watch<UserProviderV2>().user;
 
     if (session == null) {
@@ -220,199 +256,199 @@ class _AuthorizationAdminScreenState extends State<AuthorizationAdminScreen> {
           title: const Text('Autorizaciones'),
           leading: const BackToDashboardButton(),
 
-          backgroundColor: Colors.white,
+          backgroundColor: colors.surface,
 
-          foregroundColor: Colors.redAccent,
+          foregroundColor: colors.primary,
 
           centerTitle: true,
         ),
 
         body: const SafeArea(child: Center(child: Text('Acceso denegado.'))),
 
-        backgroundColor: Colors.white,
+        backgroundColor: colors.surface,
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colors.surface,
 
       appBar: AppBar(
         title: const Text('Autorizaciones'),
         leading: const BackToDashboardButton(),
 
-        backgroundColor: Colors.white,
+        backgroundColor: colors.surface,
 
-        foregroundColor: Colors.redAccent,
+        foregroundColor: colors.primary,
 
         centerTitle: true,
       ),
 
       body: SafeArea(
-        child:
-            _loading
-                ? const Center(child: CircularProgressIndicator())
-                : Padding(
-                  padding: const EdgeInsets.all(16),
-
-                  child:
-                      _items.isEmpty
-                          ? const Center(child: Text('No hay solicitudes'))
-                          : ListView.builder(
-                            itemCount: _items.length,
-
-                            itemBuilder: (_, i) {
-                              final r = _items[i];
-
-                              final c = _statusColor(r.status);
-
-                              final chip = Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-
-                                  vertical: 6,
-                                ),
-
-                                decoration: BoxDecoration(
-                                  color: c.withValues(alpha: .12),
-
-                                  borderRadius: BorderRadius.circular(10),
-
-                                  border: Border.all(
-                                    color: c.withValues(alpha: .25),
-                                  ),
-                                ),
-
-                                child: Text(
-                                  _statusLabel(r.status),
-
-                                  style: TextStyle(
-                                    color: c,
-
-                                    fontWeight: FontWeight.w700,
-
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              );
-
-                              final dateLine =
-                                  r.multiDay
-                                      ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
-                                      : _fmtD(r.dateFrom);
-
-                              final timeLine =
-                                  r.allDay
-                                      ? 'Todo el día'
-                                      : r.endTime != null
-                                      ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
-                                      : _fmtT(r.startTime);
-
-                              final sub = [
-                                'Estudiante: ${r.studentFullName} — ${r.grade}',
-
-                                'Fecha: $dateLine',
-
-                                'Hora: $timeLine',
-
-                                if ((r.reason ?? '')
-                                    .toString()
-                                    .trim()
-                                    .isNotEmpty)
-                                  'Motivo: ${_firstWords(r.reason!, 40)}',
-                              ].join('\n');
-
-                              return Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-
-                                  vertical: 6,
-                                ),
-
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-
-                                  border: Border.all(
-                                    color: Colors.red.withValues(alpha: .12),
-                                  ),
-
-                                  gradient: LinearGradient(
-                                    begin: Alignment.centerLeft,
-
-                                    end: Alignment.centerRight,
-
-                                    colors: [
-                                      Colors.red.withValues(alpha: .06),
-
-                                      Colors.white,
-                                    ],
-                                  ),
-                                ),
-
-                                child: ListTile(
-                                  leading: const Icon(
-                                    Icons.assignment_turned_in,
-
-                                    color: Colors.redAccent,
-                                  ),
-
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          r.requesterFullName.isNotEmpty
-                                              ? 'Solicitante: ${r.requesterFullName}'
-                                              : 'Solicitud',
-
-                                          maxLines: 1,
-
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 8),
-
-                                      chip,
-                                    ],
-                                  ),
-
-                                  subtitle: Text(sub),
-
-                                  onTap:
-                                      () => showDialog(
-                                        context: context,
-
-                                        builder:
-                                            (_) => AuthorizationDetailsDialog(
-                                              request: r,
-                                            ),
-                                      ),
-
-                                  trailing:
-                                      _canEdit &&
-                                              _updatingRequestId == null &&
-                                              r.status !=
-                                                  AuthorizationStatus.finished
-                                          ? IconButton(
-                                            icon: const Icon(
-                                              Icons.manage_accounts,
-                                              color: Colors.redAccent,
-                                            ),
-                                            onPressed: () => _manage(r),
-                                          )
-                                          : _updatingRequestId == r.id
-                                          ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                          : null,
-                                ),
-                              );
-                            },
-                          ),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _loadError != null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_loadError!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: _subscribeToItems,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reintentar'),
+                      ),
+                    ],
+                  ),
                 ),
+              )
+            : Padding(
+                padding: const EdgeInsets.all(16),
+
+                child: _items.isEmpty
+                    ? const Center(child: Text('No hay solicitudes'))
+                    : ListView.builder(
+                        itemCount: _items.length,
+
+                        itemBuilder: (_, i) {
+                          final r = _items[i];
+
+                          final c = _statusColor(r.status);
+
+                          final chip = Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+
+                              vertical: 6,
+                            ),
+
+                            decoration: BoxDecoration(
+                              color: c.withValues(alpha: .12),
+
+                              borderRadius: BorderRadius.circular(10),
+
+                              border: Border.all(
+                                color: c.withValues(alpha: .25),
+                              ),
+                            ),
+
+                            child: Text(
+                              _statusLabel(r.status),
+
+                              style: TextStyle(
+                                color: c,
+
+                                fontWeight: FontWeight.w700,
+
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+
+                          final dateLine = r.multiDay
+                              ? '${_fmtD(r.dateFrom)} → ${_fmtD(r.dateTo)}'
+                              : _fmtD(r.dateFrom);
+
+                          final timeLine = r.allDay
+                              ? 'Todo el día'
+                              : r.endTime != null
+                              ? '${_fmtT(r.startTime)} - ${_fmtT(r.endTime)}'
+                              : _fmtT(r.startTime);
+
+                          final sub = [
+                            'Estudiante: ${r.studentFullName} — ${r.groupName}',
+
+                            'Fecha: $dateLine',
+
+                            'Hora: $timeLine',
+
+                            if ((r.reason ?? '').toString().trim().isNotEmpty)
+                              'Motivo: ${_firstWords(r.reason!, 40)}',
+                          ].join('\n');
+
+                          return Card(
+                            elevation: 0,
+                            color: colors.surfaceContainer,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 4,
+
+                              vertical: 6,
+                            ),
+
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+
+                              side: BorderSide(
+                                color: colors.primary.withValues(alpha: .12),
+                              ),
+                            ),
+
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.assignment_turned_in,
+
+                                color: colors.primary,
+                              ),
+
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      r.requesterFullName.isNotEmpty
+                                          ? 'Solicitante: ${r.requesterFullName}'
+                                          : 'Solicitud',
+
+                                      maxLines: 1,
+
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  chip,
+                                ],
+                              ),
+
+                              subtitle: Text(sub),
+
+                              onTap: () => showDialog(
+                                context: context,
+
+                                builder: (_) =>
+                                    AuthorizationDetailsDialog(request: r),
+                              ),
+
+                              trailing:
+                                  _canEdit &&
+                                      _updatingRequestId == null &&
+                                      (r.status !=
+                                              AuthorizationStatus.finished ||
+                                          _isSuperadmin) &&
+                                      r.status != AuthorizationStatus.rejected
+                                  ? IconButton(
+                                      icon: Icon(
+                                        Icons.manage_accounts,
+                                        color: colors.primary,
+                                      ),
+                                      onPressed: () => _manage(r),
+                                    )
+                                  : _updatingRequestId == r.id
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          );
+                        },
+                      ),
+              ),
       ),
     );
   }

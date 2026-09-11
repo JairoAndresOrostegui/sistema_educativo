@@ -23,51 +23,45 @@ class AdminRouteLogUtils {
     pdf.addPage(
       pw.MultiPage(
         theme: pw.ThemeData.withFont(base: font, bold: fontBold),
-        build:
-            (context) => [
-              pw.Text(
-                'Historial de Gestión de Rutas',
-                style: pw.TextStyle(
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 20),
-              pw.TableHelper.fromTextArray(
-                headers: ['Ruta', 'Acción', 'Administrador', 'Fecha'],
-                data:
-                    logs.map((log) {
-                      final raw = log['fecha'];
-                      DateTime? fecha;
-                      if (raw is DateTime) {
-                        fecha = raw;
-                      } else if (raw is Timestamp) {
-                        fecha = raw.toDate();
-                      } else if (raw is num) {
-                        final ms = raw.abs() > 1e12 ? raw ~/ 1000 : raw;
-                        fecha = DateTime.fromMillisecondsSinceEpoch(ms.toInt());
-                      } else if (raw is String && raw.isNotEmpty) {
-                        try {
-                          fecha = DateTime.parse(raw);
-                        } catch (_) {}
-                      }
-                      final fechaTexto =
-                          fecha != null
-                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
-                              : '-';
+        build: (context) => [
+          pw.Text(
+            'Historial de Gestión de Rutas',
+            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 20),
+          pw.TableHelper.fromTextArray(
+            headers: ['Ruta', 'Acción', 'Administrador', 'Fecha'],
+            data: logs.map((log) {
+              final raw = log['fecha'];
+              DateTime? fecha;
+              if (raw is DateTime) {
+                fecha = raw;
+              } else if (raw is Timestamp) {
+                fecha = raw.toDate();
+              } else if (raw is num) {
+                final ms = raw.abs() > 1e12 ? raw ~/ 1000 : raw;
+                fecha = DateTime.fromMillisecondsSinceEpoch(ms.toInt());
+              } else if (raw is String && raw.isNotEmpty) {
+                try {
+                  fecha = DateTime.parse(raw);
+                } catch (_) {}
+              }
+              final fechaTexto = fecha != null
+                  ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                  : '-';
 
-                      return [
-                        log['nombreRuta'] ?? '',
-                        log['accion'] ?? '',
-                        log['nombreAdmin'] ?? '',
-                        fechaTexto,
-                      ];
-                    }).toList(),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                cellAlignment: pw.Alignment.centerLeft,
-                cellStyle: const pw.TextStyle(fontSize: 10),
-              ),
-            ],
+              return [
+                log['nombreRuta'] ?? '',
+                log['accion'] ?? '',
+                log['nombreAdmin'] ?? '',
+                fechaTexto,
+              ];
+            }).toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            cellAlignment: pw.Alignment.centerLeft,
+            cellStyle: const pw.TextStyle(fontSize: 10),
+          ),
+        ],
       ),
     );
 

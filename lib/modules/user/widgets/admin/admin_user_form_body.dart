@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:sistema_educativo/models/user/user_model_v2.dart';
+import 'package:sistema_educativo/models/academic/academic_group.dart';
 import 'package:sistema_educativo/utils/parameters_service.dart';
 import 'admin_user_form_section_contact.dart';
 import 'admin_user_form_section_family.dart';
@@ -30,12 +31,13 @@ class AdminUserFormBody extends StatelessWidget {
   final String rol;
   final List<Parameter> roles;
   final void Function(String?) onRolChanged;
-  final String grado;
-  final List<Parameter> grades;
-  final String? selectedGrade;
-  final void Function(String?) onGradeChanged;
+  final List<AcademicGroup> groups;
+  final String? selectedGroupId;
+  final void Function(String?) onGroupChanged;
   final TextEditingController institucion;
   final TextEditingController sede;
+  final List<InstitutionOption> institutions;
+  final List<String> campuses;
   final List<String> funcionalidades;
   final TextEditingController birthCountry;
   final TextEditingController birthDepartment;
@@ -47,7 +49,6 @@ class AdminUserFormBody extends StatelessWidget {
   final List<String> studentIds;
   final String? activeStudentId;
   final void Function(String?) setRol;
-  final void Function(String?) setGrado;
   final void Function(String) setInstitucion;
   final void Function(String) setSede;
   final void Function(String permiso, bool? isChecked) onFuncionalidadChanged;
@@ -81,12 +82,13 @@ class AdminUserFormBody extends StatelessWidget {
     required this.rol,
     required this.roles,
     required this.onRolChanged,
-    required this.grado,
-    required this.grades,
-    required this.selectedGrade,
-    required this.onGradeChanged,
+    required this.groups,
+    required this.selectedGroupId,
+    required this.onGroupChanged,
     required this.institucion,
     required this.sede,
+    required this.institutions,
+    required this.campuses,
     required this.funcionalidades,
     required this.birthCountry,
     required this.birthDepartment,
@@ -98,7 +100,6 @@ class AdminUserFormBody extends StatelessWidget {
     required this.studentIds,
     required this.activeStudentId,
     required this.setRol,
-    required this.setGrado,
     required this.setInstitucion,
     required this.setSede,
     required this.onFuncionalidadChanged,
@@ -114,8 +115,16 @@ class AdminUserFormBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visiblePermissions = allPermissions.where((permission) {
+      if (!permission.valor.startsWith('autorizaciones.')) return true;
+      if (rol == 'Estudiante') return false;
+      if (rol == 'Familiar') {
+        return permission.valor == 'autorizaciones.ver';
+      }
+      return true;
+    });
     final Map<String, List<Parameter>> groupedPermissions = {};
-    for (var perm in allPermissions) {
+    for (var perm in visiblePermissions) {
       final source = perm.etiqueta.isNotEmpty ? perm.etiqueta : perm.valor;
       final group = source.split('.').first;
       groupedPermissions.putIfAbsent(group, () => []).add(perm);
@@ -123,11 +132,12 @@ class AdminUserFormBody extends StatelessWidget {
 
     final String? safeDocType =
         documentTypes.any((d) => d.valor == selectedDocumentType)
-            ? selectedDocumentType
-            : null;
+        ? selectedDocumentType
+        : null;
     final String? safeRole = roles.any((r) => r.valor == rol) ? rol : null;
-    final String? safeGrade =
-        grades.any((g) => g.valor == selectedGrade) ? selectedGrade : null;
+    final String? safeGroupId = groups.any((g) => g.id == selectedGroupId)
+        ? selectedGroupId
+        : null;
 
     return Column(
       children: [
@@ -147,6 +157,7 @@ class AdminUserFormBody extends StatelessWidget {
           documentTypes: documentTypes,
           onDocumentTypeChanged: onDocumentTypeChanged,
           soloLectura: soloLectura,
+          esNuevo: esNuevo,
         ),
         ContactSection(
           direccion: direccion,
@@ -168,9 +179,9 @@ class AdminUserFormBody extends StatelessWidget {
           status: status,
           onStatusChanged: onStatusChanged,
           rol: rol,
-          safeGrade: safeGrade,
-          grades: grades,
-          onGradeChanged: onGradeChanged,
+          safeGroupId: safeGroupId,
+          groups: groups,
+          onGroupChanged: onGroupChanged,
           soloLectura: soloLectura,
         ),
         if (rol == 'Familiar')
@@ -184,6 +195,10 @@ class AdminUserFormBody extends StatelessWidget {
         InstitutionSection(
           institucion: institucion,
           sede: sede,
+          institutions: institutions,
+          campuses: campuses,
+          onInstitutionChanged: setInstitucion,
+          onCampusChanged: setSede,
           soloLectura: soloLectura,
           esSuperadminActual: esSuperadminActual,
         ),

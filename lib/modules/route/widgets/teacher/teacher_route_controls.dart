@@ -17,6 +17,7 @@ class TeacherRouteControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final estado = dailyRoute?.estado;
+    final scheme = Theme.of(context).colorScheme;
 
     return Column(
       children: [
@@ -24,28 +25,28 @@ class TeacherRouteControls extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Iniciar ruta'),
+              icon: Icon(Icons.play_arrow),
+              label: Text('Iniciar ruta'),
               onPressed: onStart,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                textStyle: const TextStyle(fontSize: 16),
+                padding: EdgeInsets.symmetric(vertical: 12),
+                textStyle: TextStyle(fontSize: 16),
               ),
             ),
           ),
         if (estado == EstadoRuta.activa) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.stop),
-              label: const Text('Finalizar ruta'),
+              icon: Icon(Icons.stop),
+              label: Text('Finalizar ruta'),
               onPressed: onFinalize,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                textStyle: const TextStyle(fontSize: 16),
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 12),
+                textStyle: TextStyle(fontSize: 16),
+                backgroundColor: scheme.error,
+                foregroundColor: scheme.onError,
               ),
             ),
           ),

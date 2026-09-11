@@ -3,23 +3,41 @@ import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'daily_route_service.dart';
 
 class LocationService {
+  LocationService({this.onLocationError, this.onLocationRecovered});
+
+  final ValueChanged<Object>? onLocationError;
+  final VoidCallback? onLocationRecovered;
   StreamSubscription<Position>? _positionSub;
-  final FirebaseFirestore _firestore;
 
   static const double _kMinDeltaMeters = 30;
-  static const Duration _kMinInterval = Duration(seconds: 8);
+  static const Duration _kMinInterval = Duration(seconds: 30);
   static const Duration _kMaxInterval = Duration(seconds: 45);
 
   GeoPoint? _lastWrittenPoint;
   DateTime? _lastWriteAt;
+  bool _failureReported = false;
 
-  LocationService({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  void _reportFailure(Object error) {
+    if (_failureReported) return;
+    _failureReported = true;
+    onLocationError?.call(error);
+  }
+
+  void _reportRecovery() {
+    if (!_failureReported) return;
+    _failureReported = false;
+    onLocationRecovered?.call();
+  }
 
   Future<bool> requestLocationPermission() async {
-    if (kIsWeb) return true;
+    if (kIsWeb) {
+      final status = await Geolocator.requestPermission();
+      return status == LocationPermission.whileInUse ||
+          status == LocationPermission.always;
+    }
     final status = await Permission.location.request();
     return status.isGranted;
   }
@@ -27,17 +45,17 @@ class LocationService {
   Future<void> startLocationUpdates(String rutaDiaDocId) async {
     final ok = await requestLocationPermission();
     if (!ok) {
-      debugPrint('LocationService: permisos denegados');
-      return;
+      throw StateError(
+        'Permiso de ubicación denegado. Puedes operar manualmente; activa el permiso en Ajustes para compartir posición.',
+      );
     }
 
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      debugPrint('LocationService: servicio de ubicación desactivado');
-      return;
+      throw StateError('Activa el GPS para compartir la ubicación de la ruta.');
     }
 
-    _positionSub?.cancel();
+    await _positionSub?.cancel();
 
     try {
       final first = await Geolocator.getCurrentPosition(
@@ -52,34 +70,46 @@ class LocationService {
       );
     } catch (e) {
       debugPrint('LocationService: error en posición inicial -> $e');
+      _reportFailure(e);
     }
 
-    final settings =
-        (defaultTargetPlatform == TargetPlatform.android)
-            ? AndroidSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
-              distanceFilter: 25,
-              intervalDuration: const Duration(
-                seconds: 10,
-              ),
-            )
-            : const LocationSettings(
-              accuracy: LocationAccuracy.bestForNavigation,
-              distanceFilter: 25,
-            );
+    final settings = (defaultTargetPlatform == TargetPlatform.android)
+        ? AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 25,
+            intervalDuration: const Duration(seconds: 30),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'Recorrido escolar activo',
+              notificationText: 'Compartiendo ubicación durante el recorrido.',
+              enableWakeLock: true,
+            ),
+          )
+        : const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 25,
+          );
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: settings,
-    ).listen((pos) async {
-      try {
-        await _writeIfNeeded(
-          rutaDiaDocId,
-          GeoPoint(pos.latitude, pos.longitude),
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (pos) async {
+        try {
+          await _writeIfNeeded(
+            rutaDiaDocId,
+            GeoPoint(pos.latitude, pos.longitude),
+          );
+        } catch (e) {
+          debugPrint('LocationService: error procesando posición -> $e');
+          _reportFailure(e);
+        }
+      },
+      onError: (Object error) {
+        // Un error del proveedor GPS no debe llegar como excepción no manejada
+        // al proceso de Flutter. El responsable puede reactivar ubicación.
+        debugPrint(
+          'LocationService: flujo de ubicación interrumpido -> $error',
         );
-      } catch (e) {
-        debugPrint('LocationService: error procesando posición -> $e');
-      }
-    });
+        _reportFailure(error);
+      },
+    );
   }
 
   Future<void> _writeIfNeeded(
@@ -87,43 +117,40 @@ class LocationService {
     GeoPoint point, {
     bool force = false,
   }) async {
-    try {
-      final now = DateTime.now();
+    final now = DateTime.now();
 
-      if (!force && _lastWrittenPoint != null && _lastWriteAt != null) {
-        final moved = Geolocator.distanceBetween(
-          _lastWrittenPoint!.latitude,
-          _lastWrittenPoint!.longitude,
-          point.latitude,
-          point.longitude,
-        );
-        final elapsed = now.difference(_lastWriteAt!);
+    if (!force && _lastWrittenPoint != null && _lastWriteAt != null) {
+      final moved = Geolocator.distanceBetween(
+        _lastWrittenPoint!.latitude,
+        _lastWrittenPoint!.longitude,
+        point.latitude,
+        point.longitude,
+      );
+      final elapsed = now.difference(_lastWriteAt!);
 
-        final byMovement =
-            moved >= _kMinDeltaMeters && elapsed >= _kMinInterval;
-        final byMaxAge = elapsed >= _kMaxInterval;
+      final byMovement = moved >= _kMinDeltaMeters && elapsed >= _kMinInterval;
+      final byMaxAge = elapsed >= _kMaxInterval;
 
-        if (!byMovement && !byMaxAge) {
-          return;
-        }
+      if (!byMovement && !byMaxAge) {
+        return;
       }
-
-      await _firestore.collection('daily_routes').doc(docId).set({
-        'teacherPosition': point,
-        'lastUpdate': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      _lastWrittenPoint = point;
-      _lastWriteAt = now;
-    } catch (e) {
-      debugPrint('LocationService: error actualizando ubicación -> $e');
     }
+
+    await RouteOperations.execute(docId, 'position', {
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+    });
+
+    _lastWrittenPoint = point;
+    _lastWriteAt = now;
+    _reportRecovery();
   }
 
-  void stopLocationUpdates() {
-    _positionSub?.cancel();
+  Future<void> stopLocationUpdates() async {
+    await _positionSub?.cancel();
     _positionSub = null;
     _lastWrittenPoint = null;
     _lastWriteAt = null;
+    _failureReported = false;
   }
 }

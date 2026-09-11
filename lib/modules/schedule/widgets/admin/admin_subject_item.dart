@@ -8,6 +8,7 @@ class AdminSubjectItem extends StatelessWidget {
   final VoidCallback onDelete;
   final bool showEdit;
   final bool showDelete;
+  final bool showGroupName;
 
   const AdminSubjectItem({
     super.key,
@@ -16,6 +17,7 @@ class AdminSubjectItem extends StatelessWidget {
     required this.onDelete,
     this.showEdit = true,
     this.showDelete = true,
+    this.showGroupName = false,
   });
 
   @override
@@ -26,12 +28,10 @@ class AdminSubjectItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.red.withValues(alpha: .15)),
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Colors.red.withValues(alpha: .06), Colors.white],
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .15),
         ),
+        color: Theme.of(context).colorScheme.surfaceContainer,
       ),
       child: ListTile(
         title: Text(
@@ -40,23 +40,36 @@ class AdminSubjectItem extends StatelessWidget {
         ),
         subtitle: Text(
           '${TimeOfDay.fromDateTime(subject.startTime.toDate()).format(context)} '
-          'to ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)} - ${subject.teacherName}',
+          'a ${TimeOfDay.fromDateTime(subject.endTime.toDate()).format(context)}'
+          '${showGroupName ? ' · ${subject.groupName}' : ' · ${subject.teacherName}'}',
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showEdit)
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                onPressed: onEdit,
-              ),
-            if (showDelete)
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.redAccent),
-                onPressed: onDelete,
-              ),
-          ],
-        ),
+        trailing: showEdit || showDelete
+            ? PopupMenuButton<String>(
+                tooltip: 'Acciones de la materia',
+                onSelected: (action) {
+                  if (action == 'edit') onEdit();
+                  if (action == 'delete') onDelete();
+                },
+                itemBuilder: (context) => [
+                  if (showEdit)
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: ListTile(
+                        leading: Icon(Icons.edit),
+                        title: Text('Editar'),
+                      ),
+                    ),
+                  if (showDelete)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete),
+                        title: Text('Eliminar'),
+                      ),
+                    ),
+                ],
+              )
+            : null,
       ),
     );
   }

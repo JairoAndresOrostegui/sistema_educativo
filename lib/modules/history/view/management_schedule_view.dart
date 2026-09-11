@@ -1,7 +1,12 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../../../providers/user_provider_v2.dart';
+import '../widgets/history_date_range_field.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 import '../services/schedule_history_service.dart';
 import '../export/utils/schedule_export_utils.dart';
 
@@ -14,12 +19,14 @@ class GestionHorariosView extends StatefulWidget {
 
 class _GestionHorariosViewState extends State<GestionHorariosView> {
   final _service = AdminScheduleHistoryService();
+  final _groupController = TextEditingController();
+  final _subjectController = TextEditingController();
 
   // Filtros
-  String _gradoContiene = '';
+  String _grupoContiene = '';
   String _materiaContiene = '';
   String? _dia; // lunes..domingo
-  String? _accion; // create_subject|update_subject|delete_subject
+  String? _accion; // create_subject|edit_subject|delete_subject
   DateTimeRange? _rango;
   bool _filtrosPendientes = false;
 
@@ -43,14 +50,26 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
         now.year,
         now.month,
         now.day,
-      ).subtract(const Duration(days: 29)),
+      ).subtract(Duration(days: 29)),
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
     _aplicarFiltros(recargar: true);
   }
 
+  @override
+  void dispose() {
+    _groupController.dispose();
+    _subjectController.dispose();
+    super.dispose();
+  }
+
   Future<void> _aplicarFiltros({bool recargar = false}) async {
     setState(() => _cargando = true);
+    final user = context.read<UserProviderV2>().user;
+    if (user == null) {
+      if (mounted) setState(() => _cargando = false);
+      return;
+    }
 
     if (recargar) {
       _cursors
@@ -59,42 +78,64 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
       _pageIndex = 0;
     }
 
-    final page = await _service.obtenerHistorialHorarios(
-      gradeContains:
-          _gradoContiene.trim().isEmpty ? null : _gradoContiene.trim(),
-      subjectContains:
-          _materiaContiene.trim().isEmpty ? null : _materiaContiene.trim(),
-      day: _dia?.toLowerCase(),
-      action: _accion,
-      rango: _rango,
-      limite: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final page = await _service.obtenerHistorialHorarios(
+        institutionId: user.institution,
+        campusId: user.campus,
+        groupContains: _grupoContiene.trim().isEmpty
+            ? null
+            : _grupoContiene.trim(),
+        subjectContains: _materiaContiene.trim().isEmpty
+            ? null
+            : _materiaContiene.trim(),
+        day: _dia?.toLowerCase(),
+        action: _accion,
+        rango: _rango,
+        limite: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final total = await _service.contarTotal(
-      action: _accion,
-      day: _dia?.toLowerCase(),
-      rango: _rango,
-      gradeContains:
-          _gradoContiene.trim().isEmpty ? null : _gradoContiene.trim(),
-      subjectContains:
-          _materiaContiene.trim().isEmpty ? null : _materiaContiene.trim(),
-    );
+      final total = await _service.contarTotal(
+        institutionId: user.institution,
+        campusId: user.campus,
+        action: _accion,
+        day: _dia?.toLowerCase(),
+        rango: _rango,
+        groupContains: _grupoContiene.trim().isEmpty
+            ? null
+            : _grupoContiene.trim(),
+        subjectContains: _materiaContiene.trim().isEmpty
+            ? null
+            : _materiaContiene.trim(),
+      );
 
-    setState(() {
-      _items = page.items;
-      _hasNext = page.hasNext;
-      if (page.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(page.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = page.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _items = page.items;
+        _hasNext = page.hasNext;
+        if (page.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(page.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = page.lastDoc;
+          }
         }
-      }
-      _total = total;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _total = total;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo cargar el historial',
+        message: userFacingError(
+          error,
+          fallback: 'Intenta nuevamente en unos momentos.',
+        ),
+      );
+    }
   }
 
   Future<void> _siguientePagina() async {
@@ -124,7 +165,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
             now.year,
             now.month,
             now.day,
-          ).subtract(const Duration(days: 29)),
+          ).subtract(Duration(days: 29)),
           end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
         );
 
@@ -135,15 +176,10 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
       initialDateRange: initial,
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
-      builder:
-          (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: Theme.of(
-                ctx,
-              ).colorScheme.copyWith(primary: Colors.redAccent),
-            ),
-            child: child!,
-          ),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
@@ -188,43 +224,40 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la versión web.')),
         ),
       );
     }
     final df = DateFormat('yyyy-MM-dd');
-    final rangoTexto =
-        _rango == null
-            ? ''
-            : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
+    final rangoTexto = _rango == null
+        ? ''
+        : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colors.surface,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Resumen superior
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.red.withValues(alpha: .15)),
+                  color: colors.surface,
+                  border: Border.all(color: colors.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: .03),
+                      color: colors.shadow.withValues(alpha: .06),
                       blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ],
                 ),
@@ -233,7 +266,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   child: Text('Total registros: $_total'),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // Filtros
               Wrap(
@@ -243,14 +276,14 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   SizedBox(
                     width: 220,
                     child: TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Grado (contiene)',
+                      controller: _groupController,
+                      decoration: InputDecoration(
+                        labelText: 'Grupo (contiene)',
                         border: OutlineInputBorder(),
                       ),
-                      initialValue: _gradoContiene,
                       onChanged: (v) {
                         setState(() {
-                          _gradoContiene = v;
+                          _grupoContiene = v;
                           _filtrosPendientes = true;
                         });
                       },
@@ -259,11 +292,11 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   SizedBox(
                     width: 220,
                     child: TextFormField(
-                      decoration: const InputDecoration(
+                      controller: _subjectController,
+                      decoration: InputDecoration(
                         labelText: 'Materia (contiene)',
                         border: OutlineInputBorder(),
                       ),
-                      initialValue: _materiaContiene,
                       onChanged: (v) {
                         setState(() {
                           _materiaContiene = v;
@@ -276,7 +309,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                     width: 180,
                     child: DropdownButtonFormField<String>(
                       initialValue: _dia,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: null,
                           child: Text('Todos los días'),
@@ -313,7 +346,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                           _filtrosPendientes = true;
                         });
                       },
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Día',
                         border: OutlineInputBorder(),
                       ),
@@ -323,7 +356,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                     width: 220,
                     child: DropdownButtonFormField<String>(
                       initialValue: _accion,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: null,
                           child: Text('Todas las acciones'),
@@ -333,7 +366,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                           child: Text('Crear materia'),
                         ),
                         DropdownMenuItem(
-                          value: 'update_subject',
+                          value: 'edit_subject',
                           child: Text('Editar materia'),
                         ),
                         DropdownMenuItem(
@@ -347,7 +380,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                           _filtrosPendientes = true;
                         });
                       },
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Acción',
                         border: OutlineInputBorder(),
                       ),
@@ -355,30 +388,27 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   ),
                   SizedBox(
                     width: 280,
-                    child: TextFormField(
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Rango de fechas',
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: TextEditingController(text: rangoTexto),
+                    child: HistoryDateRangeField(
+                      value: rangoTexto,
                       onTap: _pickDateRange,
                     ),
                   ),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.filter_alt),
+                    icon: Icon(Icons.filter_alt),
                     onPressed: () => _aplicarFiltros(recargar: true),
-                    label: const Text('Filtrar'),
+                    label: Text('Filtrar'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
+                      backgroundColor: colors.primary,
+                      foregroundColor: colors.onPrimary,
                     ),
                   ),
                   TextButton(
                     onPressed: () {
                       final now = DateTime.now();
                       setState(() {
-                        _gradoContiene = '';
+                        _groupController.clear();
+                        _subjectController.clear();
+                        _grupoContiene = '';
                         _materiaContiene = '';
                         _dia = null;
                         _accion = null;
@@ -387,7 +417,7 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                             now.year,
                             now.month,
                             now.day,
-                          ).subtract(const Duration(days: 29)),
+                          ).subtract(Duration(days: 29)),
                           end: DateTime(
                             now.year,
                             now.month,
@@ -402,12 +432,12 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                       });
                       _aplicarFiltros(recargar: true);
                     },
-                    child: const Text('Limpiar'),
+                    child: Text('Limpiar'),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
 
               // Exportar (Web)
               if (kIsWeb && _items.isNotEmpty)
@@ -416,73 +446,67 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   children: [
                     ElevatedButton.icon(
                       onPressed: _exportarExcel,
-                      icon: const Icon(Icons.table_view),
-                      label: const Text('Exportar Excel'),
+                      icon: Icon(Icons.table_view),
+                      label: Text('Exportar página a Excel'),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _exportarPDF,
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: const Text('Exportar PDF'),
+                      icon: Icon(Icons.picture_as_pdf),
+                      label: Text('Exportar página a PDF'),
                     ),
                   ],
                 ),
-              if (kIsWeb && _items.isNotEmpty) const SizedBox(height: 12),
+              if (kIsWeb && _items.isNotEmpty) SizedBox(height: 12),
 
               // Lista
               Expanded(
-                child:
-                    _cargando
-                        ? const Center(child: CircularProgressIndicator())
-                        : _items.isEmpty
-                        ? const Center(child: Text('No hay registros'))
-                        : ListView.builder(
-                          itemCount: _items.length,
-                          itemBuilder: (_, i) {
-                            final r = _items[i];
-                            final fecha = r['fecha'] as DateTime?;
-                            final fechaTexto =
-                                fecha != null
-                                    ? DateFormat(
-                                      'yyyy-MM-dd HH:mm:ss',
-                                    ).format(fecha)
-                                    : '-';
-                            final mensaje = (r['mensaje'] ?? '') as String;
+                child: _cargando
+                    ? Center(child: CircularProgressIndicator())
+                    : _items.isEmpty
+                    ? Center(child: Text('No hay registros'))
+                    : ListView.builder(
+                        itemCount: _items.length,
+                        itemBuilder: (_, i) {
+                          final r = _items[i];
+                          final fecha = r['fecha'] as DateTime?;
+                          final fechaTexto = fecha != null
+                              ? DateFormat('yyyy-MM-dd HH:mm:ss').format(fecha)
+                              : '-';
+                          final mensaje = r['mensaje']?.toString() ?? '';
 
-                            return Semantics(
-                              label: 'Registro de log de horarios',
-                              child: Card(
-                                color: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  side: BorderSide(
-                                    color: Colors.red.withValues(alpha: .12),
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
+                          return Semantics(
+                            label: 'Registro de log de horarios',
+                            child: Card(
+                              color: colors.surface,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(color: colors.outlineVariant),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              margin: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 6,
+                              ),
+                              child: ListTile(
+                                title: Text(
+                                  '${r['grupo'] ?? ''} — ${r['accion'] ?? ''}',
                                 ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 6,
-                                ),
-                                child: ListTile(
-                                  title: Text(
-                                    '${r['grado'] ?? ''} — ${r['accion'] ?? ''}',
-                                  ),
-                                  subtitle: Text(
-                                    'Materia: ${r['materia'] ?? ''}\n'
-                                    'Día: ${r['dia'] ?? ''}\n'
-                                    'Usuario: ${r['usuarioNombre'] ?? ''}\n'
-                                    'Fecha: $fechaTexto${mensaje.isNotEmpty ? '\n$mensaje' : ''}',
-                                  ),
+                                subtitle: Text(
+                                  'Materia: ${r['materia'] ?? ''}\n'
+                                  'Día: ${r['dia'] ?? ''}\n'
+                                  'Usuario: ${r['usuarioNombre'] ?? ''}\n'
+                                  'Fecha: $fechaTexto${mensaje.isNotEmpty ? '\n$mensaje' : ''}',
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
+                      ),
               ),
 
               // Paginación
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -490,16 +514,16 @@ class _GestionHorariosViewState extends State<GestionHorariosView> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed:
-                            _pageIndex == 0 || _cargando
-                                ? null
-                                : _paginaAnterior,
+                        icon: Icon(Icons.chevron_left),
+                        onPressed: _pageIndex == 0 || _cargando
+                            ? null
+                            : _paginaAnterior,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed:
-                            !_hasNext || _cargando ? null : _siguientePagina,
+                        icon: Icon(Icons.chevron_right),
+                        onPressed: !_hasNext || _cargando
+                            ? null
+                            : _siguientePagina,
                       ),
                     ],
                   ),

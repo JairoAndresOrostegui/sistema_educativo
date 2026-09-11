@@ -1,3 +1,4 @@
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:flutter/material.dart';
 
 class DialogUtils {
@@ -11,7 +12,7 @@ class DialogUtils {
       title: title,
       message: message,
       icon: Icons.info_outline,
-      color: Colors.blueAccent,
+      color: AppPalette.info,
     );
   }
 
@@ -25,7 +26,7 @@ class DialogUtils {
       title: title,
       message: message,
       icon: Icons.check_circle_outline,
-      color: Colors.green,
+      color: AppPalette.success,
     );
   }
 
@@ -39,7 +40,7 @@ class DialogUtils {
       title: title,
       message: message,
       icon: Icons.error_outline,
-      color: Colors.redAccent,
+      color: AppPalette.primary,
     );
   }
 
@@ -60,14 +61,11 @@ class DialogUtils {
           title: Row(
             children: [
               Icon(icon, color: color),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -76,7 +74,7 @@ class DialogUtils {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Aceptar'),
+              child: Text('Aceptar'),
             ),
           ],
         );

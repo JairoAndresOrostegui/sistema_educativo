@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 class DialogUtils {
-  static Future<int?> askEstimatedMinutes(BuildContext context, String message) {
+  static Future<int?> askEstimatedMinutes(
+    BuildContext context,
+    String message,
+  ) {
     final ctrl = TextEditingController();
     return showDialog<int>(
       context: context,

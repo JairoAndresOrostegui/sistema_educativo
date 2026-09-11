@@ -1,23 +1,57 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'history_query_utils.dart';
+
 class UserHistoryPage {
   final List<Map<String, dynamic>> items;
   final bool hasNext;
   final DocumentSnapshot<Map<String, dynamic>>? lastDoc;
-  UserHistoryPage({required this.items, required this.hasNext, required this.lastDoc});
+
+  const UserHistoryPage({
+    required this.items,
+    required this.hasNext,
+    required this.lastDoc,
+  });
 }
 
 class AdminUserHistoryService {
-  final _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db;
 
-  // Colecciones (nuevo / legado)
-  static const userHistoryCollection = 'user_history'; // vigente
-  static const historialUsuariosCollection = 'historial_usuarios'; // legado
+  AdminUserHistoryService({FirebaseFirestore? db})
+    : _db = db ?? FirebaseFirestore.instance;
 
-  /// Devuelve página normalizada a claves en español:
-  /// accion, nombres, apellidos, rol, realizadoPor, fecha, campus, institution, usuarioId
+  Query<Map<String, dynamic>> _query({
+    required String institutionId,
+    required String campusId,
+    String? role,
+    String? action,
+    DateTimeRange? rango,
+  }) {
+    Query<Map<String, dynamic>> query = _db
+        .collection('user_history')
+        .where('institution', isEqualTo: institutionId)
+        .where('campus', isEqualTo: campusId);
+    if (role != null && role.trim().isNotEmpty) {
+      query = query.where('rol', isEqualTo: role.trim());
+    }
+    if (action != null && action.trim().isNotEmpty) {
+      query = query.where('accion', isEqualTo: action.trim());
+    }
+    if (rango != null) {
+      query = query
+          .where(
+            'fecha',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start),
+          )
+          .where('fecha', isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
+    }
+    return query;
+  }
+
   Future<UserHistoryPage> obtenerHistorial({
+    required String institutionId,
+    required String campusId,
     String? nameContains,
     String? role,
     String? action,
@@ -25,277 +59,73 @@ class AdminUserHistoryService {
     required int limite,
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
   }) async {
-    // 1) Intento en 'user_history'
-    var page = await _query(
-      col: userHistoryCollection,
-      dateField: 'fecha', // en tus datos nuevos 'fecha' existe; intentamos primero
-      fallbacksDate: const ['date', 'timestamp'],
-      roleField: 'rol',
-      actionField: 'accion',
-      performedByNameField: 'realizadoPor',
-      nameFields: const ['nombres', 'apellidos'], // ya vienen en ES
-      extraCampusField: 'campus',
-      extraInstitutionField: 'institution',
-      userIdField: 'usuarioId',
-      nameContains: nameContains,
+    final query = _query(
+      institutionId: institutionId,
+      campusId: campusId,
       role: role,
       action: action,
       rango: rango,
-      limite: limite,
+    ).orderBy('fecha', descending: true);
+    final needle = nameContains?.trim().toLowerCase() ?? '';
+    final page = await scanFilteredPage(
+      query: query,
+      pageSize: limite,
       startAfter: startAfter,
+      matches: (data) =>
+          needle.isEmpty ||
+          '${data['nombres'] ?? ''} ${data['apellidos'] ?? ''} '
+                  '${data['rol'] ?? ''} ${data['accion'] ?? ''} '
+                  '${data['realizadoPor'] ?? ''}'
+              .toLowerCase()
+              .contains(needle),
     );
-
-    // 2) Fallback legado si vacío
-    if (page.items.isEmpty) {
-      page = await _query(
-        col: historialUsuariosCollection,
-        dateField: 'fecha',
-        fallbacksDate: const [],
-        roleField: 'rol',
-        actionField: 'accion',
-        performedByNameField: 'realizadoPor',
-        nameFields: const ['nombres', 'apellidos'],
-        extraCampusField: 'campus',
-        extraInstitutionField: 'institution',
-        userIdField: 'usuarioId',
-        nameContains: nameContains,
-        role: role,
-        action: action,
-        rango: rango,
-        limite: limite,
-        startAfter: startAfter,
-      );
-    }
-
-    return page;
-  }
-
-  Future<UserHistoryPage> _query({
-    required String col,
-    required String dateField,
-    required List<String> fallbacksDate,
-    required String roleField,
-    required String actionField,
-    required String performedByNameField,
-    required List<String> nameFields,
-    required String extraCampusField,
-    required String extraInstitutionField,
-    required String userIdField,
-    String? nameContains,
-    String? role,
-    String? action,
-    DateTimeRange? rango,
-    required int limite,
-    DocumentSnapshot<Map<String, dynamic>>? startAfter,
-  }) async {
-    // Construye query base
-    Query<Map<String, dynamic>> q = _db.collection(col).orderBy(dateField, descending: true).limit(limite);
-
-    // Igualdades que pueden requerir índices combinados
-    if (role != null && role.trim().isNotEmpty) {
-      q = q.where(roleField, isEqualTo: role.trim());
-    }
-    if (action != null && action.trim().isNotEmpty) {
-      q = q.where(actionField, isEqualTo: action.trim());
-    }
-
-    // Rango de fechas
-    if (rango != null) {
-      q = q
-          .where(dateField, isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-          .where(dateField, isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
-    }
-
-    // Cursor
-    if (startAfter != null) {
-      q = q.startAfterDocument(startAfter);
-    }
-
-    // Ejecuta
-    QuerySnapshot<Map<String, dynamic>> snap;
-    try {
-      snap = await q.get();
-    } catch (_) {
-      // Si falló por ordenar en un field distinto (p. ej. el doc usa 'date' en vez de 'fecha'),
-      // intenta con los alternos
-      for (final alt in fallbacksDate) {
-        try {
-          Query<Map<String, dynamic>> q2 = _db.collection(col).orderBy(alt, descending: true).limit(limite);
-          if (role != null && role.trim().isNotEmpty) {
-            q2 = q2.where(roleField, isEqualTo: role.trim());
-          }
-          if (action != null && action.trim().isNotEmpty) {
-            q2 = q2.where(actionField, isEqualTo: action.trim());
-          }
-          if (rango != null) {
-            q2 = q2
-                .where(alt, isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-                .where(alt, isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
-          }
-          if (startAfter != null) {
-            q2 = q2.startAfterDocument(startAfter);
-          }
-          snap = await q2.get();
-          // Si funcionó con 'alt', forzamos usar ese campo como 'dateField' efectivo
-          return _normalizePage(
-            docs: snap.docs,
-            dateFieldTried: alt,
-            roleField: roleField,
-            actionField: actionField,
-            performedByNameField: performedByNameField,
-            nameFields: nameFields,
-            extraCampusField: extraCampusField,
-            extraInstitutionField: extraInstitutionField,
-            userIdField: userIdField,
-            limite: limite,
-          );
-        } catch (_) {
-          continue;
-        }
-      }
-      // Si todos fallaron, devuelve vacío
-      return UserHistoryPage(items: const [], hasNext: false, lastDoc: null);
-    }
-
-    // Normaliza con el campo original
-    return _normalizePage(
-      docs: snap.docs,
-      dateFieldTried: dateField,
-      roleField: roleField,
-      actionField: actionField,
-      performedByNameField: performedByNameField,
-      nameFields: nameFields,
-      extraCampusField: extraCampusField,
-      extraInstitutionField: extraInstitutionField,
-      userIdField: userIdField,
-      limite: limite,
+    final items = page.documents.map((document) {
+      final data = document.data();
+      return <String, dynamic>{
+        'id': document.id,
+        'accion': (data['accion'] ?? '').toString(),
+        'nombres': (data['nombres'] ?? '').toString(),
+        'apellidos': (data['apellidos'] ?? '').toString(),
+        'rol': (data['rol'] ?? '').toString(),
+        'realizadoPor': (data['realizadoPor'] ?? '').toString(),
+        'fecha': historyDate(data['fecha']),
+        'campus': (data['campus'] ?? '').toString(),
+        'institution': (data['institution'] ?? '').toString(),
+        'usuarioId': (data['usuarioId'] ?? '').toString(),
+      };
+    }).toList();
+    return UserHistoryPage(
+      items: items,
+      hasNext: page.hasNext,
+      lastDoc: page.lastDoc,
     );
-  }
-
-  UserHistoryPage _normalizePage({
-    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    required String dateFieldTried,
-    required String roleField,
-    required String actionField,
-    required String performedByNameField,
-    required List<String> nameFields,
-    required String extraCampusField,
-    required String extraInstitutionField,
-    required String userIdField,
-    required int limite,
-  }) {
-    final items = <Map<String, dynamic>>[];
-
-    for (final d in docs) {
-      final data = d.data();
-
-      // Normalización a español (con posibles alias en EN)
-      final nombres = (data['nombres'] ?? data['firstName'] ?? '').toString();
-      final apellidos = (data['apellidos'] ?? data['lastName'] ?? '').toString();
-      final rol = (data[roleField] ?? data['role'] ?? '').toString();
-      final accion = (data[actionField] ?? data['action'] ?? '').toString();
-      final realizadoPor =
-          (data[performedByNameField] ??
-                  data['performedByName'] ??
-                  data['performedBy'] ??
-                  data['userName'] ??
-                  '')
-              .toString();
-
-      // Fecha puede venir en 'fecha', 'date' o 'timestamp'
-      Timestamp? ts = data[dateFieldTried] as Timestamp?;
-      ts ??= data['fecha'] as Timestamp?;
-      ts ??= data['date'] as Timestamp?;
-      ts ??= data['timestamp'] as Timestamp?;
-      final fecha = ts?.toDate();
-
-      items.add({
-        'id': d.id,
-        'accion': accion,
-        'nombres': nombres,
-        'apellidos': apellidos,
-        'rol': rol,
-        'realizadoPor': realizadoPor,
-        'fecha': fecha,
-        'campus': (data[extraCampusField] ?? data['campus'] ?? '').toString(),
-        'institution': (data[extraInstitutionField] ?? data['institution'] ?? '').toString(),
-        'usuarioId': (data[userIdField] ?? data['userId'] ?? '').toString(),
-      });
-    }
-
-    // Filtro "contains" por nombre completo en MEMORIA (no rompe índices)
-    // *Ojo*: si quieres que afecte al total, habría que escanear; aquí mantenemos total aprox.
-    // (igual que hicimos en los demás módulos).
-    // NOTA: se hace en la vista; aquí devolvemos la página tal cual.
-
-    final hasNext = docs.length == limite;
-    final lastDoc = docs.isNotEmpty ? docs.last : null;
-    return UserHistoryPage(items: items, hasNext: hasNext, lastDoc: lastDoc);
   }
 
   Future<int> contarTotal({
+    required String institutionId,
+    required String campusId,
     String? role,
     String? action,
     DateTimeRange? rango,
-    String? nameContains, // NOTA: este "contains" no se aplica aquí (sería costoso)
+    String? nameContains,
   }) async {
-    int total = await _countIn(
-      col: userHistoryCollection,
-          dateField: 'fecha',
-          actionField: 'accion',
-          roleField: 'rol',
-          role: role,
-          action: action,
-          rango: rango,
-        ) ??
-        0;
-
-    if (total == 0) {
-      total = await _countIn(
-            col: historialUsuariosCollection,
-            dateField: 'fecha',
-            actionField: 'accion',
-            roleField: 'rol',
-            role: role,
-            action: action,
-            rango: rango,
-          ) ??
-          0;
-    }
-    return total;
-  }
-
-  Future<int?> _countIn({
-    required String col,
-    required String dateField,
-    required String actionField,
-    required String roleField,
-    String? role,
-    String? action,
-    DateTimeRange? rango,
-  }) async {
-    try {
-      Query<Map<String, dynamic>> q = _db.collection(col);
-      if (role != null && role.trim().isNotEmpty) {
-        q = q.where(roleField, isEqualTo: role.trim());
-      }
-      if (action != null && action.trim().isNotEmpty) {
-        q = q.where(actionField, isEqualTo: action.trim());
-      }
-      if (rango != null) {
-        q = q
-            .where(dateField, isGreaterThanOrEqualTo: Timestamp.fromDate(rango.start))
-            .where(dateField, isLessThanOrEqualTo: Timestamp.fromDate(rango.end));
-      }
-
-      // Si tu SDK soporta agregaciones:
-      // final agg = await q.count().get();
-      // return agg.count;
-
-      final snap = await q.get();
-      return snap.docs.length;
-    } catch (_) {
-      return null;
-    }
+    final query = _query(
+      institutionId: institutionId,
+      campusId: campusId,
+      role: role,
+      action: action,
+      rango: rango,
+    );
+    final needle = nameContains?.trim().toLowerCase() ?? '';
+    if (needle.isEmpty) return (await query.count().get()).count ?? 0;
+    return countFilteredDocuments(
+      query: query.orderBy('fecha', descending: true),
+      matches: (data) =>
+          '${data['nombres'] ?? ''} ${data['apellidos'] ?? ''} '
+                  '${data['rol'] ?? ''} ${data['accion'] ?? ''} '
+                  '${data['realizadoPor'] ?? ''}'
+              .toLowerCase()
+              .contains(needle),
+    );
   }
 }

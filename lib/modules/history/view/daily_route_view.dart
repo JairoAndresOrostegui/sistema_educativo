@@ -7,8 +7,12 @@ import 'package:provider/provider.dart'; // ⬅️ NUEVO
 import '../../../providers/user_provider_v2.dart'; // ⬅️ NUEVO
 
 import '../services/daily_route_history_service.dart';
+import '../services/history_query_utils.dart';
+import '../widgets/history_date_range_field.dart';
 import '../export/utils/daily_route_export_utils.dart';
 import '../../../utils/format_utils.dart';
+import '../../../utils/dialog_utils.dart';
+import '../../../utils/user_facing_error.dart';
 
 class RutasDiariasView extends StatefulWidget {
   const RutasDiariasView({super.key});
@@ -51,11 +55,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
     // rango por defecto: últimos 7 días
     final now = DateTime.now();
     _rango = DateTimeRange(
-      start: DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(const Duration(days: 6)),
+      start: DateTime(now.year, now.month, now.day).subtract(Duration(days: 6)),
       end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
     );
 
@@ -89,39 +89,52 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
 
     final service = RutaHistoryService();
 
-    final res = await service.obtenerHistorialRutas(
-      institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
-      campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
-      nombreRuta:
-          _nombreCtrl.text.trim().isEmpty ? null : _nombreCtrl.text.trim(),
-      estado: _estadoSeleccionado,
-      rango: _rango,
-      limite: _porPagina,
-      startAfter: _cursors[_pageIndex],
-    );
+    try {
+      final res = await service.obtenerHistorialRutas(
+        institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
+        campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
+        nombreRuta: _nombreCtrl.text.trim().isEmpty
+            ? null
+            : _nombreCtrl.text.trim(),
+        estado: _estadoSeleccionado,
+        rango: _rango,
+        limite: _porPagina,
+        startAfter: _cursors[_pageIndex],
+      );
 
-    final totalFin = await service.contarRutasFinalizadas(
-      institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
-      campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
-      rango: _rango,
-      nombreRuta:
-          _nombreCtrl.text.trim().isEmpty ? null : _nombreCtrl.text.trim(),
-    );
+      final totalFin = await service.contarRutasFinalizadas(
+        institutionId: _institutionId!, // ⬅️ NUEVO (obligatorio)
+        campusId: _campusId!, // ⬅️ NUEVO (obligatorio)
+        rango: _rango,
+        nombreRuta: _nombreCtrl.text.trim().isEmpty
+            ? null
+            : _nombreCtrl.text.trim(),
+      );
 
-    setState(() {
-      _rutas = res.items;
-      _hasNext = res.hasNext;
-      if (res.lastDoc != null) {
-        if (_cursors.length == _pageIndex + 1) {
-          _cursors.add(res.lastDoc);
-        } else {
-          _cursors[_pageIndex + 1] = res.lastDoc;
+      if (!mounted) return;
+      setState(() {
+        _rutas = res.items;
+        _hasNext = res.hasNext;
+        if (res.lastDoc != null) {
+          if (_cursors.length == _pageIndex + 1) {
+            _cursors.add(res.lastDoc);
+          } else {
+            _cursors[_pageIndex + 1] = res.lastDoc;
+          }
         }
-      }
-      _totalFinalizadas = totalFin;
-      _cargando = false;
-      _filtrosPendientes = false;
-    });
+        _totalFinalizadas = totalFin;
+        _cargando = false;
+        _filtrosPendientes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+      await DialogUtils.showError(
+        context: context,
+        title: 'No se pudo cargar el historial',
+        message: userFacingError(error),
+      );
+    }
   }
 
   Future<void> _siguientePagina() async {
@@ -151,7 +164,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
             now.year,
             now.month,
             now.day,
-          ).subtract(const Duration(days: 6)),
+          ).subtract(Duration(days: 6)),
           end: DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
         );
 
@@ -162,15 +175,10 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
       initialDateRange: initial,
       helpText: 'Rango de fechas',
       saveText: 'Aplicar',
-      builder:
-          (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: Theme.of(
-                ctx,
-              ).colorScheme.copyWith(primary: Colors.redAccent),
-            ),
-            child: child!,
-          ),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(colorScheme: Theme.of(ctx).colorScheme),
+        child: child!,
+      ),
     );
 
     if (picked != null) {
@@ -216,18 +224,18 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     if (!kIsWeb) {
-      return const Scaffold(
+      return Scaffold(
         body: SafeArea(
           child: Center(child: Text('Disponible solo en la versión web.')),
         ),
       );
     }
     final df = DateFormat('yyyy-MM-dd');
-    final rangoTexto =
-        _rango == null
-            ? ''
-            : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
+    final rangoTexto = _rango == null
+        ? ''
+        : '${df.format(_rango!.start)}  →  ${df.format(_rango!.end)}';
 
     return Semantics(
       label: 'Historial de rutas diarias',
@@ -237,22 +245,22 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
           // Resumen
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.red.withValues(alpha: .15)),
+              color: colors.surface,
+              border: Border.all(color: colors.outlineVariant),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: .03),
+                  color: colors.shadow.withValues(alpha: .06),
                   blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  offset: Offset(0, 2),
                 ),
               ],
             ),
             child: Text('Total finalizadas (rango): $_totalFinalizadas'),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
 
           // Filtros
           Wrap(
@@ -263,7 +271,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                 width: 220,
                 child: TextFormField(
                   controller: _nombreCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Nombre de la ruta',
                     border: OutlineInputBorder(),
                   ),
@@ -274,7 +282,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                 width: 200,
                 child: DropdownButtonFormField<String>(
                   initialValue: _estadoSeleccionado,
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: 'pendiente',
                       child: Text('pendiente'),
@@ -291,7 +299,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                       _filtrosPendientes = true;
                     });
                   },
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Estado',
                     border: OutlineInputBorder(),
                   ),
@@ -299,23 +307,18 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
               ),
               SizedBox(
                 width: 280,
-                child: TextFormField(
-                  readOnly: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Rango de fechas',
-                    border: OutlineInputBorder(),
-                  ),
-                  controller: TextEditingController(text: rangoTexto),
+                child: HistoryDateRangeField(
+                  value: rangoTexto,
                   onTap: _pickDateRange,
                 ),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.filter_alt),
+                icon: Icon(Icons.filter_alt),
                 onPressed: () => _aplicarFiltros(recargar: true),
-                label: const Text('Filtrar'),
+                label: Text('Filtrar'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
+                  backgroundColor: colors.primary,
+                  foregroundColor: colors.onPrimary,
                 ),
               ),
               TextButton(
@@ -329,7 +332,7 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                         now.year,
                         now.month,
                         now.day,
-                      ).subtract(const Duration(days: 6)),
+                      ).subtract(Duration(days: 6)),
                       end: DateTime(
                         now.year,
                         now.month,
@@ -344,11 +347,11 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
                   });
                   _aplicarFiltros(recargar: true);
                 },
-                child: const Text('Limpiar'),
+                child: Text('Limpiar'),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
 
           // Exportar (solo Web)
           if (kIsWeb && _rutas.isNotEmpty)
@@ -357,34 +360,33 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
               children: [
                 ElevatedButton.icon(
                   onPressed: _exportarExcel,
-                  icon: const Icon(Icons.table_view),
-                  label: const Text('Exportar Excel'),
+                  icon: Icon(Icons.table_view),
+                  label: Text('Exportar página a Excel'),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: _exportarPDF,
-                  icon: const Icon(Icons.picture_as_pdf),
-                  label: const Text('Exportar PDF'),
+                  icon: Icon(Icons.picture_as_pdf),
+                  label: Text('Exportar página a PDF'),
                 ),
               ],
             ),
-          if (kIsWeb && _rutas.isNotEmpty) const SizedBox(height: 12),
+          if (kIsWeb && _rutas.isNotEmpty) SizedBox(height: 12),
 
           // Lista
           Expanded(
-            child:
-                _cargando
-                    ? const Center(child: CircularProgressIndicator())
-                    : _rutas.isEmpty
-                    ? const Center(child: Text('Sin resultados.'))
-                    : ListView.builder(
-                      itemCount: _rutas.length,
-                      itemBuilder: (_, i) => _buildRutaItem(_rutas[i]),
-                    ),
+            child: _cargando
+                ? Center(child: CircularProgressIndicator())
+                : _rutas.isEmpty
+                ? Center(child: Text('Sin resultados.'))
+                : ListView.builder(
+                    itemCount: _rutas.length,
+                    itemBuilder: (_, i) => _buildRutaItem(_rutas[i]),
+                  ),
           ),
 
           // Paginación
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -392,12 +394,13 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    onPressed:
-                        _pageIndex == 0 || _cargando ? null : _paginaAnterior,
+                    icon: Icon(Icons.chevron_left),
+                    onPressed: _pageIndex == 0 || _cargando
+                        ? null
+                        : _paginaAnterior,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.chevron_right),
+                    icon: Icon(Icons.chevron_right),
                     onPressed: !_hasNext || _cargando ? null : _siguientePagina,
                   ),
                 ],
@@ -410,69 +413,75 @@ class _RutasDiariasViewState extends State<RutasDiariasView> {
   }
 
   Widget _buildRutaItem(Map<String, dynamic> ruta) {
-    final estudiantes = List<Map<String, dynamic>>.from(
-      ruta['estudiantes'] ?? [],
-    );
-    final fecha = (ruta['fecha'] as Timestamp).toDate();
+    final rawStudents = ruta['estudiantes'];
+    final estudiantes = rawStudents is List
+        ? rawStudents
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final fecha = historyDate(ruta['fecha']);
     final inicioTs = ruta['horaInicio'];
     final finTs = ruta['horaFin'];
-    final inicio = inicioTs is Timestamp ? inicioTs.toDate() : null;
-    final fin = finTs is Timestamp ? finTs.toDate() : null;
-    final duracion =
-        (inicio != null && fin != null) ? fin.difference(inicio).inMinutes : 0;
+    final inicio = historyDate(inicioTs);
+    final fin = historyDate(finTs);
+    final duracion = (inicio != null && fin != null)
+        ? fin.difference(inicio).inMinutes
+        : 0;
     final estado = (ruta['estado'] ?? '').toString();
 
     return Semantics(
       label:
-          'Ruta ${ruta['nombreRuta']} realizada el ${FormatUtils.formatoFechaHora(fecha)} '
+          'Ruta ${ruta['nombreRuta']} realizada el ${fecha == null ? 'sin fecha' : FormatUtils.formatoFechaHora(fecha)} '
           'por ${ruta['gestionadaPorNombre']} estado $estado',
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
+        margin: EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.red.withValues(alpha: .15)),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
           borderRadius: BorderRadius.circular(14),
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: .03),
+              color: Theme.of(
+                context,
+              ).colorScheme.shadow.withValues(alpha: .06),
               blurRadius: 8,
-              offset: const Offset(0, 2),
+              offset: Offset(0, 2),
             ),
           ],
         ),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          childrenPadding: const EdgeInsets.only(bottom: 12),
+          tilePadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          childrenPadding: EdgeInsets.only(bottom: 12),
           title: Text(
             ruta['nombreRuta'] ?? '',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
           subtitle: Text(
-            'Por: ${ruta['gestionadaPorNombre']} • ${FormatUtils.formatoFechaHora(fecha)}\n'
+            'Por: ${ruta['gestionadaPorNombre']} • ${fecha == null ? 'Sin fecha' : FormatUtils.formatoFechaHora(fecha)}\n'
             'Estado: $estado • Duración: $duracion min',
           ),
-          children:
-              estudiantes.map((est) {
-                final recogido = est['recogido'] == true ? 'Si' : 'No';
-                final anulado = est['anulado'] == true ? 'Si' : 'No';
-                final activo = est['activo'] == true ? 'Si' : 'No';
-                final hora =
-                    est['horaRecogida'] != null
-                        ? FormatUtils.formatoHora(
-                          (est['horaRecogida'] as Timestamp).toDate(),
-                        )
-                        : '-';
-                final avisos = est['avisosEnviados'] ?? 0;
+          children: estudiantes.map((est) {
+            final recogido = est['recogido'] == true ? 'Si' : 'No';
+            final anulado = est['anulado'] == true ? 'Si' : 'No';
+            final activo = est['activo'] == true ? 'Si' : 'No';
+            final pickupTime = historyDate(est['horaRecogida']);
+            final hora = pickupTime == null
+                ? '-'
+                : FormatUtils.formatoHora(pickupTime);
+            final avisos = est['avisosEnviados'] ?? 0;
 
-                return ListTile(
-                  dense: true,
-                  title: Text(est['nombre'] ?? ''),
-                  subtitle: Text(
-                    'Dirección: ${est['direccion'] ?? ''}\nHora: $hora\nAvisos enviados: $avisos\nRecogido: $recogido\nAnulado: $anulado\nEn ruta: $activo',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                );
-              }).toList(),
+            return ListTile(
+              dense: true,
+              title: Text(est['nombre'] ?? ''),
+              subtitle: Text(
+                'Dirección: ${est['direccion'] ?? ''}\nHora: $hora\nAvisos enviados: $avisos\nRecogido: $recogido\nAnulado: $anulado\nEn ruta: $activo',
+                style: TextStyle(fontSize: 12),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );

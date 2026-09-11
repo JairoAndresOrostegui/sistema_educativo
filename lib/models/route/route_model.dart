@@ -11,7 +11,9 @@ class RouteModel {
   final TimeOfDay? startTime;
   final TimeOfDay? endTime;
   final String? manager;
+  final String? driverId;
   final List<String> students;
+  final int revision;
 
   const RouteModel({
     required this.id,
@@ -22,21 +24,34 @@ class RouteModel {
     this.startTime,
     this.endTime,
     this.manager,
+    this.driverId,
     required this.students,
+    this.revision = 0,
   });
 
   factory RouteModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
+    final raw = doc.data();
+    final data = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : const <String, dynamic>{};
+    String text(String key) => data[key] is String ? data[key] as String : '';
+    final rawStudents = data['estudiantes'];
     return RouteModel(
       id: doc.id,
-      name: data['nombre'] ?? '',
-      startAddress: data['direccionInicio'] ?? '',
+      name: text('nombre'),
+      startAddress: text('direccionInicio'),
       startDate: FormatUtils.dateTimeDesdeTimestamp(data['fechaInicio']),
       endDate: FormatUtils.dateTimeDesdeTimestamp(data['fechaFin']),
       startTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaInicio']),
       endTime: FormatUtils.timeOfDayDesdeTimestamp(data['horaFin']),
-      manager: data['gestionador'],
-      students: List<String>.from(data['estudiantes'] ?? []),
+      manager: data['gestionador'] is String
+          ? data['gestionador'] as String
+          : null,
+      driverId: data['driverId'] is String ? data['driverId'] as String : null,
+      students: rawStudents is List
+          ? rawStudents.whereType<String>().toList(growable: false)
+          : const [],
+      revision: (data['revision'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -50,7 +65,9 @@ class RouteModel {
       startTime: startTime,
       endTime: endTime,
       manager: manager,
+      driverId: driverId,
       students: students,
+      revision: revision,
     );
   }
 
@@ -63,6 +80,7 @@ class RouteModel {
       'horaInicio': FormatUtils.timestampDesdeHora(startTime),
       'horaFin': FormatUtils.timestampDesdeHora(endTime),
       'gestionador': manager,
+      'driverId': driverId,
       'estudiantes': students,
     };
   }

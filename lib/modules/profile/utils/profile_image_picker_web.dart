@@ -3,6 +3,8 @@ import 'dart:convert';
 // ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 
+const _maxProfilePhotoBytes = 5 * 1024 * 1024;
+
 Future<(List<int>?, String)> pickImage() async {
   final completer = Completer<(List<int>?, String)>();
   final input = html.FileUploadInputElement()..accept = 'image/jpeg,image/png';
@@ -11,6 +13,10 @@ Future<(List<int>?, String)> pickImage() async {
   input.onChange.listen((_) {
     final file = input.files?.first;
     if (file != null) {
+      if (file.size > _maxProfilePhotoBytes) {
+        completer.completeError(StateError('La foto no puede superar 5 MB.'));
+        return;
+      }
       final reader = html.FileReader();
       reader.readAsDataUrl(file);
       reader.onLoadEnd.listen((_) {
@@ -26,4 +32,3 @@ Future<(List<int>?, String)> pickImage() async {
 
   return completer.future;
 }
-

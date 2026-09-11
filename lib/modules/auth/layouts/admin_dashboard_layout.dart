@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sistema_educativo/config/app_palette.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_provider_v2.dart';
+import '../../authorization/services/authorization_service.dart';
 import '../../enrollment/services/enrollment_service.dart';
+import '../../messaging/services/messaging_service.dart';
 import 'dashboard_layout.dart';
 
 class AdminDashboardLayout extends StatefulWidget {
@@ -20,6 +24,8 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
   bool isLoading = true;
   Stream<QuerySnapshot<Map<String, dynamic>>>? _pendingStream;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingSub;
+  StreamSubscription<int>? _pendingAuthSub;
+  StreamSubscription<int>? _messageUnreadSub;
 
   @override
   void initState() {
@@ -40,8 +46,11 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
 
     int pendingEnrollments = 0;
     try {
-      pendingEnrollments = await EnrollmentService()
-          .countByEstados(['prematriculado', 'pendiente_revision']);
+      pendingEnrollments = await EnrollmentService().countByEstados(
+        ['prematriculado', 'pendiente_revision', 'correccion_solicitada'],
+        institution: esSuperadmin ? null : user.institution,
+        campus: esSuperadmin ? null : user.campus,
+      );
     } catch (_) {
       pendingEnrollments = 0;
     }
@@ -64,15 +73,21 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    items.add(
-      const MenuItemData(
-        label: 'Par\u00e1metros',
-        icon: Icons.tune,
-        route: '/admin_parameters',
-      ),
-    );
+    if (esSuperadmin ||
+        perms.contains('parametros.ver') ||
+        perms.contains('parametros.editar')) {
+      items.add(
+        const MenuItemData(
+          label: 'Configuración académica',
+          icon: Icons.tune,
+          route: '/admin_parameters',
+        ),
+      );
+    }
 
-    if (esSuperadmin || perms.contains('matricula.ver')) {
+    if (esSuperadmin ||
+        perms.contains('matricula.ver') ||
+        perms.contains('matricula.editar')) {
       items.add(
         MenuItemData(
           label: 'Matr\u00edculas',
@@ -86,14 +101,25 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
     if (esSuperadmin || perms.contains('rutas.ver')) {
       items.add(
         const MenuItemData(
-          label: 'Gesti\u00f3n de rutas',
+          label: 'Administrar rutas',
           icon: Icons.route,
           route: '/management_route',
         ),
       );
+      items.add(
+        const MenuItemData(
+          label: 'Operar recorrido',
+          icon: Icons.directions_bus,
+          route: '/execute_route',
+        ),
+      );
     }
 
-    if (esSuperadmin || perms.contains('horarios.ver')) {
+    if (esSuperadmin ||
+        perms.contains('horarios.ver') ||
+        perms.contains('horarios.crear') ||
+        perms.contains('horarios.editar') ||
+        perms.contains('horarios.eliminar')) {
       items.add(
         const MenuItemData(
           label: 'Horario escolar',
@@ -113,7 +139,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin || perms.contains('historial_rutas.ver')) {
+    if (kIsWeb && (esSuperadmin || perms.contains('historial.ver'))) {
       items.add(
         const MenuItemData(
           label: 'Historial administrativo',
@@ -123,7 +149,9 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
-    if (esSuperadmin || perms.contains('autorizaciones.ver')) {
+    if (esSuperadmin ||
+        perms.contains('autorizaciones.ver') ||
+        perms.contains('autorizaciones.editar')) {
       items.add(
         const MenuItemData(
           label: 'Autorizaciones',
@@ -145,51 +173,224 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
       );
     }
 
+    if (esSuperadmin || perms.contains('mensajeria.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Mensajeria',
+          icon: Icons.chat_bubble_outline,
+          route: '/messages',
+        ),
+      );
+    }
+
+    if (esSuperadmin || perms.contains('asistencia.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Lista de asistencia',
+          icon: Icons.fact_check_outlined,
+          route: '/attendance',
+        ),
+      );
+    }
+
+    if (esSuperadmin || perms.contains('eventos.ver')) {
+      items.add(
+        const MenuItemData(
+          label: 'Eventos',
+          icon: Icons.event_outlined,
+          route: '/events',
+        ),
+      );
+    }
+
+    if (kIsWeb &&
+        (esSuperadmin ||
+            perms.contains('sitio_web.ver') ||
+            perms.contains('sitio_web.editar'))) {
+      items.add(
+        const MenuItemData(
+          label: 'Sitio web',
+          icon: Icons.web,
+          route: '/website_admin',
+        ),
+      );
+    }
+
     if (!mounted) return;
     setState(() {
       _menuItems = items;
       isLoading = false;
     });
+
+    _listenPendingAuthorizations(
+      user.institution,
+      user.campus,
+      allCampuses: user.isSuperadmin,
+    );
+    if (esSuperadmin || perms.contains('mensajeria.ver')) {
+      _messageUnreadSub?.cancel();
+      _messageUnreadSub = MessagingService()
+          .watchUnreadCount(user)
+          .listen(_setMessageBadge, onError: (_) => _setMessageBadge(0));
+    }
   }
 
-  void _listenPending() {
-    _pendingStream = FirebaseFirestore.instance
-        .collection('enrollments')
-        .where('estado', whereIn: ['prematriculado', 'pendiente_revision'])
-        .snapshots();
-    _pendingSub = _pendingStream!.listen((snapshot) {
-      final count = snapshot.size;
-      if (!mounted) return;
-      setState(() {
-        _menuItems = _menuItems
-            .map(
-              (m) => m.route == '/enrollment'
-                  ? MenuItemData(
-                      label: m.label,
-                      icon: m.icon,
-                      route: m.route,
-                      badgeCount: count,
-                    )
-                  : m,
-            )
+  void _setMessageBadge(int count) {
+    if (!mounted) return;
+    setState(
+      () => _menuItems = _menuItems
+          .map(
+            (item) => item.route == '/messages'
+                ? MenuItemData(
+                    label: item.label,
+                    icon: item.icon,
+                    route: item.route,
+                    badgeCount: count,
+                  )
+                : item,
+          )
+          .toList(),
+    );
+  }
+
+  Future<void> _listenPending() async {
+    try {
+      final user = context.read<UserProviderV2>().user;
+      if (user == null) return;
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('enrollments')
+          .where(
+            'estado',
+            whereIn: [
+              'prematriculado',
+              'pendiente_revision',
+              'correccion_solicitada',
+            ],
+          );
+      if (user.isSuperadmin) {
+        final settings = await FirebaseFirestore.instance
+            .collection('academic_year_settings')
+            .get();
+        final ids = settings.docs
+            .map((item) => (item.data()['activeYearId'] ?? '').toString())
+            .where((item) => item.isNotEmpty)
+            .take(30)
             .toList();
-      });
+        if (ids.isEmpty) return;
+        query = query.where('academicYearId', whereIn: ids);
+      } else {
+        final settings = await FirebaseFirestore.instance
+            .collection('academic_year_settings')
+            .where('institutionId', isEqualTo: user.institution)
+            .where('campusId', isEqualTo: user.campus)
+            .limit(1)
+            .get();
+        if (settings.docs.isEmpty) return;
+        query = query.where(
+          'academicYearId',
+          isEqualTo: settings.docs.first.data()['activeYearId'],
+        );
+      }
+      if (!user.isSuperadmin) {
+        query = query
+            .where('institution', isEqualTo: user.institution)
+            .where('campus', isEqualTo: user.campus);
+      }
+      _pendingStream = query.snapshots();
+      _pendingSub = _pendingStream!.listen((snapshot) {
+        final count = snapshot.size;
+        if (!mounted) return;
+        setState(() {
+          _menuItems = _menuItems
+              .map(
+                (m) => m.route == '/enrollment'
+                    ? MenuItemData(
+                        label: m.label,
+                        icon: m.icon,
+                        route: m.route,
+                        badgeCount: count,
+                      )
+                    : m,
+              )
+              .toList();
+        });
+      }, onError: (_) => _setEnrollmentBadge(0));
+    } catch (_) {
+      _setEnrollmentBadge(0);
+    }
+  }
+
+  void _setEnrollmentBadge(int count) {
+    if (!mounted) return;
+    setState(() {
+      _menuItems = _menuItems
+          .map(
+            (item) => item.route == '/enrollment'
+                ? MenuItemData(
+                    label: item.label,
+                    icon: item.icon,
+                    route: item.route,
+                    badgeCount: count,
+                  )
+                : item,
+          )
+          .toList();
     });
+  }
+
+  void _listenPendingAuthorizations(
+    String institutionId,
+    String campusId, {
+    required bool allCampuses,
+  }) {
+    _pendingAuthSub?.cancel();
+    _pendingAuthSub = AuthorizationService()
+        .watchPendingCountForAdmin(
+          institutionId: institutionId,
+          campusId: campusId,
+          allCampuses: allCampuses,
+        )
+        .listen(
+          (pendingCount) {
+            if (!mounted) return;
+            setState(() {
+              _menuItems = _menuItems
+                  .map(
+                    (m) => m.route == '/admin_authorization'
+                        ? MenuItemData(
+                            label: m.label,
+                            icon: m.icon,
+                            route: m.route,
+                            badgeCount: pendingCount,
+                          )
+                        : m,
+                  )
+                  .toList();
+            });
+          },
+          onError: (Object error) {
+            debugPrint(
+              'No se pudo actualizar el contador de autorizaciones: $error',
+            );
+          },
+        );
   }
 
   @override
   void dispose() {
     _pendingSub?.cancel();
+    _pendingAuthSub?.cancel();
+    _messageUnreadSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return isLoading
-        ? const Scaffold(
+        ? Scaffold(
             body: SafeArea(
               child: Center(
-                child: CircularProgressIndicator(color: Colors.redAccent),
+                child: CircularProgressIndicator(color: AppPalette.primary),
               ),
             ),
           )
