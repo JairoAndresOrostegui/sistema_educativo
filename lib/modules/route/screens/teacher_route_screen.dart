@@ -12,6 +12,7 @@ import '../services/location_service.dart';
 import '../utils/route_ui_helpers.dart';
 import '../widgets/teacher/teacher_route_form_dialog.dart';
 import '../widgets/route_history_dialog.dart';
+import '../widgets/route_qr_pickup_button.dart';
 
 class TeacherRouteScreen extends StatefulWidget {
   const TeacherRouteScreen({super.key});
@@ -314,6 +315,11 @@ class _TeacherRouteScreenState extends State<TeacherRouteScreen> {
                         Wrap(
                           spacing: 8,
                           children: [
+                            RouteQrPickupButton(
+                              key: ValueKey(_dailyId),
+                              dailyRouteId: _dailyId!,
+                              enabled: !_busy,
+                            ),
                             if (automatic)
                               OutlinedButton(
                                 onPressed: _busy

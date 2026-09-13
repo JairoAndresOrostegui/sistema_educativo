@@ -216,6 +216,24 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // Catálogos, pedidos, cumplimientos e idempotencia se validan en backend.
+    // Ni un administrador cliente puede modificar precios, pagos o auditoría.
+    match /event_food_items/{id} {
+      allow read, write: if false;
+    }
+    match /event_food_orders/{id} {
+      allow read, write: if false;
+    }
+    match /event_materials/{id} {
+      allow read, write: if false;
+    }
+    match /event_requirement_completions/{id} {
+      allow read, write: if false;
+    }
+    match /event_operation_requests/{id} {
+      allow read, write: if false;
+    }
+
     match /academic_group_history/{id} {
       allow read: if admin() && sameTenant(resource.data);
       allow create, update, delete: if false;

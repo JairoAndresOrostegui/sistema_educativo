@@ -26,14 +26,22 @@ function createAcademicPushValidator(db) {
     const isAttendance = type === "attendance";
     const entityId = job.message.data[isAttendance ? "sessionId" : "eventId"];
     if (!safeId(entityId)) return [];
-    const [entitySnapshot, outboxSnapshot] = await Promise.all([
+    const [entitySnapshot, outboxSnapshot, yearSnapshot] = await Promise.all([
       db.collection(isAttendance ? "attendance_sessions" : "school_events")
           .doc(entityId).get(),
       db.collection(isAttendance ? "attendance_notification_events" :
         "event_notification_events").doc(job.notificationEventId).get(),
+      isAttendance ? null : db.collection("academic_years")
+          .doc(job.academicYearId).get(),
     ]);
     const entity = entitySnapshot.data() || {};
     const outbox = outboxSnapshot.data() || {};
+    if (!isAttendance) {
+      const year = yearSnapshot?.data() || {};
+      if (!yearSnapshot?.exists || year.status !== "active" ||
+          year.institutionId !== job.institutionId ||
+          year.campusId !== job.campusId) return [];
+    }
     if (!entitySnapshot.exists || !outboxSnapshot.exists ||
         !scopeMatches(entity, job) || !scopeMatches(outbox, job) ||
         outbox[isAttendance ? "sessionId" : "eventId"] !== entityId) return [];
@@ -42,11 +50,16 @@ function createAcademicPushValidator(db) {
         entity.status === "cancelled" && !entity.publishedAt) return [];
     if (!isAttendance && outbox.kind === "reminder" &&
         entity.status !== "published") return [];
+    if (!isAttendance && ["order_changed", "requirement_changed",
+      "food_changed", "materials_changed"].includes(outbox.kind) &&
+      !["published", "closed"].includes(entity.status)) return [];
 
     const recipientIds = new Set(ids(outbox.recipientUserIds));
+    const privateEvent = !isAttendance &&
+      ["order_changed", "requirement_changed"].includes(outbox.kind);
     const roster = new Set(ids(isAttendance ? entity.studentIds :
       entity.targetStudentIds));
-    const targetIds = isAttendance ? ids(outbox.studentIds)
+    const targetIds = isAttendance || privateEvent ? ids(outbox.studentIds)
         .filter((studentId) => roster.has(studentId)) : [...roster];
     const studentRefs = targetIds.map((studentId) =>
       db.collection("users").doc(studentId));
@@ -70,12 +83,19 @@ function createAcademicPushValidator(db) {
               !canView(user, isAttendance ? "asistencia" : "eventos") ||
               !isAttendance && !recipientIds.has(snapshot.id)) continue;
           const allowed = user.role === "Estudiante" ?
-            activeTargets.has(snapshot.id) : user.role === "Familiar" ?
+            (!privateEvent || outbox.includeStudents === true) &&
+              activeTargets.has(snapshot.id) : user.role === "Familiar" ?
+              (!privateEvent || outbox.familyIds == null ||
+                ids(outbox.familyIds).includes(snapshot.id)) &&
               ids(user.studentIds).some((studentId) =>
                 activeTargets.has(studentId)) :
               !isAttendance &&
                 ["Administrador", "Docente"].includes(user.role) &&
-                responsibleIds.has(snapshot.id);
+                (responsibleIds.has(snapshot.id) ||
+                  user.role === "Administrador" && ["order_changed",
+                    "requirement_changed", "food_changed", "materials_changed"]
+                      .includes(outbox.kind) && (user.isSuperadmin === true ||
+                        user.permissions?.includes("eventos.editar")));
           if (allowed) allowedTokens.add(user.notificationTokens[slot]);
         }
       }

@@ -14,6 +14,19 @@ String? notificationDestination(Map<String, dynamic> data, {String? role}) {
       queryParameters: {'channelId': channelId},
     ).toString();
   }
+  if (type == 'event') {
+    final eventId = data['eventId'];
+    if (eventId is! String ||
+        eventId.trim().isEmpty ||
+        eventId.length > 160 ||
+        eventId.contains('/')) {
+      return '/events';
+    }
+    return Uri(
+      path: '/events',
+      queryParameters: {'eventId': eventId},
+    ).toString();
+  }
   final normalizedRole = (role ?? '').trim().toLowerCase();
   final administrator =
       normalizedRole == 'administrador' ||
@@ -42,7 +55,6 @@ String? notificationDestination(Map<String, dynamic> data, {String? role}) {
           ? '/teacher_document'
           : '/student_document',
     'attendance' => '/attendance',
-    'event' => '/events',
     _ => null,
   };
 }

@@ -4,6 +4,7 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {eventOperations, normalizeEventConfiguration} = require("./event_operations");
 
 const EVENT_STATES = new Set(["draft", "published", "closed", "cancelled", "archived"]);
 const ATTENDANCE_STATES = new Set(["present", "absent"]);
@@ -121,6 +122,12 @@ function eventFunctions(db, getCaller, activeYear) {
     return {
       id: snapshot.id,
       title: value.title,
+      schemaVersion: value.schemaVersion,
+      eventType: value.eventType,
+      subtitle: value.subtitle,
+      foodEnabled: value.foodEnabled === true,
+      publicity: value.publicity,
+      requirements: value.requirements || [],
       description: value.description,
       location: value.location,
       startAtMillis: value.startAt?.toMillis?.() || null,
@@ -340,6 +347,7 @@ function eventFunctions(db, getCaller, activeYear) {
     }
     const value = {
       ...tenant, academicYearId: year.id, academicYear: year.year,
+      ...normalizeEventConfiguration(input),
       title: text(input.title, "Título", 120),
       description: text(input.description, "Descripción", 3000),
       location: text(input.location, "Lugar", 250),
@@ -356,6 +364,15 @@ function eventFunctions(db, getCaller, activeYear) {
       const snapshot = await tx.get(ref);
       const actor = await mutationActor(tx, user, value);
       if (!sameTenant(actor, value) || !permission(actor, action)) deny();
+      if (!admin(actor, action)) {
+        const previous = snapshot.exists ? normalizeEventConfiguration(snapshot.data()) :
+          {requirements: [], foodEnabled: false, publicity: {text: "", url: ""}};
+        if (JSON.stringify(value.requirements) !== JSON.stringify(previous.requirements) ||
+            value.foodEnabled !== previous.foodEnabled ||
+            JSON.stringify(value.publicity) !== JSON.stringify(previous.publicity)) {
+          deny("Solo administración configura requisitos, publicidad y alimentación.");
+        }
+      }
       value.responsibleNames = await validateResponsibleUsers(responsibleUserIds, tenant, tx);
       Object.assign(value, await validateAudience(input, tenant, year, actor, tx));
       if (eventId) {
@@ -777,6 +794,10 @@ function eventFunctions(db, getCaller, activeYear) {
   });
 
   return {
+    ...eventOperations(db, getCaller, {
+      permission, admin, sameTenant, mutationActor, checkedStudent,
+      checkedManageEvent, eventResponse, teacherGroupIds, recipientUsers,
+    }),
     listarContextosEventos,
     guardarEvento,
     cambiarEstadoEvento,

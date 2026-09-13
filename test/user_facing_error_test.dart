@@ -4,6 +4,31 @@ import 'package:sistema_educativo/utils/user_facing_error.dart';
 
 void main() {
   group('userFacingError', () {
+    test('prioriza mensajes humanos en fallos de transporte y servidor', () {
+      for (final code in ['unavailable', 'deadline-exceeded']) {
+        expect(
+          userFacingError(
+            FirebaseFunctionsException(
+              code: code,
+              message: 'INTERNAL transport detail',
+            ),
+          ),
+          'No fue posible conectarse al servicio. Intenta nuevamente.',
+        );
+      }
+      for (final code in ['internal', 'unknown']) {
+        expect(
+          userFacingError(
+            FirebaseFunctionsException(
+              code: code,
+              message: 'Unexpected server response',
+            ),
+          ),
+          'No fue posible completar la operación. Intenta nuevamente.',
+        );
+      }
+    });
+
     test('oculta trazas y errores técnicos', () {
       expect(
         userFacingError(

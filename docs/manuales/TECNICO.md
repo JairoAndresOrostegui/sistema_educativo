@@ -74,7 +74,7 @@ estado dentro de una transacción y actualiza también el directorio.
 | Horarios | subjects, schedule_history | Cruces, expectedRevision, docente y grupo activos |
 | Archivos | files, cuota, Storage y file_download_receipts | Reserva, confirmación, acuse por cuenta, borrar objeto antes de metadatos |
 | Mensajería | message_channels, mensajes/lecturas, message_attachments | Miembros derivados, `supervised_student`, secuencia, lectura y descarga por cuenta; adjuntos comparten cuota/retención; administrador normal solo accede a colectivos materializados o particulares propios |
-| QR | qr_credentials, events, qr_audit | Token opaco `LLQ1`, cámara/manual, revisión optimista, revocación recuperable por reemplazo, año/sede vigentes y sin autorización implícita |
+| QR | qr_credentials, school_events, qr_audit | Token opaco `LLQ1`, cámara/manual, revisión optimista, revocación recuperable por reemplazo, año/sede vigentes y sin autorización implícita; unión canónica operativa en ampliación QA |
 | Asistencia | attendance_sessions, attendance_records, attendance_history | Lista congelada, sesión única, revisión optimista, cierre completo, consulta propia e hijo activo; escritura solo por Functions |
 | Eventos | school_events, event_responses, event_attendance, event_history | Audiencia y responsables revalidados al publicar, año activo, cupo transaccional y asistencia auditada |
 | Web | website/config, website_pages | Esquema v5, filas/columnas, tema central, limpieza reintentable |
@@ -235,6 +235,29 @@ no confirman GPS físico, notificación visible ni aceptación de Google Play.
 
 ## Eventos y Asistencia: controles de entrega y volumen
 
+Ampliación QA de septiembre de 2026: contrato en
+[Eventos y QR QA](../CONTRATO_EVENTOS_QR_QA_2026_09.md). Los catálogos, pedidos,
+materiales, cumplimientos e idempotencia viven en colecciones `event_*` cerradas
+al cliente, siempre con institución/sede/año y referencia al evento padre.
+Los permisos operativos derivan de responsables vigentes de `school_events`.
+Los nuevos índices cubren pedidos por evento/familiar/hijo y cumplimientos por
+evento/contexto de hijo. No desplegar esta ampliación a producción o Play hasta
+aprobación de la prueba QA. La rama `agent/qa-eventos-qr` evita el disparador de
+publicación automática de Hostinger.
+
+Los QR de evento aislados del esquema anterior no se convierten inventando
+fechas. El preflight QA debe detectar esos datos y detenerse para migración si
+existen; en la inspección inicial había cero eventos y dos QR de usuario.
+El QR de evento ahora identifica un `school_events` publicado/cerrado accesible.
+Rutas prepara la identidad y confirma con `operarRecorrido/pickup`; relee
+credencial, estudiante, actor y año en la transacción y mantiene idempotencia.
+Los payload QR no se guardan en historia ni avisos.
+
+`event_user_integrity` incorpora relaciones al impacto de baja. La eliminación
+definitiva se detiene ante referencias de Eventos para no dejar pedidos o
+cumplimientos sin identidad. Se permite la baja lógica. Un futuro flujo de
+anonimización/archivo debe diseñarse antes de autorizar esas eliminaciones.
+
 `academic_push_access.js` revalida cada envío y reintento contra el outbox
 identificado por `push_jobs.notificationEventId`. La sede, institución, año y
 entidad deben coincidir. Sin origen verificable se omite el envío; nunca se
@@ -303,11 +326,12 @@ Paradas como entidades con coordenadas/Places, planificación futura, ida/regres
 relevo de auxiliar, cola offline con conflictos e historial antiguo unificado.
 La agrupación actual sigue siendo por texto de dirección normalizado, no distancia.
 Automático real necesita habilitación y prueba de Google, no basta con compilar.
-Cola sin conexión y ayuda de asistencia por QR siguen pendientes. Eventos ya es
+Cola sin conexión y ayuda de asistencia académica por QR siguen pendientes. Eventos ya es
 operativo mediante Functions, reglas cerradas, historial, audiencia materializada,
-confirmación familiar, cupo, asistencia y reporte; su QR continúa siendo solo un
-identificador. Entregas por QR y lonchera/restaurante operativos no están
-finalizados. Inventariar y ocultar entradas incompletas antes de release.
+confirmación familiar, cupo, asistencia y reporte. La ampliación QA agrega QR
+guiado, reservas de alimentos, preparación y checklist. No equivale a pasarela de
+cobro, inventario, restaurante o lonchera institucional completa. Inventariar y
+ocultar entradas incompletas antes de release.
 
 ## Google Play
 

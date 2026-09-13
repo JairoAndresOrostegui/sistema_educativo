@@ -116,6 +116,12 @@ class SchoolEvent {
     this.capacity,
     this.myResponse,
     this.myAttendance,
+    this.eventType = 'student_presentation',
+    this.subtitle = '',
+    this.foodEnabled = false,
+    this.publicityText = '',
+    this.publicityUrl = '',
+    this.requirements = const [],
   });
 
   final String id;
@@ -138,6 +144,38 @@ class SchoolEvent {
   final List<EventLink> links;
   final String? myResponse;
   final String? myAttendance;
+  final String eventType;
+  final String subtitle;
+  final bool foodEnabled;
+  final String publicityText;
+  final String publicityUrl;
+  final List<EventRequirement> requirements;
+
+  bool get isPresentation => eventType == 'student_presentation';
+  String get typeLabel =>
+      isPresentation ? 'Presentación estudiantil' : 'Reunión de padres';
+
+  Map<String, dynamic> toDraftMap() => {
+    'schemaVersion': 2,
+    'eventType': eventType,
+    'subtitle': subtitle,
+    'foodEnabled': foodEnabled,
+    'title': title,
+    'description': description,
+    'location': location,
+    'startAtMillis': startAt.millisecondsSinceEpoch,
+    'endAtMillis': endAt.millisecondsSinceEpoch,
+    'audienceType': audienceType,
+    'targetGroupIds': targetGroupIds,
+    'targetStudentIds': targetStudentIds,
+    'responsibleUserIds': responsibleNames.keys.toList(),
+    'registrationRequired': registrationRequired,
+    'requiresFamilyAuthorization': requiresFamilyAuthorization,
+    'capacity': capacity,
+    'links': links.map((e) => {'label': e.label, 'url': e.url}).toList(),
+    'publicity': {'text': publicityText, 'url': publicityUrl},
+    'requirements': requirements.map((e) => e.toMap()).toList(),
+  };
 
   factory SchoolEvent.fromMap(Map<String, dynamic> map) => SchoolEvent(
     id: (map['id'] ?? '').toString(),
@@ -174,6 +212,221 @@ class SchoolEvent {
         .toList(),
     myResponse: map['myResponse']?.toString(),
     myAttendance: map['myAttendance']?.toString(),
+    eventType: (map['eventType'] ?? 'student_presentation').toString(),
+    subtitle: (map['subtitle'] ?? '').toString(),
+    foodEnabled: map['foodEnabled'] == true,
+    publicityText: ((map['publicity'] as Map?)?['text'] ?? '').toString(),
+    publicityUrl: ((map['publicity'] as Map?)?['url'] ?? '').toString(),
+    requirements: eventMaps(
+      map['requirements'],
+    ).map(EventRequirement.fromMap).toList(),
+  );
+}
+
+List<Map<String, dynamic>> eventMaps(Object? value) => value is List
+    ? value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+    : const [];
+
+class EventRequirement {
+  const EventRequirement({
+    required this.id,
+    required this.label,
+    this.instructions = '',
+    this.targetType = 'student',
+    this.completionType = 'manual',
+    this.required = true,
+    this.amountCop,
+  });
+  final String id, label, instructions, targetType, completionType;
+  final bool required;
+  final int? amountCop;
+  String get targetLabel =>
+      targetType == 'family' ? 'Cada familiar' : 'Estudiante';
+  String get completionLabel => switch (completionType) {
+    'attendance' => 'Asistencia',
+    'payment' => 'Pago manual',
+    _ => 'Verificación manual',
+  };
+  factory EventRequirement.fromMap(Map<String, dynamic> m) => EventRequirement(
+    id: '${m['id'] ?? ''}',
+    label: '${m['label'] ?? ''}',
+    instructions: '${m['instructions'] ?? ''}',
+    targetType: '${m['targetType'] ?? 'student'}',
+    completionType: '${m['completionType'] ?? 'manual'}',
+    required: m['required'] == true,
+    amountCop: (m['amountCop'] as num?)?.toInt(),
+  );
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'label': label,
+    'instructions': instructions,
+    'targetType': targetType,
+    'completionType': completionType,
+    'required': required,
+    'amountCop': amountCop,
+  };
+}
+
+class EventFoodItem {
+  const EventFoodItem({
+    required this.id,
+    required this.name,
+    required this.priceCop,
+    this.description = '',
+    this.active = true,
+    this.revision = 1,
+  });
+  final String id, name, description;
+  final int priceCop, revision;
+  final bool active;
+  factory EventFoodItem.fromMap(Map<String, dynamic> m) => EventFoodItem(
+    id: '${m['id'] ?? ''}',
+    name: '${m['name'] ?? ''}',
+    description: '${m['description'] ?? ''}',
+    priceCop: (m['priceCop'] as num?)?.toInt() ?? 0,
+    active: m['active'] == true,
+    revision: (m['revision'] as num?)?.toInt() ?? 1,
+  );
+}
+
+class EventFoodOrder {
+  const EventFoodOrder({
+    required this.id,
+    required this.familyId,
+    required this.studentId,
+    this.familyName = '',
+    this.studentName = '',
+    this.lines = const [],
+    this.totalCop = 0,
+    this.paymentState = 'pending',
+    this.deliveryState = 'pending',
+    this.state = 'reserved',
+    this.revision = 1,
+  });
+  final String id,
+      familyId,
+      familyName,
+      studentId,
+      studentName,
+      paymentState,
+      deliveryState,
+      state;
+  final List<Map<String, dynamic>> lines;
+  final int totalCop, revision;
+  bool get locked => paymentState == 'paid' || deliveryState == 'delivered';
+  factory EventFoodOrder.fromMap(Map<String, dynamic> m) => EventFoodOrder(
+    id: '${m['id'] ?? ''}',
+    familyId: '${m['familyId'] ?? ''}',
+    familyName: '${m['familyName'] ?? ''}',
+    studentId: '${m['studentId'] ?? ''}',
+    studentName: '${m['studentName'] ?? ''}',
+    lines: eventMaps(m['lines']),
+    totalCop: (m['totalCop'] as num?)?.toInt() ?? 0,
+    paymentState: '${m['paymentState'] ?? 'pending'}',
+    deliveryState: '${m['deliveryState'] ?? 'pending'}',
+    state: '${m['state'] ?? 'reserved'}',
+    revision: (m['revision'] as num?)?.toInt() ?? 1,
+  );
+}
+
+class EventMaterial {
+  const EventMaterial({
+    required this.id,
+    required this.name,
+    this.kind = 'material',
+    this.instructions = '',
+    this.amountCop,
+    this.address = '',
+    this.url = '',
+    this.groupIds = const [],
+    this.active = true,
+    this.revision = 1,
+  });
+  final String id, name, kind, instructions, address, url;
+  final int? amountCop;
+  final List<String> groupIds;
+  final bool active;
+  final int revision;
+  factory EventMaterial.fromMap(Map<String, dynamic> m) => EventMaterial(
+    id: '${m['id'] ?? ''}',
+    name: '${m['name'] ?? ''}',
+    kind: '${m['kind'] ?? 'material'}',
+    instructions: '${m['instructions'] ?? ''}',
+    amountCop: (m['amountCop'] as num?)?.toInt(),
+    address: '${m['address'] ?? ''}',
+    url: '${m['url'] ?? ''}',
+    groupIds: (m['groupIds'] as List? ?? const []).whereType<String>().toList(),
+    active: m['active'] == true,
+    revision: (m['revision'] as num?)?.toInt() ?? 1,
+  );
+}
+
+class EventCompletion {
+  const EventCompletion({
+    required this.id,
+    required this.requirementId,
+    required this.targetType,
+    required this.targetId,
+    this.completed = false,
+    this.revision = 1,
+    this.markedAt,
+    this.markedBy = '',
+    this.studentContextIds = const [],
+  });
+  final String id, requirementId, targetType, targetId, markedBy;
+  final bool completed;
+  final int revision;
+  final DateTime? markedAt;
+  final List<String> studentContextIds;
+  factory EventCompletion.fromMap(Map<String, dynamic> m) => EventCompletion(
+    id: '${m['id'] ?? ''}',
+    requirementId: '${m['requirementId'] ?? ''}',
+    targetType: '${m['targetType'] ?? ''}',
+    targetId: '${m['targetId'] ?? ''}',
+    completed: m['completed'] == true,
+    revision: (m['revision'] as num?)?.toInt() ?? 1,
+    markedBy: '${m['performedByName'] ?? ''}',
+    markedAt: m['completedAtMillis'] is num
+        ? DateTime.fromMillisecondsSinceEpoch(
+            (m['completedAtMillis'] as num).toInt(),
+          )
+        : null,
+    studentContextIds: (m['studentContextIds'] as List? ?? const [])
+        .whereType<String>()
+        .toList(),
+  );
+}
+
+class EventDetail {
+  const EventDetail({
+    required this.event,
+    this.foodItems = const [],
+    this.orders = const [],
+    this.materials = const [],
+    this.completions = const [],
+    this.participants = const [],
+    this.capabilities = const {},
+  });
+  final SchoolEvent event;
+  final List<EventFoodItem> foodItems;
+  final List<EventFoodOrder> orders;
+  final List<EventMaterial> materials;
+  final List<EventCompletion> completions;
+  final List<Map<String, dynamic>> participants;
+  final Map<String, dynamic> capabilities;
+  bool can(String action) => capabilities[action] == true;
+  factory EventDetail.fromMap(Map<String, dynamic> m) => EventDetail(
+    event: SchoolEvent.fromMap(Map<String, dynamic>.from(m['event'] as Map)),
+    foodItems: eventMaps(m['foodItems']).map(EventFoodItem.fromMap).toList(),
+    orders: eventMaps(m['orders']).map(EventFoodOrder.fromMap).toList(),
+    materials: eventMaps(m['materials']).map(EventMaterial.fromMap).toList(),
+    completions: eventMaps(
+      m['completions'],
+    ).map(EventCompletion.fromMap).toList(),
+    participants: eventMaps(m['participants']),
+    capabilities: Map<String, dynamic>.from(
+      m['capabilities'] as Map? ?? const {},
+    ),
   );
 }
 

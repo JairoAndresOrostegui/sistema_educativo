@@ -29,6 +29,9 @@ class _FakeEventGateway implements EventGateway {
   int saves = 0;
 
   @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
   Future<(SchoolEvent, List<EventAttendanceEntry>)> attendance(
     String eventId,
   ) async => (items.first, roster);

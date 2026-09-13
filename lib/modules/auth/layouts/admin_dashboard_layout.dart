@@ -61,6 +61,11 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
         icon: Icons.person,
         route: '/profile',
       ),
+      const MenuItemData(
+        label: 'Mi QR y lector',
+        icon: Icons.qr_code_scanner,
+        route: '/my_qr',
+      ),
     ];
 
     if (esSuperadmin || perms.contains('usuarios.ver')) {
@@ -166,7 +171,7 @@ class _AdminDashboardLayoutState extends State<AdminDashboardLayout> {
         perms.contains('codigoqr.editar')) {
       items.add(
         const MenuItemData(
-          label: 'QR',
+          label: 'Administrar QR',
           icon: Icons.qr_code,
           route: '/admin_qr',
         ),

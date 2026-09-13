@@ -4,7 +4,7 @@ const assert = require("assert");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
-const {seedAcademicYear} = require("./academic_year_fixture");
+const {seedAcademicYear, academicYearId} = require("./academic_year_fixture");
 const {credentialId} = require("../qr_identity");
 const projectId = "sistema-educativo-qr-test";
 let app; let db; let auth;
@@ -37,15 +37,16 @@ describe("identificadores QR", () => {
     const users = await auth.listUsers(1000);
     if (users.users.length) await auth.deleteUsers(users.users.map((u) => u.uid));
     await seedAcademicYear(db, "i", "c");
-    await seed("student", "Estudiante");
+    await seed("student", "Estudiante", {permissions: ["eventos.ver"]});
     await seed("other", "Estudiante");
-    await seed("family", "Familiar", {studentIds: ["student"], activeStudentId: "student"});
-    await seed("teacher", "Docente");
-    await seed("admin", "Administrador", {permissions: ["codigoqr.crear", "codigoqr.editar"]});
+    await seed("family", "Familiar", {studentIds: ["student"], activeStudentId: "student", permissions: ["eventos.ver"]});
+    await seed("teacher", "Docente", {permissions: ["eventos.ver"]});
+    await seed("auxiliary", "Auxiliar");
+    await seed("admin", "Administrador", {permissions: ["codigoqr.crear", "codigoqr.editar", "eventos.ver"]});
     await seed("super", "Administrador", {isSuperadmin: true});
   });
   it("emite un QR opaco estable por usuario y rechaza el JSON antiguo", async () => {
-    for (const uid of ["student", "family", "teacher", "admin"]) {
+    for (const uid of ["student", "family", "teacher", "admin", "auxiliary"]) {
       const first = await call("obtenerCredencialQr", {}, uid);
       assert.match(first.result.payload, /^LLQ1:[A-Za-z0-9_-]{43}$/);
       assert.equal((await call("obtenerCredencialQr", {}, uid)).result.payload, first.result.payload);
@@ -95,13 +96,21 @@ describe("identificadores QR", () => {
     assert.equal((await db.collection("qr_credentials").doc(credentialId("user", "student")).get()).exists, false);
   });
   it("identifica eventos sin registrar asistencia y respeta el año", async () => {
-    const denied = await call("crearIdentificadorEventoQr", {title: "Reunion"}, "student");
-    assert.equal(denied.error.status, "PERMISSION_DENIED");
-    const event = (await call("crearIdentificadorEventoQr", {title: "Reunion"}, "admin")).result;
+    const denied = await call("crearIdentificadorEventoQr", {title: "Reunion"}, "admin");
+    assert.equal(denied.error.status, "FAILED_PRECONDITION");
+    assert.equal((await db.collection("events").get()).size, 0);
+    await db.collection("school_events").doc("meeting").set({title: "Reunión", institutionId: "i", campusId: "c",
+      academicYearId: academicYearId("i", "c"), status: "published", targetStudentIds: ["student"], responsibleUserIds: ["teacher"]});
+    const event = (await call("crearIdentificadorEventoQr", {eventId: "meeting"}, "admin")).result;
     assert.ok(event);
     const read = (await call("resolverCredencialQr", {payload: event.payload}, "student")).result;
     assert.equal(read.targetType, "event"); assert.equal(read.identificationOnly, true);
-    const source = (await db.collection("events").doc(event.targetId).get()).data();
+    assert.equal(read.eventId, "meeting"); assert.equal(read.action, "open_event");
+    assert.ok((await call("resolverCredencialQr", {payload: event.payload}, "family")).result);
+    assert.ok((await call("resolverCredencialQr", {payload: event.payload}, "teacher")).result);
+    assert.equal((await call("resolverCredencialQr", {payload: event.payload}, "other")).error.status, "PERMISSION_DENIED");
+    assert.equal((await db.collection("event_attendance").get()).size, 0);
+    const source = (await db.collection("school_events").doc(event.targetId).get()).data();
     await db.collection("academic_years").doc(source.academicYearId).update({campusId: "otra"});
     assert.equal((await call("resolverCredencialQr", {payload: event.payload}, "student")).error.status, "PERMISSION_DENIED");
     await db.collection("academic_years").doc(source.academicYearId).update({campusId: "c"});

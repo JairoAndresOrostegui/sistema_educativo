@@ -75,6 +75,23 @@ aviso. Un vínculo retirado deja de recibir avisos pendientes o reintentos.
 
 ## Eventos
 
+Ampliación disponible primero en QA: abre la ficha para ver publicidad y requisitos,
+materiales/trajes con instrucciones y posibles valores o direcciones. Todo lo
+no configurado es opcional o no aparece; no inventes requisitos ni importes.
+
+En una presentación con alimentación habilitada, elige cantidades y confirma
+la reserva antes del inicio. El total lo calcula el servidor. Es tu pedido para
+el hijo seleccionado, separado del pedido de otro familiar. Puedes cambiarlo o
+cancelarlo mientras no figure pagado/entregado y no haya iniciado el evento.
+No se cobra dinero en la aplicación ni se garantizan existencias por reservar.
+El colegio registra pago y entrega; cualquier corrección se consulta con él.
+
+Para boletines o encuentro de padres, muestra tu propio QR, no el del estudiante.
+El docente lo escanea y confirma el requisito correspondiente. Tu asistencia o
+entrega no marca a otro adulto. En la ficha consultas quién la registró y cuándo.
+Desde Mi QR y lector puedes escanear el QR de un evento y abrirlo con tu hijo
+seleccionado si está entre sus destinatarios. El QR no hace un pedido por sí solo.
+
 Selecciona el hijo y abre **Eventos**. Solo aparecen actividades publicadas para
 ese estudiante. Cuando el colegio pida confirmación o autorización, pulsa
 **Confirmar** o **No asistirá** antes del inicio; el cupo se controla al guardar.

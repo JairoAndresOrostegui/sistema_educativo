@@ -42,6 +42,19 @@ con el acceso anterior y pide volver a consultar.
 
 ## Eventos
 
+Ampliación disponible primero en QA: cada ficha separa Información, Preparación,
+Alimentos y Seguimiento. El administrador configura publicidad, alimentación y
+requisitos; el docente responsable puede administrar materiales/trajes con valor,
+dirección o enlace opcionales dentro de la audiencia del evento. La delegación
+del evento da ese acceso sin inventar horarios o una dirección de grupo.
+
+En Seguimiento puedes leer el QR del familiar o estudiante, seleccionar el
+requisito configurado por administración y confirmar su cumplimiento. La lectura
+sola no marca nada. La presencia de cada adulto se registra individualmente y
+solo desde el inicio. Los cambios conservan autor y hora; una corrección exige
+motivo. Si operas alimentación, registrar pago es un control manual del colegio,
+no un cobro electrónico, y la entrega se confirma desde el inicio del evento.
+
 Abre **Eventos** para crear actividades dirigidas a grupos completos de tu carga
 o a estudiantes específicos de esos mismos grupos.
 Quedas como responsable y no puedes sustituirte por otra persona. Completa fechas,
@@ -98,8 +111,10 @@ se usa la pantalla.
    a sus familias; llegada también lo habilita. Puede avisar varias paradas próximas.
 6. En automático se calcula al iniciar. Recalcular tiempos es una acción explícita
    con confirmación de consumo, útil ante trancón. No se recalcula por cada recogida.
-7. Registrar cada niño como Recogido o no recogido con motivo; un QR no sustituye
-   este registro ni concede autorización de entrega.
+7. Registrar cada niño como Recogido o no recogido con motivo. En QA puedes usar
+   Escanear QR de estudiante y confirmar la recogida del participante mostrado.
+   El botón manual permanece. Escanear sin confirmar no registra la recogida ni
+   concede autorización de entrega; repetir una confirmación no duplica avisos.
 8. Enviar aviso general desde la misma pantalla ante novedades. También llega a
    familias de niños recogidos; se conserva en Avisos e historial.
 9. Finalizar cuando todos estén resueltos. Se detiene ubicación; se notifica cierre.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -10,10 +12,12 @@ import '../../user/services/active_student_service.dart';
 import '../models/event_models.dart';
 import '../services/event_service.dart';
 import '../utils/event_export.dart';
+import 'event_detail_screen.dart';
 
 class EventsScreen extends StatefulWidget {
-  const EventsScreen({super.key, this.service});
+  const EventsScreen({super.key, this.service, this.initialEventId});
   final EventGateway? service;
+  final String? initialEventId;
 
   @override
   State<EventsScreen> createState() => _EventsScreenState();
@@ -28,6 +32,8 @@ class _EventsScreenState extends State<EventsScreen> {
   bool _loading = true;
   String? _error;
   int _requestId = 0;
+  String? _pendingInitialEventId;
+  Route<void>? _detailRoute;
 
   bool _isCurrent(int requestId) => mounted && requestId == _requestId;
 
@@ -52,7 +58,57 @@ class _EventsScreenState extends State<EventsScreen> {
   void initState() {
     super.initState();
     _service = widget.service ?? EventService();
+    _pendingInitialEventId = widget.initialEventId?.trim();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didUpdateWidget(covariant EventsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.initialEventId?.trim();
+    if (next == oldWidget.initialEventId?.trim()) return;
+    _pendingInitialEventId = next;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryOpenInitialEvent());
+  }
+
+  void _tryOpenInitialEvent() {
+    if (!mounted || _loading) return;
+    final id = _pendingInitialEventId;
+    if (id == null || id.isEmpty) return;
+    // Do not dismiss a confirmation/dialog owned by the open detail. A queued
+    // link is consumed when that detail returns, rather than changing its data.
+    if (_detailRoute != null && !_detailRoute!.isCurrent) return;
+    _pendingInitialEventId = null;
+    unawaited(_openDetail(id, replaceCurrent: true));
+  }
+
+  Future<void> _openDetail(
+    String eventId, {
+    bool replaceCurrent = false,
+  }) async {
+    if (!mounted) return;
+    final user = context.read<UserProviderV2>().user;
+    final selectedStudentId = user?.role == 'Familiar'
+        ? user?.activeStudentId ?? _studentId
+        : _studentId;
+    final previous = _detailRoute;
+    final route = MaterialPageRoute<void>(
+      builder: (_) => EventDetailScreen(
+        eventId: eventId,
+        service: _service,
+        studentId: selectedStudentId,
+      ),
+    );
+    _detailRoute = route;
+    if (replaceCurrent && previous?.isCurrent == true) {
+      await Navigator.of(context).pushReplacement<void, void>(route);
+    } else {
+      await Navigator.of(context).push<void>(route);
+    }
+    if (mounted && identical(_detailRoute, route)) {
+      _detailRoute = null;
+      await _load();
+    }
   }
 
   Future<void> _load() async {
@@ -112,7 +168,10 @@ class _EventsScreenState extends State<EventsScreen> {
         );
       }
     } finally {
-      if (_isCurrent(requestId)) setState(() => _loading = false);
+      if (_isCurrent(requestId)) {
+        setState(() => _loading = false);
+        _tryOpenInitialEvent();
+      }
     }
   }
 
@@ -153,7 +212,10 @@ class _EventsScreenState extends State<EventsScreen> {
         });
       }
     } finally {
-      if (_isCurrent(requestId)) setState(() => _loading = false);
+      if (_isCurrent(requestId)) {
+        setState(() => _loading = false);
+        _tryOpenInitialEvent();
+      }
     }
   }
 
@@ -527,6 +589,18 @@ class _EventsScreenState extends State<EventsScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(event.description),
+                      Text(event.typeLabel),
+                      if (event.subtitle.isNotEmpty) Text(event.subtitle),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: _loading
+                              ? null
+                              : () => _openDetail(event.id),
+                          icon: const Icon(Icons.info_outline),
+                          label: const Text('Ver detalles'),
+                        ),
+                      ),
                       if (event.responsibleNames.isNotEmpty)
                         Text(
                           'Responsables: ${event.responsibleNames.values.join(', ')}',
@@ -551,6 +625,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         ),
                       if (context.read<UserProviderV2>().user?.role ==
                               'Familiar' &&
+                          event.status == SchoolEventStatus.published &&
                           DateTime.now().isBefore(event.startAt) &&
                           (event.registrationRequired ||
                               event.requiresFamilyAuthorization))
@@ -612,6 +687,7 @@ class EventEditorScreen extends StatefulWidget {
 class _EventEditorScreenState extends State<EventEditorScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title;
+  late final TextEditingController _subtitle;
   late final TextEditingController _description;
   late final TextEditingController _location;
   late final TextEditingController _capacity;
@@ -625,6 +701,9 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
   late Set<String> _responsibleIds;
   late bool _registrationRequired;
   late bool _requiresAuthorization;
+  late String _eventType;
+  late bool _foodEnabled;
+  int _step = 0;
   bool _loading = false;
   String? _error;
 
@@ -639,6 +718,9 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
         ? DateTime(widget.eventContext.academicYear, 1, 1, 8)
         : DateTime(widget.eventContext.academicYear, 12, 31, 8);
     _title = TextEditingController(text: event?.title ?? '');
+    _subtitle = TextEditingController(text: event?.subtitle ?? '');
+    _eventType = event?.eventType ?? 'student_presentation';
+    _foodEnabled = event?.foodEnabled ?? false;
     _description = TextEditingController(text: event?.description ?? '');
     _location = TextEditingController(text: event?.location ?? '');
     _capacity = TextEditingController(text: event?.capacity?.toString() ?? '');
@@ -665,6 +747,7 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
   @override
   void dispose() {
     _title.dispose();
+    _subtitle.dispose();
     _description.dispose();
     _location.dispose();
     _capacity.dispose();
@@ -691,6 +774,43 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_title.text.trim().isEmpty ||
+        _description.text.trim().isEmpty ||
+        _location.text.trim().isEmpty) {
+      setState(() {
+        _step = 0;
+        _error = 'Completa el título, la descripción y el lugar.';
+      });
+      return;
+    }
+    if (!_end.isAfter(_start)) {
+      setState(() {
+        _step = 0;
+        _error = 'El final debe ser posterior al inicio.';
+      });
+      return;
+    }
+    final capacity = int.tryParse(_capacity.text.trim());
+    if (_registrationRequired &&
+        _capacity.text.trim().isNotEmpty &&
+        (capacity == null || capacity < 1)) {
+      setState(() {
+        _step = 1;
+        _error = 'El cupo debe ser un número entero mayor que cero.';
+      });
+      return;
+    }
+    final uri = Uri.tryParse(_linkUrl.text.trim());
+    if (_linkUrl.text.trim().isNotEmpty &&
+        (uri?.scheme != 'https' ||
+            uri!.host.isEmpty ||
+            _linkLabel.text.trim().isEmpty)) {
+      setState(
+        () => _error =
+            'Indica un nombre y una dirección HTTPS válida para el enlace.',
+      );
+      return;
+    }
     if (_audienceType == 'groups' && _groupIds.isEmpty) {
       setState(() => _error = 'Selecciona al menos un grupo.');
       return;
@@ -712,6 +832,11 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
         eventId: widget.event?.id,
         expectedRevision: widget.event?.revision,
         value: {
+          if (widget.event != null) ...widget.event!.toDraftMap(),
+          'schemaVersion': 2,
+          'eventType': _eventType,
+          'subtitle': _subtitle.text.trim(),
+          'foodEnabled': _eventType == 'student_presentation' && _foodEnabled,
           'title': _title.text,
           'description': _description.text,
           'location': _location.text,
@@ -723,7 +848,7 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
           'responsibleUserIds': _responsibleIds.toList(),
           'registrationRequired': _registrationRequired,
           'requiresFamilyAuthorization': _requiresAuthorization,
-          'capacity': _capacity.text.trim().isEmpty
+          'capacity': !_registrationRequired || _capacity.text.trim().isEmpty
               ? null
               : int.tryParse(_capacity.text.trim()),
           'links': _linkUrl.text.trim().isEmpty
@@ -765,189 +890,287 @@ class _EventEditorScreenState extends State<EventEditorScreen> {
               if (_loading) const LinearProgressIndicator(),
               if (_error != null)
                 Text(_error!, style: TextStyle(color: scheme.error)),
-              TextFormField(
-                controller: _title,
-                maxLength: 120,
-                decoration: const InputDecoration(labelText: 'Título'),
-                validator: _required,
+              Text(
+                'Paso ${_step + 1} de 3 · ${const ['Datos del evento', 'Participantes', 'Revisar y guardar'][_step]}',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              TextFormField(
-                controller: _description,
-                maxLength: 3000,
-                maxLines: 5,
-                decoration: const InputDecoration(labelText: 'Descripción'),
-                validator: _required,
-              ),
-              TextFormField(
-                controller: _location,
-                maxLength: 250,
-                decoration: const InputDecoration(labelText: 'Lugar'),
-                validator: _required,
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Inicio'),
-                subtitle: Text(_eventDate(context, _start)),
-                trailing: const Icon(Icons.schedule),
-                onTap: _loading
-                    ? null
-                    : () async {
-                        final value = await _pickDateTime(_start);
-                        if (value != null) setState(() => _start = value);
-                      },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Final'),
-                subtitle: Text(_eventDate(context, _end)),
-                trailing: const Icon(Icons.schedule),
-                onTap: _loading
-                    ? null
-                    : () async {
-                        final value = await _pickDateTime(_end);
-                        if (value != null) setState(() => _end = value);
-                      },
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: _audienceType,
-                decoration: const InputDecoration(labelText: 'Audiencia'),
-                items: [
-                  const DropdownMenuItem(
-                    value: 'groups',
-                    child: Text('Grupos completos'),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(value: (_step + 1) / 3),
+              const SizedBox(height: 16),
+              if (_step == 0) ...[
+                DropdownButtonFormField<String>(
+                  initialValue: _eventType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo de evento',
                   ),
-                  const DropdownMenuItem(
-                    value: 'students',
-                    child: Text('Estudiantes específicos'),
-                  ),
-                  if (isAdmin || _audienceType == 'all')
+                  items: const [
                     DropdownMenuItem(
-                      value: 'all',
-                      enabled: isAdmin,
-                      child: Text('Toda la sede'),
+                      value: 'student_presentation',
+                      child: Text('Presentación estudiantil'),
                     ),
-                ],
-                onChanged: _loading
-                    ? null
-                    : (value) => setState(() => _audienceType = value!),
-              ),
-              if (_audienceType == 'groups') ...[
-                const SizedBox(height: 12),
-                Text('Grupos', style: Theme.of(context).textTheme.titleMedium),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final group in widget.eventContext.groups)
-                      FilterChip(
-                        label: Text(group.name),
-                        selected: _groupIds.contains(group.id),
-                        onSelected: (selected) => setState(() {
-                          if (selected) {
-                            _groupIds.add(group.id);
-                          } else {
-                            _groupIds.remove(group.id);
-                          }
+                    DropdownMenuItem(
+                      value: 'parent_meeting',
+                      child: Text('Reunión de padres'),
+                    ),
+                  ],
+                  onChanged: _loading
+                      ? null
+                      : (value) => setState(() {
+                          _eventType = value!;
+                          if (value == 'parent_meeting') _foodEnabled = false;
                         }),
+                ),
+                TextFormField(
+                  controller: _title,
+                  maxLength: 120,
+                  decoration: const InputDecoration(labelText: 'Título'),
+                  validator: _required,
+                ),
+                TextFormField(
+                  controller: _subtitle,
+                  maxLength: 200,
+                  decoration: const InputDecoration(
+                    labelText: 'Subtítulo (opcional)',
+                  ),
+                ),
+                TextFormField(
+                  controller: _description,
+                  maxLength: 3000,
+                  maxLines: 5,
+                  decoration: const InputDecoration(labelText: 'Descripción'),
+                  validator: _required,
+                ),
+                TextFormField(
+                  controller: _location,
+                  maxLength: 250,
+                  decoration: const InputDecoration(labelText: 'Lugar'),
+                  validator: _required,
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Inicio'),
+                  subtitle: Text(_eventDate(context, _start)),
+                  trailing: const Icon(Icons.schedule),
+                  onTap: _loading
+                      ? null
+                      : () async {
+                          final value = await _pickDateTime(_start);
+                          if (value != null) setState(() => _start = value);
+                        },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Final'),
+                  subtitle: Text(_eventDate(context, _end)),
+                  trailing: const Icon(Icons.schedule),
+                  onTap: _loading
+                      ? null
+                      : () async {
+                          final value = await _pickDateTime(_end);
+                          if (value != null) setState(() => _end = value);
+                        },
+                ),
+                if (_eventType == 'student_presentation' && isAdmin)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Habilitar reserva de alimentos'),
+                    subtitle: const Text(
+                      'El catálogo y los precios se configuran desde la ficha.',
+                    ),
+                    value: _foodEnabled,
+                    onChanged: _loading
+                        ? null
+                        : (value) => setState(() => _foodEnabled = value),
+                  ),
+              ],
+              if (_step == 1) ...[
+                DropdownButtonFormField<String>(
+                  initialValue: _audienceType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Audiencia'),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'groups',
+                      child: Text('Grupos completos'),
+                    ),
+                    const DropdownMenuItem(
+                      value: 'students',
+                      child: Text('Estudiantes específicos'),
+                    ),
+                    if (isAdmin || _audienceType == 'all')
+                      DropdownMenuItem(
+                        value: 'all',
+                        enabled: isAdmin,
+                        child: Text('Toda la sede'),
                       ),
                   ],
+                  onChanged: _loading
+                      ? null
+                      : (value) => setState(() => _audienceType = value!),
                 ),
-              ],
-              if (_audienceType == 'students') ...[
+                if (_audienceType == 'groups') ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Grupos',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final group in widget.eventContext.groups)
+                        FilterChip(
+                          label: Text(group.name),
+                          selected: _groupIds.contains(group.id),
+                          onSelected: (selected) => setState(() {
+                            if (selected) {
+                              _groupIds.add(group.id);
+                            } else {
+                              _groupIds.remove(group.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                ],
+                if (_audienceType == 'students') ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Estudiantes',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (widget.eventContext.students.isEmpty)
+                    const Text('No hay estudiantes activos en tus grupos.'),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final student in widget.eventContext.students)
+                        FilterChip(
+                          label: Text('${student.name} · ${student.groupName}'),
+                          selected: _studentIds.contains(student.id),
+                          onSelected: (selected) => setState(() {
+                            if (selected) {
+                              _studentIds.add(student.id);
+                            } else {
+                              _studentIds.remove(student.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Text(
-                  'Estudiantes',
+                  'Responsables',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                if (widget.eventContext.students.isEmpty)
-                  const Text('No hay estudiantes activos en tus grupos.'),
                 Wrap(
                   spacing: 8,
                   children: [
-                    for (final student in widget.eventContext.students)
+                    for (final responsible
+                        in widget.eventContext.responsibleUsers)
                       FilterChip(
-                        label: Text('${student.name} · ${student.groupName}'),
-                        selected: _studentIds.contains(student.id),
-                        onSelected: (selected) => setState(() {
-                          if (selected) {
-                            _studentIds.add(student.id);
-                          } else {
-                            _studentIds.remove(student.id);
-                          }
-                        }),
+                        label: Text(responsible.name),
+                        selected: _responsibleIds.contains(responsible.id),
+                        onSelected: user.role == 'Docente'
+                            ? null
+                            : (selected) => setState(() {
+                                if (selected) {
+                                  _responsibleIds.add(responsible.id);
+                                } else {
+                                  _responsibleIds.remove(responsible.id);
+                                }
+                              }),
                       ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 12),
-              Text(
-                'Responsables',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final responsible
-                      in widget.eventContext.responsibleUsers)
-                    FilterChip(
-                      label: Text(responsible.name),
-                      selected: _responsibleIds.contains(responsible.id),
-                      onSelected: user.role == 'Docente'
-                          ? null
-                          : (selected) => setState(() {
-                              if (selected) {
-                                _responsibleIds.add(responsible.id);
-                              } else {
-                                _responsibleIds.remove(responsible.id);
-                              }
-                            }),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Requiere confirmación de asistencia'),
+                  value: _registrationRequired,
+                  onChanged: (value) =>
+                      setState(() => _registrationRequired = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Requiere autorización familiar'),
+                  value: _requiresAuthorization,
+                  onChanged: (value) =>
+                      setState(() => _requiresAuthorization = value),
+                ),
+                if (_registrationRequired)
+                  TextFormField(
+                    controller: _capacity,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Cupo (vacío significa sin límite)',
                     ),
-                ],
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Requiere confirmación de asistencia'),
-                value: _registrationRequired,
-                onChanged: (value) =>
-                    setState(() => _registrationRequired = value),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Requiere autorización familiar'),
-                value: _requiresAuthorization,
-                onChanged: (value) =>
-                    setState(() => _requiresAuthorization = value),
-              ),
-              if (_registrationRequired)
+                  ),
+              ],
+              if (_step == 2) ...[
+                Text(
+                  _title.text,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(
+                  _eventType == 'parent_meeting'
+                      ? 'Reunión de padres'
+                      : 'Presentación estudiantil',
+                ),
+                if (_subtitle.text.trim().isNotEmpty)
+                  Text(_subtitle.text.trim()),
+                Text('${_eventDate(context, _start)}\n${_location.text}'),
+                Text(
+                  'Responsables: ${widget.eventContext.responsibleUsers.where((u) => _responsibleIds.contains(u.id)).map((u) => u.name).join(', ')}',
+                ),
+                const Text(
+                  'Guardar crea un borrador. Desde Ver detalles puedes añadir avisos, '
+                  'requisitos, materiales y alimentos antes de publicarlo.',
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Enlace adjunto opcional',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 TextFormField(
-                  controller: _capacity,
-                  keyboardType: TextInputType.number,
+                  controller: _linkLabel,
+                  maxLength: 80,
                   decoration: const InputDecoration(
-                    labelText: 'Cupo (vacío significa sin límite)',
+                    labelText: 'Nombre del enlace',
                   ),
                 ),
-              const SizedBox(height: 12),
-              Text(
-                'Enlace adjunto opcional',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              TextFormField(
-                controller: _linkLabel,
-                maxLength: 80,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre del enlace',
+                TextFormField(
+                  controller: _linkUrl,
+                  maxLength: 500,
+                  decoration: const InputDecoration(labelText: 'URL HTTPS'),
                 ),
-              ),
-              TextFormField(
-                controller: _linkUrl,
-                maxLength: 500,
-                decoration: const InputDecoration(labelText: 'URL HTTPS'),
-              ),
+              ],
               const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _loading ? null : _save,
-                icon: const Icon(Icons.save),
-                label: const Text('Guardar borrador'),
-              ),
+              if (_step > 0)
+                TextButton(
+                  onPressed: _loading ? null : () => setState(() => _step--),
+                  child: const Text('Anterior'),
+                ),
+              if (_step < 2)
+                FilledButton(
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          if (_formKey.currentState!.validate()) {
+                            setState(() {
+                              _step++;
+                              _error = null;
+                            });
+                          }
+                        },
+                  child: const Text('Continuar'),
+                ),
+              if (_step == 2)
+                FilledButton.icon(
+                  onPressed: _loading ? null : _save,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Guardar borrador'),
+                ),
             ],
           ),
         ),

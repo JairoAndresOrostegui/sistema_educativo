@@ -2,7 +2,7 @@
   "name": "functions",
   "description": "Cloud Functions for Firebase",
   "scripts": {
-    "test:routes": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-push-audit-test --only firestore \"mocha --timeout 30000 test/routes.test.js test/routes_push.audit.test.js test/push_devices.test.js test/notification_function.audit.test.js\"",
+    "test:routes": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-push-audit-test --only firestore \"mocha --timeout 30000 test/routes.test.js test/routes_qr.test.js test/routes_push.audit.test.js test/push_devices.test.js test/notification_function.audit.test.js\"",
     "test:qr": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-qr-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/qr.function.test.js\"",
     "test:attendance": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-attendance-test --only auth,firestore,functions \"mocha --timeout 60000 test/attendance.function.test.js\"",
     "test:events": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-events-test --only auth,firestore,functions \"mocha --timeout 60000 test/events.function.test.js\"",
@@ -17,7 +17,7 @@
     "test:files": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-file-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/file.function.test.js\"",
     "test:downloads": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-download-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/protected_downloads.function.test.js\"",
     "test:cleanup": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-file-cleanup-test --only firestore \"mocha --timeout 60000 test/file_cleanup.test.js test/message_attachment_cleanup.test.js\"",
-    "test:unit": "mocha --timeout 30000 test/academic_push_access.test.js test/protected_downloads.test.js",
+    "test:unit": "mocha --timeout 30000 test/academic_push_access.test.js test/protected_downloads.test.js test/event_user_integrity.test.js test/qa_events_smoke.safety.test.js",
     "test:messaging": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-messaging-test --only auth,firestore,storage,functions \"mocha --timeout 60000 test/messaging.function.test.js\"",
     "test:website": "firebase emulators:exec --config ../firebase.test.json --project sistema-educativo-website-test --only firestore,functions \"mocha --timeout 60000 test/website.function.test.js\"",
     "serve": "firebase emulators:start --only functions",

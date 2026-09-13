@@ -152,6 +152,8 @@ exports.encolarNotificacionEvento = onDocumentCreated({
     tokens,
     notification: {title: value.title, body: value.body},
     data: {type: "event", eventId: value.eventId || ""},
+    webpush: {fcmOptions: {link: `${runtimeEnvironment().publicAppUrl}` +
+      `/#/events?eventId=${encodeURIComponent(value.eventId || "")}`}},
   }, {
     institutionId: value.institutionId,
     campusId: value.campusId,
@@ -977,8 +979,15 @@ async function userDeletionContext(targetSnap) {
   const auditCount = logsSnap.size + historySnap.size;
   const qrCredential = await db.collection("qr_credentials")
       .doc(require("./qr_identity").credentialId("user", uid)).get();
+  const eventReferences = await require("./event_user_integrity")
+      .eventUserReferences(db, uid);
 
   const impact = [
+    {key: "eventReferences", label: eventReferences.truncated ?
+      "Eventos (conteo mínimo; impiden eliminación definitiva)" :
+      "Eventos (impiden eliminación definitiva)",
+    count: eventReferences.count, truncated: eventReferences.truncated,
+    action: "preserve"},
     {key: "qrCredential", label: "Identificador QR",
       count: qrCredential.exists ? 1 : 0, action: "delete"},
     {key: "enrollments", label: "Matriculas", count: enrollments.length,
@@ -1008,6 +1017,7 @@ async function userDeletionContext(targetSnap) {
 
   return {
     target,
+    eventReferences,
     families,
     routes,
     subjects,
@@ -5899,6 +5909,9 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
     );
   }
 
+  require("./event_user_integrity")
+      .requireNoEventReferences(context.eventReferences);
+
   try {
     await targetRef.update({
       status: "eliminando",
@@ -5908,6 +5921,12 @@ exports.eliminarUsuarioAuth = onCall(async (request) => {
       deletionManifest: {storagePaths: context.storagePaths},
       deletionImpact: impactSummary,
     });
+
+    // Closing the profile first invalidates concurrent event transactions.
+    // Recheck after the lock so a relation created after the impact cannot
+    // become orphaned while the permanent deletion proceeds.
+    require("./event_user_integrity").requireNoEventReferences(
+        await require("./event_user_integrity").eventUserReferences(db, uid));
 
     for (let i = 0; i < context.families.length; i += 400) {
       const batch = db.batch();
@@ -6038,11 +6057,14 @@ exports.sincronizarDirectorioUsuarios = onDocumentWritten(
       const target = db.collection("user_directory").doc(event.params.userId);
       const before = event.data?.before.data();
       const after = event.data?.after.data();
-      if (!event.data?.after.exists) {
-        await target.delete();
-      } else {
-        await target.set(directoryData(after), {merge: false});
-      }
+      // Firestore events may arrive late or out of order. Project the current
+      // profile atomically, never an old create/update/delete event snapshot.
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(db.collection("users")
+            .doc(event.params.userId));
+        if (!current.exists) tx.delete(target);
+        else tx.set(target, directoryData(current.data()), {merge: false});
+      });
       const groupIds = new Set();
       if (before?.groupId) groupIds.add(before.groupId);
       if (after?.groupId) groupIds.add(after.groupId);

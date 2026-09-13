@@ -261,6 +261,22 @@ activos vinculados, sin depender del hijo que tengan seleccionado en ese momento
 
 ## Eventos
 
+La ampliación de septiembre de 2026 se publica primero en QA. Incluye presentación
+estudiantil (alimentación opcional) y encuentro de padres con subtítulo. La ficha
+separa información, preparación, alimentos y seguimiento. Publicidad, requisitos,
+costos, materiales y direcciones son opcionales; los importes son COP enteros.
+El administrador configura requisitos por estudiante o familiar y congela su
+definición al publicar. Personal responsable confirma cumplimiento, asistencia,
+pago o entrega, con actor/fecha y correcciones auditadas. La presencia de un
+adulto no sustituye la del otro ni la del alumno.
+
+Familiares reservan alimentos en presentaciones para su hijo seleccionado antes
+del inicio. Cada cuenta tiene su propio pedido; el servidor calcula el total y
+valida los precios. No existe cobro electrónico ni inventario garantizado. Los
+pedidos pagados/entregados no se reescriben desde un carrito. Un encuentro de padres
+no ofrece catálogo de alimentos. Los avisos particulares no se envían a familias
+ajenas. Consultar los manuales por perfil para el recorrido de prueba.
+
 Administración y docentes autorizados abren **Eventos** desde el tablero. Un evento
 se guarda primero como borrador; después puede publicarse, cancelarse, finalizarse
 y archivarse. Incluye lugar, horario, responsables, grupos destinatarios, enlaces,
@@ -324,9 +340,9 @@ Obtener de nuevo un código conserva el mismo mientras esté vigente. **Revocar*
 lo invalida y **Reemplazar** produce uno nuevo, ambos con confirmación y log.
 Un usuario inactivo o eliminado no puede identificarse con un QR antiguo.
 
-**Identificador de evento** crea una referencia con nombre y año activo, no una
-asistencia ni una reunión completa. Su sede se indica en pantalla: corresponde
-a la entidad seleccionada o, sin selección, a la del administrador.
+En la ampliación QA, los QR de evento corresponden exclusivamente a la agenda
+operativa `school_events`. Primero se crea el evento en Eventos; no existe una
+segunda agenda de identificadores aislados. Su sede es la del evento.
 **Validar manualmente** permite pegar un identificador copiado desde la
 aplicación. **Leer con cámara** abre el lector, solicita permiso en el equipo y
 acepta únicamente códigos del sistema. Puede encender la linterna o cambiar de
@@ -337,8 +353,11 @@ normales. Los vínculos de hijos se consultan en la base de datos.
 
 Los QR no contienen documentos ni datos personales y no son firmas digitales.
 Presentar, copiar o leer un QR no autoriza entregar a un estudiante, reclamar
-bienes ni registrar asistencia. La cámara solo identifica; cada operación futura
-exigirá su propia confirmación y registro. No publicar el QR en redes.
+bienes ni registrar asistencia. Todos los roles pueden abrir el lector. En QA,
+leer un evento abre su ficha; desde Seguimiento permite preparar un requisito,
+y desde un recorrido activo permite preparar la recogida de un estudiante.
+Cada operación exige permisos propios, confirmación y registro del servidor.
+El proceso manual de recogida permanece. No publicar QR de usuarios en redes.
 Los códigos del esquema anterior deben reemplazarse; ya no son válidos.
 
 Rutas gestiona recorridos y estados diarios, sujeto a permisos y sede. Los permisos de ubicación y el flujo Android deben volver a validarse antes de publicar en Play Store. Toda ampliación futura debe mantener selección de hijo, grupos por sede, seguridad backend, auditoría y tema central.

@@ -161,6 +161,35 @@ se interpreta el fallo como ausencia de datos.
 
 ## Eventos
 
+Ampliación QR/Eventos de septiembre de 2026: disponible primero en QA, no implica
+publicación de estas funciones en producción o Google Play.
+
+Al crear el borrador, elige Presentación de estudiantes o Encuentro de padres y
+un subtítulo opcional. Solo las presentaciones permiten habilitar alimentos.
+Abre la ficha para trabajar en Información, Preparación, Alimentos o Seguimiento.
+Antes de publicar, configura publicidad (texto/enlace HTTPS) y requisitos:
+nombre, instrucciones, obligatorio, destinatario estudiante/familiar y clase
+de control (manual, asistencia o pago). Los requisitos se congelan al publicar.
+
+Administra alimentos con nombre, descripción y precio en COP enteros. Desactiva
+una opción para retirarla del catálogo sin borrar los pedidos que ya la usaron.
+Son reservas anticipadas sin control de existencias ni pasarela de cobro. Cada
+familiar tiene un pedido separado por hijo. El personal registra pago y entrega
+con confirmación; las correcciones requieren motivo. La entrega se registra
+desde el inicio del evento; un pedido pagado no puede cambiarlo la familia.
+
+En Preparación se añaden materiales o trajes, con instrucciones y valor, dirección
+o enlace opcionales. En Seguimiento se elige estudiante y, para un requisito de
+adultos, el familiar exacto. Escanear el QR ayuda a identificarlo; hay que elegir
+el requisito y confirmar. Marcar a un familiar no marca al otro. Se conserva
+quién registró el cambio y cuándo. La asistencia exige que el evento haya iniciado.
+El QR del evento abre su ficha a destinatarios autorizados; no inscribe ni cobra.
+
+Pedidos y cumplimientos tienen avisos para las cuentas involucradas y el personal
+autorizado. No se muestran pedidos de una familia a otra. La eliminación definitiva
+de usuarios con referencias de Eventos queda bloqueada para conservar identidades
+e historial: usar baja lógica, no borrar registros manualmente.
+
 Abre **Eventos**, crea el borrador y define lugar, fechas, audiencia de toda la
 sede, grupos completos o estudiantes específicos, responsables,
 confirmación, autorización familiar, cupo y enlace opcional. Revisa el borrador y
@@ -230,7 +259,8 @@ con confirmación si se expuso. No autoriza entregar estudiantes ni registrar
 asistencia por sí solo. **Leer con cámara** solicita permiso, acepta solamente
 identificadores `LLQ1` y valida su vigencia en el servidor; si no hay cámara o
 permiso, usar **Validar manualmente**. El QR del evento solo identifica y no cambia
-la confirmación ni la asistencia del módulo Eventos.
+la confirmación ni la asistencia del módulo Eventos por sí mismo. En QA abre la
+ficha operativa y permite preparar una acción autorizada con confirmación.
 Sitio web: editar Header, Footer y páginas con filas/columnas/componentes; comprobar
 vista móvil y publicar. Usar enlaces YouTube/Vimeo para videos. Eliminar en borrador
 no equivale a retirar recursos publicados; la limpieza ocurre al publicar.
@@ -249,6 +279,10 @@ el código anterior; una credencial revocada permanece visible para administraci
 y puede reemplazarse. Si otra sesión la modificó primero, recargar. Validar un QR
 solo confirma la identidad vigente: no registra asistencia ni autoriza entregas.
 Cada lectura correcta deja auditoría del administrador, fecha, origen y plataforma.
+Todos los roles tienen Mi QR y lector. En el recorrido activo, Escanear QR de
+estudiante identifica un participante pendiente; Confirmar recogida ejecuta la
+misma operación que el botón manual. Cancelar no cambia al estudiante y reintentar
+la misma confirmación no duplica el registro ni su aviso.
 
 ## Escenarios de soporte
 

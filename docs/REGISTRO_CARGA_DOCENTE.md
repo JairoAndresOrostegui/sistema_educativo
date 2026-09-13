@@ -51,8 +51,9 @@ un viaje necesita un flujo específico y no debe simularse alterando la autoría
 
 QR identifica al docente, no representa carga transferible: su credencial nunca
 se entrega al reemplazo, quien usa la propia. La desactivación del saliente
-bloquea su resolución. Los identificadores de eventos actuales no asignan
-responsables; antes de añadirlos, integrar el evento al contrato de traslado.
+bloquea su resolución. En la ampliación QA de septiembre de 2026 el QR de evento
+apunta al evento operativo `school_events`; su acceso y sus acciones derivan de
+los responsables actuales. El QR no copia responsabilidades ni autoriza acciones.
 
 Lista de asistencia transfiere únicamente sesiones todavía abiertas cuya
 responsabilidad vigente pertenece al docente saliente. `createdBy`,
@@ -67,6 +68,16 @@ iniciado. El reemplazo se agrega sin duplicarlo y el saliente se retira. En una
 reversión temporal se restaura únicamente si el evento continúa elegible y el
 reemplazo conserva esa responsabilidad. Creador, actores históricos, inscripciones,
 autorizaciones y marcas de asistencia nunca se reescriben.
+
+La ampliación QA de alimentos, materiales/trajes y checklist no agrega listas de
+responsables en las colecciones hijas. El mismo traslado de `school_events` da
+acceso operativo al reemplazo y lo revoca al saliente para esos recursos.
+`createdBy`, `updatedBy` y autores de cumplimientos, pagos y entregas conservan
+su identidad histórica. La reversión vuelve a derivar permisos desde el padre;
+no transfiere pedidos de una familia a otra, importes ni credenciales QR.
+El impacto sigue contando el evento una sola vez: sus subprocesos no constituyen
+eventos ni cargas independientes. Un evento iniciado o finalizado no se traslada
+mediante continuidad futura; administración conserva su operación según permisos.
 
 Eventos y Lista de asistencia releen el actor, el responsable vigente y el año
 lectivo dentro de sus transacciones de escritura. Un traslado, desactivación o

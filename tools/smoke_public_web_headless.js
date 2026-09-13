@@ -295,4 +295,4 @@ if (require.main === module) main().catch((error) => {
   console.error(safeText(error.message));
   process.exitCode = 1;
 });
-module.exports = {safeUrl, safeText};
+module.exports = {safeUrl, safeText, Cdp, browserAddress};

@@ -12,6 +12,15 @@ String userFacingError(Object error, {String fallback = _defaultErrorMessage}) {
   }
 
   if (error is FirebaseFunctionsException) {
+    // Transport failures never contain a message authored for the user.
+    if (const {
+      'unavailable',
+      'deadline-exceeded',
+      'internal',
+      'unknown',
+    }.contains(error.code.toLowerCase())) {
+      return _firebaseCodeMessage(error.code, fallback: fallback);
+    }
     final safeMessage = _safeMessage(error.message);
     if (safeMessage != null) return safeMessage;
     return _firebaseCodeMessage(error.code, fallback: fallback);

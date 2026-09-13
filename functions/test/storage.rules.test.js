@@ -8,7 +8,8 @@ const {
 } = require("@firebase/rules-unit-testing");
 const {doc, setDoc} = require("firebase/firestore");
 
-const projectId = "sistema-educativo-rl";
+// Storage resolves cross-service Firestore rules in the emulator project.
+const projectId = process.env.GCLOUD_PROJECT || "sistema-educativo-rl";
 let env;
 const verifiedContext = (uid) =>
   env.authenticatedContext(uid, {email_verified: true});

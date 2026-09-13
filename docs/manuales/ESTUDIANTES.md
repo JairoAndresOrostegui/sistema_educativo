@@ -50,6 +50,11 @@ puede cambiar su propia marca.
 
 ## Eventos
 
+Ampliación disponible primero en QA: puedes consultar los materiales, trajes,
+instrucciones, publicidad y requisitos que te correspondan. Los familiares hacen
+las reservas de alimentos y el colegio registra pagos, entregas y cumplimiento.
+La cuenta de estudiante no recibe facultades administrativas para probarlo.
+
 Abre **Eventos** para consultar actividades publicadas para ti o tu grupo. Verás
 fecha, lugar, responsables, descripción, enlaces y, cuando ya se registró, tu
 asistencia. La confirmación o autorización la realiza un familiar vinculado; un
@@ -94,6 +99,11 @@ Obtén tu identificación desde Inicio/Perfil. No publiques el código ni lo pre
 Sirve para identificar, no es contraseña, firma digital ni permiso para salir.
 La cámara identifica el código, pero no marca asistencia automáticamente. Si se
 expuso, avisa a administración para reemplazarlo.
+
+En QA, Mi QR y lector también permite abrir la cámara. Un QR de evento válido
+abre su ficha si estás entre los destinatarios. En Rutas puedes mostrar tu QR
+al responsable para que prepare y confirme la recogida; tu escaneo no la registra
+automáticamente. No necesitas prestar tu sesión o contraseña para identificarte.
 
 ## Módulos que no te corresponden
 

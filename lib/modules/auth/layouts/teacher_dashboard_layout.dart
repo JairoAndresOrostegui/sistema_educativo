@@ -44,6 +44,11 @@ class _DocenteDashboardLayoutState extends State<DocenteDashboardLayout> {
         icon: Icons.person,
         route: '/profile',
       ),
+      const MenuItemData(
+        label: 'Mi QR y lector',
+        icon: Icons.qr_code_scanner,
+        route: '/my_qr',
+      ),
     ];
 
     if (user.isSuperadmin || perms.contains('rutas.ver')) {

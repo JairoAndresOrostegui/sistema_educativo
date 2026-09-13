@@ -9,6 +9,13 @@ class EventChild {
 }
 
 abstract interface class EventGateway {
+  Future<EventDetail> detail(String eventId, {String? studentId});
+  Future<Map<String, dynamic>> saveFood(Map<String, dynamic> value);
+  Future<Map<String, dynamic>> reserveFood(Map<String, dynamic> value);
+  Future<Map<String, dynamic>> manageOrder(Map<String, dynamic> value);
+  Future<Map<String, dynamic>> saveMaterial(Map<String, dynamic> value);
+  Future<Map<String, dynamic>> saveCompletion(Map<String, dynamic> value);
+  Future<Map<String, dynamic>> prepareQr(Map<String, dynamic> value);
   Future<EventContext> contexts();
   Future<List<SchoolEvent>> events({String? studentId});
   Future<List<EventChild>> children();
@@ -45,6 +52,33 @@ class EventService implements EventGateway {
     : _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFunctions _functions;
+
+  @override
+  Future<EventDetail> detail(String eventId, {String? studentId}) async =>
+      EventDetail.fromMap(
+        await _call('obtenerDetalleEvento', {
+          'eventId': eventId,
+          'studentId': ?studentId,
+        }),
+      );
+  @override
+  Future<Map<String, dynamic>> saveFood(Map<String, dynamic> value) =>
+      _call('guardarAlimentoEvento', value);
+  @override
+  Future<Map<String, dynamic>> reserveFood(Map<String, dynamic> value) =>
+      _call('reservarAlimentosEvento', value);
+  @override
+  Future<Map<String, dynamic>> manageOrder(Map<String, dynamic> value) =>
+      _call('gestionarPedidoEvento', value);
+  @override
+  Future<Map<String, dynamic>> saveMaterial(Map<String, dynamic> value) =>
+      _call('guardarMaterialEvento', value);
+  @override
+  Future<Map<String, dynamic>> saveCompletion(Map<String, dynamic> value) =>
+      _call('guardarCumplimientoEvento', value);
+  @override
+  Future<Map<String, dynamic>> prepareQr(Map<String, dynamic> value) =>
+      _call('prepararAccionesEventoQr', value);
 
   Future<Map<String, dynamic>> _call(
     String name, [

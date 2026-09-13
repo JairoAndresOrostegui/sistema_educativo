@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../providers/user_provider_v2.dart';
@@ -27,6 +28,7 @@ class _QrScreenState extends State<QrScreen> {
   int? _credentialRevision;
   String _search = '';
   bool _busy = true;
+  bool _showingResult = false;
   Future<Map<String, dynamic>> _call(
     String name,
     Map<String, dynamic> data,
@@ -43,6 +45,7 @@ class _QrScreenState extends State<QrScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -160,35 +163,6 @@ class _QrScreenState extends State<QrScreen> {
     return result;
   }
 
-  Future<void> _event() async {
-    final title = await _text('Identificador de evento');
-    if (title == null || title.isEmpty || !mounted) return;
-    final user = context.read<UserProviderV2>().user!;
-    final scope =
-        _selected ??
-        {'institutionId': user.institution, 'campusId': user.campus};
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final result = await _call('crearIdentificadorEventoQr', {
-        'title': title,
-        'institutionId': scope['institutionId'],
-        'campusId': scope['campusId'],
-      });
-      await _load();
-      if (mounted) await _select({...result, 'name': title, 'role': 'Evento'});
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _error = userFacingError(error);
-          _busy = false;
-        });
-      }
-    }
-  }
-
   Future<void> _manage(String action) async {
     if (_selected == null || _credentialRevision == null) {
       setState(() => _error = 'Recarga la credencial antes de modificarla.');
@@ -267,6 +241,15 @@ class _QrScreenState extends State<QrScreen> {
             : defaultTargetPlatform.name.toLowerCase(),
       });
       if (!mounted) return;
+      if (result['targetType'] == 'event' &&
+          result['action'] == 'open_event' &&
+          result['eventId'] is String) {
+        context.go(
+          '/events?eventId=${Uri.encodeQueryComponent(result['eventId'] as String)}',
+        );
+        return;
+      }
+      setState(() => _showingResult = true);
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -288,7 +271,12 @@ class _QrScreenState extends State<QrScreen> {
     } catch (error) {
       if (mounted) setState(() => _error = userFacingError(error));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _showingResult = false;
+        });
+      }
     }
   }
 
@@ -324,7 +312,7 @@ class _QrScreenState extends State<QrScreen> {
             const Text(
               'Un QR identifica; no es una firma digital ni acredita quién lo presenta. No lo compartas públicamente.',
             ),
-            if (_busy) const LinearProgressIndicator(),
+            if (_busy && !_showingResult) const LinearProgressIndicator(),
             if (_error != null)
               Text(_error!, style: TextStyle(color: scheme.error)),
             if (widget.manage)
@@ -343,24 +331,25 @@ class _QrScreenState extends State<QrScreen> {
                   icon: const Icon(Icons.verified_outlined),
                   label: const Text('Validar manualmente'),
                 ),
-                if (widget.manage)
-                  FilledButton.icon(
-                    onPressed: _busy ? null : _scan,
-                    icon: const Icon(Icons.qr_code_scanner),
-                    label: const Text('Leer con cámara'),
-                  ),
-                if (widget.manage)
+                FilledButton.icon(
+                  onPressed: _busy ? null : _scan,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Leer con cámara'),
+                ),
+                if (widget.manage &&
+                    (user?.isSuperadmin == true ||
+                        user?.permissions.contains('eventos.ver') == true))
                   OutlinedButton.icon(
-                    onPressed: _busy ? null : _event,
+                    onPressed: _busy ? null : () => context.go('/events'),
                     icon: const Icon(Icons.event),
-                    label: const Text('Identificador de evento'),
+                    label: const Text('Crear o consultar eventos'),
                   ),
               ],
             ),
-            if (widget.manage)
-              const Text(
-                'El evento se crea en la sede de la entidad seleccionada; sin selección, en tu sede.',
-              ),
+            const Text(
+              'Para registrar una acción, abre el lector desde el evento o recorrido. '
+              'Cada operación requiere permiso y confirmación.',
+            ),
             if (widget.manage && _payload != null)
               TextButton(
                 onPressed: _busy

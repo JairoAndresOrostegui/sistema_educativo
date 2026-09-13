@@ -41,7 +41,8 @@ describe("Reglas Firestore", () => {
       projectId,
       firestore: {
         host: "127.0.0.1",
-        port: 8180,
+        port: Number((process.env.FIRESTORE_EMULATOR_HOST ||
+          "127.0.0.1:8180").split(":").at(-1)),
         rules: fs.readFileSync(
             path.resolve(__dirname, "../../firestore.rules"),
             "utf8",
@@ -853,6 +854,11 @@ describe("Reglas Firestore", () => {
         "event_attendance",
         "event_history",
         "event_notification_events",
+        "event_food_items",
+        "event_food_orders",
+        "event_materials",
+        "event_requirement_completions",
+        "event_operation_requests",
       ]) {
         await assertFails(getDoc(doc(clientDb, collectionName, "example")));
         await assertFails(setDoc(doc(clientDb, collectionName, "forged"), {

@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {readQrCredential, recordQrResolution} = require("./qr_identity");
 const hash = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const day = () => new Intl.DateTimeFormat("en-CA", {timeZone: "America/Bogota"}).format(new Date());
 const cleanAddress = (value) => typeof value === "string" ? value.trim() : "";
@@ -44,7 +45,24 @@ function routeFunctions(db, getCaller, activeYear) {
   };
   async function checkedYear(tx, d) {
     const year = (await tx.get(db.doc(`academic_years/${ident(d.academicYearId)}`))).data();
-    if (!year || year.status !== "active") throw new HttpsError("failed-precondition", "El año está cerrado.");
+    if (!year || year.status !== "active" || year.institutionId !== d.institution || year.campusId !== d.campus) {
+      throw new HttpsError("failed-precondition", "El año no está vigente para esta sede.");
+    }
+  }
+  async function freshOperator(tx, caller, d) {
+    const profile = (await tx.get(db.collection("users").doc(caller.uid))).data();
+    const actor = {...profile, uid: caller.uid};
+    if (!profile || profile.status !== "activo" || profile.mustChangePassword === true || !operator(actor, d)) fail();
+    return actor;
+  }
+  async function pickupIdentity(tx, data, d, studentId = null) {
+    const identity = await readQrCredential(db, data.payload, {tx, expectedType: "user"});
+    if (identity.raw.role !== "Estudiante" || identity.institutionId !== d.institution ||
+        identity.campusId !== d.campus || studentId && identity.targetId !== studentId) fail();
+    if (data.credentialRevision !== undefined && data.credentialRevision !== identity.revision) {
+      throw new HttpsError("aborted", "El QR cambió. Vuelve a leer la credencial.");
+    }
+    return identity;
   }
   // Opens all due stops, not just the next one. No Maps request here.
   function openWindows(tx, ref, d, students) {
@@ -257,16 +275,51 @@ function routeFunctions(db, getCaller, activeYear) {
       audit(tx, u, d, "prepared"); return {id: ref.id};
     });
   });
+  const prepararRecogidaQr = onCall(async (request) => {
+    const caller = await getCaller(request);
+    const data = request.data || {};
+    const ref = db.collection("daily_routes").doc(ident(data.dailyRouteId));
+    return db.runTransaction(async (tx) => {
+      const route = (await tx.get(ref)).data();
+      if (!route) fail();
+      const actor = await freshOperator(tx, caller, route);
+      await checkedYear(tx, route);
+      if (route.estado !== "activa") throw new HttpsError("failed-precondition", "Inicia el recorrido antes de leer una recogida.");
+      const identity = await pickupIdentity(tx, data, route);
+      const stop = (await tx.get(ref.collection("students").doc(identity.targetId))).data();
+      if (!stop || stop.activo !== true || stop.recogido || stop.anulado || !cleanAddress(stop.direccion)) {
+        throw new HttpsError("failed-precondition", "El estudiante no está pendiente en este recorrido.");
+      }
+      recordQrResolution(tx, db, actor, identity, {...data, context: "rutas"});
+      return {dailyRouteId: ref.id, routeName: route.nombreRuta || "Recorrido escolar",
+        studentId: identity.targetId, studentName: `${identity.raw.firstName || ""} ${identity.raw.lastName || ""}`.trim(),
+        credentialRevision: identity.revision, identificationOnly: true};
+    });
+  });
   const operarRecorrido = onCall(async (request) => {
     const u = await getCaller(request); const data = request.data || {};
     const ref = db.doc(`daily_routes/${ident(data.id)}`);
     const command = ident(data.command); const requestId = ident(data.requestId);
+    const qr = data.identification;
+    if (qr !== undefined && (command !== "pickup" || qr?.method !== "qr" ||
+        typeof qr.payload !== "string" || !Number.isInteger(qr.credentialRevision))) {
+      throw new HttpsError("invalid-argument", "La confirmación QR no es válida.");
+    }
+    const fingerprint = qr ? hash(JSON.stringify([command, data.studentId, qr.payload, qr.credentialRevision])) : null;
     return db.runTransaction(async (tx) => {
       const d = (await tx.get(ref)).data();
       if (!d || !operator(u, d)) fail();
+      const actor = await freshOperator(tx, u, d);
       await checkedYear(tx, d);
       const operationRef = ref.collection("operations").doc(hash(`${u.uid}:${requestId}`));
-      if ((await tx.get(operationRef)).exists) return {ok: true};
+      const operation = await tx.get(operationRef);
+      if (operation.exists) {
+        if (operation.data().command !== command ||
+            (qr || operation.data().fingerprint) && operation.data().fingerprint !== fingerprint) {
+          throw new HttpsError("already-exists", "Este intento ya se usó para una operación distinta.");
+        }
+        return {ok: true};
+      }
       if (d.estado === "finalizada") throw new HttpsError("failed-precondition", "Recorrido finalizado: solo consulta.");
       if (!["pendiente", "activa"].includes(d.estado)) {
         throw new HttpsError("failed-precondition", "El recorrido no está disponible para operación.");
@@ -274,6 +327,12 @@ function routeFunctions(db, getCaller, activeYear) {
       const snapshot = await tx.get(ref.collection("students"));
       const students = snapshot.docs.map((s) => ({...s.data(), id: s.id}));
       const target = students.find((s) => s.id === data.studentId);
+      const identity = qr ? await pickupIdentity(tx, qr, d, data.studentId) : null;
+      if (command === "pickup" && !identity && target) {
+        const student = (await tx.get(db.collection("users").doc(target.id))).data();
+        if (!student || student.status !== "activo" || student.role !== "Estudiante" ||
+            student.institution !== d.institution || student.campus !== d.campus) fail();
+      }
       const running = d.estado === "activa";
       const updated = {...d, dailyId: ref.id};
       let affected = [];
@@ -347,8 +406,15 @@ function routeFunctions(db, getCaller, activeYear) {
           }
         }
       } else throw new HttpsError("invalid-argument", "Acción no válida.");
-      if (command !== "position") audit(tx, u, updated, command, {studentIds: affected, reason: typeof data.reason === "string" ? data.reason.slice(0, 500) : null});
-      tx.create(operationRef, {createdAt: FieldValue.serverTimestamp(), command});
+      if (command !== "position") {
+        audit(tx, actor, updated, command, {studentIds: affected,
+          reason: typeof data.reason === "string" ? data.reason.slice(0, 500) : null,
+          ...(command === "pickup" ? {inputMethod: identity ? "qr" : "manual",
+            ...(identity ? {credentialId: identity.credentialId, credentialRevision: identity.revision} : {})} : {})});
+      }
+      if (identity) recordQrResolution(tx, db, actor, identity, {...qr, context: "rutas"});
+      tx.create(operationRef, {createdAt: FieldValue.serverTimestamp(), command,
+        ...(fingerprint ? {fingerprint, studentId: data.studentId} : {})});
       return {ok: true};
     });
   });
@@ -546,7 +612,7 @@ function routeFunctions(db, getCaller, activeYear) {
     }
     return {items};
   });
-  return {guardarRutaSegura, eliminarRutaSegura, listarParticipantesRuta, prepararRecorrido, operarRecorrido, consultarMiRecorrido, consultarHistorialRuta,
+  return {guardarRutaSegura, eliminarRutaSegura, listarParticipantesRuta, prepararRecorrido, prepararRecogidaQr, operarRecorrido, consultarMiRecorrido, consultarHistorialRuta,
     gestionarConductores, solicitarCambioParada, gestionarCambiosParada, calcularTiemposRuta};
 }
 module.exports = {routeFunctions};

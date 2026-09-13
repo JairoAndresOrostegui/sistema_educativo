@@ -1,5 +1,12 @@
 {
   "indexes": [
+    {"collectionGroup": "event_food_orders", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "eventId", "order": "ASCENDING"},
+      {"fieldPath": "familyId", "order": "ASCENDING"},
+      {"fieldPath": "studentId", "order": "ASCENDING"}]},
+    {"collectionGroup": "event_requirement_completions", "queryScope": "COLLECTION", "fields": [
+      {"fieldPath": "eventId", "order": "ASCENDING"},
+      {"fieldPath": "studentContextIds", "arrayConfig": "CONTAINS"}]},
     {"collectionGroup": "routes", "queryScope": "COLLECTION", "fields": [
       {"fieldPath": "institution", "order": "ASCENDING"},
       {"fieldPath": "campus", "order": "ASCENDING"},

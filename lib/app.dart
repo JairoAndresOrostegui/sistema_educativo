@@ -232,7 +232,9 @@ class _AppRouterState extends State<AppRouter> {
         ),
         GoRoute(
           path: '/events',
-          builder: (context, state) => const EventsScreen(),
+          builder: (context, state) => EventsScreen(
+            initialEventId: state.uri.queryParameters['eventId'],
+          ),
         ),
         GoRoute(
           path: '/website_admin',

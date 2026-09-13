@@ -20,7 +20,9 @@ describe("Recorridos seguros", () => {
   after(() => deleteApp(app));
   beforeEach(async () => {
     for (const name of ["routes", "daily_routes", "route_history", "route_push_events", "users"]) await db.recursiveDelete(db.collection(name));
-    await db.doc("academic_years/y").set({...scope, status: "active"});
+    await db.doc("academic_years/y").set({...scope, institutionId: "i", campusId: "c", status: "active"});
+    await db.doc("users/t").set({...teacher, status: "activo"});
+    await db.doc("users/a").set({...admin, status: "activo"});
     await db.doc("routes/r").set({...scope, gestionador: "t", estudiantes: ["s1", "s2"], nombre: "Ruta"});
     await db.doc("daily_routes/r_today").set({...scope, idRuta: "r", gestionador: "t", estado: "pendiente", fecha: Timestamp.now()});
     for (const id of ["s1", "s2"]) {
@@ -171,7 +173,7 @@ describe("Recorridos seguros", () => {
     await assert.rejects(call("gestionarConductores", {
       ...data, id: result.items[0].id, expectedRevision: 1,
     }, admin), (e) => e.code === "aborted");
-    assert.equal((await db.collection("users").get()).size, 2);
+    assert.equal((await db.collection("users").get()).size, 4);
     assert.equal((await call("gestionarConductores", {}, {...admin, campus: "otra"})).items.length, 0);
   });
   it("entrega participantes y direcciones solo al administrador autorizado", async () => {
@@ -180,7 +182,7 @@ describe("Recorridos seguros", () => {
     const result = await call("listarParticipantesRuta", {institution: "i", campus: "c"}, admin);
     assert.deepEqual(result.students.map((item) => item.id).sort(), ["s1", "s2"]);
     assert.equal(result.students[0].routeAddress, "Misma dirección");
-    assert.deepEqual(result.managers.map((item) => item.id), ["t"]);
+    assert.deepEqual(result.managers.map((item) => item.id).sort(), ["a", "t"]);
     await assert.rejects(call("listarParticipantesRuta", {}, teacher), (e) => e.code === "permission-denied");
     await assert.rejects(call("listarParticipantesRuta", {}, {...admin, permissions: ["rutas.ver"]}), (e) => e.code === "permission-denied");
   });

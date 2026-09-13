@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:sistema_educativo/models/user/user_model_v2.dart';
@@ -8,6 +9,124 @@ import 'package:sistema_educativo/modules/qr/screens/qr_screen.dart';
 import 'package:sistema_educativo/modules/qr/screens/qr_scanner_screen.dart';
 
 void main() {
+  for (final role in [
+    'Administrador',
+    'Docente',
+    'Auxiliar',
+    'Estudiante',
+    'Familiar',
+  ]) {
+    testWidgets(
+      '$role muestra QR propio y puede abrir cámara sin administrar',
+      (tester) async {
+        final provider = UserProviderV2()
+          ..setUser(
+            userModelv2.fromFirestore({
+              'role': role,
+              'firstName': 'Identidad propia',
+              'institution': 'i',
+              'campus': 'c',
+              'permissions': <String>[],
+            }, 'self'),
+          );
+        final calls = <String>[];
+        var scans = 0;
+        await tester.pumpWidget(
+          ChangeNotifierProvider.value(
+            value: provider,
+            child: MaterialApp(
+              home: QrScreen(
+                scan: (_) async {
+                  scans++;
+                  return 'LLQ1:${'a' * 43}';
+                },
+                invoke: (name, data) async {
+                  calls.add(name);
+                  if (name == 'obtenerHijosVinculados') return {'children': []};
+                  if (name == 'obtenerCredencialQr') {
+                    return {'payload': 'LLQ1:${'a' * 43}', 'revision': 1};
+                  }
+                  return {
+                    'targetType': 'user',
+                    'targetId': 'self',
+                    'name': 'Identidad propia validada',
+                    'children': [],
+                  };
+                },
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(QrImageView), findsOneWidget);
+        await tester.tap(find.text('Leer con cámara'));
+        await tester.pumpAndSettle();
+        expect(scans, 1);
+        expect(calls, contains('resolverCredencialQr'));
+        expect(calls, isNot(contains('listarEntidadesQr')));
+        expect(find.text('Identidad propia validada'), findsOneWidget);
+        expect(find.text('Revocar'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'escanear evento permitido abre su ficha sin registrar acciones',
+    (tester) async {
+      final provider = UserProviderV2()
+        ..setUser(
+          userModelv2.fromFirestore({
+            'role': 'Estudiante',
+            'institution': 'i',
+            'campus': 'c',
+            'permissions': ['eventos.ver'],
+          }, 'self'),
+        );
+      final calls = <String>[];
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => QrScreen(
+              scan: (_) async => 'LLQ1:${'a' * 43}',
+              invoke: (name, data) async {
+                calls.add(name);
+                if (name == 'obtenerCredencialQr') {
+                  return {'payload': 'LLQ1:${'b' * 43}', 'revision': 1};
+                }
+                return {
+                  'targetType': 'event',
+                  'eventId': 'event-1',
+                  'action': 'open_event',
+                };
+              },
+            ),
+          ),
+          GoRoute(
+            path: '/events',
+            builder: (_, state) => Scaffold(
+              body: Text('Ficha ${state.uri.queryParameters['eventId']}'),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: provider,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Leer con cámara'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ficha event-1'), findsOneWidget);
+      expect(calls, ['obtenerCredencialQr', 'resolverCredencialQr']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('QR familiar permite elegir hijo y desplazarse a 320px', (
     tester,
   ) async {
@@ -55,6 +174,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.ensureVisible(find.text('Hijo Prueba'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Hijo Prueba'));
     await tester.pumpAndSettle();
     expect(provider.user!.activeStudentId, 'child');

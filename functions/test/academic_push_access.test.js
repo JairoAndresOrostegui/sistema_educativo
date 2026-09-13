@@ -23,6 +23,7 @@ function fixture() {
     getAll: async (...refs) => refs.map((ref) => snapshot(ref.path)),
   };
   const tenant = {institutionId: "i", campusId: "c", academicYearId: "year"};
+  values.set("academic_years/year", {...tenant, status: "active"});
   const user = (role, extra = {}) => ({
     institution: "i", campus: "c", status: "activo", role,
     permissions: ["eventos.ver", "asistencia.ver"], ...extra,
@@ -125,5 +126,42 @@ describe("revalidación de avisos de Eventos y Asistencia", () => {
         ["token-A", "new-family-token"]), []);
     values.get("users/family").campus = "otra";
     assert.deepEqual(await validate(jobs.event, ["token-family"]), []);
+  });
+
+  it("preventa y cumplimiento privados no avisan a otro familiar ni estudiante", async () => {
+    const {validate, jobs, values, user} = fixture();
+    values.set("users/otherfamily", user("Familiar", {studentIds: ["childA"], notificationTokens: {web: "other-family"}}));
+    values.set("users/admin", user("Administrador", {permissions: ["eventos.ver", "eventos.editar"], notificationTokens: {web: "admin-token"}}));
+    Object.assign(values.get("event_notification_events/event-notice"), {
+      kind: "order_changed", studentIds: ["childA"], familyIds: ["family"], includeStudents: false,
+      recipientUserIds: ["childA", "family", "otherfamily", "teacher", "admin"],
+    });
+    assert.deepEqual(await validate(jobs.event, ["token-A", "token-family", "other-family", "token-teacher", "admin-token"]),
+        ["token-family", "token-teacher", "admin-token"]);
+    values.get("users/admin").permissions = ["eventos.ver"];
+    values.get("users/family").studentIds = ["childB"];
+    assert.deepEqual(await validate(jobs.event, ["token-family", "admin-token"]), []);
+    values.get("event_notification_events/event-notice").studentIds = ["childB"];
+    assert.deepEqual(await validate(jobs.event, ["token-family"]), []);
+  });
+
+  it("todo aviso de Eventos revalida el año activo sin alterar Asistencia", async () => {
+    const {validate, jobs, values} = fixture();
+    for (const kind of [undefined, "reminder", "food_changed",
+      "materials_changed", "order_changed", "requirement_changed"]) {
+      const outbox = values.get("event_notification_events/event-notice");
+      Object.assign(outbox, {kind, studentIds: ["childA"],
+        familyIds: ["family"], includeStudents: true});
+      values.get("academic_years/year").status = "active";
+      assert.deepEqual(await validate(jobs.event, ["token-A"]), ["token-A"]);
+      values.get("academic_years/year").status = "closed";
+      assert.deepEqual(await validate(jobs.event, ["token-A"]), []);
+    }
+    assert.deepEqual(await validate(jobs.attendance, ["token-A"]), ["token-A"]);
+    values.get("academic_years/year").status = "active";
+    values.get("academic_years/year").campusId = "otra";
+    assert.deepEqual(await validate(jobs.event, ["token-A"]), []);
+    values.delete("academic_years/year");
+    assert.deepEqual(await validate(jobs.event, ["token-A"]), []);
   });
 });

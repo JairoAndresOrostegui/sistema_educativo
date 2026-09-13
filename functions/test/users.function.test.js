@@ -157,6 +157,26 @@ async function seedRelations(uid) {
   });
 }
 
+async function seedEventRelations(uid) {
+  const scope = {institutionId: "inst-1", campusId: "campus-1",
+    academicYearId: academicYearId("inst-1", "campus-1")};
+  const records = [
+    ["school_events/presentation", {...scope, title: "Presentación de prueba",
+      status: "published", createdBy: "operator", targetStudentIds: [uid],
+      targetGroupIds: ["group-5a"], responsibleUserIds: ["operator"]}],
+    ["event_food_orders/reservation", {...scope, eventId: "presentation",
+      studentId: uid, familyId: "family", performedBy: "family",
+      state: "reserved", paymentState: "paid", deliveryState: "pending",
+      totalCop: 5000, revision: 1}],
+    ["event_requirement_completions/attendance", {...scope,
+      eventId: "presentation", requirementId: "attendance",
+      targetType: "student", targetId: uid, studentContextIds: [uid],
+      performedBy: "operator", completed: true, revision: 1}],
+  ];
+  for (const [path, data] of records) await db.doc(path).set(data);
+  return records;
+}
+
 function createPayload({
   document = "70000001",
   email = "nuevo@colegio.test",
@@ -269,6 +289,32 @@ describe("baja y eliminacion de usuarios", () => {
     assert.ok((await db.collection("users").doc("target").get()).exists);
   });
 
+  it("proyecta el perfil actual ante triggers de directorio fuera de orden",
+      async () => {
+        const {sincronizarDirectorioUsuarios} = require("../index");
+        await seedUser("projection-user", "Estudiante");
+        const source = db.doc("users/projection-user");
+        const directory = db.doc("user_directory/projection-user");
+        const active = profile("Estudiante");
+        const snapshot = (data) => ({exists: !!data, data: () => data});
+        const deliver = (before, after) => sincronizarDirectorioUsuarios.run({
+          params: {userId: "projection-user"},
+          data: {before: snapshot(before), after: snapshot(after)},
+        });
+
+        await source.update({status: "inactivo"});
+        await deliver(undefined, active);
+        assert.equal((await directory.get()).data().status, "inactivo");
+
+        await source.update({status: "activo"});
+        await deliver({...active, status: "inactivo"}, undefined);
+        assert.equal((await directory.get()).data().status, "activo");
+
+        await source.delete();
+        await deliver(undefined, active);
+        assert.equal((await directory.get()).exists, false);
+      });
+
   it("permite al admin dejar inactivo sin borrar relaciones", async () => {
     const adminEmail = await seedUser("admin", "Administrador", {
       permissions: ["usuarios.eliminar", "usuarios.editar"],
@@ -334,6 +380,131 @@ describe("baja y eliminacion de usuarios", () => {
     );
     assert.equal(response.body.error.status, "PERMISSION_DENIED");
     assert.ok((await db.collection("users").doc("target").get()).exists);
+  });
+
+  it("rechaza el borrado con Eventos antes de alterar Auth, datos o Storage",
+      async () => {
+        const email = await seedUser("super", "Administrador", {
+          isSuperadmin: true,
+        });
+        const targetEmail = await seedUser("target", "Estudiante");
+        await seedRelations("target");
+        const events = await seedEventRelations("target");
+        const token = await signIn(email);
+        const targetRef = db.collection("users").doc("target");
+        const directoryRef = db.collection("user_directory").doc("target");
+        const photo = bucket.file("fotos_perfil/target/perfil.png");
+        await photo.save(Buffer.from("foto de prueba"), {
+          metadata: {contentType: "image/png"},
+        });
+        const before = (await targetRef.get()).data();
+        const beforeDirectory = (await directoryRef.get()).data();
+        const beforeAuth = (await auth.getUser("target")).toJSON();
+        const impact = await callFunction("obtenerImpactoEliminacionUsuario",
+            {uid: "target"}, token);
+        assert.ok(impact.body.result, JSON.stringify(impact.body));
+        const eventImpact = impact.body.result.impact.find(
+            (item) => item.key === "eventReferences");
+        assert.equal(eventImpact.count, 3);
+        assert.equal(eventImpact.action, "preserve");
+        const response = await callFunction("eliminarUsuarioAuth", {
+          uid: "target", mode: "permanent", confirmation: "ELIMINAR target",
+        }, token);
+        assert.equal(response.body.error?.status, "FAILED_PRECONDITION",
+            JSON.stringify(response.body));
+        assert.match(response.body.error.message, /Eventos/);
+        assert.deepEqual((await targetRef.get()).data(), before);
+        assert.deepEqual((await directoryRef.get()).data(), beforeDirectory);
+        assert.deepEqual((await auth.getUser("target")).toJSON(), beforeAuth);
+        assert.equal((await photo.download())[0].toString(), "foto de prueba");
+        for (const [path, data] of events) {
+          assert.deepEqual((await db.doc(path).get()).data(), data);
+        }
+        assert.deepEqual((await db.doc("users/family").get()).data().studentIds,
+            ["target"]);
+        const route = (await db.doc("routes/route").get()).data();
+        assert.deepEqual(route.estudiantes, ["target"]);
+        assert.ok((await db.doc("enrollments/enrollment").get()).exists);
+        assert.ok((await db.doc("authorization_requests/authorization").get())
+            .exists);
+        assert.ok((await db.doc("message_channels/thread/messages/message")
+            .get()).exists);
+        assert.equal((await db.collection("user_history")
+            .where("usuarioId", "==", "target").get()).size, 0);
+        assert.ok((await signInAttempt(targetEmail)).idToken);
+      });
+
+  for (const mode of ["inactive", "soft"]) {
+    it(`permite baja ${mode} conservando identidades y registros de Eventos`,
+        async () => {
+          const email = await seedUser("admin", "Administrador", {
+            permissions: ["usuarios.eliminar"],
+          });
+          const targetEmail = await seedUser("target", "Estudiante");
+          const events = await seedEventRelations("target");
+          const response = await callFunction("eliminarUsuarioAuth", {
+            uid: "target", mode,
+          }, await signIn(email));
+          assert.equal(response.body.result?.deletionType, mode,
+              JSON.stringify(response.body));
+          const status = mode === "inactive" ? "inactivo" : "eliminado";
+          assert.equal((await db.doc("users/target").get()).data().status,
+              status);
+          assert.equal((await db.doc("user_directory/target").get())
+              .data().status, status);
+          assert.equal((await auth.getUser("target")).disabled, true);
+          for (const [path, data] of events) {
+            assert.deepEqual((await db.doc(path).get()).data(), data);
+          }
+          const history = await db.collection("user_history")
+              .where("usuarioId", "==", "target").get();
+          assert.equal(history.size, 1);
+          assert.equal(history.docs[0].data().impacto.eventReferences, 3);
+          assert.equal((await signInAttempt(targetEmail)).error.message,
+              "USER_DISABLED");
+        });
+  }
+
+  it("acota el impacto masivo sin impedir la baja lógica", async () => {
+    const email = await seedUser("super", "Administrador", {
+      isSuperadmin: true,
+    });
+    await seedUser("target", "Estudiante");
+    for (let offset = 0; offset < 2002; offset += 400) {
+      const batch = db.batch();
+      for (let i = offset; i < Math.min(2002, offset + 400); i++) {
+        batch.set(db.collection("event_food_orders").doc(`order-${i}`), {
+          institutionId: "inst-1", campusId: "campus-1", studentId: "target",
+          state: "reserved", revision: 1,
+        });
+      }
+      await batch.commit();
+    }
+    const token = await signIn(email);
+    const preview = await callFunction("obtenerImpactoEliminacionUsuario",
+        {uid: "target"}, token);
+    assert.ok(preview.body.result, JSON.stringify(preview.body));
+    const impact = preview.body.result.impact.find(
+        (item) => item.key === "eventReferences");
+    assert.equal(impact.count, 2001);
+    assert.equal(impact.truncated, true);
+    assert.match(impact.label, /conteo mínimo/);
+    const denied = await callFunction("eliminarUsuarioAuth", {
+      uid: "target", mode: "permanent", confirmation: "ELIMINAR target",
+    }, token);
+    assert.equal(denied.body.error?.status, "FAILED_PRECONDITION",
+        JSON.stringify(denied.body));
+    assert.equal((await auth.getUser("target")).disabled, false);
+    assert.equal((await db.doc("users/target").get()).data().status, "activo");
+    const retired = await callFunction("eliminarUsuarioAuth", {
+      uid: "target", mode: "inactive",
+    }, token);
+    assert.equal(retired.body.result?.deletionType, "inactive",
+        JSON.stringify(retired.body));
+    assert.equal((await auth.getUser("target")).disabled, true);
+    assert.equal((await db.doc("users/target").get()).data().status,
+        "inactivo");
+    assert.equal((await db.collection("event_food_orders").get()).size, 2002);
   });
 
   it("ejecuta la cascada y conserva la auditoria", async () => {
