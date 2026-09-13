@@ -17,6 +17,17 @@ for (const env of ["qa", "prod"]) {
         env === "prod" ? "sistema-educativo-rl-prod" : "sistema-educativo-rl");
   });
 }
+test("QA launcher name is explicit without changing the production label", () => {
+  const manifest = fs.readFileSync(path.join(root,
+      "android/app/src/main/AndroidManifest.xml"), "utf8");
+  const shared = fs.readFileSync(path.join(root,
+      "android/app/src/main/res/values/styles.xml"), "utf8");
+  const qa = fs.readFileSync(path.join(root,
+      "android/app/src/qa/res/values/strings.xml"), "utf8");
+  assert.match(manifest, /android:label="@string\/app_name"/);
+  assert.match(shared, /<string name="app_name">SE Rodolfo Llinás<\/string>/);
+  assert.match(qa, /<string name="app_name">SE Rodolfo Llinás QA<\/string>/);
+});
 test("QA worker rejects production origins", () => {
   const code = fs.readFileSync(path.join(root, "web/firebase-runtime.js"), "utf8");
   for (const hostname of ["liceobilinguerodolfollinas.edu.co",

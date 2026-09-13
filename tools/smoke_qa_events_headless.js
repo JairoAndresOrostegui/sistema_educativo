@@ -187,7 +187,7 @@ async function inspectRole(executable, account) {
     }
     check(route === `#${HOME[account.key]}`, "FIXTURE_LOGIN_DID_NOT_REACH_ITS_DASHBOARD");
     report.login = true;
-    const menu = await waitNode(cdp, /^Eventos$/, {role: "button", scroll: true});
+    const menu = await waitNode(cdp, /^Eventos\b/, {role: "button", scroll: true});
     check(menu, "EVENTS_MENU_NOT_ACCESSIBLE");
     await clickNode(cdp, menu);
     report.menu = true;
@@ -199,7 +199,7 @@ async function inspectRole(executable, account) {
       await cdp.send("Emulation.setDeviceMetricsOverride", {width, height: 900, deviceScaleFactor: 1, mobile: false});
       for (const kind of ["presentation", "meeting"]) {
         await navigateHash(cdp, HOME[account.key]);
-        check(await waitNode(cdp, /^Eventos$/, {role: "button", scroll: true}), "HOME_NOT_RESTORED");
+        check(await waitNode(cdp, /^Eventos\b/, {role: "button", scroll: true}), "HOME_NOT_RESTORED");
         await navigateHash(cdp, `/events?eventId=${encodeURIComponent(eventIds.get(kind))}`);
         check(await waitNode(cdp, /^Detalle del evento$/), "EVENT_DETAIL_NOT_OPENED");
         const seen = new Set();
@@ -209,7 +209,9 @@ async function inspectRole(executable, account) {
             // Store only allowlisted UI labels, never people, fields or content.
             for (const expected of ["Información", "Preparación", "Alimentos", "Seguimiento", "Hijo seleccionado",
               "Agregar alimento", "Agregar material o traje", "Registrar cumplimiento", "Reservar alimentos"] ) {
-              if (label === expected || label.startsWith(`${expected}\n`)) seen.add(expected);
+              // Flutter merges some expanded tiles and field values into their
+              // accessible name; validate the fixed leading control label.
+              if (label === expected || label.startsWith(`${expected}\n`) || label.startsWith(`${expected} `)) seen.add(expected);
             }
           }
           await wheel(cdp, 450);
@@ -224,6 +226,7 @@ async function inspectRole(executable, account) {
         check(item.materials === (account.key !== "familiar1"), "MATERIAL_ROLE_CONTROLS_MISMATCH");
         check(item.configureFood === (kind === "presentation" && account.key === "admin"), "FOOD_ADMIN_CONTROL_MISMATCH");
         check(item.reserve === (kind === "presentation" && account.key === "familiar1"), "FAMILY_RESERVATION_CONTROL_MISMATCH");
+        check(item.familySelector === (account.key === "familiar1"), "FAMILY_STUDENT_SELECTOR_MISMATCH");
       }
     }
     // A normal logout clears only this fixture's owned web slot.
@@ -232,7 +235,21 @@ async function inspectRole(executable, account) {
     report.logout = true;
   } catch (error) {
     report.failure = error instanceof SmokeFailure ? error.code : "BROWSER_AUTOMATION_ERROR";
+    // Diagnose semantic matching with allowlisted words only, no actual labels.
+    if (cdp) {
+      const nodes = await ax(cdp).catch(() => []);
+      report.semanticHints = nodes.flatMap((node) =>
+        ["Eventos", "Información", "Preparación", "Alimentos", "Seguimiento"].filter((word) =>
+          (node.name?.value || "").includes(word)).map((word) => ({word, role: node.role?.value,
+          exact: node.name?.value === word})));
+    }
   } finally {
+    if (cdp && report.login && !report.logout) {
+      try {
+        await navigateHash(cdp, "/logout");
+        report.logout = !!await waitNode(cdp, /iniciar sesi[oó]n/i, {role: "button"});
+      } catch { report.logout = false; }
+    }
     report.functions = [...observedFunctions].sort();
     if (cdp) cdp.socket.close();
     if (browserCdp) {
@@ -257,7 +274,9 @@ async function inspectRole(executable, account) {
 
 async function main() {
   const args = process.argv.slice(2);
-  check(args.every((arg) => arg === "--run" || arg.startsWith("--expected-main-sha256=")), "INVALID_ARGUMENTS");
+  check(args.every((arg) => arg === "--run" || arg.startsWith("--expected-main-sha256=") || arg.startsWith("--roles=")), "INVALID_ARGUMENTS");
+  const roleKeys = args.find((arg) => arg.startsWith("--roles="))?.slice(8).split(",") || Object.keys(ROLES);
+  check(roleKeys.length > 0 && roleKeys.every((key) => Object.hasOwn(ROLES, key)), "UNSAFE_ROLE_FILTER");
   const executable = ["C:/Program Files/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"].find((value) => fs.existsSync(value));
   check(executable, "NO_HEADLESS_BROWSER_INSTALLED");
@@ -269,7 +288,7 @@ async function main() {
   }
   const expectedHash = args.find((arg) => arg.startsWith("--expected-main-sha256="))?.split("=")[1];
   await verifyHostedBuild(expectedHash);
-  const accounts = readFixtures();
+  const accounts = readFixtures().filter((account) => roleKeys.includes(account.key));
   const folder = path.resolve(__dirname, "../.buildlog", `qa-events-ui-${Date.now()}`);
   fs.mkdirSync(folder, {recursive: true});
   const reports = [];
@@ -280,7 +299,8 @@ async function main() {
     console.log(JSON.stringify({role: report.role, login: report.login, menu: report.menu,
       detailsChecked: report.details.length, failure: report.failure || null, folder}));
   }
-  if (reports.some((report) => report.failure || report.jsErrors || !report.temporaryProfileRemoved)) process.exitCode = 1;
+  if (reports.some((report) => report.failure || report.jsErrors || report.consoleErrors ||
+      report.httpErrors.length || report.failedRequests || !report.logout || !report.temporaryProfileRemoved)) process.exitCode = 1;
 }
 if (require.main === module) main().catch((error) => {
   console.error(error instanceof SmokeFailure ? error.code : "QA_SMOKE_FAILED_WITHOUT_LOGGING_SENSITIVE_DETAILS");

@@ -264,10 +264,11 @@ function writeGuide(context, privateData, eventIds) {
       "Administrador: abrir Eventos. Revisar Presentación de baile y Encuentro de padres. Para crear otro, guardar borrador, configurar requisitos y alimentos cuando correspondan, y publicar.", "",
       "Familiar Uno: abrir Eventos con Sara seleccionada. En Presentación, reservar un jugo y un sándwich. Anotar el total calculado. Abrir su propio QR para que lo escanee el docente.", "",
       "Familiar Dos: entrar con su cuenta y comprobar que su pedido/asistencia no se marcó al operar con Familiar Uno.", "",
-      "Docente: abrir Encuentro de padres, Seguimiento. Escanear QR de Familiar Uno y confirmar Boletín entregado. Registrar asistencia solo cuando llegue la hora del evento. Para presentación, revisar materiales y registrar pago/entrega del pedido de prueba.", "",
+      "Docente: abrir Encuentro de padres, Seguimiento. Escanear QR de Familiar Uno y confirmar Boletín entregado. Registrar asistencia solo cuando llegue la hora del evento. Para presentación, revisar materiales y registrar pago del pedido de prueba. La entrega se habilita al iniciar el evento; antes debe quedar bloqueada.", "",
       "Sara: consultar ambos eventos y materiales. Mostrar su carnet QR. No debe poder reservar alimentos ni marcar pagos o cumplimientos.", "",
-      "QR de evento: personal muestra el código del evento; familiar lo escanea desde Mi QR y lector y abre la ficha con Sara seleccionada.", "",
+      "QR de evento: administrador abre Administrar QR en el tablero, busca QA · Presentación de baile en Buscar usuario o evento y lo selecciona para mostrar el código. El familiar abre su módulo QR, pulsa Leer con cámara y abre la ficha del evento con Sara seleccionada.", "",
       "Rutas: responsable abre un recorrido iniciado con Sara pendiente, escanea su QR y confirma recogida. Se conserva el botón manual. Escanear sin confirmar no debe recogerla.", "",
+      "Antes de probar Rutas con Sara: su ruta antigua de QA aún tiene fechas de 2025 y recorridos históricos abiertos. No se modificaron durante esta ampliación. Hace falta preparar una ruta vigente con su responsable; no volver a grabar ni probar GPS usando esos recorridos antiguos.", "",
       "GPS: fuera de ventana no debe verse mapa familiar; con aviso de hasta diez minutos sí; después de recoger/finalizar se revoca. Comprobar GPS real y cámara en Android con APK QA.", "",
       "Push: iniciar sesión y activar avisos en cada equipo QA. Publicación, pedido y cumplimiento generan avisos a sus destinatarios. Una aceptación del servidor no confirma que el equipo los mostró.", "",
       "Los pagos son marcas manuales de ensayo. No existe pasarela ni stock reservado garantizado. No pagar dinero real.", "",
@@ -283,7 +284,8 @@ async function main() {
   if (legacy.data().count) throw new Error("Hay identificadores de evento antiguos; migración explícita necesaria antes de continuar.");
   const applyIdentities = process.argv.includes("--apply-identities");
   const applyEvents = process.argv.includes("--seed-events");
-  if (!applyIdentities && !applyEvents) {
+  const guideOnly = process.argv.includes("--write-guide");
+  if (!applyIdentities && !applyEvents && !guideOnly) {
     console.log(JSON.stringify({projectId: PROJECT, planOnly: true, realAccountsUnchanged: true,
       temporaryAccounts: definitions.map(({key, role}) => ({key, role})), legacyEvents: 0}));
     return;

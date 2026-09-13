@@ -1,7 +1,8 @@
 # Eventos y QR: contrato de ampliación QA
 
-Estado: implementación terminada; aceptación y despliegue QA en curso. Este
-contrato no reemplaza el informe de verificación ni acredita producción.
+Estado: implementación y despliegue QA terminados. La evidencia y los pendientes
+de aceptación física están en [VALIDACION_QA_EVENTOS_QR_2026_09_13.md](VALIDACION_QA_EVENTOS_QR_2026_09_13.md).
+Este contrato no acredita despliegue en producción.
 Alcance aprobado: solo QA (`sistema-educativo-rl`). No publicar producción ni Play.
 
 ## Identidad y permisos
