@@ -577,6 +577,26 @@ describe("baja y eliminacion de usuarios", () => {
     assert.equal(denied.body.error.status, "PERMISSION_DENIED");
   });
 
+  it("asigna Mensajeria por defecto a docentes nuevos", async () => {
+    const adminEmail = await seedUser("admin", "Administrador", {
+      permissions: ["usuarios.crear"],
+    });
+    const response = await callFunction(
+        "crearUsuarioDesdeAdmin",
+        createPayload({
+          role: "Docente",
+          document: "70000059",
+          email: "docente.mensajeria@colegio.test",
+          personalEmail: "docente.mensajeria@correo.test",
+        }),
+        await signIn(adminEmail),
+    );
+    assert.ok(response.body.result.exito, JSON.stringify(response.body));
+    const created = await db.collection("users")
+        .doc(response.body.result.uid).get();
+    assert.deepEqual(created.data().permissions, ["mensajeria.ver"]);
+  });
+
   it("impide al admin crear en otra sede o crear administradores", async () => {
     const adminEmail = await seedUser("admin", "Administrador", {
       permissions: ["usuarios.crear"],

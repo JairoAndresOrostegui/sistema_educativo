@@ -398,6 +398,10 @@ async function resolveAcademicYear(caller, institution, campus, requestedId,
  * @return {string[]} Permisos permitidos.
  */
 function permissionsForRole(role, permissions) {
+  if (role === "Docente") {
+    return permissions.includes("mensajeria.ver") ?
+      permissions : [...permissions, "mensajeria.ver"];
+  }
   if (role === "Estudiante") {
     return permissions.filter((item) =>
       !item.startsWith("autorizaciones."));
