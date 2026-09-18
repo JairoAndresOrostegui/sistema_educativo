@@ -289,7 +289,7 @@ class TeacherBulkImportService {
           isSuperadmin: false,
           status: candidate.status,
           phones: const <String>[],
-          permissions: const <String>[],
+          permissions: const <String>['mensajeria.ver'],
           webPushToken: null,
           mobilePushToken: null,
           address: '',

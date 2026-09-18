@@ -116,6 +116,9 @@ describe("mensajeria institucional", () => {
       groupId: "group-5a", groupName: "Quinto A",
     });
     await seedUser("teacher", "Docente", {firstName: "Laura"});
+    await seedUser("teacher-without-messaging", "Docente", {
+      firstName: "Sin permiso", permissions: [],
+    });
     await seedUser("teacher-tutor", "Docente", {
       firstName: "Tutor", tutorGroupId: "group-4a",
     });
@@ -212,6 +215,16 @@ describe("mensajeria institucional", () => {
         assert.equal(sent.status, 200, JSON.stringify(sent.body));
         assert.equal(sent.body.result.success, true);
       });
+
+  it("excluye contactos que no tienen acceso a Mensajeria", async () => {
+    const teacherToken = await signIn("teacher@colegio.test");
+    const contacts = await callFunction(
+        "listarDestinatariosMensajeria", {}, teacherToken,
+    );
+    assert.equal(contacts.status, 200, JSON.stringify(contacts.body));
+    assert.ok(!contacts.body.result.contacts.some((item) =>
+      item.id === "teacher-without-messaging"));
+  });
 
   it("silencia grupos, admite anuncios admin y registra lecturas", async () => {
     const adminToken = await signIn(await seedUser("admin", "Administrador"));

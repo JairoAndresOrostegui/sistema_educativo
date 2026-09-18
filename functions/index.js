@@ -2112,6 +2112,13 @@ function requireMessagingAccess(caller) {
   );
 }
 
+/** @param {Object} user Destinatario potencial. @return {boolean} Acceso. */
+function canUseMessaging(user) {
+  return user.isSuperadmin === true ||
+    (Array.isArray(user.permissions) &&
+      user.permissions.includes("mensajeria.ver"));
+}
+
 /** @param {*} value Texto de mensaje. @return {string} Texto seguro. */
 function validatedMessageBody(value) {
   return requiredString(value, "mensaje", MESSAGE_BODY_MAX);
@@ -6068,6 +6075,8 @@ exports.sincronizarDirectorioUsuarios = onDocumentWritten(
       const groupIds = new Set();
       if (before?.groupId) groupIds.add(before.groupId);
       if (after?.groupId) groupIds.add(after.groupId);
+      if (before?.tutorGroupId) groupIds.add(before.tutorGroupId);
+      if (after?.tutorGroupId) groupIds.add(after.tutorGroupId);
       if (before?.role === "Familiar" || after?.role === "Familiar") {
         const studentIds = new Set([
           ...(Array.isArray(before?.studentIds) ? before.studentIds : []),
@@ -7261,7 +7270,7 @@ exports.listarDestinatariosMensajeria = onCall(async (request) => {
        item.role === "Familiar" && Array.isArray(item.studentIds) &&
        item.studentIds.some((id) => classmates.has(id))));
   }
-  return {contacts: allowed.map((item) => ({
+  return {contacts: allowed.filter(canUseMessaging).map((item) => ({
     id: item.uid,
     fullName: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
     role: item.role,
