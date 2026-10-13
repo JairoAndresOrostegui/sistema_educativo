@@ -23,7 +23,7 @@ class DashboardLayout extends StatefulWidget {
 class _DashboardLayoutState extends State<DashboardLayout> {
   // URL de la política
   static final String _privacyUrl =
-      'https://liceobilinguerodolfollinas.edu.co/';
+      'https://se-rodolfo-llinas-privacidad.web.app/privacidad';
 
   Future<void> openPrivacy() async {
     final uri = Uri.parse(_privacyUrl);
