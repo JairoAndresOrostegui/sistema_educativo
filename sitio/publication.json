@@ -1,0 +1,491 @@
+{
+  "environment": "prod",
+  "projectId": "sistema-educativo-rl-prod",
+  "official": true,
+  "cmsRevision": 1,
+  "bundleHash": "18318a402143be0461eef9ca119f4cb79f7131032193b7d5ed56113796e44034",
+  "bundleHashFormat": "sha256-canonical-json-v1",
+  "pages": [
+    "/",
+    "/nosotros/",
+    "/aprendizaje/",
+    "/admisiones/",
+    "/vida-escolar/",
+    "/familias/",
+    "/contacto/",
+    "/proyecto-educativo/",
+    "/mision-y-vision/",
+    "/valores/",
+    "/campus/",
+    "/ubicacion/",
+    "/preescolar/",
+    "/primaria/",
+    "/educacion-media/",
+    "/bilinguismo/",
+    "/ciencia-y-tecnologia/",
+    "/lectura-y-escritura/",
+    "/arte-y-expresion/",
+    "/deporte-y-movimiento/",
+    "/cultura-y-tradiciones/",
+    "/primera-comunion/",
+    "/dia-de-la-familia/",
+    "/dia-de-los-abuelitos/",
+    "/amor-y-amistad/",
+    "/salidas-pedagogicas/",
+    "/reconocimientos/",
+    "/guia-de-la-plataforma/",
+    "/comunicacion-con-el-colegio/",
+    "/autorizaciones-y-eventos/",
+    "/preguntas-frecuentes/",
+    "/proceso-de-admision/",
+    "/visita-al-colegio/"
+  ],
+  "editorIntegration": "Campus content slots v1; protected templates, authenticated publication and revision history.",
+  "templateId": "0b90bdebeed9d52858a9bbfa",
+  "files": [
+    {
+      "file": "/plataforma/index.html",
+      "sha256": "470b1799d20b772391a4ebc5d84d046b40e232f18c38e7c5f64dd1768a6de5ee"
+    },
+    {
+      "file": "/legacy_route_redirect.js",
+      "sha256": "0074c43668941688373301339d449a46213471057f23e00802ad15ed2ab49fcc"
+    },
+    {
+      "file": "/sitio/editor.html",
+      "sha256": "a9b4d08214743b45b4e333234499041050e39cfc30077176f8dede7f59b78023"
+    },
+    {
+      "file": "/sitio/editor-manifest.json",
+      "sha256": "9e1a49d0718d2c8d064f5851ef75924836edbaae6630ab07449b297b3a6decf1"
+    },
+    {
+      "file": "/sitio/assets/app.js",
+      "sha256": "4ab4c893d0609ca9f55d788e38630e0f05450bc652b9a4a8c432f1170cde117f"
+    },
+    {
+      "file": "/sitio/assets/baloo2-latin.woff2",
+      "sha256": "26fb4610d4bc976d2584ca15e66c11465dbc1f267a10dca668fcb3080dfe59c1"
+    },
+    {
+      "file": "/sitio/assets/baloo2-OFL.txt",
+      "sha256": "ad09b05dc8bc678c9daf7c4c5f7ef1f55e5726127f4330b2e98e40b9dffcb860"
+    },
+    {
+      "file": "/sitio/assets/bungee-latin.woff2",
+      "sha256": "126eec706b7931682dbcf6c6efc274132c603f181fbf912678e6cfeb341e721b"
+    },
+    {
+      "file": "/sitio/assets/bungee-OFL.txt",
+      "sha256": "d5787a50dde5be6c6daecab9ed459939b1bc37cff0d0e00257eaf1ec2cf4c16c"
+    },
+    {
+      "file": "/sitio/assets/cms-editor.css",
+      "sha256": "fe45907cb75f3e82ca32b21bc0979508bfc3d643892edb7b81edad32a1b4d9e2"
+    },
+    {
+      "file": "/sitio/assets/cms-editor.js",
+      "sha256": "16dc103278d4d7ac1205e08a29d20f6de3382c69805eee6e3dbc015ac48bb9d9"
+    },
+    {
+      "file": "/sitio/assets/cms-runtime.js",
+      "sha256": "a995ad9631e7392277d59216c3516e68229395b4d8475430d38e8d9bac5f7b3f"
+    },
+    {
+      "file": "/sitio/assets/cormorantgaramond-OFL.txt",
+      "sha256": "60700d351cac4650c51f3f9db318d2a420f8b45052dba2715eb5fec41f0f6956"
+    },
+    {
+      "file": "/sitio/assets/editorial-latin.woff2",
+      "sha256": "d80df8ff5aecd299a61549f9e29ab1ed0b9b05f4ea71d50fe978e07d5240b235"
+    },
+    {
+      "file": "/sitio/assets/facebook.svg",
+      "sha256": "51e362770f996b7b44eef3687c1ea9556acdc9d0965bf029ca4dbb864c215546"
+    },
+    {
+      "file": "/sitio/assets/instagram.svg",
+      "sha256": "5b46b51101631c38498c02c51580e2714fbc2cbae14a72396aa53ba9d8db2d69"
+    },
+    {
+      "file": "/sitio/assets/liceo-en-movimiento-1080p.mp4",
+      "sha256": "38e83dd2099c6dd12cd232935c9ad44e3578221f28af22e951924c45b9160dc4"
+    },
+    {
+      "file": "/sitio/assets/liceo-en-movimiento-vertical.mp4",
+      "sha256": "b5491f7211e2b7d4f5632d4090c883e6557767466f4f14d79d3dfab22f21d223"
+    },
+    {
+      "file": "/sitio/assets/montserrat-latin.woff2",
+      "sha256": "06b16db7a969135d48d38c49183be7fb88d4452e2a3011957c7851941f4e4879"
+    },
+    {
+      "file": "/sitio/assets/montserrat-OFL.txt",
+      "sha256": "8b7141c03fa4f8d44e6345d5d4931709290f0f67875e452e95ac1fd3a027802e"
+    },
+    {
+      "file": "/sitio/assets/styles.css",
+      "sha256": "a579c090ef5b20903aa352399c0dafc699cc267453f629b17339a02c6282f118"
+    },
+    {
+      "file": "/sitio/assets/tiktok.svg",
+      "sha256": "6e199721b1f5ef3102eecc564dba4997550ddf6df0c5d06cd873492b656985ec"
+    },
+    {
+      "file": "/sitio/assets/video-campus.webp",
+      "sha256": "cfd5dbd49c354c18ae86c4f0f10fec287a2366bf160ba6da4ea6981778c46d10"
+    },
+    {
+      "file": "/sitio/assets/video-friendship.webp",
+      "sha256": "9b76fbf525b72f2b41514d7837f05158a51ee0a4b5e361298b9cdbad572799d2"
+    },
+    {
+      "file": "/sitio/assets/video-grandparents.webp",
+      "sha256": "a13c5b09ad15841fe2a7480dd773bbd4383ffa00fe67a58f59f812c92762fcfb"
+    },
+    {
+      "file": "/sitio/assets/whatsapp.svg",
+      "sha256": "408af60e0e6e9cbd069bfcfce033072f6ec8c03aaafa4041423cef176ede8c24"
+    },
+    {
+      "file": "/index.html",
+      "sha256": "c4643c43d9bda01a99afddeed9aae678de275d92192f971efc4390e6b0882f20"
+    },
+    {
+      "file": "/favicon.png",
+      "sha256": "38306ec2b1ddfba01b14cdde86e70f083de09b4928032429c79af5ba5de1c63c"
+    },
+    {
+      "file": "/school-home/advantages.webp",
+      "sha256": "18ca894263312803f4146978e6260cb815183301ebb743cd98b23cce3a36c318"
+    },
+    {
+      "file": "/school-home/compecer.webp",
+      "sha256": "9d93858780eb5b5bbd627cc71111c0471e259df638e429141fd2e99bb429f353"
+    },
+    {
+      "file": "/school-home/community.webp",
+      "sha256": "3d696e786db4614343c9a0fe5c9b7caf847793ba21666d2ef2a0a989ca5851d2"
+    },
+    {
+      "file": "/school-home/friendship.webp",
+      "sha256": "16e5eb6a02fb445a7901befef859414e43cca3191876e97d6174645d827c652c"
+    },
+    {
+      "file": "/school-home/learning-explore.webp",
+      "sha256": "100a759ea539a008a2fe4daab0942d0e6f8be7c2f1ddc2f3dbe2937fae8985d6"
+    },
+    {
+      "file": "/school-home/learning-express.webp",
+      "sha256": "6f72a95f7bc3197ccf201af68575215d9c71d642adaf8717efa721f6d128d3ce"
+    },
+    {
+      "file": "/school-home/learning-belong.webp",
+      "sha256": "ecd6de1678e30877d56000ce5cf9329cb4fe80f719d1c5765e7c8555037a1379"
+    },
+    {
+      "file": "/school-home/spirit.webp",
+      "sha256": "1376a1b1ba321e3b7dcaf94837519c983145076a35868a5e2a61a2ee117cbc2d"
+    },
+    {
+      "file": "/school-home/news-culture.webp",
+      "sha256": "3ef2f7b91ea98707683fb2b34f5518e3e53f2ed0ce82918c8473f576eaee8530"
+    },
+    {
+      "file": "/school-home/news-stories.webp",
+      "sha256": "f5bb392a200ac69082dd04254430d6cfb350b7132a9fb1608dee97ff7dd2b781"
+    },
+    {
+      "file": "/school-home/news-encounters.webp",
+      "sha256": "afd5e24abeae8ee81287376e1241b6f43fe1ed6673245dc46b9bf15d0a4a24c2"
+    },
+    {
+      "file": "/school-home/parents-updates.webp",
+      "sha256": "41d3ae7169ed43c96b17e0c3e92ddde56138b10c73f02679dcd8209a18bda40b"
+    },
+    {
+      "file": "/school-home/families.webp",
+      "sha256": "be98b9775e556616c4e8e444d43857bfe17b3b8cfa4ac02b4d50ab970dc94aaa"
+    },
+    {
+      "file": "/school-home/exp-communion-community.webp",
+      "sha256": "842211999c5756151632e696a09000e3c2ff7f54b75cd17e1f6cf0a3f5a8ba22"
+    },
+    {
+      "file": "/school-home/exp-stage-inclusive.webp",
+      "sha256": "fdcf32ab7c51b97cac4e41944e18dc76e748612e27be4933ad1f0357d270e04a"
+    },
+    {
+      "file": "/school-home/exp-music-keyboard.webp",
+      "sha256": "5f1a150afbeed4ba24826c09853f1601a2e0b2aa4df1f074c401c92b91f45654"
+    },
+    {
+      "file": "/school-home/exp-garden-care.webp",
+      "sha256": "e115d95103ec181cc0f945a2385913714137e2d958f3b9fce87c0a68bc8701af"
+    },
+    {
+      "file": "/nosotros/index.html",
+      "sha256": "c1f587862084da65875aa82093b22dd4f3d04fad9ab1bb326339161601ea86ec"
+    },
+    {
+      "file": "/school-home/together.webp",
+      "sha256": "37f2e0d20aa7e2c4decabadab1fd1a77867361064b3cd7d09d914e5492961f43"
+    },
+    {
+      "file": "/school-home/exp-school-community.webp",
+      "sha256": "1a5be156c031ab2b88e4c2b27a49e14b11b921a93b178a254d73c1ff6d4d51e8"
+    },
+    {
+      "file": "/school-home/exp-outdoor-picnic.webp",
+      "sha256": "44b2d44a2bf71fbf9ad91b637897562faef27846f15b01e88e71e16eda2fa5bf"
+    },
+    {
+      "file": "/school-home/exp-campus-playground.webp",
+      "sha256": "74554fab5bd5174fdbeec4cb5c5588a738a980ca85bffdc68bfa7316ac296fc8"
+    },
+    {
+      "file": "/school-home/achievement.webp",
+      "sha256": "741aa736c1fbf78a629cf99670b01811e753ded0cd0e30290205981e30414485"
+    },
+    {
+      "file": "/school-home/exp-creative-play.webp",
+      "sha256": "6ccc83873c52804be55bc3c5f74a105bb867e94039f9a511d8c9d6aa39d16c3c"
+    },
+    {
+      "file": "/school-home/exp-campus-court.webp",
+      "sha256": "8a36c00918b30e86167a65ac138315f1f664cebb6baa69fdeac2e90c81d6a32f"
+    },
+    {
+      "file": "/aprendizaje/index.html",
+      "sha256": "b69bf7adf416176d609b0437479db1e1712762430e0354bcc35d9e33f2bb1467"
+    },
+    {
+      "file": "/school-home/discover.webp",
+      "sha256": "cab766bde39def32de8588537d26cde6b29f7f460bd48aa08ea537a20ea795dc"
+    },
+    {
+      "file": "/school-home/create.webp",
+      "sha256": "e935cf94facff688d8dbcbb21d692d2e0e467d2529a3bfc4edaba5b3c5444f5f"
+    },
+    {
+      "file": "/school-home/exp-early-learning.webp",
+      "sha256": "7de4ef08cbd759e5791edfde5f236ce4c631a50860badf421d59adbd750998a1"
+    },
+    {
+      "file": "/school-home/exp-student-art.webp",
+      "sha256": "16c0f7aa9d22538d616837b1dbdcea6f3a03ca5b5424ecf9910db549ce4f4f7d"
+    },
+    {
+      "file": "/school-home/welcome.webp",
+      "sha256": "ff62af05beaeeac7080959f49d84b8e31c5e086ec9a01d9b9ed0c7adbf8e45eb"
+    },
+    {
+      "file": "/school-home/exp-science-density.webp",
+      "sha256": "81c528b0fd3eb3a94ef0fa822153d4a2b49d3386ce13c5e4a47935b9876d6f11"
+    },
+    {
+      "file": "/admisiones/index.html",
+      "sha256": "a5b220a2bec16bf37ed7f38c037f5010c8bdf9479c670b95098f82514855372b"
+    },
+    {
+      "file": "/school-home/admissions-family.webp",
+      "sha256": "8df5a93839a556d8f39f2b7496d07495984468cb4fe034db2bf23090ae00d365"
+    },
+    {
+      "file": "/school-home/admissions-classroom.webp",
+      "sha256": "82391f04477402014b70503abe1f34bf1bba167adebded6136ffd369a9e281dd"
+    },
+    {
+      "file": "/school-home/admissions-community.webp",
+      "sha256": "5415af3e951b5d092687b4b64ddad3c1d916fbca14e8c0bf33b4420059a38e38"
+    },
+    {
+      "file": "/vida-escolar/index.html",
+      "sha256": "4f3c04dc4660e373694d7b17d563d6382e42102dded781b34369c412f06a5a5f"
+    },
+    {
+      "file": "/school-home/exp-traditional-dance.webp",
+      "sha256": "bd432c41fb7e22f1e0e650ae3f9ff64c2b8944959ea0061b397f5e88e88cb004"
+    },
+    {
+      "file": "/school-home/celebrate.webp",
+      "sha256": "4fc838f6d23abcf5a25334f1de0c288d490ba4442afe4f6436563603195c0d46"
+    },
+    {
+      "file": "/school-home/parents-child.webp",
+      "sha256": "aac98446b1c431bffe85162041a20b63fa7ee41eb70dd6539bcbf9292e1bec4a"
+    },
+    {
+      "file": "/school-home/exp-communion-procession.webp",
+      "sha256": "f133cbaf6ad1a40a3e1dd393ec1a88220a0eadbb58db93bedb8c1436598c9b2f"
+    },
+    {
+      "file": "/school-home/exp-communion-outdoors.webp",
+      "sha256": "dcfce87b0feae1aa188140bdd70bafc52545f4f228b14549e1dd2f3a5cf3a414"
+    },
+    {
+      "file": "/school-home/exp-stage-retro-group.webp",
+      "sha256": "9a08b559fc36e9167ce7b3058c4666c317eda61b649c2fa6f4a0c5131ca96010"
+    },
+    {
+      "file": "/school-home/exp-communion-group.webp",
+      "sha256": "bc955dfd85f337667449fe1c0ab4e268b16af88c1d1a21da809ec9864032504c"
+    },
+    {
+      "file": "/school-home/parents-account.webp",
+      "sha256": "d4e36b0f04490c1d482c4cfeee2dfcd5b58f11235b5728385fce479245ea30fb"
+    },
+    {
+      "file": "/school-home/exp-outing-museum.webp",
+      "sha256": "15e5478f548ae956b2800d527b0410426ff1590246ff7afb0dec50627b2008c1"
+    },
+    {
+      "file": "/school-home/exp-stage-young-talent.webp",
+      "sha256": "7165e05b6ef4a05853fd980fad0435cb53ef7380a1bdcb6759d24baa000036df"
+    },
+    {
+      "file": "/familias/index.html",
+      "sha256": "5d1cfe2f8e59855545325a76b8b625706d7e64aa11a730bb31f3a0d4e6a56718"
+    },
+    {
+      "file": "/school-home/exp-stage-retro-music.webp",
+      "sha256": "50af9bc4c4c986279451cdb1b0926362c59cc044ac713c6b6ca0224fd37a0a9e"
+    },
+    {
+      "file": "/school-home/exp-stage-retro-solo.webp",
+      "sha256": "4485c1c204bf3008bcbf857afea108bfb916ac7a8e0a7a823c8c513f353b21cc"
+    },
+    {
+      "file": "/contacto/index.html",
+      "sha256": "48d2c5ab8e795d6699fd7930ca48d926f5e6ccc27a9e4d3f1768c76f3c026c3b"
+    },
+    {
+      "file": "/proyecto-educativo/index.html",
+      "sha256": "6f936a01d0405f9ee939d8b75c0b7b63c6fbe4289fde3bc27513c03e315dd3da"
+    },
+    {
+      "file": "/mision-y-vision/index.html",
+      "sha256": "55c76e15e144eef4fedc7c50e08d8b3efd877e2ec159f157f8e24b02a91fcc6b"
+    },
+    {
+      "file": "/valores/index.html",
+      "sha256": "18e43be59770892bd4ef6f3a1b917606cd7416736758e0e8748dd4d2eb895fae"
+    },
+    {
+      "file": "/campus/index.html",
+      "sha256": "b0511109a26d276b6f03c163be6b8f469d8abd922bce1f2ce5b0dbb34bfafa78"
+    },
+    {
+      "file": "/ubicacion/index.html",
+      "sha256": "8c62a72b266fda22be9b6addbdd175850e9a50648ce6cffe84c93a2cedf23eb1"
+    },
+    {
+      "file": "/preescolar/index.html",
+      "sha256": "6e5eb2ac0f90cc4b9217bcdefec97bb420559bf578cffe776da04bc3a9d31782"
+    },
+    {
+      "file": "/primaria/index.html",
+      "sha256": "c70ff27056c8c924a804f3d53461fc2daa3a78cd71e9dee867bfd01cb2f7bdeb"
+    },
+    {
+      "file": "/school-home/exp-garden-planting.webp",
+      "sha256": "92034388b21ff16de2f97be4bd5c4ac57d33ea605256c877ea92289976d314dd"
+    },
+    {
+      "file": "/educacion-media/index.html",
+      "sha256": "89919ac5e1db9607ec275b332741a59cd40971d25d73411b62b4f7892095ea29"
+    },
+    {
+      "file": "/school-home/exp-performing-arts.webp",
+      "sha256": "808edf678da95507212ae18739c0119c51eb4e72743f40f5208c9e2d7a51795c"
+    },
+    {
+      "file": "/bilinguismo/index.html",
+      "sha256": "1eace0cdb95e24bd5bfafeb664dbcb8c07492a632ad54b43fd710b10da8a2029"
+    },
+    {
+      "file": "/ciencia-y-tecnologia/index.html",
+      "sha256": "90c3282fcbfdb6439976bfb78177415c2f82dbf72f1148c7b219d5bd5a11b608"
+    },
+    {
+      "file": "/school-home/exp-science-magnetism.webp",
+      "sha256": "3a60324cd629efe52cb232f488f1899d3fbcd5efd0822864ba2a7edec1867535"
+    },
+    {
+      "file": "/school-home/exp-science-water.webp",
+      "sha256": "3b727f1512b7055017fac1bcb804cb8afde1629c745cfe9719c3da8283958b68"
+    },
+    {
+      "file": "/school-home/exp-science-human-body.webp",
+      "sha256": "0de3654860b7582d4e83817c579055f470e46611f31b4314cfa1bd45fc6a5264"
+    },
+    {
+      "file": "/lectura-y-escritura/index.html",
+      "sha256": "47877e8b1198373daac209d4e65311140f5bdf0e8a019e95ef7255a5226f9133"
+    },
+    {
+      "file": "/arte-y-expresion/index.html",
+      "sha256": "e56dcdeeda57c34b1a835afc80f51328d032407cc0e72393d948f1b346096223"
+    },
+    {
+      "file": "/deporte-y-movimiento/index.html",
+      "sha256": "28db36b212e795b7a7e5d68ec6f4f0ced6149819e492232d30da8bfbb2019bf1"
+    },
+    {
+      "file": "/cultura-y-tradiciones/index.html",
+      "sha256": "bdf003c3e1a7b145527b84a6ba61ae9e06c392144bdd9703ecf0fac3457304d7"
+    },
+    {
+      "file": "/primera-comunion/index.html",
+      "sha256": "28fd9966026f2d678359e7d59ea3740dc6daf45244689ebe4d33e8875d36094b"
+    },
+    {
+      "file": "/school-home/exp-communion-gathering.webp",
+      "sha256": "09777810b2ffbacdc3a466d1b344e6156a9dfd6600e4fdaedad51fc10941b501"
+    },
+    {
+      "file": "/dia-de-la-familia/index.html",
+      "sha256": "e67da1bf4ca38d795df05dcdea919e8e6152bf107a0b9180a8e73f48db7a219f"
+    },
+    {
+      "file": "/dia-de-los-abuelitos/index.html",
+      "sha256": "fae657451be22324b978f22badb6b2382c2c05307a3bcb34d11d587ae44d9d65"
+    },
+    {
+      "file": "/amor-y-amistad/index.html",
+      "sha256": "b87f319f8c8290d0199e3e14f1c0674591cce0ca0ec11135be4bf0b7c417b2ae"
+    },
+    {
+      "file": "/salidas-pedagogicas/index.html",
+      "sha256": "79e3bc42aa86aad577f83e4a24611e916cde6f1279beac9be1e361647901b41b"
+    },
+    {
+      "file": "/reconocimientos/index.html",
+      "sha256": "150fa271d090ee043a72df7ee1acd36479233ba871105bd07da9aae8587de33b"
+    },
+    {
+      "file": "/guia-de-la-plataforma/index.html",
+      "sha256": "7d0a524b7cadfe5e3665aade6483876f4afb70986bc6e26048ec02ed70e96881"
+    },
+    {
+      "file": "/comunicacion-con-el-colegio/index.html",
+      "sha256": "e4c4abcbb82daddbdf2dce93ae054233d1d5ece2ca411b038dc6f5f47fef5cb7"
+    },
+    {
+      "file": "/autorizaciones-y-eventos/index.html",
+      "sha256": "b832272da751e16f98da83e8ab55feae2d8c3c2519205c976498c62e92296a9e"
+    },
+    {
+      "file": "/preguntas-frecuentes/index.html",
+      "sha256": "f42d7d0112a5a7d536440e2181a5f1fbfaceefcee90aa8d3acd380664fb3fe8b"
+    },
+    {
+      "file": "/proceso-de-admision/index.html",
+      "sha256": "f18ea2cc9598f57b2e2d51f49835a4cae62cad481baed236ceaa2ee2976a2fd3"
+    },
+    {
+      "file": "/visita-al-colegio/index.html",
+      "sha256": "1a0b4f9bcf751e8c78c736b0ae47447c0165042145c899c0271ab2534c42363f"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+Social brand glyphs: Simple Icons, CC0 1.0 Universal.
+https://github.com/simple-icons/simple-icons/blob/16.0.0/LICENSE.md
+
+instagram.svg, facebook.svg, tiktok.svg, whatsapp.svg, youtube.svg:
+https://github.com/simple-icons/simple-icons/tree/16.0.0/icons
+linkedin.svg:
+https://github.com/simple-icons/simple-icons/tree/13.0.0/icons
+
+Brand names and trademarks belong to their respective owners.
+These icons link to the school's official accounts; no endorsement is claimed.
